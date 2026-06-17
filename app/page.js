@@ -1,9 +1,20 @@
-export default function Home() {
+"use client"
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
+
+export default function Root() {
+  const router = useRouter()
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      router.replace(session ? '/home' : '/login')
+    })
+  }, [router])
+
   return (
-    <main style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', textAlign: 'center', padding: '2rem' }}>
-      <h1 style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🐝 The Social Hive</h1>
-      <p style={{ color: '#aaa', fontSize: '1.1rem' }}>Community platform for Fullerton Cove</p>
-      <p style={{ color: '#555', marginTop: '2rem', fontSize: '0.9rem' }}>Coming soon</p>
-    </main>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+      <div className="spinner" />
+    </div>
   )
 }
