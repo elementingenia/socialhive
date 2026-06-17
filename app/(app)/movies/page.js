@@ -5,9 +5,11 @@ import { supabase } from '@/lib/supabase'
 export default function Movies() {
   const [movies, setMovies] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    supabase.from('movies').select('*').order('title').then(({ data }) => {
+    supabase.from('movies').select('*').order('title').then(({ data, error }) => {
+      if (error) setError(error.message)
       setMovies(data || [])
       setLoading(false)
     })
@@ -18,6 +20,8 @@ export default function Movies() {
       <h1 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '1.25rem' }}>🎬 Movie Library</h1>
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}><div className="spinner" /></div>
+      ) : error ? (
+        <div style={{ color: 'var(--danger)', fontSize: '0.85rem', padding: '1rem', background: 'var(--surface)', borderRadius: '8px' }}>Error: {error}</div>
       ) : movies.length === 0 ? (
         <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '3rem', fontSize: '0.9rem' }}>No movies yet.</div>
       ) : (
