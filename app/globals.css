@@ -1,0 +1,32 @@
+:root {
+  --bg: #0f1117;
+  --surface: #1a1f2e;
+  --surface2: #242938;
+  --teal: #2dd4bf;
+  --teal-light: #5eead4;
+  --text: #f0f4f8;
+  --text-dim: #94a3b8;
+  --border: rgba(255,255,255,0.08);
+  --danger: #f87171;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--teal);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
