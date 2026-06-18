@@ -26,7 +26,6 @@ export default function Login() {
         background: 'var(--surface)', borderRadius: '16px',
         padding: '1.5rem', boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
       }}>
-        {/* Tabs */}
         <div style={{
           display: 'flex', gap: '0.25rem', background: 'var(--surface2)',
           borderRadius: '10px', padding: '4px', marginBottom: '1.5rem'
@@ -62,11 +61,15 @@ function SignIn({ router }) {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.trim(), pin: password })
+        body: JSON.stringify({ username: username.trim(), password })
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Invalid username or password'); setLoading(false); return }
-      const { error: authError } = await supabase.auth.signInWithPassword({ email: data.email, password })
+      // Use the authPassword returned by the API (padded for Supabase Auth)
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: data.email,
+        password: data.authPassword
+      })
       if (authError) { setError('Sign-in failed. Please try again.'); setLoading(false) }
       else router.replace('/home')
     } catch { setError('Network error. Please try again.'); setLoading(false) }
@@ -98,7 +101,7 @@ function Register({ onSuccess }) {
       const res = await fetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ inviteCode: inviteCode.trim(), username: username.trim(), password })
+        body: JSON.stringify({ inviteCode: inviteCode.trim(), username: username.trim(), password, confirmPassword: confirm })
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Registration failed'); setLoading(false); return }
@@ -110,7 +113,7 @@ function Register({ onSuccess }) {
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <Field label="INVITE CODE" value={inviteCode} onChange={setInviteCode} placeholder="Enter invite code" />
       <Field label="USERNAME" value={username} onChange={setUsername} placeholder="Choose a username" />
-      <Field label="PASSWORD" value={password} onChange={setPassword} placeholder="Choose a password" type="password" />
+      <Field label="PASSWORD" value={password} onChange={setPassword} placeholder="Choose a password (min 4 chars)" type="password" />
       <Field label="CONFIRM PASSWORD" value={confirm} onChange={setConfirm} placeholder="Confirm password" type="password" />
       {error && <p style={errStyle}>{error}</p>}
       <Btn loading={loading} label="Register" />
@@ -153,7 +156,7 @@ function ChangePassword() {
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       <Field label="USERNAME" value={username} onChange={setUsername} placeholder="Your username" />
       <Field label="CURRENT PASSWORD" value={current} onChange={setCurrent} placeholder="Current password" type="password" />
-      <Field label="NEW PASSWORD" value={newPass} onChange={setNewPass} placeholder="New password" type="password" />
+      <Field label="NEW PASSWORD" value={newPass} onChange={setNewPass} placeholder="New password (min 4 chars)" type="password" />
       <Field label="CONFIRM NEW PASSWORD" value={confirm} onChange={setConfirm} placeholder="Confirm new password" type="password" />
       {error && <p style={errStyle}>{error}</p>}
       <Btn loading={loading} label="Change Password" />
