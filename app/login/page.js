@@ -14,16 +14,11 @@ export default function Login() {
       background: 'var(--bg)'
     }}>
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>🐝</div>
-        <h1 style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '-0.5px', color: 'var(--text)' }}>
-          The Social Hive
-        </h1>
-        <p style={{
-          color: 'var(--amber-dark)', fontSize: '0.75rem', fontWeight: 600,
-          letterSpacing: '2px', textTransform: 'uppercase', marginTop: '0.3rem'
-        }}>
-          Fullerton Cove Community
-        </p>
+        <img
+          src="/wordmark_final.png"
+          alt="The Social Hive"
+          style={{ width: '280px', maxWidth: '100%', height: 'auto', display: 'block', margin: '0 auto' }}
+        />
       </div>
 
       <div style={{
