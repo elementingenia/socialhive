@@ -25,7 +25,7 @@ export async function POST(request) {
       .single()
 
     if (memberError || !member) {
-      return NextResponse.json({ error: 'Username not found' }, { status: 401 })
+      return NextResponse.json({ error: 'Username not found', debug: memberError?.message }, { status: 401 })
     }
     if (member.pin !== currentPassword) {
       return NextResponse.json({ error: 'Current password is incorrect' }, { status: 401 })
@@ -38,8 +38,12 @@ export async function POST(request) {
         { password: newPassword }
       )
       if (authError) {
-        console.error('Auth password update failed:', authError)
-        return NextResponse.json({ error: 'Password update failed. Please try again.' }, { status: 500 })
+        return NextResponse.json({
+          error: 'Password update failed. Please try again.',
+          debug: authError.message,
+          serviceKeySet: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
+          serviceKeyPrefix: process.env.SUPABASE_SERVICE_ROLE_KEY?.substring(0, 30)
+        }, { status: 500 })
       }
     }
 
@@ -50,8 +54,6 @@ export async function POST(request) {
       .eq('id', member.id)
 
     if (pinError) {
-      console.error('Pin update failed:', pinError)
-      // Auth password was already updated — try to roll back
       if (member.auth_id) {
         await supabaseAdmin.auth.admin.updateUserById(member.auth_id, { password: currentPassword })
       }
@@ -60,7 +62,6 @@ export async function POST(request) {
 
     return NextResponse.json({ success: true })
   } catch (err) {
-    console.error('Change password error:', err)
-    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Server error', debug: err.message }, { status: 500 })
   }
 }
