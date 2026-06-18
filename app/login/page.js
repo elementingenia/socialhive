@@ -15,8 +15,13 @@ export default function Login() {
     }}>
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>🐝</div>
-        <h1 style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '-0.5px' }}>The Social Hive</h1>
-        <p style={{ color: 'var(--teal)', fontSize: '0.75rem', fontWeight: 600, letterSpacing: '2px', textTransform: 'uppercase', marginTop: '0.3rem' }}>
+        <h1 style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '-0.5px', color: 'var(--text)' }}>
+          The Social Hive
+        </h1>
+        <p style={{
+          color: 'var(--amber-dark)', fontSize: '0.75rem', fontWeight: 600,
+          letterSpacing: '2px', textTransform: 'uppercase', marginTop: '0.3rem'
+        }}>
           Fullerton Cove Community
         </p>
       </div>
@@ -24,7 +29,7 @@ export default function Login() {
       <div style={{
         width: '100%', maxWidth: 400,
         background: 'var(--surface)', borderRadius: '16px',
-        padding: '1.5rem', boxShadow: '0 8px 32px rgba(0,0,0,0.4)'
+        padding: '1.5rem', boxShadow: 'var(--shadow)'
       }}>
         <div style={{
           display: 'flex', gap: '0.25rem', background: 'var(--surface2)',
@@ -34,8 +39,8 @@ export default function Login() {
             <button key={key} onClick={() => setTab(key)} style={{
               flex: 1, padding: '0.55rem 0.25rem', border: 'none', borderRadius: '8px', cursor: 'pointer',
               fontSize: '0.78rem', fontWeight: 600, transition: 'all 0.2s',
-              background: tab === key ? 'var(--teal)' : 'transparent',
-              color: tab === key ? '#0f1117' : 'var(--text-dim)'
+              background: tab === key ? 'var(--amber)' : 'transparent',
+              color: tab === key ? '#ffffff' : 'var(--text-dim)'
             }}>{label}</button>
           ))}
         </div>
@@ -65,7 +70,6 @@ function SignIn({ router }) {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Invalid username or password'); setLoading(false); return }
-      // Use the authPassword returned by the API (padded for Supabase Auth)
       const { error: authError } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.authPassword
@@ -167,7 +171,10 @@ function ChangePassword() {
 function Field({ label, value, onChange, placeholder, type = 'text' }) {
   return (
     <div>
-      <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '1px', color: 'var(--text-dim)', marginBottom: '0.4rem' }}>
+      <label style={{
+        display: 'block', fontSize: '0.7rem', fontWeight: 700,
+        letterSpacing: '1px', color: 'var(--text-dim)', marginBottom: '0.4rem'
+      }}>
         {label}
       </label>
       <input
@@ -186,7 +193,7 @@ function Field({ label, value, onChange, placeholder, type = 'text' }) {
 function Btn({ loading, label }) {
   return (
     <button type="submit" disabled={loading} style={{
-      padding: '0.9rem', background: 'var(--teal)', color: '#0f1117',
+      padding: '0.9rem', background: 'var(--amber)', color: '#ffffff',
       border: 'none', borderRadius: '10px', fontSize: '0.95rem', fontWeight: 700,
       cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
       marginTop: '0.25rem', width: '100%'
