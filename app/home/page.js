@@ -28,9 +28,12 @@ export default function Home() {
         maxWidth: 600, margin: '0 auto 2rem',
         paddingBottom: '1rem', borderBottom: '1px solid var(--border)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-          <span style={{ fontSize: '1.6rem' }}>🐝</span>
-          <span style={{ fontWeight: 700, fontSize: '1.1rem', color: 'var(--text)' }}>The Social Hive</span>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <img
+            src="/logo_hex_bee.png"
+            alt="The Social Hive"
+            style={{ width: '44px', height: '44px', objectFit: 'contain' }}
+          />
         </div>
         <button onClick={handleSignOut} style={{
           background: 'transparent', border: '1px solid var(--border)',
