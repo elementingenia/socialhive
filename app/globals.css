@@ -1,13 +1,28 @@
 :root {
-  --bg: #0f1117;
-  --surface: #1a1f2e;
-  --surface2: #242938;
-  --teal: #2dd4bf;
-  --teal-light: #5eead4;
-  --text: #f0f4f8;
-  --text-dim: #94a3b8;
-  --border: rgba(255,255,255,0.08);
-  --danger: #f87171;
+  /* Core */
+  --bg: #fdf8f0;
+  --surface: #ffffff;
+  --surface2: #f5efe4;
+  --border: rgba(0,0,0,0.1);
+
+  /* Text */
+  --text: #1c1917;
+  --text-dim: #78716c;
+
+  /* Amber / Hive (primary) */
+  --amber: #f59e0b;
+  --amber-dark: #d97706;
+  --amber-light: #fde68a;
+
+  /* Module colours */
+  --teal: #0d9488;       /* Movies */
+  --purple: #7c3aed;     /* Book Club */
+  --terracotta: #c2410c; /* Social Events */
+  --green: #15803d;      /* Outings */
+
+  /* Utility */
+  --danger: #dc2626;
+  --shadow: 0 2px 16px rgba(0,0,0,0.08);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -26,7 +41,7 @@ body {
   width: 28px;
   height: 28px;
   border: 3px solid var(--border);
-  border-top-color: var(--teal);
+  border-top-color: var(--amber);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
