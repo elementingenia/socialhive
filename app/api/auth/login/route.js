@@ -6,50 +6,54 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
+// Supabase Auth requires 6+ char passwords — pin may be shorter, so we pad
+function toAuthPassword(pin) {
+  return pin + '_hive'
+}
+
 export async function POST(request) {
   try {
-    const { username, pin } = await request.json()
-
-    if (!username || !pin) {
-      return NextResponse.json({ error: 'Name and PIN required' }, { status: 400 })
+    const { username, password } = await request.json()
+    if (!username || !password) {
+      return NextResponse.json({ error: 'Username and password are required' }, { status: 400 })
     }
 
-    // Look up member by username (case-insensitive)
+    // Look up member
     const { data: member, error: memberError } = await supabaseAdmin
       .from('members')
-      .select('id, username, pin, auth_id')
+      .select('id, username, pin, auth_id, status')
       .ilike('username', username.trim())
       .single()
 
     if (memberError || !member) {
-      return NextResponse.json({ error: 'Name not found. Check spelling and try again.' }, { status: 401 })
+      return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 })
+    }
+    if (member.status !== 'active') {
+      return NextResponse.json({ error: 'Account is not active' }, { status: 403 })
+    }
+    if (member.pin !== password) {
+      return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 })
     }
 
-    if (member.pin !== pin) {
-      return NextResponse.json({ error: 'Incorrect PIN. Try again.' }, { status: 401 })
-    }
+    const fakeEmail = `${member.username.toLowerCase()}@thesocialhive.internal`
+    const authPassword = toAuthPassword(member.pin)
 
-    // Build the fake internal email used for Supabase Auth
-    const fakeEmail = `${member.username.toLowerCase().replace(/\s+/g, '.')}@thesocialhive.internal`
-
-    // First login — create Supabase Auth user
+    // Create Supabase Auth user if not yet linked
     if (!member.auth_id) {
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email: fakeEmail,
-        password: pin,
+        password: authPassword,
         email_confirm: true,
-        user_metadata: { member_id: member.id, username: member.username }
+        user_metadata: { username: member.username }
       })
       if (createError) {
-        console.error('createUser error:', createError)
-        return NextResponse.json({ error: 'Account setup failed. Contact admin.' }, { status: 500 })
+        return NextResponse.json({ error: 'Login failed' }, { status: 500 })
       }
       await supabaseAdmin.from('members').update({ auth_id: newUser.user.id }).eq('id', member.id)
     }
 
-    return NextResponse.json({ email: fakeEmail })
+    return NextResponse.json({ email: fakeEmail, authPassword })
   } catch (err) {
-    console.error('Login route error:', err)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
