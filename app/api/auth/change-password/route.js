@@ -31,12 +31,31 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Current password is incorrect' }, { status: 401 })
     }
 
-    // Update pin in members table
-    await supabaseAdmin.from('members').update({ pin: newPassword }).eq('id', member.id)
-
-    // Update Supabase Auth password if auth_id exists
+    // Update Supabase Auth password first (if auth_id exists)
     if (member.auth_id) {
-      await supabaseAdmin.auth.admin.updateUserById(member.auth_id, { password: newPassword })
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
+        member.auth_id,
+        { password: newPassword }
+      )
+      if (authError) {
+        console.error('Auth password update failed:', authError)
+        return NextResponse.json({ error: 'Password update failed. Please try again.' }, { status: 500 })
+      }
+    }
+
+    // Then update pin in members table
+    const { error: pinError } = await supabaseAdmin
+      .from('members')
+      .update({ pin: newPassword })
+      .eq('id', member.id)
+
+    if (pinError) {
+      console.error('Pin update failed:', pinError)
+      // Auth password was already updated — try to roll back
+      if (member.auth_id) {
+        await supabaseAdmin.auth.admin.updateUserById(member.auth_id, { password: currentPassword })
+      }
+      return NextResponse.json({ error: 'Password update failed. Please try again.' }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })
