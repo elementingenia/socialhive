@@ -51,16 +51,18 @@ export async function POST(request) {
 
     // Create member record
     const { error: memberError } = await supabaseAdmin.from('members').insert({
+      name: username.trim(),
       username: username.trim(),
       pin: password,
       auth_id: newUser.user.id,
       is_admin: false,
-      status: 'active'
+      status: 'active',
+      joined_date: new Date().toISOString().split('T')[0]
     })
+
     if (memberError) {
-      // Rollback auth user
       await supabaseAdmin.auth.admin.deleteUser(newUser.user.id)
-      return NextResponse.json({ error: 'Registration failed. Please try again.' }, { status: 500 })
+      return NextResponse.json({ error: memberError.message }, { status: 500 })
     }
 
     return NextResponse.json({ success: true })
