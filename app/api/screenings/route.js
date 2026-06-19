@@ -35,25 +35,45 @@ export async function GET(req) {
 
   const eventIds = events.map(e => e.id)
 
+  // Fetch bookings — include member name for admin attendee list
   const { data: bookings } = await supabaseAdmin
     .from('bookings')
-    .select('id, event_id, member_id, status, seats')
+    .select('id, event_id, member_id, status, seats, booked_at, members(name)')
     .in('event_id', eventIds)
     .neq('status', 'cancelled')
 
   const result = events.map(ev => {
     const evBookings = (bookings || []).filter(b => b.event_id === ev.id)
-    const confirmed_seats = evBookings
-      .filter(b => b.status === 'confirmed')
-      .reduce((sum, b) => sum + (b.seats || 1), 0)
-    const waitlist_count = evBookings.filter(b => b.status === 'waitlist').length
-    const my_booking = evBookings.find(b => b.member_id === member.id) || null
+    const confirmedBookings = evBookings.filter(b => b.status === 'confirmed')
+    const waitlistBookings  = evBookings.filter(b => b.status === 'waitlist')
+
+    const confirmed_seats = confirmedBookings.reduce((sum, b) => sum + (b.seats || 1), 0)
+    const waitlist_count  = waitlistBookings.length
+    const my_booking      = evBookings.find(b => b.member_id === member.id) || null
+
+    // Attendees list (admin only)
+    const attendees = member.is_admin
+      ? [
+          ...confirmedBookings.map(b => ({
+            name: b.members?.name || 'Member',
+            seats: b.seats || 1,
+            status: 'confirmed',
+          })),
+          ...waitlistBookings.map(b => ({
+            name: b.members?.name || 'Member',
+            seats: b.seats || 1,
+            status: 'waitlist',
+          })),
+        ]
+      : undefined
+
     return {
       ...ev,
       confirmed_seats,
       waitlist_count,
       seats_remaining: Math.max(0, ev.max_seats - confirmed_seats),
       my_booking,
+      ...(attendees !== undefined ? { attendees } : {}),
     }
   })
 
@@ -81,7 +101,11 @@ export async function POST(req) {
 
   const { data: event, error } = await supabaseAdmin
     .from('events')
-    .insert({ type: 'movie', title, movie_id: movie_id || null, event_date, event_time, max_seats: max_seats || 20, notes: notes || null, created_by: member.id })
+    .insert({
+      type: 'movie', title, movie_id: movie_id || null,
+      event_date, event_time, max_seats: max_seats || 20,
+      notes: notes || null, created_by: member.id,
+    })
     .select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
