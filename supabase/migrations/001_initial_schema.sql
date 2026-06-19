@@ -7,6 +7,7 @@ CREATE TABLE members (
   auth_id      UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   name         TEXT NOT NULL,
   username     TEXT UNIQUE NOT NULL,
+  pin          TEXT NOT NULL,
   status       TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
   is_admin     BOOLEAN DEFAULT false,
   joined_date  DATE DEFAULT CURRENT_DATE,
@@ -34,7 +35,6 @@ CREATE TABLE movies (
 );
 
 -- ─── EVENTS ────────────────────────────────────────────────────────────────
--- Movies are one type of event; future events (social, etc.) use type='general'
 CREATE TABLE events (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   type         TEXT NOT NULL DEFAULT 'movie' CHECK (type IN ('movie', 'general')),
@@ -69,44 +69,36 @@ CREATE TABLE votes (
 );
 
 -- ─── SETTINGS ──────────────────────────────────────────────────────────────
--- App-wide config (invite token, streaming services list, etc.)
 CREATE TABLE settings (
   key         TEXT PRIMARY KEY,
   value       TEXT,
   updated_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Seed default settings
 INSERT INTO settings (key, value) VALUES
-  ('invite_token', 'hive2026'),
+  ('invite_token', 'element2026'),
   ('our_streaming_services', '[]'),
   ('app_name', 'The Social Hive');
 
 -- ─── ROW LEVEL SECURITY ────────────────────────────────────────────────────
--- RLS is enabled automatically (project setting). Policies below control access.
-
--- Members: anyone authenticated can read; only admins write
 ALTER TABLE members ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "members_read" ON members FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "members_admin_write" ON members FOR ALL USING (
   EXISTS (SELECT 1 FROM members WHERE auth_id = auth.uid() AND is_admin = true)
 );
 
--- Movies: authenticated read; admin write
 ALTER TABLE movies ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "movies_read" ON movies FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "movies_admin_write" ON movies FOR ALL USING (
   EXISTS (SELECT 1 FROM members WHERE auth_id = auth.uid() AND is_admin = true)
 );
 
--- Events: authenticated read; admin write
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "events_read" ON events FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "events_admin_write" ON events FOR ALL USING (
   EXISTS (SELECT 1 FROM members WHERE auth_id = auth.uid() AND is_admin = true)
 );
 
--- Bookings: members see own bookings; admin sees all; members can insert/cancel own
 ALTER TABLE bookings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "bookings_own_read" ON bookings FOR SELECT USING (
   member_id = (SELECT id FROM members WHERE auth_id = auth.uid())
@@ -120,14 +112,12 @@ CREATE POLICY "bookings_own_cancel" ON bookings FOR UPDATE USING (
   OR EXISTS (SELECT 1 FROM members WHERE auth_id = auth.uid() AND is_admin = true)
 );
 
--- Votes: authenticated read/write own
 ALTER TABLE votes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "votes_read" ON votes FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "votes_own_write" ON votes FOR ALL USING (
   member_id = (SELECT id FROM members WHERE auth_id = auth.uid())
 );
 
--- Settings: authenticated read; admin write
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "settings_read" ON settings FOR SELECT USING (auth.role() = 'authenticated');
 CREATE POLICY "settings_admin_write" ON settings FOR ALL USING (
