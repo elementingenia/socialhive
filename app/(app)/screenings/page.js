@@ -18,10 +18,38 @@ function fmtTime(timeStr) {
   return `${h12}:${String(m).padStart(2, '0')}${ampm}`
 }
 
-function seatsLabel(seatsRemaining, maxSeats) {
-  if (seatsRemaining === 0) return { text: 'Full', color: 'var(--danger)' }
-  if (seatsRemaining <= 3) return { text: `${seatsRemaining} seat${seatsRemaining === 1 ? '' : 's'} left`, color: 'var(--amber-dark)' }
-  return { text: `${seatsRemaining} of ${maxSeats} seats available`, color: 'var(--text-dim)' }
+// ── Capacity Bar ──────────────────────────────────────────────────────────────
+function CapacityBar({ confirmedSeats, maxSeats, waitlistCount }) {
+  const pct = maxSeats > 0 ? Math.min(100, (confirmedSeats / maxSeats) * 100) : 0
+  const remaining = Math.max(0, maxSeats - confirmedSeats)
+  const barColor = pct >= 85 ? 'var(--danger)' : pct >= 55 ? 'var(--amber)' : 'var(--green)'
+  const labelColor = pct >= 85 ? 'var(--danger)' : pct >= 55 ? 'var(--amber-dark)' : 'var(--green)'
+
+  return (
+    <div style={{ marginTop: '0.4rem' }}>
+      {/* Bar */}
+      <div style={{ height: 7, background: 'var(--surface2)', borderRadius: 4, overflow: 'hidden', marginBottom: '0.3rem' }}>
+        <div style={{
+          height: '100%',
+          width: `${pct}%`,
+          background: barColor,
+          borderRadius: 4,
+          transition: 'width 0.4s ease, background 0.4s ease',
+          minWidth: pct > 0 ? 6 : 0,
+        }} />
+      </div>
+      {/* Labels */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+        <span style={{ color: 'var(--text-dim)' }}>
+          {confirmedSeats}/{maxSeats} seats taken
+          {waitlistCount > 0 && <span style={{ color: 'var(--amber-dark)', marginLeft: '0.4rem' }}>· {waitlistCount} waiting</span>}
+        </span>
+        <span style={{ color: labelColor, fontWeight: 600 }}>
+          {remaining === 0 ? 'Full' : `${remaining} left`}
+        </span>
+      </div>
+    </div>
+  )
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -46,22 +74,13 @@ function Toast({ toasts }) {
 // ── Confirm Dialog ────────────────────────────────────────────────────────────
 function ConfirmDialog({ message, onConfirm, onCancel }) {
   return (
-    <div
-      onClick={onCancel}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}
-    >
+    <div onClick={onCancel} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', borderRadius: '16px', padding: '1.5rem', width: '100%', maxWidth: 320, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
         <div style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem' }}>Are you sure?</div>
         <div style={{ fontSize: '0.88rem', color: 'var(--text-dim)', marginBottom: '1.25rem', lineHeight: 1.5 }}>{message}</div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <button onClick={onCancel}
-            style={{ flex: 1, padding: '0.75rem', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', color: 'var(--text)' }}>
-            Keep it
-          </button>
-          <button onClick={onConfirm}
-            style={{ flex: 1, padding: '0.75rem', background: 'var(--danger)', border: 'none', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', color: '#fff' }}>
-            Yes, cancel
-          </button>
+          <button onClick={onCancel} style={{ flex: 1, padding: '0.75rem', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', color: 'var(--text)' }}>Keep it</button>
+          <button onClick={onConfirm} style={{ flex: 1, padding: '0.75rem', background: 'var(--danger)', border: 'none', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', color: '#fff' }}>Yes, cancel</button>
         </div>
       </div>
     </div>
@@ -88,24 +107,16 @@ function SeatPicker({ seatsRemaining, isFull, onPick, onCancel }) {
         {[1, 2, 3, 4].map(n => {
           const disabled = !isFull && n > seatsRemaining
           return (
-            <button
-              key={n}
-              onClick={() => !disabled && onPick(n)}
-              style={{
-                width: 36, height: 36, borderRadius: '50%', border: '2px solid',
-                borderColor: disabled ? 'var(--border)' : isFull ? 'var(--amber)' : 'var(--teal)',
-                background: disabled ? 'var(--surface2)' : 'transparent',
-                color: disabled ? 'var(--border)' : isFull ? 'var(--amber-dark)' : 'var(--teal)',
-                fontWeight: 700, fontSize: '0.9rem',
-                cursor: disabled ? 'not-allowed' : 'pointer',
-              }}
-            >{n}</button>
+            <button key={n} onClick={() => !disabled && onPick(n)} style={{
+              width: 36, height: 36, borderRadius: '50%', border: '2px solid',
+              borderColor: disabled ? 'var(--border)' : isFull ? 'var(--amber)' : 'var(--teal)',
+              background: disabled ? 'var(--surface2)' : 'transparent',
+              color: disabled ? 'var(--border)' : isFull ? 'var(--amber-dark)' : 'var(--teal)',
+              fontWeight: 700, fontSize: '0.9rem', cursor: disabled ? 'not-allowed' : 'pointer',
+            }}>{n}</button>
           )
         })}
-        <button onClick={onCancel}
-          style={{ background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '0.78rem', cursor: 'pointer', padding: '0 0.25rem' }}>
-          ✕
-        </button>
+        <button onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '0.78rem', cursor: 'pointer', padding: '0 0.25rem' }}>✕</button>
       </div>
     </div>
   )
@@ -142,11 +153,7 @@ function AddScreeningSheet({ session, onClose, onAdded, addToast }) {
     })
     const data = await res.json()
     setSaving(false)
-    if (!res.ok) {
-      setErr(data.error || 'Failed to add screening')
-      addToast('Failed to add screening', 'error')
-      return
-    }
+    if (!res.ok) { setErr(data.error || 'Failed'); addToast('Failed to add screening', 'error'); return }
     addToast(`Screening added — ${pickedMovie?.title || 'Movie Night'} on ${date}`, 'success')
     onAdded(); onClose()
   }
@@ -228,7 +235,6 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
   const [pickingSeats, setPickingSeats] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
 
-  const { text: seatsText, color: seatsColor } = seatsLabel(ev.seats_remaining, ev.max_seats)
   const myStatus = ev.my_booking?.status || null
   const mySeats = ev.my_booking?.seats || 1
   const movie = ev.movies
@@ -244,10 +250,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
     })
     const data = await res.json()
     setActing(false)
-    if (!res.ok) {
-      addToast(data.error || 'Booking failed', 'error')
-      return
-    }
+    if (!res.ok) { addToast(data.error || 'Booking failed', 'error'); return }
     if (data.status === 'waitlist') {
       addToast(`Added to waitlist — ${seats} seat${seats > 1 ? 's' : ''} for ${ev.title}`, 'warn')
     } else {
@@ -265,10 +268,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
       body: JSON.stringify({ event_id: ev.id }),
     })
     setActing(false)
-    if (!res.ok) {
-      addToast('Could not cancel — please try again', 'error')
-      return
-    }
+    if (!res.ok) { addToast('Could not cancel — please try again', 'error'); return }
     addToast(`Booking cancelled for ${ev.title}`, 'success')
     onRefresh()
   }
@@ -277,13 +277,15 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
     <>
       <div style={{ background: 'var(--surface)', borderRadius: '14px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
         <div style={{ display: 'flex' }}>
+          {/* Poster */}
           {movie?.poster_url ? (
             <img src={movie.poster_url} alt={movie.title} style={{ width: 90, minHeight: 130, objectFit: 'cover', flexShrink: 0 }} />
           ) : (
             <div style={{ width: 90, minHeight: 130, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', flexShrink: 0 }}>🎬</div>
           )}
 
-          <div style={{ flex: 1, padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+          {/* Info */}
+          <div style={{ flex: 1, padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
             <div style={{ fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.3 }}>{ev.title}</div>
             <div style={{ color: 'var(--teal)', fontSize: '0.82rem', fontWeight: 600 }}>
               {fmtDate(ev.event_date)} · {fmtTime(ev.event_time)}
@@ -291,12 +293,15 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
             {movie?.genre && <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>{movie.genre}</div>}
             {ev.notes && <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', fontStyle: 'italic' }}>{ev.notes}</div>}
 
-            <div style={{ marginTop: '0.2rem', fontSize: '0.78rem', color: seatsColor, fontWeight: 500 }}>
-              {seatsText}
-              {ev.waitlist_count > 0 && <span style={{ color: 'var(--amber-dark)', marginLeft: '0.5rem' }}>· {ev.waitlist_count} on waitlist</span>}
-            </div>
+            {/* Capacity bar */}
+            <CapacityBar
+              confirmedSeats={ev.confirmed_seats}
+              maxSeats={ev.max_seats}
+              waitlistCount={ev.waitlist_count}
+            />
 
-            <div style={{ marginTop: 'auto', paddingTop: '0.4rem' }}>
+            {/* Actions */}
+            <div style={{ paddingTop: '0.4rem' }}>
               {myStatus === 'confirmed' && (
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                   <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.75rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: '20px' }}>
@@ -332,6 +337,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
           </div>
         </div>
 
+        {/* Admin bar */}
         {isAdmin && (
           <div style={{ padding: '0.5rem 1rem', borderTop: '1px solid var(--border)', background: 'var(--surface2)', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-dim)' }}>
             <span>{ev.confirmed_seats} seats confirmed · {ev.waitlist_count} on waitlist</span>
@@ -345,7 +351,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
           message={
             myStatus === 'waitlist'
               ? `Leave the waitlist for ${ev.title}? Your place in the queue will be lost.`
-              : `Cancel your ${mySeats > 1 ? mySeats + ' seats' : 'seat'} for ${ev.title}? ${mySeats > 1 ? 'All seats will be released.' : ''}`
+              : `Cancel your ${mySeats > 1 ? mySeats + ' seats' : 'seat'} for ${ev.title}?${mySeats > 1 ? ' All seats will be released.' : ''}`
           }
           onConfirm={doCancel}
           onCancel={() => setConfirmCancel(false)}
