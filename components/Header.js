@@ -57,7 +57,7 @@ export default function Header() {
         <div style={{ minWidth: 0 }}>
           <div style={{
             fontSize: '0.58rem', fontWeight: 700, letterSpacing: '0.1em',
-            color: 'var(--amber-dark)', textTransform: 'uppercase', lineHeight: 1,
+            color: moduleColour, textTransform: 'uppercase', lineHeight: 1,
             whiteSpace: 'nowrap',
           }}>The Social Hive</div>
           <div style={{
