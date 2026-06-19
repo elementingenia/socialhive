@@ -1,11 +1,11 @@
 export default function Home() {
   return (
     <div style={{ padding: '1.5rem' }}>
-      <div style={{ marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.5rem' }}>
+      <div style={{ marginBottom: '1.5rem' }}>
         <img
           src="/wordmark_final.png"
           alt="The Social Hive"
-          style={{ height: 56, width: 'auto', display: 'block' }}
+          style={{ height: 96, width: 'auto', display: 'block' }}
         />
       </div>
       <div style={{ background: 'var(--surface)', borderRadius: '12px', padding: '1.5rem', border: '1px solid var(--border)', textAlign: 'center' }}>
