@@ -16,7 +16,8 @@ function streamingPill(streamingAu, weOwn) {
 
 function parseGenres(genreStr) {
   if (!genreStr) return []
-  return genreStr.split(',').map(g => g.trim()).filter(Boolean)
+  // Handle comma, pipe, and slash separators; normalise whitespace
+  return genreStr.split(/[,|\/]/).map(g => g.trim()).filter(Boolean)
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────
@@ -28,6 +29,22 @@ function Toast({ toasts }) {
           <span>{t.type === 'error' ? '✕' : '✓'}</span>{t.message}
         </div>
       ))}
+    </div>
+  )
+}
+
+// ── Confirm Dialog ────────────────────────────────────────────────────────────
+function ConfirmDialog({ title, message, confirmLabel, confirmColor, onConfirm, onCancel }) {
+  return (
+    <div onClick={onCancel} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', borderRadius: '16px', padding: '1.5rem', width: '100%', maxWidth: 320, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+        <div style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.5rem' }}>{title || 'Are you sure?'}</div>
+        <div style={{ fontSize: '0.88rem', color: 'var(--text-dim)', marginBottom: '1.25rem', lineHeight: 1.5 }}>{message}</div>
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <button onClick={onCancel} style={{ flex: 1, padding: '0.75rem', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', color: 'var(--text)' }}>Cancel</button>
+          <button onClick={onConfirm} style={{ flex: 1, padding: '0.75rem', background: confirmColor || 'var(--danger)', border: 'none', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', color: '#fff' }}>{confirmLabel || 'Confirm'}</button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -76,8 +93,10 @@ function Overlay({ children, onClose }) {
 }
 
 // ── Movie Detail Sheet ────────────────────────────────────────────────────────
-function DetailSheet({ movie, myVote, avgData, memberId, session, onClose, onVoted, addToast }) {
+function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClose, onVoted, onDeleted, addToast }) {
   const [voting, setVoting] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const pill = streamingPill(movie.streaming_au, movie.we_own)
   const genres = parseGenres(movie.genre)
 
@@ -103,83 +122,124 @@ function DetailSheet({ movie, myVote, avgData, memberId, session, onClose, onVot
     onVoted()
   }
 
+  async function handleDelete() {
+    setConfirmDelete(false)
+    setDeleting(true)
+    const res = await fetch(`/api/movies/${movie.id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${session.access_token}` },
+    })
+    setDeleting(false)
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      addToast(d.error || 'Delete failed', 'error')
+      return
+    }
+    addToast(`${movie.title} removed from library`, 'success')
+    onClose()
+    onDeleted()
+  }
+
   const imdbUrl = movie.imdb_id ? `https://www.imdb.com/title/${movie.imdb_id}/` : null
-  const rtUrl = null // RT doesn't have reliable deep links from title
 
   return (
-    <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', maxHeight: '92vh', overflowY: 'auto' }}>
-      {/* Poster banner */}
-      {movie.poster_url && (
-        <div style={{ position: 'relative', height: 180, overflow: 'hidden', borderRadius: '20px 20px 0 0' }}>
-          <img src={movie.poster_url} alt={movie.title} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', filter: 'blur(2px) brightness(0.6)', transform: 'scale(1.05)' }} />
-          <img src={movie.poster_url} alt={movie.title} style={{ position: 'absolute', left: '1.25rem', bottom: '-40px', width: 80, height: 120, objectFit: 'cover', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }} />
-          <button onClick={onClose} style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.5)', border: 'none', color: '#fff', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-        </div>
-      )}
-
-      <div style={{ padding: movie.poster_url ? '3rem 1.25rem 1.5rem' : '1.5rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        {!movie.poster_url && (
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-dim)' }}>×</button>
+    <>
+      <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', maxHeight: '92vh', overflowY: 'auto' }}>
+        {/* Poster banner */}
+        {movie.poster_url && (
+          <div style={{ position: 'relative', height: 180, overflow: 'hidden', borderRadius: '20px 20px 0 0' }}>
+            <img src={movie.poster_url} alt={movie.title} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', filter: 'blur(2px) brightness(0.6)', transform: 'scale(1.05)' }} />
+            <img src={movie.poster_url} alt={movie.title} style={{ position: 'absolute', left: '1.25rem', bottom: '-40px', width: 80, height: 120, objectFit: 'cover', borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }} />
+            <button onClick={onClose} style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.5)', border: 'none', color: '#fff', fontSize: '1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
           </div>
         )}
 
-        {/* Title + year */}
-        <div>
-          <div style={{ fontWeight: 800, fontSize: '1.2rem', lineHeight: 1.2 }}>{movie.title}</div>
-          {movie.year && <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem', marginTop: '0.2rem' }}>{movie.year} {movie.runtime && `· ${movie.runtime}`}</div>}
-        </div>
-
-        {/* Genres + pill */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center' }}>
-          {genres.map(g => (
-            <span key={g} style={{ background: 'var(--surface2)', borderRadius: '20px', padding: '0.2rem 0.65rem', fontSize: '0.75rem', color: 'var(--text-dim)' }}>{g}</span>
-          ))}
-          {pill && <span style={{ background: pill.bg, color: pill.color, borderRadius: '20px', padding: '0.2rem 0.65rem', fontSize: '0.75rem', fontWeight: 700 }}>● {pill.label}</span>}
-        </div>
-
-        {/* Ratings row */}
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          {avgData?.count > 0 && (
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--teal)' }}>{avgData.avg.toFixed(1)}</div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>Community ({avgData.count})</div>
+        <div style={{ padding: movie.poster_url ? '3rem 1.25rem 1.5rem' : '1.5rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {!movie.poster_url && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-dim)' }}>×</button>
             </div>
           )}
-          {movie.rating_imdb && (
-            <div style={{ textAlign: 'center' }}>
-              {imdbUrl
-                ? <a href={imdbUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--amber-dark)', textDecoration: 'none' }}>★ {movie.rating_imdb}</a>
-                : <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--amber-dark)' }}>★ {movie.rating_imdb}</div>
-              }
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>IMDB</div>
-            </div>
+
+          {/* Title + year */}
+          <div>
+            <div style={{ fontWeight: 800, fontSize: '1.2rem', lineHeight: 1.2 }}>{movie.title}</div>
+            {movie.year && <div style={{ color: 'var(--text-dim)', fontSize: '0.85rem', marginTop: '0.2rem' }}>{movie.year}{movie.runtime && ` · ${movie.runtime}`}</div>}
+          </div>
+
+          {/* Genres + streaming pill */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center' }}>
+            {genres.map(g => (
+              <span key={g} style={{ background: 'var(--surface2)', borderRadius: '20px', padding: '0.2rem 0.65rem', fontSize: '0.75rem', color: 'var(--text-dim)' }}>{g}</span>
+            ))}
+            {pill && <span style={{ background: pill.bg, color: pill.color, borderRadius: '20px', padding: '0.2rem 0.65rem', fontSize: '0.75rem', fontWeight: 700 }}>● {pill.label}</span>}
+          </div>
+
+          {/* Ratings row */}
+          <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            {avgData?.count > 0 && (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--teal)' }}>{avgData.avg.toFixed(1)}</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>Community ({avgData.count})</div>
+              </div>
+            )}
+            {movie.rating_imdb && (
+              <div style={{ textAlign: 'center' }}>
+                {imdbUrl
+                  ? <a href={imdbUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--amber-dark)', textDecoration: 'none' }}>★ {movie.rating_imdb}</a>
+                  : <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--amber-dark)' }}>★ {movie.rating_imdb}</div>
+                }
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>IMDB</div>
+              </div>
+            )}
+            {movie.rating_rt && (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fa320a' }}>🍅 {movie.rating_rt}</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>Rotten Tomatoes</div>
+              </div>
+            )}
+          </div>
+
+          {/* Director / cast */}
+          {movie.director && <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}><strong>Director:</strong> {movie.director}</div>}
+          {movie.actors   && <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}><strong>Cast:</strong> {movie.actors}</div>}
+
+          {/* Plot */}
+          {movie.plot && <div style={{ fontSize: '0.88rem', lineHeight: 1.6, color: 'var(--text)' }}>{movie.plot}</div>}
+
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+            <VoteGrid current={myVote} onVote={handleVote} onRemove={handleRemove} loading={voting} />
+          </div>
+
+          {/* Admin delete */}
+          {isAdmin && (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              disabled={deleting}
+              style={{ marginTop: '0.25rem', background: 'none', border: '1px solid var(--danger)', borderRadius: '10px', color: 'var(--danger)', fontSize: '0.82rem', fontWeight: 600, padding: '0.55rem', cursor: deleting ? 'not-allowed' : 'pointer', width: '100%', opacity: deleting ? 0.5 : 1 }}
+            >
+              {deleting ? 'Removing…' : '🗑 Remove from library'}
+            </button>
           )}
-          {movie.rating_rt && (
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fa320a' }}>🍅 {movie.rating_rt}</div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>Rotten Tomatoes</div>
-            </div>
-          )}
-        </div>
-
-        {/* Director / cast */}
-        {movie.director && <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}><strong>Director:</strong> {movie.director}</div>}
-        {movie.actors && <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)' }}><strong>Cast:</strong> {movie.actors}</div>}
-
-        {/* Plot */}
-        {movie.plot && <div style={{ fontSize: '0.88rem', lineHeight: 1.6, color: 'var(--text)' }}>{movie.plot}</div>}
-
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-          <VoteGrid current={myVote} onVote={handleVote} onRemove={handleRemove} loading={voting} />
         </div>
       </div>
-    </div>
+
+      {confirmDelete && (
+        <ConfirmDialog
+          title="Remove movie?"
+          message={`Remove "${movie.title}" from the library? This will also delete all community ratings.`}
+          confirmLabel="Remove"
+          confirmColor="var(--danger)"
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+    </>
   )
 }
 
-// ── Suggest Sheet (admin) ─────────────────────────────────────────────────────
-function SuggestSheet({ session, onClose, onAdded, addToast }) {
+// ── Suggest Sheet (any member can suggest; label changes for admin) ───────────
+function SuggestSheet({ isAdmin, session, onClose, onAdded, addToast }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -291,7 +351,7 @@ function SuggestSheet({ session, onClose, onAdded, addToast }) {
 
 // ── Movie Card ────────────────────────────────────────────────────────────────
 function MovieCard({ movie, myVote, avgData, onClick }) {
-  const pill = streamingPill(movie.streaming_au, movie.we_own)
+  const pill   = streamingPill(movie.streaming_au, movie.we_own)
   const genres = parseGenres(movie.genre)
 
   return (
@@ -305,28 +365,40 @@ function MovieCard({ movie, myVote, avgData, onClick }) {
       {/* Middle */}
       <div style={{ flex: 1, padding: '0.7rem 0.75rem', overflow: 'hidden' }}>
         <div style={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{movie.title}</div>
-        {movie.actors && <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem', marginTop: '0.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{movie.actors.split(',')[0]?.trim()}</div>}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem', marginTop: '0.35rem', alignItems: 'center' }}>
-          {pill && <span style={{ background: pill.bg, color: pill.color, borderRadius: '20px', padding: '0.15rem 0.5rem', fontSize: '0.7rem', fontWeight: 700 }}>● {pill.label}</span>}
-          {genres.slice(0, 2).map(g => (
-            <span key={g} style={{ background: 'var(--surface2)', borderRadius: '20px', padding: '0.15rem 0.5rem', fontSize: '0.7rem', color: 'var(--text-dim)' }}>{g}</span>
-          ))}
-        </div>
+        {movie.actors && (
+          <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem', marginTop: '0.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {movie.actors.split(',')[0]?.trim()}
+          </div>
+        )}
+        {/* Genre tags */}
+        {genres.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.3rem' }}>
+            {genres.slice(0, 2).map(g => (
+              <span key={g} style={{ background: 'var(--surface2)', borderRadius: '20px', padding: '0.12rem 0.45rem', fontSize: '0.68rem', color: 'var(--text-dim)' }}>{g}</span>
+            ))}
+          </div>
+        )}
+        {/* Streaming pill */}
+        {pill && (
+          <div style={{ marginTop: '0.3rem' }}>
+            <span style={{ background: pill.bg, color: pill.color, borderRadius: '20px', padding: '0.12rem 0.45rem', fontSize: '0.68rem', fontWeight: 700 }}>● {pill.label}</span>
+          </div>
+        )}
       </div>
 
       {/* Right: scores */}
-      <div style={{ padding: '0.7rem 0.85rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', gap: '0.2rem', flexShrink: 0, minWidth: 72 }}>
+      <div style={{ padding: '0.7rem 0.85rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', gap: '0.25rem', flexShrink: 0, minWidth: 72 }}>
         {avgData?.count > 0 ? (
           <>
             <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--teal)', lineHeight: 1 }}>{avgData.avg.toFixed(1)}</div>
-            <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)' }}>COMMUNITY ({avgData.count})</div>
+            <div style={{ fontSize: '0.62rem', color: 'var(--text-dim)', textAlign: 'right' }}>COMMUNITY<br/>({avgData.count})</div>
           </>
         ) : (
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', textAlign: 'right' }}>Not yet rated</div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textAlign: 'right' }}>Not yet<br/>rated</div>
         )}
-        {myVote && <div style={{ fontSize: '0.72rem', color: 'var(--teal)', fontWeight: 600 }}>you: {myVote}</div>}
-        {movie.rating_imdb && <div style={{ fontSize: '0.72rem', color: 'var(--amber-dark)' }}>★ {movie.rating_imdb}</div>}
-        {movie.rating_rt && <div style={{ fontSize: '0.72rem', color: '#fa320a' }}>🍅 {movie.rating_rt}</div>}
+        {myVote && <div style={{ fontSize: '0.7rem', color: 'var(--teal)', fontWeight: 700 }}>you: {myVote}</div>}
+        {movie.rating_imdb && <div style={{ fontSize: '0.7rem', color: 'var(--amber-dark)', fontWeight: 600 }}>★ {movie.rating_imdb}</div>}
+        {movie.rating_rt   && <div style={{ fontSize: '0.7rem', color: '#fa320a', fontWeight: 600 }}>🍅 {movie.rating_rt}</div>}
       </div>
     </div>
   )
@@ -334,19 +406,19 @@ function MovieCard({ movie, myVote, avgData, onClick }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Movies() {
-  const [movies, setMovies] = useState([])
-  const [votes, setVotes] = useState([])
-  const [member, setMember] = useState(null)
+  const [movies,  setMovies]  = useState([])
+  const [votes,   setVotes]   = useState([])
+  const [member,  setMember]  = useState(null)
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  const [search, setSearch] = useState('')
-  const [sortBy, setSortBy] = useState('community')
+  const [search,      setSearch]      = useState('')
+  const [sortBy,      setSortBy]      = useState('community')
   const [genreFilter, setGenreFilter] = useState('all')
 
   const [selectedMovie, setSelectedMovie] = useState(null)
-  const [showSuggest, setShowSuggest] = useState(false)
-  const [toasts, setToasts] = useState([])
+  const [showSuggest,   setShowSuggest]   = useState(false)
+  const [toasts,        setToasts]        = useState([])
 
   function addToast(message, type = 'success') {
     const id = Date.now()
@@ -387,22 +459,30 @@ export default function Movies() {
     return acc
   }, {})
 
-  // Unique genres
+  // Unique genres — collect from ALL movies, robust parsing
   const allGenres = [...new Set(
     movies.flatMap(m => parseGenres(m.genre))
   )].sort()
 
-  // Filter + sort
+  // Filter
   const filtered = movies.filter(m => {
-    const matchSearch = !search || m.title.toLowerCase().includes(search.toLowerCase()) || (m.actors || '').toLowerCase().includes(search.toLowerCase())
+    const matchSearch = !search ||
+      m.title.toLowerCase().includes(search.toLowerCase()) ||
+      (m.actors || '').toLowerCase().includes(search.toLowerCase())
     let matchGenre = true
     if (genreFilter === 'unscored') matchGenre = !myVotes[m.id]
     else if (genreFilter !== 'all') matchGenre = parseGenres(m.genre).includes(genreFilter)
     return matchSearch && matchGenre
   })
 
+  // Sort: community desc → IMDB desc (tiebreaker) → A-Z
   const sorted = [...filtered].sort((a, b) => {
-    if (sortBy === 'community') return (avgVotes[b.id]?.avg || 0) - (avgVotes[a.id]?.avg || 0)
+    if (sortBy === 'community') {
+      const diff = (avgVotes[b.id]?.avg || 0) - (avgVotes[a.id]?.avg || 0)
+      if (diff !== 0) return diff
+      // IMDB as tiebreaker
+      return (parseFloat(b.rating_imdb) || 0) - (parseFloat(a.rating_imdb) || 0)
+    }
     if (sortBy === 'imdb') return (parseFloat(b.rating_imdb) || 0) - (parseFloat(a.rating_imdb) || 0)
     return a.title.localeCompare(b.title)
   })
@@ -435,17 +515,15 @@ export default function Movies() {
         <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--teal)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
           ✦ Movies — Tap to view &amp; vote
         </div>
-        {member?.is_admin && (
-          <button onClick={() => setShowSuggest(true)}
-            style={{ background: 'var(--teal)', color: '#fff', border: 'none', borderRadius: '20px', padding: '0.4rem 0.9rem', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}>
-            + Suggest
-          </button>
-        )}
+        <button onClick={() => setShowSuggest(true)}
+          style={{ background: 'var(--teal)', color: '#fff', border: 'none', borderRadius: '20px', padding: '0.4rem 0.9rem', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}>
+          + Suggest
+        </button>
       </div>
 
       {/* Sort tabs */}
       <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.85rem' }}>
-        {[['community', 'Community Score'], ['imdb', 'IMDB Rating'], ['az', 'A–Z']].map(([key, label]) => (
+        {[['community', 'Community'], ['imdb', 'IMDB'], ['az', 'A–Z']].map(([key, label]) => (
           <button key={key} onClick={() => setSortBy(key)}
             style={{ flex: 1, padding: '0.5rem 0', borderRadius: '10px', border: '1.5px solid', borderColor: sortBy === key ? 'var(--teal)' : 'var(--border)', background: sortBy === key ? 'var(--teal)' : 'var(--surface)', color: sortBy === key ? '#fff' : 'var(--text)', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>
             {label}
@@ -455,10 +533,28 @@ export default function Movies() {
 
       {/* Genre filter pills */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '1rem' }}>
-        {[['all', 'All'], ['unscored', 'Unscored'], ...allGenres.map(g => [g, g])].map(([key, label]) => (
-          <button key={key} onClick={() => setGenreFilter(key)}
-            style={{ padding: '0.3rem 0.75rem', borderRadius: '20px', border: '1.5px solid', borderColor: genreFilter === key ? 'var(--teal)' : 'var(--border)', background: genreFilter === key ? 'var(--teal)' : 'transparent', color: genreFilter === key ? '#fff' : 'var(--text)', fontSize: '0.78rem', fontWeight: genreFilter === key ? 700 : 400, cursor: 'pointer' }}>
-            {label}
+        {/* All */}
+        <button onClick={() => setGenreFilter('all')}
+          style={{ padding: '0.3rem 0.75rem', borderRadius: '20px', border: '1.5px solid', borderColor: genreFilter === 'all' ? 'var(--teal)' : 'var(--border)', background: genreFilter === 'all' ? 'var(--teal)' : 'transparent', color: genreFilter === 'all' ? '#fff' : 'var(--text)', fontSize: '0.78rem', fontWeight: genreFilter === 'all' ? 700 : 400, cursor: 'pointer' }}>
+          All
+        </button>
+
+        {/* Unscored + help icon */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+          <button onClick={() => setGenreFilter('unscored')}
+            style={{ padding: '0.3rem 0.75rem', borderRadius: '20px', border: '1.5px solid', borderColor: genreFilter === 'unscored' ? 'var(--teal)' : 'var(--border)', background: genreFilter === 'unscored' ? 'var(--teal)' : 'transparent', color: genreFilter === 'unscored' ? '#fff' : 'var(--text)', fontSize: '0.78rem', fontWeight: genreFilter === 'unscored' ? 700 : 400, cursor: 'pointer' }}>
+            Unscored
+          </button>
+          <a href="https://iainpallot.github.io/elementmovies/user-guide.html" target="_blank" rel="noopener noreferrer"
+            title="What does Unscored mean?"
+            style={{ width: 18, height: 18, borderRadius: '50%', border: '1.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-dim)', fontWeight: 700, fontSize: '0.65rem', textDecoration: 'none', flexShrink: 0, lineHeight: 1 }}>?</a>
+        </div>
+
+        {/* Genre pills */}
+        {allGenres.map(g => (
+          <button key={g} onClick={() => setGenreFilter(g)}
+            style={{ padding: '0.3rem 0.75rem', borderRadius: '20px', border: '1.5px solid', borderColor: genreFilter === g ? 'var(--teal)' : 'var(--border)', background: genreFilter === g ? 'var(--teal)' : 'transparent', color: genreFilter === g ? '#fff' : 'var(--text)', fontSize: '0.78rem', fontWeight: genreFilter === g ? 700 : 400, cursor: 'pointer' }}>
+            {g}
           </button>
         ))}
       </div>
@@ -490,18 +586,21 @@ export default function Movies() {
             myVote={myVotes[selectedMovieData.id]}
             avgData={avgVotes[selectedMovieData.id]}
             memberId={member?.id}
+            isAdmin={member?.is_admin}
             session={session}
             onClose={() => setSelectedMovie(null)}
-            onVoted={() => { loadData(); }}
+            onVoted={loadData}
+            onDeleted={() => { setSelectedMovie(null); loadData() }}
             addToast={addToast}
           />
         </Overlay>
       )}
 
-      {/* Suggest sheet (admin) */}
+      {/* Suggest sheet */}
       {showSuggest && (
         <Overlay onClose={() => setShowSuggest(false)}>
           <SuggestSheet
+            isAdmin={member?.is_admin}
             session={session}
             onClose={() => setShowSuggest(false)}
             onAdded={loadData}
