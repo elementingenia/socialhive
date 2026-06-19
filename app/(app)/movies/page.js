@@ -389,10 +389,10 @@ function MovieCard({ movie, myVote, avgData, onClick }) {
       {/* Right: scores */}
       <div style={{ padding: '0.7rem 0.85rem', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center', gap: '0.25rem', flexShrink: 0, minWidth: 72 }}>
         {avgData?.count > 0 ? (
-          <>
-            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--teal)', lineHeight: 1 }}>{avgData.avg.toFixed(1)}</div>
-            <div style={{ fontSize: '0.62rem', color: 'var(--text-dim)', textAlign: 'right' }}>COMMUNITY<br/>({avgData.count})</div>
-          </>
+          <div style={{ position: 'relative', textAlign: 'right' }}>
+            <span style={{ position: 'absolute', top: 0, left: 0, fontSize: '0.58rem', fontWeight: 700, color: 'var(--teal)', lineHeight: 1 }}>({avgData.count})</span>
+            <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--teal)', lineHeight: 1, paddingTop: '0.6rem' }}>{avgData.avg.toFixed(1)}</div>
+          </div>
         ) : (
           <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textAlign: 'right' }}>Not yet<br/>rated</div>
         )}
