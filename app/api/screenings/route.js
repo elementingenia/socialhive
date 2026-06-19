@@ -10,14 +10,10 @@ async function getMember(token) {
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
   if (error || !user) return null
   const { data: member } = await supabaseAdmin
-    .from('members')
-    .select('id, is_admin')
-    .eq('auth_id', user.id)
-    .single()
+    .from('members').select('id, is_admin').eq('auth_id', user.id).single()
   return member
 }
 
-// GET — list upcoming screenings with booking seat counts + my status
 export async function GET(req) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
   if (!token) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
@@ -29,7 +25,7 @@ export async function GET(req) {
 
   const { data: events, error } = await supabaseAdmin
     .from('events')
-    .select('*, movies(id, title, poster_url, genre, runtime, rating_imdb)')
+    .select('*, movies(id, title, poster_url, genre, plot, runtime, rating_imdb, rating_rt)')
     .gte('event_date', today)
     .order('event_date')
     .order('event_time')
@@ -39,7 +35,6 @@ export async function GET(req) {
 
   const eventIds = events.map(e => e.id)
 
-  // Fetch seats column alongside status
   const { data: bookings } = await supabaseAdmin
     .from('bookings')
     .select('id, event_id, member_id, status, seats')
@@ -48,7 +43,6 @@ export async function GET(req) {
 
   const result = events.map(ev => {
     const evBookings = (bookings || []).filter(b => b.event_id === ev.id)
-    // Sum seats, not count rows
     const confirmed_seats = evBookings
       .filter(b => b.status === 'confirmed')
       .reduce((sum, b) => sum + (b.seats || 1), 0)
@@ -66,7 +60,6 @@ export async function GET(req) {
   return NextResponse.json(result)
 }
 
-// POST — create screening (admin only)
 export async function POST(req) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
   if (!token) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
@@ -88,18 +81,8 @@ export async function POST(req) {
 
   const { data: event, error } = await supabaseAdmin
     .from('events')
-    .insert({
-      type: 'movie',
-      title,
-      movie_id: movie_id || null,
-      event_date,
-      event_time,
-      max_seats: max_seats || 20,
-      notes: notes || null,
-      created_by: member.id,
-    })
-    .select()
-    .single()
+    .insert({ type: 'movie', title, movie_id: movie_id || null, event_date, event_time, max_seats: max_seats || 20, notes: notes || null, created_by: member.id })
+    .select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(event)
