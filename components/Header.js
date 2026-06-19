@@ -9,12 +9,19 @@ const PAGE_TITLES = {
   '/screenings': 'Screenings',
 }
 
+const MODULE_COLOURS = {
+  '/home': 'var(--amber)',
+  '/movies': 'var(--teal)',
+  '/screenings': 'var(--terracotta)',
+}
+
 export default function Header() {
   const [memberName, setMemberName] = useState('')
   const pathname = usePathname()
   const router  = useRouter()
 
-  const pageTitle = PAGE_TITLES[pathname] || ''
+  const pageTitle    = PAGE_TITLES[pathname] || ''
+  const moduleColour = MODULE_COLOURS[pathname] || 'var(--amber)'
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -33,19 +40,42 @@ export default function Header() {
   return (
     <header style={{
       position: 'sticky', top: 0, zIndex: 50,
-      background: 'var(--surface)', borderBottom: '1px solid var(--border)',
-      padding: '0.6rem 1rem',
+      background: 'var(--surface)',
+      borderBottom: `3px solid ${moduleColour}`,
+      padding: '0.5rem 1rem',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       boxShadow: '0 1px 8px rgba(0,0,0,0.07)',
     }}>
-      {/* Left: welcome */}
-      <div>
-        <div style={{ fontSize: '0.62rem', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.07em', lineHeight: 1 }}>Welcome</div>
-        <div style={{ fontSize: '0.92rem', fontWeight: 700, lineHeight: 1.2 }}>{memberName || '…'}</div>
+
+      {/* Left: bee logo mark + brand name */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+        <img
+          src="/logo_hex_bee.png"
+          alt="The Social Hive"
+          style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 4 }}
+        />
+        <div style={{ minWidth: 0 }}>
+          <div style={{
+            fontSize: '0.58rem', fontWeight: 700, letterSpacing: '0.1em',
+            color: 'var(--amber-dark)', textTransform: 'uppercase', lineHeight: 1,
+            whiteSpace: 'nowrap',
+          }}>The Social Hive</div>
+          <div style={{
+            fontSize: '0.72rem', color: 'var(--text-dim)', lineHeight: 1.2,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            {memberName ? `Welcome, ${memberName}` : '…'}
+          </div>
+        </div>
       </div>
 
-      {/* Centre: page title */}
-      <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text)', letterSpacing: '0.02em' }}>{pageTitle}</div>
+      {/* Centre: page title with module colour */}
+      <div style={{
+        fontSize: '0.95rem', fontWeight: 700,
+        color: moduleColour,
+        letterSpacing: '0.01em',
+        flexShrink: 0,
+      }}>{pageTitle}</div>
 
       {/* Right: help + sign out */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
