@@ -12,7 +12,7 @@ const PAGE_TITLES = {
 const MODULE_COLOURS = {
   '/home': 'var(--amber)',
   '/movies': 'var(--teal)',
-  '/screenings': 'var(--terracotta)',
+  '/screenings': 'var(--teal)',
 }
 
 export default function Header() {
@@ -41,7 +41,7 @@ export default function Header() {
     <header style={{
       position: 'sticky', top: 0, zIndex: 50,
       background: 'var(--surface)',
-      borderBottom: `3px solid ${moduleColour}`,
+      borderBottom: '3px solid ' + moduleColour,
       padding: '0.5rem 1rem',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       boxShadow: '0 1px 8px rgba(0,0,0,0.07)',
@@ -64,12 +64,12 @@ export default function Header() {
             fontSize: '0.72rem', color: 'var(--text-dim)', lineHeight: 1.2,
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>
-            {memberName ? `Welcome, ${memberName}` : '…'}
+            {memberName ? 'Welcome, ' + memberName : '…'}
           </div>
         </div>
       </div>
 
-      {/* Centre: page title with module colour */}
+      {/* Centre: page title */}
       <div style={{
         fontSize: '0.95rem', fontWeight: 700,
         color: moduleColour,
