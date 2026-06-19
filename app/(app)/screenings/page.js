@@ -46,6 +46,22 @@ function CapacityBar({ confirmedSeats, maxSeats, waitlistCount }) {
   )
 }
 
+// ── Community Score ───────────────────────────────────────────────────────────
+function CommunityScore({ communityScore }) {
+  if (!communityScore || communityScore.count === 0) return null
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <span style={{
+        position: 'absolute', top: 0, left: 0,
+        fontSize: '0.55rem', fontWeight: 700, color: 'var(--teal)', lineHeight: 1,
+      }}>({communityScore.count})</span>
+      <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--teal)', lineHeight: 1, paddingTop: '0.55rem' }}>
+        {communityScore.avg.toFixed(1)}
+      </div>
+    </div>
+  )
+}
+
 // ── Toast ─────────────────────────────────────────────────────────────────────
 function Toast({ toasts }) {
   return (
@@ -75,6 +91,39 @@ function ConfirmDialog({ message, onConfirm, onCancel }) {
         <div style={{ display: 'flex', gap: '0.75rem' }}>
           <button onClick={onCancel} style={{ flex: 1, padding: '0.75rem', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', color: 'var(--text)' }}>Keep it</button>
           <button onClick={onConfirm} style={{ flex: 1, padding: '0.75rem', background: 'var(--danger)', border: 'none', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', color: '#fff' }}>Yes, cancel</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Split Booking Dialog ──────────────────────────────────────────────────────
+function SplitDialog({ offer, onAccept, onDecline }) {
+  return (
+    <div onClick={onDecline} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: 'var(--surface)', borderRadius: '16px', padding: '1.5rem', width: '100%', maxWidth: 340, boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+        <div style={{ fontSize: '1rem', fontWeight: 700, marginBottom: '0.5rem' }}>Not enough seats</div>
+        <div style={{ fontSize: '0.88rem', color: 'var(--text-dim)', marginBottom: '1rem', lineHeight: 1.55 }}>
+          Only <strong style={{ color: 'var(--text)' }}>{offer.confirmed}</strong> seat{offer.confirmed !== 1 ? 's' : ''} are available right now.
+          We can confirm those and put <strong style={{ color: 'var(--text)' }}>{offer.waitlisted}</strong> on the waitlist — you&apos;ll be first in line if more seats open up.
+        </div>
+        <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '0.75rem 1rem', marginBottom: '1.25rem', fontSize: '0.82rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+            <span style={{ color: 'var(--text-dim)' }}>Confirmed</span>
+            <span style={{ fontWeight: 700, color: '#15803d' }}>{offer.confirmed} seat{offer.confirmed !== 1 ? 's' : ''}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: 'var(--text-dim)' }}>Waitlisted</span>
+            <span style={{ fontWeight: 700, color: 'var(--amber-dark)' }}>{offer.waitlisted} seat{offer.waitlisted !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <button onClick={onDecline} style={{ flex: 1, padding: '0.75rem', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', color: 'var(--text)' }}>
+            Go back
+          </button>
+          <button onClick={onAccept} style={{ flex: 1, padding: '0.75rem', background: 'var(--teal)', border: 'none', borderRadius: '10px', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer', color: '#fff' }}>
+            Accept split
+          </button>
         </div>
       </div>
     </div>
@@ -143,13 +192,13 @@ function AddScreeningSheet({ session, onClose, onAdded, addToast }) {
     setSaving(true); setErr(null)
     const res = await fetch('/api/screenings', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
       body: JSON.stringify({ movie_id: pickedMovie?.id || null, event_date: date, event_time: time, max_seats: Number(maxSeats), notes: notes || null }),
     })
     const data = await res.json()
     setSaving(false)
     if (!res.ok) { setErr(data.error || 'Failed'); addToast('Failed to add screening', 'error'); return }
-    addToast(`Screening added — ${pickedMovie?.title || 'Movie Night'} on ${date}`, 'success')
+    addToast('Screening added — ' + (pickedMovie?.title || 'Movie Night') + ' on ' + date, 'success')
     onAdded(); onClose()
   }
 
@@ -231,28 +280,54 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
   const [changingSeats, setChangingSeats] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [showAttendees, setShowAttendees] = useState(false)
+  const [splitOffer,    setSplitOffer]    = useState(null)
 
-  const myStatus = ev.my_booking?.status || null
-  const mySeats  = ev.my_booking?.seats  || 1
   const movie    = ev.movies
   const isFull   = ev.seats_remaining === 0
+
+  // Derived booking state from updated API shape
+  const hasConfirmed     = ev.my_booking?.has_confirmed     || false
+  const hasWaitlist      = ev.my_booking?.has_waitlist      || false
+  const myConfirmedSeats = ev.my_booking?.confirmed_seats   || 0
+  const myWaitlistSeats  = ev.my_booking?.waitlist_seats    || 0
+  const hasAnyBooking    = hasConfirmed || hasWaitlist
 
   async function book(seats) {
     setPickingSeats(false)
     setActing(true)
     const res = await fetch('/api/bookings', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
       body: JSON.stringify({ event_id: ev.id, seats }),
     })
     const data = await res.json()
     setActing(false)
     if (!res.ok) { addToast(data.error || 'Booking failed', 'error'); return }
-    if (data.status === 'waitlist') {
-      addToast(`Added to waitlist — ${seats} seat${seats > 1 ? 's' : ''} for ${ev.title}`, 'warn')
-    } else {
-      addToast(`Booked! ${seats} seat${seats > 1 ? 's' : ''} confirmed for ${ev.title}`, 'success')
+    if (data.status === 'split_offer') {
+      setSplitOffer({ confirmed: data.confirmed, waitlisted: data.waitlisted, seats })
+      return
     }
+    if (data.status === 'waitlist') {
+      addToast('Added to waitlist — ' + seats + ' seat' + (seats > 1 ? 's' : '') + ' for ' + ev.title, 'warn')
+    } else {
+      addToast('Booked! ' + seats + ' seat' + (seats > 1 ? 's' : '') + ' confirmed for ' + ev.title, 'success')
+    }
+    onRefresh()
+  }
+
+  async function acceptSplit() {
+    const { seats } = splitOffer
+    setSplitOffer(null)
+    setActing(true)
+    const res = await fetch('/api/bookings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ event_id: ev.id, seats, accept_split: true }),
+    })
+    const data = await res.json()
+    setActing(false)
+    if (!res.ok) { addToast(data.error || 'Booking failed', 'error'); return }
+    addToast(data.confirmed + ' confirmed + ' + data.waitlisted + ' on waitlist for ' + ev.title, 'success')
     onRefresh()
   }
 
@@ -261,13 +336,13 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
     setActing(true)
     const res = await fetch('/api/bookings', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
       body: JSON.stringify({ event_id: ev.id, seats: newSeats }),
     })
     const data = await res.json()
     setActing(false)
     if (!res.ok) { addToast(data.error || 'Could not change seats', 'error'); return }
-    addToast(`Changed to ${newSeats} seat${newSeats > 1 ? 's' : ''} for ${ev.title}`, 'success')
+    addToast('Changed to ' + newSeats + ' seat' + (newSeats > 1 ? 's' : '') + ' for ' + ev.title, 'success')
     onRefresh()
   }
 
@@ -276,12 +351,12 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
     setActing(true)
     const res = await fetch('/api/bookings', {
       method: 'DELETE',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
       body: JSON.stringify({ event_id: ev.id }),
     })
     setActing(false)
     if (!res.ok) { addToast('Could not cancel — please try again', 'error'); return }
-    addToast(`Booking cancelled for ${ev.title}`, 'success')
+    addToast('Booking cancelled for ' + ev.title, 'success')
     onRefresh()
   }
 
@@ -290,7 +365,14 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
 
   return (
     <>
-      <div style={{ background: 'var(--surface)', borderRadius: '14px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
+      <div style={{
+        background: 'var(--surface)',
+        borderRadius: '14px',
+        border: '1px solid var(--border)',
+        borderLeft: '3px solid var(--teal)',
+        overflow: 'hidden',
+        boxShadow: 'var(--shadow)',
+      }}>
         <div style={{ display: 'flex' }}>
           {/* Poster */}
           {movie?.poster_url ? (
@@ -308,32 +390,43 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
               {fmtDate(ev.event_date)} · {fmtTime(ev.event_time)}
             </div>
 
-            {/* Capacity bar — right under date/time */}
-            <CapacityBar
-              confirmedSeats={ev.confirmed_seats}
-              maxSeats={ev.max_seats}
-              waitlistCount={ev.waitlist_count}
-            />
-
             {/* Genre */}
             {movie?.genre && (
               <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>{movie.genre}</div>
             )}
 
-            {/* Plot */}
+            {/* Plot summary */}
             {movie?.plot && (
               <div style={{ color: 'var(--text-dim)', fontSize: '0.77rem', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                 {movie.plot}
               </div>
             )}
 
-            {/* Ratings */}
-            {(movie?.rating_imdb || movie?.rating_rt) && (
-              <div style={{ display: 'flex', gap: '0.65rem', fontSize: '0.75rem' }}>
-                {movie.rating_imdb && <span style={{ color: 'var(--amber-dark)', fontWeight: 600 }}>★ {movie.rating_imdb}</span>}
-                {movie.rating_rt   && <span style={{ color: '#fa320a', fontWeight: 600 }}>🍅 {movie.rating_rt}</span>}
+            {/* Ratings row */}
+            {(movie?.rating_imdb || movie?.rating_rt || ev.community_score) && (
+              <div style={{ display: 'flex', gap: '0.65rem', fontSize: '0.75rem', alignItems: 'center' }}>
+                {movie?.rating_imdb && (
+                  <span style={{ color: 'var(--amber-dark)', fontWeight: 600 }}>★ {movie.rating_imdb}</span>
+                )}
+                {movie?.rating_rt && (
+                  <span style={{ color: '#fa320a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                    🍅 {movie.rating_rt}
+                  </span>
+                )}
+                {ev.community_score && (
+                  <CommunityScore communityScore={ev.community_score} />
+                )}
               </div>
             )}
+
+            {/* Capacity bar — after all movie info */}
+            <div style={{ marginTop: '0.2rem' }}>
+              <CapacityBar
+                confirmedSeats={ev.confirmed_seats}
+                maxSeats={ev.max_seats}
+                waitlistCount={ev.waitlist_count}
+              />
+            </div>
 
             {/* Notes */}
             {ev.notes && (
@@ -342,11 +435,30 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
 
             {/* Actions */}
             <div style={{ paddingTop: '0.2rem' }}>
-              {/* Confirmed booking */}
-              {myStatus === 'confirmed' && !changingSeats && (
+
+              {/* Split booking: both confirmed + waitlisted seats */}
+              {hasConfirmed && hasWaitlist && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.75rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: '20px' }}>
+                      ✓ {myConfirmedSeats} seat{myConfirmedSeats > 1 ? 's' : ''} confirmed
+                    </span>
+                    <span style={{ background: '#fef3c7', color: '#d97706', fontSize: '0.75rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: '20px' }}>
+                      ⏳ {myWaitlistSeats} on waitlist
+                    </span>
+                  </div>
+                  <button onClick={() => setConfirmCancel(true)} disabled={acting}
+                    style={{ alignSelf: 'flex-start', background: 'none', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--text-dim)' }}>
+                    Cancel all
+                  </button>
+                </div>
+              )}
+
+              {/* Confirmed only */}
+              {hasConfirmed && !hasWaitlist && !changingSeats && (
                 <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.75rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: '20px' }}>
-                    ✓ {mySeats} seat{mySeats > 1 ? 's' : ''} booked
+                    ✓ {myConfirmedSeats} seat{myConfirmedSeats > 1 ? 's' : ''} booked
                   </span>
                   <button onClick={() => setChangingSeats(true)} disabled={acting}
                     style={{ background: 'none', border: '1px solid var(--teal)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: 'pointer', color: 'var(--teal)', fontWeight: 600 }}>
@@ -360,21 +472,21 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
               )}
 
               {/* Change seats picker */}
-              {myStatus === 'confirmed' && changingSeats && (
+              {hasConfirmed && !hasWaitlist && changingSeats && (
                 <SeatPicker
-                  seatsRemaining={ev.seats_remaining + mySeats}
+                  seatsRemaining={ev.seats_remaining + myConfirmedSeats}
                   isFull={false}
-                  currentSeats={mySeats}
+                  currentSeats={myConfirmedSeats}
                   onPick={doChange}
                   onCancel={() => setChangingSeats(false)}
                 />
               )}
 
-              {/* Waitlist */}
-              {myStatus === 'waitlist' && (
+              {/* Waitlist only */}
+              {!hasConfirmed && hasWaitlist && (
                 <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                   <span style={{ background: '#fef3c7', color: '#d97706', fontSize: '0.75rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: '20px' }}>
-                    ⏳ Waitlist — {mySeats} seat{mySeats > 1 ? 's' : ''}
+                    ⏳ Waitlist — {myWaitlistSeats} seat{myWaitlistSeats > 1 ? 's' : ''}
                   </span>
                   <button onClick={() => setConfirmCancel(true)} disabled={acting}
                     style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--text-dim)' }}>
@@ -383,8 +495,8 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
                 </div>
               )}
 
-              {/* Book button */}
-              {!myStatus && !pickingSeats && (
+              {/* Book button — only shown when no active booking */}
+              {!hasAnyBooking && !pickingSeats && (
                 <button onClick={() => setPickingSeats(true)} disabled={acting}
                   style={{ background: isFull ? 'var(--amber)' : 'var(--teal)', color: '#fff', border: 'none', borderRadius: '8px', padding: '0.4rem 1rem', fontSize: '0.82rem', fontWeight: 600, cursor: acting ? 'not-allowed' : 'pointer', opacity: acting ? 0.6 : 1 }}>
                   {acting ? '…' : isFull ? 'Join Waitlist' : 'Book'}
@@ -392,7 +504,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
               )}
 
               {/* Seat picker for new booking */}
-              {!myStatus && pickingSeats && (
+              {!hasAnyBooking && pickingSeats && (
                 <SeatPicker seatsRemaining={ev.seats_remaining} isFull={isFull} onPick={book} onCancel={() => setPickingSeats(false)} />
               )}
             </div>
@@ -450,12 +562,22 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
       {confirmCancel && (
         <ConfirmDialog
           message={
-            myStatus === 'waitlist'
-              ? `Leave the waitlist for ${ev.title}? Your place in the queue will be lost.`
-              : `Cancel your ${mySeats > 1 ? mySeats + ' seats' : 'seat'} for ${ev.title}?${mySeats > 1 ? ' All seats will be released.' : ''}`
+            hasConfirmed && hasWaitlist
+              ? 'Cancel all your bookings for ' + ev.title + '? Both your confirmed seats and waitlist place will be released.'
+              : !hasConfirmed && hasWaitlist
+              ? 'Leave the waitlist for ' + ev.title + '? Your place in the queue will be lost.'
+              : 'Cancel your ' + (myConfirmedSeats > 1 ? myConfirmedSeats + ' seats' : 'seat') + ' for ' + ev.title + '?' + (myConfirmedSeats > 1 ? ' All seats will be released.' : '')
           }
           onConfirm={doCancel}
           onCancel={() => setConfirmCancel(false)}
+        />
+      )}
+
+      {splitOffer && (
+        <SplitDialog
+          offer={splitOffer}
+          onAccept={acceptSplit}
+          onDecline={() => setSplitOffer(null)}
         />
       )}
     </>
@@ -491,7 +613,7 @@ export default function Screenings() {
     if (!session) return
     setLoading(true)
     const res = await fetch('/api/screenings', {
-      headers: { 'Authorization': `Bearer ${session.access_token}` },
+      headers: { 'Authorization': 'Bearer ' + session.access_token },
     })
     const data = await res.json()
     setScreenings(Array.isArray(data) ? data : [])
@@ -507,7 +629,7 @@ export default function Screenings() {
       <Toast toasts={toasts} />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-        <h1 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Upcoming Screenings</h1>
+        <h1 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--teal)' }}>🎬 Upcoming Screenings</h1>
         {member?.is_admin && (
           <button onClick={() => setShowAdd(true)}
             style={{ background: 'var(--teal)', color: '#fff', border: 'none', borderRadius: '10px', padding: '0.5rem 1rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
@@ -521,7 +643,7 @@ export default function Screenings() {
       ) : screenings.length === 0 ? (
         <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '3rem', fontSize: '0.9rem' }}>
           No upcoming screenings yet.
-          {member?.is_admin && <div style={{ marginTop: '0.5rem', fontSize: '0.82rem' }}>Use "+ Add" to schedule one.</div>}
+          {member?.is_admin && <div style={{ marginTop: '0.5rem', fontSize: '0.82rem' }}>Use &quot;+ Add&quot; to schedule one.</div>}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
