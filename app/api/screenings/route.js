@@ -17,7 +17,7 @@ async function getMember(token) {
   return member
 }
 
-// GET — list upcoming screenings with booking counts + my status
+// GET — list upcoming screenings with booking seat counts + my status
 export async function GET(req) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
   if (!token) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
@@ -39,22 +39,26 @@ export async function GET(req) {
 
   const eventIds = events.map(e => e.id)
 
+  // Fetch seats column alongside status
   const { data: bookings } = await supabaseAdmin
     .from('bookings')
-    .select('id, event_id, member_id, status')
+    .select('id, event_id, member_id, status, seats')
     .in('event_id', eventIds)
     .neq('status', 'cancelled')
 
   const result = events.map(ev => {
     const evBookings = (bookings || []).filter(b => b.event_id === ev.id)
-    const confirmed_count = evBookings.filter(b => b.status === 'confirmed').length
+    // Sum seats, not count rows
+    const confirmed_seats = evBookings
+      .filter(b => b.status === 'confirmed')
+      .reduce((sum, b) => sum + (b.seats || 1), 0)
     const waitlist_count = evBookings.filter(b => b.status === 'waitlist').length
     const my_booking = evBookings.find(b => b.member_id === member.id) || null
     return {
       ...ev,
-      confirmed_count,
+      confirmed_seats,
       waitlist_count,
-      seats_remaining: Math.max(0, ev.max_seats - confirmed_count),
+      seats_remaining: Math.max(0, ev.max_seats - confirmed_seats),
       my_booking,
     }
   })
