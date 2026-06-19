@@ -355,7 +355,7 @@ function MovieCard({ movie, myVote, avgData, onClick }) {
   const genres = parseGenres(movie.genre)
 
   return (
-    <div onClick={onClick} style={{ background: 'var(--surface)', borderRadius: '12px', border: '1px solid var(--border)', display: 'flex', gap: 0, overflow: 'hidden', boxShadow: 'var(--shadow)', cursor: 'pointer', minHeight: 100 }}>
+    <div onClick={onClick} style={{ background: 'var(--surface)', borderRadius: '12px', border: '1px solid var(--border)', borderLeft: '3px solid var(--teal)', display: 'flex', gap: 0, overflow: 'hidden', boxShadow: 'var(--shadow)', cursor: 'pointer', minHeight: 100 }}>
       {/* Poster */}
       {movie.poster_url
         ? <img src={movie.poster_url} alt={movie.title} style={{ width: 70, objectFit: 'cover', flexShrink: 0 }} />
@@ -494,9 +494,15 @@ export default function Movies() {
       <Toast toasts={toasts} />
 
       {/* Welcome banner */}
-      <div style={{ background: 'var(--surface)', borderRadius: '14px', padding: '1rem 1.1rem', marginBottom: '1rem', border: '1px solid var(--border)', fontSize: '0.88rem', lineHeight: 1.6, color: 'var(--text)' }}>
-        This is the community movie library — films suggested by residents for future screenings.{' '}
-        <strong>Score each movie to have your say.</strong> The higher the community vote, the more likely it is to make the big screen! 🎬
+      <div style={{ background: 'var(--surface)', borderRadius: '14px', padding: '1rem 1.1rem', marginBottom: '1rem', border: '1px solid var(--border)', borderLeft: '4px solid var(--teal)', fontSize: '0.88rem', lineHeight: 1.6, color: 'var(--text)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem' }}>
+          <span style={{ fontSize: '1.4rem', lineHeight: 1, flexShrink: 0 }}>🎬</span>
+          <div>
+            <div style={{ fontWeight: 700, color: 'var(--teal)', fontSize: '0.82rem', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.2rem' }}>Movies Library</div>
+            This is the community movie library — films suggested by residents for future screenings.{' '}
+            <strong>Score each movie to have your say.</strong> The higher the community vote, the more likely it is to make the big screen!
+          </div>
+        </div>
       </div>
 
       {/* Search */}
