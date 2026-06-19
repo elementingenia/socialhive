@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import BottomNav from '@/components/BottomNav'
+import Header from '@/components/Header'
 
 export default function AppLayout({ children }) {
   const router = useRouter()
@@ -27,6 +28,7 @@ export default function AppLayout({ children }) {
 
   return (
     <div style={{ paddingBottom: 70 }}>
+      <Header />
       {children}
       <BottomNav />
     </div>
