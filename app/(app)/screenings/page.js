@@ -50,15 +50,12 @@ function CapacityBar({ confirmedSeats, maxSeats, waitlistCount }) {
 function CommunityScore({ communityScore }) {
   if (!communityScore || communityScore.count === 0) return null
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
-      <span style={{
-        position: 'absolute', top: 0, left: 0,
-        fontSize: '0.55rem', fontWeight: 700, color: 'var(--teal)', lineHeight: 1,
-      }}>({communityScore.count})</span>
-      <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--teal)', lineHeight: 1, paddingTop: '0.55rem' }}>
-        {communityScore.avg.toFixed(1)}
-      </div>
-    </div>
+    <span style={{ color: 'var(--teal)', fontWeight: 800, fontSize: '0.9rem', lineHeight: 1 }}>
+      <sup style={{ fontSize: '0.5rem', fontWeight: 700, verticalAlign: 'super', lineHeight: 0 }}>
+        ({communityScore.count})
+      </sup>
+      {communityScore.avg.toFixed(1)}
+    </span>
   )
 }
 
