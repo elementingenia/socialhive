@@ -291,6 +291,11 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
               {fmtDate(ev.event_date)} · {fmtTime(ev.event_time)}
             </div>
             {movie?.genre && <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>{movie.genre}</div>}
+          {movie?.plot && (
+            <div style={{ color: 'var(--text-dim)', fontSize: '0.77rem', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+              {movie.plot}
+            </div>
+          )}
             {ev.notes && <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', fontStyle: 'italic' }}>{ev.notes}</div>}
 
             {/* Capacity bar */}
