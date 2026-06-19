@@ -6,7 +6,9 @@ const OMDB_KEY = 'ed1ed939'
 const delay = ms => new Promise(r => setTimeout(r, ms))
 
 export async function GET(req) {
-  if (req.headers.get('x-admin-secret') !== 'tmp-diag-2026') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (req.headers.get('x-admin-secret') !== 'tmp-diag-2026') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const { data: movies } = await admin
     .from('movies')
@@ -14,22 +16,25 @@ export async function GET(req) {
     .is('genre', null)
     .not('imdb_id', 'is', null)
 
-  if (!movies?.length) return NextResponse.json({ message: 'Nothing to backfill', count: 0 })
+  if (!movies || movies.length === 0) {
+    return NextResponse.json({ message: 'Nothing to backfill', count: 0 })
+  }
 
   const results = []
   for (const movie of movies) {
     try {
-      const res = await fetch(\`https://www.omdbapi.com/?i=\${movie.imdb_id}&apikey=\${OMDB_KEY}\`)
+      const url = 'https://www.omdbapi.com/?i=' + movie.imdb_id + '&apikey=' + OMDB_KEY
+      const res = await fetch(url)
       const data = await res.json()
       const genre = data.Genre && data.Genre !== 'N/A' ? data.Genre : null
       if (genre) {
         await admin.from('movies').update({ genre }).eq('id', movie.id)
         results.push({ title: movie.title, genre, status: 'updated' })
       } else {
-        results.push({ title: movie.title, genre: null, status: 'no_genre' })
+        results.push({ title: movie.title, status: 'no_genre' })
       }
     } catch (e) {
-      results.push({ title: movie.title, status: 'error', error: e.message })
+      results.push({ title: movie.title, status: 'error', error: String(e) })
     }
     await delay(220)
   }
