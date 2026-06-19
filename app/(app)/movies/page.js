@@ -92,6 +92,29 @@ function Overlay({ children, onClose }) {
   )
 }
 
+// ── Suggest Overlay (keyboard-aware) ─────────────────────────────────────────
+function SuggestOverlay({ children, onClose }) {
+  const [bottomOffset, setBottomOffset] = React.useState(0)
+
+  React.useEffect(() => {
+    const vv = window.visualViewport
+    if (!vv) return
+    function update() {
+      const keyboardH = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      setBottomOffset(keyboardH)
+    }
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update) }
+  }, [])
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 100, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 640, marginBottom: bottomOffset, transition: 'margin-bottom 0.18s ease' }}>{children}</div>
+    </div>
+  )
+}
+
 // ── Movie Detail Sheet ────────────────────────────────────────────────────────
 function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClose, onVoted, onDeleted, addToast }) {
   const [voting, setVoting] = useState(false)
@@ -280,7 +303,7 @@ function SuggestSheet({ isAdmin, session, onClose, onAdded, addToast }) {
   }
 
   return (
-    <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: '1.5rem', maxHeight: '90vh', overflowY: 'auto' }}>
+    <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: '1.5rem', maxHeight: '90vh', minHeight: '55vh', overflowY: 'auto' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
         <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Suggest a Movie</h2>
         <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-dim)' }}>×</button>
@@ -294,6 +317,7 @@ function SuggestSheet({ isAdmin, session, onClose, onAdded, addToast }) {
               value={query}
               onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && search()}
+              autoFocus
               style={{ flex: 1, padding: '0.65rem 0.85rem', border: '1.5px solid var(--border)', borderRadius: '10px', fontSize: '0.9rem', background: 'var(--surface2)', fontFamily: 'inherit' }}
             />
             <button onClick={search} disabled={searching}
@@ -604,7 +628,7 @@ export default function Movies() {
 
       {/* Suggest sheet */}
       {showSuggest && (
-        <Overlay onClose={() => setShowSuggest(false)}>
+        <SuggestOverlay onClose={() => setShowSuggest(false)}>
           <SuggestSheet
             isAdmin={member?.is_admin}
             session={session}
@@ -612,7 +636,7 @@ export default function Movies() {
             onAdded={loadData}
             addToast={addToast}
           />
-        </Overlay>
+        </SuggestOverlay>
       )}
     </div>
   )
