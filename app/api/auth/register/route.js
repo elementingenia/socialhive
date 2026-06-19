@@ -14,7 +14,15 @@ export async function POST(request) {
   try {
     const { inviteCode, username, password, confirmPassword } = await request.json()
 
-    if (inviteCode !== 'element2026') {
+    // Read invite token from settings (DB-driven, not hardcoded)
+    const { data: setting } = await supabaseAdmin
+      .from('settings')
+      .select('value')
+      .eq('key', 'invite_token')
+      .single()
+    const validToken = setting?.value || 'element2026'
+
+    if (inviteCode !== validToken) {
       return NextResponse.json({ error: 'Invalid invite code' }, { status: 403 })
     }
     if (!username || username.trim().length < 3) {
