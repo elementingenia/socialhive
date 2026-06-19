@@ -20,26 +20,20 @@ function fmtTime(timeStr) {
 
 // ── Capacity Bar ──────────────────────────────────────────────────────────────
 function CapacityBar({ confirmedSeats, maxSeats, waitlistCount }) {
-  const pct = maxSeats > 0 ? Math.min(100, (confirmedSeats / maxSeats) * 100) : 0
+  const pct       = maxSeats > 0 ? Math.min(100, (confirmedSeats / maxSeats) * 100) : 0
   const remaining = Math.max(0, maxSeats - confirmedSeats)
-  const barColor = pct >= 85 ? 'var(--danger)' : pct >= 55 ? 'var(--amber)' : 'var(--green)'
+  const barColor   = pct >= 85 ? 'var(--danger)' : pct >= 55 ? 'var(--amber)' : 'var(--green)'
   const labelColor = pct >= 85 ? 'var(--danger)' : pct >= 55 ? 'var(--amber-dark)' : 'var(--green)'
 
   return (
-    <div style={{ marginTop: '0.4rem' }}>
-      {/* Bar */}
-      <div style={{ height: 7, background: 'var(--surface2)', borderRadius: 4, overflow: 'hidden', marginBottom: '0.3rem' }}>
+    <div style={{ marginBottom: '0.4rem' }}>
+      <div style={{ height: 7, background: 'var(--surface2)', borderRadius: 4, overflow: 'hidden', marginBottom: '0.25rem' }}>
         <div style={{
-          height: '100%',
-          width: `${pct}%`,
-          background: barColor,
-          borderRadius: 4,
-          transition: 'width 0.4s ease, background 0.4s ease',
-          minWidth: pct > 0 ? 6 : 0,
+          height: '100%', width: `${pct}%`, background: barColor, borderRadius: 4,
+          transition: 'width 0.4s ease, background 0.4s ease', minWidth: pct > 0 ? 6 : 0,
         }} />
       </div>
-      {/* Labels */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.75rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
         <span style={{ color: 'var(--text-dim)' }}>
           {confirmedSeats}/{maxSeats} seats taken
           {waitlistCount > 0 && <span style={{ color: 'var(--amber-dark)', marginLeft: '0.4rem' }}>· {waitlistCount} waiting</span>}
@@ -97,26 +91,27 @@ function Overlay({ children, onClose }) {
 }
 
 // ── Seat Picker ───────────────────────────────────────────────────────────────
-function SeatPicker({ seatsRemaining, isFull, onPick, onCancel }) {
+function SeatPicker({ seatsRemaining, isFull, currentSeats, onPick, onCancel }) {
   return (
     <div style={{ marginTop: '0.5rem' }}>
       <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginBottom: '0.4rem', fontWeight: 500 }}>
-        {isFull ? 'Join waitlist — how many seats?' : 'How many seats?'}
+        {isFull ? 'Join waitlist — how many seats?' : currentSeats ? 'Change to how many seats?' : 'How many seats?'}
       </div>
       <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
         {[1, 2, 3, 4].map(n => {
-          const disabled = !isFull && n > seatsRemaining
+          const disabled = !isFull && !currentSeats && n > seatsRemaining
+          const isActive = n === currentSeats
           return (
             <button key={n} onClick={() => !disabled && onPick(n)} style={{
-              width: 36, height: 36, borderRadius: '50%', border: '2px solid',
-              borderColor: disabled ? 'var(--border)' : isFull ? 'var(--amber)' : 'var(--teal)',
-              background: disabled ? 'var(--surface2)' : 'transparent',
-              color: disabled ? 'var(--border)' : isFull ? 'var(--amber-dark)' : 'var(--teal)',
-              fontWeight: 700, fontSize: '0.9rem', cursor: disabled ? 'not-allowed' : 'pointer',
+              width: 40, height: 40, borderRadius: '50%', border: '2px solid',
+              borderColor: isActive ? 'var(--teal)' : disabled ? 'var(--border)' : isFull ? 'var(--amber)' : 'var(--teal)',
+              background: isActive ? 'var(--teal)' : disabled ? 'var(--surface2)' : 'transparent',
+              color: isActive ? '#fff' : disabled ? 'var(--border)' : isFull ? 'var(--amber-dark)' : 'var(--teal)',
+              fontWeight: 700, fontSize: '0.95rem', cursor: disabled ? 'not-allowed' : 'pointer',
             }}>{n}</button>
           )
         })}
-        <button onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '0.78rem', cursor: 'pointer', padding: '0 0.25rem' }}>✕</button>
+        <button onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '0.8rem', cursor: 'pointer', padding: '0 0.25rem' }}>✕</button>
       </div>
     </div>
   )
@@ -127,12 +122,12 @@ function AddScreeningSheet({ session, onClose, onAdded, addToast }) {
   const [movies, setMovies] = useState([])
   const [movieSearch, setMovieSearch] = useState('')
   const [pickedMovie, setPickedMovie] = useState(null)
-  const [date, setDate] = useState('')
-  const [time, setTime] = useState('18:00')
+  const [date, setDate]       = useState('')
+  const [time, setTime]       = useState('18:00')
   const [maxSeats, setMaxSeats] = useState(20)
-  const [notes, setNotes] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [err, setErr] = useState(null)
+  const [notes, setNotes]     = useState('')
+  const [saving, setSaving]   = useState(false)
+  const [err, setErr]         = useState(null)
 
   useEffect(() => {
     supabase.from('movies').select('id, title, poster_url, year').order('title')
@@ -231,14 +226,16 @@ function AddScreeningSheet({ session, onClose, onAdded, addToast }) {
 
 // ── Screening Card ────────────────────────────────────────────────────────────
 function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
-  const [acting, setActing] = useState(false)
-  const [pickingSeats, setPickingSeats] = useState(false)
+  const [acting,        setActing]        = useState(false)
+  const [pickingSeats,  setPickingSeats]  = useState(false)
+  const [changingSeats, setChangingSeats] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
+  const [showAttendees, setShowAttendees] = useState(false)
 
   const myStatus = ev.my_booking?.status || null
-  const mySeats = ev.my_booking?.seats || 1
-  const movie = ev.movies
-  const isFull = ev.seats_remaining === 0
+  const mySeats  = ev.my_booking?.seats  || 1
+  const movie    = ev.movies
+  const isFull   = ev.seats_remaining === 0
 
   async function book(seats) {
     setPickingSeats(false)
@@ -259,6 +256,21 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
     onRefresh()
   }
 
+  async function doChange(newSeats) {
+    setChangingSeats(false)
+    setActing(true)
+    const res = await fetch('/api/bookings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify({ event_id: ev.id, seats: newSeats }),
+    })
+    const data = await res.json()
+    setActing(false)
+    if (!res.ok) { addToast(data.error || 'Could not change seats', 'error'); return }
+    addToast(`Changed to ${newSeats} seat${newSeats > 1 ? 's' : ''} for ${ev.title}`, 'success')
+    onRefresh()
+  }
+
   async function doCancel() {
     setConfirmCancel(false)
     setActing(true)
@@ -273,6 +285,9 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
     onRefresh()
   }
 
+  const confirmedAttendees = (ev.attendees || []).filter(a => a.status === 'confirmed')
+  const waitlistAttendees  = (ev.attendees || []).filter(a => a.status === 'waitlist')
+
   return (
     <>
       <div style={{ background: 'var(--surface)', borderRadius: '14px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow)' }}>
@@ -285,41 +300,79 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
           )}
 
           {/* Info */}
-          <div style={{ flex: 1, padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+          <div style={{ flex: 1, padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
             <div style={{ fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.3 }}>{ev.title}</div>
+
+            {/* Date/time */}
             <div style={{ color: 'var(--teal)', fontSize: '0.82rem', fontWeight: 600 }}>
               {fmtDate(ev.event_date)} · {fmtTime(ev.event_time)}
             </div>
-            {movie?.genre && <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>{movie.genre}</div>}
-          {movie?.plot && (
-            <div style={{ color: 'var(--text-dim)', fontSize: '0.77rem', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-              {movie.plot}
-            </div>
-          )}
-            {ev.notes && <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', fontStyle: 'italic' }}>{ev.notes}</div>}
 
-            {/* Capacity bar */}
+            {/* Capacity bar — right under date/time */}
             <CapacityBar
               confirmedSeats={ev.confirmed_seats}
               maxSeats={ev.max_seats}
               waitlistCount={ev.waitlist_count}
             />
 
+            {/* Genre */}
+            {movie?.genre && (
+              <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>{movie.genre}</div>
+            )}
+
+            {/* Plot */}
+            {movie?.plot && (
+              <div style={{ color: 'var(--text-dim)', fontSize: '0.77rem', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                {movie.plot}
+              </div>
+            )}
+
+            {/* Ratings */}
+            {(movie?.rating_imdb || movie?.rating_rt) && (
+              <div style={{ display: 'flex', gap: '0.65rem', fontSize: '0.75rem' }}>
+                {movie.rating_imdb && <span style={{ color: 'var(--amber-dark)', fontWeight: 600 }}>★ {movie.rating_imdb}</span>}
+                {movie.rating_rt   && <span style={{ color: '#fa320a', fontWeight: 600 }}>🍅 {movie.rating_rt}</span>}
+              </div>
+            )}
+
+            {/* Notes */}
+            {ev.notes && (
+              <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', fontStyle: 'italic' }}>{ev.notes}</div>
+            )}
+
             {/* Actions */}
-            <div style={{ paddingTop: '0.4rem' }}>
-              {myStatus === 'confirmed' && (
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <div style={{ paddingTop: '0.2rem' }}>
+              {/* Confirmed booking */}
+              {myStatus === 'confirmed' && !changingSeats && (
+                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.75rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: '20px' }}>
                     ✓ {mySeats} seat{mySeats > 1 ? 's' : ''} booked
                   </span>
+                  <button onClick={() => setChangingSeats(true)} disabled={acting}
+                    style={{ background: 'none', border: '1px solid var(--teal)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: 'pointer', color: 'var(--teal)', fontWeight: 600 }}>
+                    Change
+                  </button>
                   <button onClick={() => setConfirmCancel(true)} disabled={acting}
                     style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--text-dim)' }}>
                     Cancel
                   </button>
                 </div>
               )}
+
+              {/* Change seats picker */}
+              {myStatus === 'confirmed' && changingSeats && (
+                <SeatPicker
+                  seatsRemaining={ev.seats_remaining + mySeats}
+                  isFull={false}
+                  currentSeats={mySeats}
+                  onPick={doChange}
+                  onCancel={() => setChangingSeats(false)}
+                />
+              )}
+
+              {/* Waitlist */}
               {myStatus === 'waitlist' && (
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                   <span style={{ background: '#fef3c7', color: '#d97706', fontSize: '0.75rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: '20px' }}>
                     ⏳ Waitlist — {mySeats} seat{mySeats > 1 ? 's' : ''}
                   </span>
@@ -329,12 +382,16 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
                   </button>
                 </div>
               )}
+
+              {/* Book button */}
               {!myStatus && !pickingSeats && (
                 <button onClick={() => setPickingSeats(true)} disabled={acting}
                   style={{ background: isFull ? 'var(--amber)' : 'var(--teal)', color: '#fff', border: 'none', borderRadius: '8px', padding: '0.4rem 1rem', fontSize: '0.82rem', fontWeight: 600, cursor: acting ? 'not-allowed' : 'pointer', opacity: acting ? 0.6 : 1 }}>
                   {acting ? '…' : isFull ? 'Join Waitlist' : 'Book'}
                 </button>
               )}
+
+              {/* Seat picker for new booking */}
               {!myStatus && pickingSeats && (
                 <SeatPicker seatsRemaining={ev.seats_remaining} isFull={isFull} onPick={book} onCancel={() => setPickingSeats(false)} />
               )}
@@ -342,11 +399,50 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
           </div>
         </div>
 
-        {/* Admin bar */}
+        {/* Admin bar with attendees accordion */}
         {isAdmin && (
-          <div style={{ padding: '0.5rem 1rem', borderTop: '1px solid var(--border)', background: 'var(--surface2)', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-dim)' }}>
-            <span>{ev.confirmed_seats} seats confirmed · {ev.waitlist_count} on waitlist</span>
-            <span>{ev.max_seats} total</span>
+          <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>
+            <button
+              onClick={() => setShowAttendees(!showAttendees)}
+              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 1rem', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'inherit' }}
+            >
+              <span>
+                <strong style={{ color: 'var(--green)' }}>{ev.confirmed_seats} seats confirmed</strong>
+                {ev.waitlist_count > 0 && <span style={{ color: 'var(--amber-dark)', marginLeft: '0.5rem' }}>· {ev.waitlist_count} on waitlist</span>}
+                <span style={{ marginLeft: '0.5rem' }}>of {ev.max_seats}</span>
+              </span>
+              <span style={{ fontSize: '0.65rem', color: 'var(--teal)' }}>{showAttendees ? '▲ Hide' : '▼ Attendees'}</span>
+            </button>
+
+            {showAttendees && (
+              <div style={{ padding: '0 1rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                {confirmedAttendees.length > 0 && (
+                  <>
+                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.15rem' }}>Confirmed</div>
+                    {confirmedAttendees.map((a, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', padding: '0.2rem 0', borderBottom: '1px solid var(--border)' }}>
+                        <span>{a.name}</span>
+                        <span style={{ color: 'var(--text-dim)' }}>{a.seats} seat{a.seats > 1 ? 's' : ''}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {waitlistAttendees.length > 0 && (
+                  <>
+                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--amber-dark)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: '0.5rem', marginBottom: '0.15rem' }}>Waitlist</div>
+                    {waitlistAttendees.map((a, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', padding: '0.2rem 0', borderBottom: '1px solid var(--border)' }}>
+                        <span>{a.name}</span>
+                        <span style={{ color: 'var(--text-dim)' }}>{a.seats} seat{a.seats > 1 ? 's' : ''}</span>
+                      </div>
+                    ))}
+                  </>
+                )}
+                {confirmedAttendees.length === 0 && waitlistAttendees.length === 0 && (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontStyle: 'italic' }}>No bookings yet</div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -369,11 +465,11 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Screenings() {
   const [screenings, setScreenings] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [session, setSession] = useState(null)
-  const [member, setMember] = useState(null)
-  const [showAdd, setShowAdd] = useState(false)
-  const [toasts, setToasts] = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [session,    setSession]    = useState(null)
+  const [member,     setMember]     = useState(null)
+  const [showAdd,    setShowAdd]    = useState(false)
+  const [toasts,     setToasts]     = useState([])
 
   function addToast(message, type = 'success') {
     const id = Date.now()
