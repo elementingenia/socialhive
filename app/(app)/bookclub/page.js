@@ -160,9 +160,8 @@ export default function BookClubHome() {
       {selected && (
         <EventSlideOut
           event={selected}
-          memberId={member?.id}
           onClose={() => setSelected(null)}
-          onBooked={() => { setSelected(null); window.location.reload() }}
+          onRefresh={() => { setSelected(null); window.location.reload() }}
         />
       )}
     </div>

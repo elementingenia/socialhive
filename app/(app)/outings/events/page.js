@@ -181,9 +181,8 @@ export default function SocialEvents() {
       {selected && (
         <EventSlideOut
           event={selected}
-          memberId={member?.id}
           onClose={() => setSelected(null)}
-          onBooked={() => { setSelected(null); load() }}
+          onRefresh={() => { setSelected(null); load() }}
         />
       )}
     </div>
