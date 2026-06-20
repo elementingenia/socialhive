@@ -408,10 +408,13 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
     const data = await res.json()
     setActing(false)
     if (!res.ok) { addToast(data.error || 'Could not change seats', 'error'); return }
-    addToast(newSeats + ' seat' + (newSeats > 1 ? 's' : '') + ' confirmed for ' + ev.title, 'success')
-    setTimeout(() => {
-      addToast('Waitlist place removed for ' + ev.title, 'warn')
-    }, 600)
+    if (data.status === 'split_change') {
+      addToast(data.confirmed + ' seat' + (data.confirmed > 1 ? 's' : '') + ' confirmed for ' + ev.title, 'success')
+      setTimeout(() => addToast(data.waitlisted + ' seat' + (data.waitlisted > 1 ? 's' : '') + ' on waitlist for ' + ev.title, 'warn'), 600)
+    } else {
+      addToast('Changed to ' + newSeats + ' seat' + (newSeats > 1 ? 's' : '') + ' for ' + ev.title, 'success')
+      if (myWaitlistSeats > 0) setTimeout(() => addToast('Waitlist place removed for ' + ev.title, 'warn'), 600)
+    }
     onRefresh()
   }
 
@@ -524,21 +527,16 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
                 </div>
               )}
 
-              {/* Split booking: Change seat picker — capped at confirmed seats, no overflow */}
+              {/* Split booking: Change seat picker — total seats (confirmed+waitlist), overflow allowed */}
               {hasConfirmed && hasWaitlist && changingSplit && (
-                <div>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--amber-dark)', fontWeight: 600, marginBottom: '0.3rem' }}>
-                    ⚠ Changing removes your waitlist place
-                  </div>
-                  <SeatPicker
-                    seatsRemaining={myConfirmedSeats}
-                    isFull={false}
-                    currentSeats={myConfirmedSeats}
-                    onPick={doChangeSplit}
-                    onCancel={() => setChangingSplit(false)}
-                    noOverflow={true}
-                  />
-                </div>
+                <SeatPicker
+                  seatsRemaining={myConfirmedSeats + myWaitlistSeats}
+                  isFull={false}
+                  currentSeats={myConfirmedSeats + myWaitlistSeats}
+                  onPick={doChangeSplit}
+                  onCancel={() => setChangingSplit(false)}
+                  allowOverflow={true}
+                />
               )}
 
               {/* Confirmed only */}
