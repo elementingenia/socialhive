@@ -12,7 +12,8 @@ const HUB_CONFIG = {
     items: [
       { path: "/movies",     label: "Movies Home", icon: "🏠" },
       { path: "/screenings", label: "Scheduled",   icon: "📅" },
-      { path: "/library",    label: "Library",     icon: "📚" },
+      { path: "/library",    label: "Suggestions", icon: "🗳️" },
+      { path: "/dvd",         label: "DVDs",        icon: "💿" },
     ],
   },
   bookclub: {

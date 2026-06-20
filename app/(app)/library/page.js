@@ -2,7 +2,6 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 function streamingPill(streamingAu, weOwn) {
   if (weOwn) return { label: 'Free', bg: '#dcfce7', color: '#15803d' }
   if (!streamingAu) return null
@@ -15,20 +14,18 @@ function parseGenres(g) {
   return g.split(/[,|\/]/).map(x => x.trim()).filter(Boolean)
 }
 
-// ── Toast ─────────────────────────────────────────────────────────────────────
 function Toast({ toasts }) {
   return (
     <div style={{ position:'fixed', top:'1rem', left:'50%', transform:'translateX(-50%)', zIndex:999, display:'flex', flexDirection:'column', gap:'0.5rem', pointerEvents:'none', minWidth:260, maxWidth:'90vw' }}>
       {toasts.map(t => (
-        <div key={t.id} style={{ background: t.type==='error' ? 'var(--danger)' : '#15803d', color:'#fff', padding:'0.75rem 1.1rem', borderRadius:'12px', fontSize:'0.88rem', fontWeight:600, boxShadow:'0 4px 20px rgba(0,0,0,0.2)', display:'flex', alignItems:'center', gap:'0.5rem' }}>
-          <span>{t.type==='error' ? '✕' : '✓'}</span>{t.message}
+        <div key={t.id} style={{ background: t.type==='error'?'var(--danger)':'#15803d', color:'#fff', padding:'0.75rem 1.1rem', borderRadius:'12px', fontSize:'0.88rem', fontWeight:600, boxShadow:'0 4px 20px rgba(0,0,0,0.2)', display:'flex', alignItems:'center', gap:'0.5rem' }}>
+          <span>{t.type==='error'?'✕':'✓'}</span>{t.message}
         </div>
       ))}
     </div>
   )
 }
 
-// ── Confirm Dialog ─────────────────────────────────────────────────────────────
 function ConfirmDialog({ title, message, confirmLabel, confirmColor, onConfirm, onCancel }) {
   return (
     <div onClick={onCancel} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:300, display:'flex', alignItems:'center', justifyContent:'center', padding:'1.5rem' }}>
@@ -44,7 +41,6 @@ function ConfirmDialog({ title, message, confirmLabel, confirmColor, onConfirm, 
   )
 }
 
-// ── Vote Grid ─────────────────────────────────────────────────────────────────
 function VoteGrid({ current, onVote, onRemove, loading }) {
   return (
     <div>
@@ -68,7 +64,6 @@ function VoteGrid({ current, onVote, onRemove, loading }) {
   )
 }
 
-// ── Overlay ───────────────────────────────────────────────────────────────────
 function Overlay({ children, onClose }) {
   return (
     <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
@@ -92,7 +87,6 @@ function SuggestOverlay({ children, onClose }) {
   )
 }
 
-// ── Detail Sheet ──────────────────────────────────────────────────────────────
 function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClose, onVoted, onDeleted, addToast }) {
   const [voting, setVoting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -115,9 +109,7 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
   async function handleRemove() {
     setVoting(true)
     await supabase.from('votes').delete().eq('movie_id',movie.id).eq('member_id',memberId)
-    setVoting(false)
-    addToast('Rating removed')
-    onVoted()
+    setVoting(false); addToast('Rating removed'); onVoted()
   }
   async function handleDelete() {
     setConfirmDelete(false); setDeleting(true)
@@ -177,7 +169,7 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
           {isAdmin && (
             <button onClick={()=>setConfirmDelete(true)} disabled={deleting}
               style={{ background:'none', border:'1px solid var(--danger)', borderRadius:'10px', color:'var(--danger)', fontSize:'0.82rem', fontWeight:600, padding:'0.55rem', cursor:deleting?'not-allowed':'pointer', width:'100%', opacity:deleting?0.5:1 }}>
-              {deleting?'Removing…':'🗑 Remove from library'}
+              {deleting?'Removing…':'🗑 Remove from suggestions'}
             </button>
           )}
         </div>
@@ -187,7 +179,6 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
   )
 }
 
-// ── Suggest Sheet ─────────────────────────────────────────────────────────────
 function SuggestSheet({ session, onClose, onAdded, addToast }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
@@ -260,7 +251,7 @@ function SuggestSheet({ session, onClose, onAdded, addToast }) {
           <div style={{ display:'flex', gap:'0.65rem' }}>
             <button onClick={()=>setPreview(null)} style={{ flex:1, padding:'0.8rem', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'10px', fontSize:'0.9rem', cursor:'pointer', fontWeight:600 }}>← Back</button>
             <button onClick={handleAdd} disabled={saving} style={{ flex:2, padding:'0.8rem', background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', fontSize:'0.9rem', fontWeight:600, cursor:saving?'not-allowed':'pointer', opacity:saving?0.6:1 }}>
-              {saving?'Adding…':'Add to Library'}
+              {saving?'Adding…':'Add to Suggestions'}
             </button>
           </div>
         </div>
@@ -269,7 +260,6 @@ function SuggestSheet({ session, onClose, onAdded, addToast }) {
   )
 }
 
-// ── Viewing Suggestions card ───────────────────────────────────────────────────
 function MovieCard({ movie, myVote, avgData, onClick }) {
   const pill = streamingPill(movie.streaming_au, movie.we_own)
   const genres = parseGenres(movie.genre)
@@ -305,58 +295,19 @@ function MovieCard({ movie, myVote, avgData, onClick }) {
   )
 }
 
-// ── DVD Library card (poster left, details right, no community score) ─────────
-function DvdCard({ movie, onClick }) {
-  const genres = parseGenres(movie.genre)
-  const imdbUrl = movie.imdb_id ? `https://www.imdb.com/title/${movie.imdb_id}/` : null
-  return (
-    <div onClick={onClick} style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', borderLeft:'3px solid var(--teal)', display:'flex', overflow:'hidden', boxShadow:'var(--shadow)', cursor:'pointer', minHeight:110 }}>
-      {movie.poster_url
-        ? <img src={movie.poster_url} alt={movie.title} style={{ width:75, objectFit:'cover', flexShrink:0 }} />
-        : <div style={{ width:75, background:'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.8rem', flexShrink:0 }}>💿</div>}
-      <div style={{ flex:1, padding:'0.75rem', display:'flex', flexDirection:'column', justifyContent:'center', gap:'0.3rem', overflow:'hidden' }}>
-        <div style={{ fontWeight:700, fontSize:'0.9rem', lineHeight:1.2 }}>{movie.title}</div>
-        {movie.year && <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{movie.year}{movie.runtime ? ` · ${movie.runtime}` : ''}</div>}
-        {genres.length>0 && (
-          <div style={{ display:'flex', flexWrap:'wrap', gap:'0.25rem' }}>
-            {genres.slice(0,2).map(g=><span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.12rem 0.45rem', fontSize:'0.68rem', color:'var(--text-dim)' }}>{g}</span>)}
-          </div>
-        )}
-        <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', flexWrap:'wrap' }}>
-          <span style={{ background:'#dcfce7', color:'#15803d', borderRadius:'20px', padding:'0.12rem 0.5rem', fontSize:'0.72rem', fontWeight:700 }}>● Free</span>
-          <span style={{ background:'var(--teal)18', color:'var(--teal)', borderRadius:'20px', padding:'0.12rem 0.5rem', fontSize:'0.72rem', fontWeight:700 }}>💿 DVD</span>
-          {movie.rating_imdb && (imdbUrl
-            ? <a href={imdbUrl} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ fontSize:'0.72rem', color:'var(--amber-dark)', fontWeight:600, textDecoration:'none' }}>★ {movie.rating_imdb}</a>
-            : <span style={{ fontSize:'0.72rem', color:'var(--amber-dark)', fontWeight:600 }}>★ {movie.rating_imdb}</span>)}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function LibraryPage() {
-  const [tab, setTab] = useState('suggestions')
-
-  // Shared data
   const [movies,  setMovies]  = useState([])
   const [votes,   setVotes]   = useState([])
   const [member,  setMember]  = useState(null)
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
-
-  // Viewing Suggestions state
   const [search,      setSearch]      = useState('')
   const [sortBy,      setSortBy]      = useState('community')
   const [genreFilter, setGenreFilter] = useState('all')
   const [selectedId,  setSelectedId]  = useState(null)
   const [showSuggest, setShowSuggest] = useState(false)
-
-  // DVD Library state
-  const [dvdSearch, setDvdSearch] = useState('')
-  const [dvdSort,   setDvdSort]   = useState('az')
-
   const [toasts, setToasts] = useState([])
+
   function addToast(message, type='success') {
     const id = Date.now()
     setToasts(prev=>[...prev,{id,message,type}])
@@ -365,7 +316,7 @@ export default function LibraryPage() {
 
   const loadData = useCallback(async () => {
     const [{ data: moviesData }, { data: votesData }] = await Promise.all([
-      supabase.from('movies').select('*').order('title'),
+      supabase.from('movies').select('*').eq('we_own', false).order('title'),
       supabase.from('votes').select('movie_id, member_id, score'),
     ])
     setMovies(moviesData||[])
@@ -381,201 +332,94 @@ export default function LibraryPage() {
     loadData()
   }, [loadData])
 
-  // Derived — voting
-  const myVotes = Object.fromEntries(
-    votes.filter(v=>v.member_id===member?.id).map(v=>[v.movie_id,v.score])
-  )
+  const myVotes = Object.fromEntries(votes.filter(v=>v.member_id===member?.id).map(v=>[v.movie_id,v.score]))
   const avgVotes = movies.reduce((acc,m) => {
     const mv = votes.filter(v=>v.movie_id===m.id)
     if (mv.length>0) acc[m.id] = { avg: mv.reduce((s,v)=>s+v.score,0)/mv.length, count:mv.length }
     return acc
   }, {})
-
   const allGenres = [...new Set(movies.flatMap(m=>parseGenres(m.genre)))].sort()
 
-  // Viewing Suggestions: exclude owned movies (DVD library handles those)
-  const suggestions = movies.filter(m => !m.we_own)
-  const filteredSuggestions = suggestions.filter(m => {
+  const filtered = movies.filter(m => {
     const matchSearch = !search || m.title.toLowerCase().includes(search.toLowerCase()) || (m.actors||'').toLowerCase().includes(search.toLowerCase())
     let matchGenre = true
     if (genreFilter==='unscored') matchGenre = !myVotes[m.id]
     else if (genreFilter!=='all') matchGenre = parseGenres(m.genre).includes(genreFilter)
     return matchSearch && matchGenre
   })
-  const sortedSuggestions = [...filteredSuggestions].sort((a,b) => {
+  const sorted = [...filtered].sort((a,b) => {
     if (sortBy==='community') { const d=(avgVotes[b.id]?.avg||0)-(avgVotes[a.id]?.avg||0); return d!==0?d:(parseFloat(b.rating_imdb)||0)-(parseFloat(a.rating_imdb)||0) }
     if (sortBy==='imdb') return (parseFloat(b.rating_imdb)||0)-(parseFloat(a.rating_imdb)||0)
     return a.title.localeCompare(b.title)
   })
-
-  // DVD Library: only owned movies
-  const dvdMovies = movies.filter(m => m.we_own)
-  const filteredDvd = dvdMovies.filter(m =>
-    !dvdSearch || m.title.toLowerCase().includes(dvdSearch.toLowerCase())
-  )
-  const sortedDvd = [...filteredDvd].sort((a,b) =>
-    dvdSort==='imdb'
-      ? (parseFloat(b.rating_imdb)||0)-(parseFloat(a.rating_imdb)||0)
-      : a.title.localeCompare(b.title)
-  )
 
   const selectedMovie = selectedId ? movies.find(m=>m.id===selectedId) : null
 
   return (
     <div style={{ background:'var(--bg)', minHeight:'100vh' }}>
       <Toast toasts={toasts} />
+      <div style={{ padding:'1rem 1rem 6rem' }}>
+        <div style={{ background:'var(--surface)', borderRadius:'14px', padding:'1rem', marginBottom:'1rem', border:'1px solid var(--border)', borderLeft:'4px solid var(--teal)', fontSize:'0.88rem', lineHeight:1.6 }}>
+          <div style={{ display:'flex', alignItems:'flex-start', gap:'0.6rem' }}>
+            <span style={{ fontSize:'1.4rem', flexShrink:0 }}>🗳️</span>
+            <div>
+              <div style={{ fontWeight:700, color:'var(--teal)', fontSize:'0.8rem', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'0.2rem' }}>Viewing Suggestions</div>
+              Films suggested by residents for future screenings. <strong>Score each movie to have your say</strong> — the higher the community vote, the more likely it is to make the big screen!
+            </div>
+          </div>
+        </div>
 
-      {/* Tab bar */}
-      <div style={{ display:'flex', gap:0, borderBottom:'2px solid var(--border)', background:'var(--surface)', position:'sticky', top:0, zIndex:10 }}>
-        {[['suggestions','🎬 Viewing Suggestions'],['dvd','💿 DVD Library']].map(([key,label])=>(
-          <button key={key} onClick={()=>setTab(key)} style={{
-            flex:1, padding:'14px 8px',
-            background:'transparent', border:'none', borderBottom: tab===key ? '2px solid var(--teal)' : '2px solid transparent',
-            marginBottom:-2,
-            color: tab===key ? 'var(--teal)' : 'var(--text-dim)',
-            fontWeight: tab===key ? 700 : 500,
-            fontSize:14, cursor:'pointer', fontFamily:'inherit',
-          }}>{label}</button>
-        ))}
+        <div style={{ position:'relative', marginBottom:'1rem' }}>
+          <span style={{ position:'absolute', left:'0.85rem', top:'50%', transform:'translateY(-50%)', color:'var(--text-dim)' }}>🔍</span>
+          <input placeholder="Search movies…" value={search} onChange={e=>setSearch(e.target.value)}
+            style={{ width:'100%', padding:'0.7rem 0.85rem 0.7rem 2.4rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
+        </div>
+
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.75rem' }}>
+          <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--teal)', letterSpacing:'0.08em', textTransform:'uppercase' }}>
+            ✦ {sorted.length} film{sorted.length!==1?'s':''} — tap to view &amp; vote
+          </div>
+          <button onClick={()=>setShowSuggest(true)} style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'20px', padding:'0.4rem 0.9rem', fontSize:'0.8rem', fontWeight:700, cursor:'pointer' }}>
+            + Suggest
+          </button>
+        </div>
+
+        <div style={{ display:'flex', gap:'0.4rem', marginBottom:'0.85rem' }}>
+          {[['community','Community'],['imdb','IMDB'],['az','A–Z']].map(([k,l])=>(
+            <button key={k} onClick={()=>setSortBy(k)}
+              style={{ flex:1, padding:'0.5rem 0', borderRadius:'10px', border:'1.5px solid', borderColor:sortBy===k?'var(--teal)':'var(--border)', background:sortBy===k?'var(--teal)':'var(--surface)', color:sortBy===k?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' }}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', marginBottom:'1rem' }}>
+          {[['all','All'],['unscored','Unscored'],...allGenres.map(g=>[g,g])].map(([k,l])=>(
+            <button key={k} onClick={()=>setGenreFilter(k)}
+              style={{ padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px solid', borderColor:genreFilter===k?'var(--teal)':'var(--border)', background:genreFilter===k?'var(--teal)':'transparent', color:genreFilter===k?'#fff':'var(--text)', fontSize:'0.78rem', fontWeight:genreFilter===k?700:400, cursor:'pointer' }}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {loading ? (
+          <div style={{ display:'flex', justifyContent:'center', padding:'3rem' }}><div className="spinner" /></div>
+        ) : sorted.length===0 ? (
+          <div style={{ textAlign:'center', color:'var(--text-dim)', padding:'3rem', fontSize:'0.9rem' }}>No movies match your filter.</div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:'0.65rem' }}>
+            {sorted.map(m=>(
+              <MovieCard key={m.id} movie={m} myVote={myVotes[m.id]} avgData={avgVotes[m.id]} onClick={()=>setSelectedId(m.id)} />
+            ))}
+          </div>
+        )}
       </div>
 
-      {loading ? (
-        <div style={{ display:'flex', justifyContent:'center', padding:'3rem' }}><div className="spinner" /></div>
-      ) : (
-        <>
-          {/* ── VIEWING SUGGESTIONS ────────────────────────────────── */}
-          {tab==='suggestions' && (
-            <div style={{ padding:'1rem 1rem 6rem' }}>
-              <div style={{ background:'var(--surface)', borderRadius:'14px', padding:'1rem', marginBottom:'1rem', border:'1px solid var(--border)', borderLeft:'4px solid var(--teal)', fontSize:'0.88rem', lineHeight:1.6, color:'var(--text)' }}>
-                <div style={{ display:'flex', alignItems:'flex-start', gap:'0.6rem' }}>
-                  <span style={{ fontSize:'1.4rem', flexShrink:0 }}>🎬</span>
-                  <div>
-                    <div style={{ fontWeight:700, color:'var(--teal)', fontSize:'0.8rem', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'0.2rem' }}>Viewing Suggestions</div>
-                    Films suggested by residents for future screenings. <strong>Score each movie to have your say</strong> — the higher the community vote, the more likely it is to make the big screen!
-                  </div>
-                </div>
-              </div>
-
-              {/* Search */}
-              <div style={{ position:'relative', marginBottom:'1rem' }}>
-                <span style={{ position:'absolute', left:'0.85rem', top:'50%', transform:'translateY(-50%)', color:'var(--text-dim)' }}>🔍</span>
-                <input placeholder="Search movies…" value={search} onChange={e=>setSearch(e.target.value)}
-                  style={{ width:'100%', padding:'0.7rem 0.85rem 0.7rem 2.4rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
-              </div>
-
-              {/* Header + suggest button */}
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.75rem' }}>
-                <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--teal)', letterSpacing:'0.08em', textTransform:'uppercase' }}>
-                  ✦ {sortedSuggestions.length} film{sortedSuggestions.length!==1?'s':''} — tap to view &amp; vote
-                </div>
-                <button onClick={()=>setShowSuggest(true)} style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'20px', padding:'0.4rem 0.9rem', fontSize:'0.8rem', fontWeight:700, cursor:'pointer' }}>
-                  + Suggest
-                </button>
-              </div>
-
-              {/* Sort tabs */}
-              <div style={{ display:'flex', gap:'0.4rem', marginBottom:'0.85rem' }}>
-                {[['community','Community'],['imdb','IMDB'],['az','A–Z']].map(([k,l])=>(
-                  <button key={k} onClick={()=>setSortBy(k)}
-                    style={{ flex:1, padding:'0.5rem 0', borderRadius:'10px', border:'1.5px solid', borderColor:sortBy===k?'var(--teal)':'var(--border)', background:sortBy===k?'var(--teal)':'var(--surface)', color:sortBy===k?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' }}>
-                    {l}
-                  </button>
-                ))}
-              </div>
-
-              {/* Genre pills */}
-              <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', marginBottom:'1rem' }}>
-                {[['all','All'],['unscored','Unscored'],...allGenres.map(g=>[g,g])].map(([k,l])=>(
-                  <button key={k} onClick={()=>setGenreFilter(k)}
-                    style={{ padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px solid', borderColor:genreFilter===k?'var(--teal)':'var(--border)', background:genreFilter===k?'var(--teal)':'transparent', color:genreFilter===k?'#fff':'var(--text)', fontSize:'0.78rem', fontWeight:genreFilter===k?700:400, cursor:'pointer' }}>
-                    {l}
-                  </button>
-                ))}
-              </div>
-
-              {/* List */}
-              {sortedSuggestions.length===0 ? (
-                <div style={{ textAlign:'center', color:'var(--text-dim)', padding:'3rem', fontSize:'0.9rem' }}>No movies match your filter.</div>
-              ) : (
-                <div style={{ display:'flex', flexDirection:'column', gap:'0.65rem' }}>
-                  {sortedSuggestions.map(m=>(
-                    <MovieCard key={m.id} movie={m} myVote={myVotes[m.id]} avgData={avgVotes[m.id]} onClick={()=>setSelectedId(m.id)} />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── DVD LIBRARY ────────────────────────────────────────── */}
-          {tab==='dvd' && (
-            <div style={{ padding:'1rem 1rem 6rem' }}>
-              <div style={{ background:'var(--surface)', borderRadius:'14px', padding:'1rem', marginBottom:'1rem', border:'1px solid var(--border)', borderLeft:'4px solid var(--teal)', fontSize:'0.88rem', lineHeight:1.6, color:'var(--text)' }}>
-                <div style={{ display:'flex', alignItems:'flex-start', gap:'0.6rem' }}>
-                  <span style={{ fontSize:'1.4rem', flexShrink:0 }}>💿</span>
-                  <div>
-                    <div style={{ fontWeight:700, color:'var(--teal)', fontSize:'0.8rem', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'0.2rem' }}>DVD Library</div>
-                    DVDs available in the cinema for residents to enjoy. All titles are <strong>free to watch</strong>.
-                  </div>
-                </div>
-              </div>
-
-              {/* Search */}
-              <div style={{ position:'relative', marginBottom:'1rem' }}>
-                <span style={{ position:'absolute', left:'0.85rem', top:'50%', transform:'translateY(-50%)', color:'var(--text-dim)' }}>🔍</span>
-                <input placeholder="Search DVDs…" value={dvdSearch} onChange={e=>setDvdSearch(e.target.value)}
-                  style={{ width:'100%', padding:'0.7rem 0.85rem 0.7rem 2.4rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
-              </div>
-
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.85rem' }}>
-                <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--teal)', letterSpacing:'0.08em', textTransform:'uppercase' }}>
-                  💿 {sortedDvd.length} title{sortedDvd.length!==1?'s':''}
-                </div>
-                <div style={{ display:'flex', gap:'0.4rem' }}>
-                  {[['az','A–Z'],['imdb','IMDB']].map(([k,l])=>(
-                    <button key={k} onClick={()=>setDvdSort(k)}
-                      style={{ padding:'0.3rem 0.75rem', borderRadius:'10px', border:'1.5px solid', borderColor:dvdSort===k?'var(--teal)':'var(--border)', background:dvdSort===k?'var(--teal)':'var(--surface)', color:dvdSort===k?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' }}>
-                      {l}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {sortedDvd.length===0 ? (
-                <div style={{ textAlign:'center', color:'var(--text-dim)', padding:'3rem' }}>
-                  <div style={{ fontSize:'2.5rem', marginBottom:'0.75rem' }}>💿</div>
-                  <div style={{ fontSize:'0.9rem', fontWeight:600 }}>No DVDs in the library yet</div>
-                  <div style={{ fontSize:'0.82rem', marginTop:'0.4rem' }}>Admin can add DVDs by marking movies as owned in the library.</div>
-                </div>
-              ) : (
-                <div style={{ display:'flex', flexDirection:'column', gap:'0.65rem' }}>
-                  {sortedDvd.map(m=>(
-                    <DvdCard key={m.id} movie={m} onClick={()=>setSelectedId(m.id)} />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Detail sheet (shared between both tabs) */}
       {selectedMovie && (
         <Overlay onClose={()=>setSelectedId(null)}>
-          <DetailSheet
-            movie={selectedMovie}
-            myVote={myVotes[selectedMovie.id]}
-            avgData={avgVotes[selectedMovie.id]}
-            memberId={member?.id}
-            isAdmin={member?.is_admin}
-            session={session}
-            onClose={()=>setSelectedId(null)}
-            onVoted={loadData}
-            onDeleted={()=>{ setSelectedId(null); loadData() }}
-            addToast={addToast}
-          />
+          <DetailSheet movie={selectedMovie} myVote={myVotes[selectedMovie.id]} avgData={avgVotes[selectedMovie.id]} memberId={member?.id} isAdmin={member?.is_admin} session={session} onClose={()=>setSelectedId(null)} onVoted={loadData} onDeleted={()=>{ setSelectedId(null); loadData() }} addToast={addToast} />
         </Overlay>
       )}
-
       {showSuggest && (
         <SuggestOverlay onClose={()=>setShowSuggest(false)}>
           <SuggestSheet session={session} onClose={()=>setShowSuggest(false)} onAdded={loadData} addToast={addToast} />
