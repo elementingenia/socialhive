@@ -70,11 +70,21 @@ export async function GET(req) {
     const myConfirmed = myBookings.find(b => b.status === 'confirmed') || null
     const myWaitlist  = myBookings.find(b => b.status === 'waitlist')  || null
 
+    // Waitlist position — rank by booked_at ascending
+    let waitlist_position = null
+    if (myWaitlist) {
+      const sorted = [...waitlistBookings].sort(
+        (a, b) => new Date(a.booked_at) - new Date(b.booked_at)
+      )
+      waitlist_position = sorted.findIndex(b => b.member_id === member.id) + 1
+    }
+
     const my_booking = (myConfirmed || myWaitlist) ? {
-      confirmed_seats: myConfirmed?.seats || 0,
-      waitlist_seats:  myWaitlist?.seats  || 0,
-      has_confirmed:   !!myConfirmed,
-      has_waitlist:    !!myWaitlist,
+      confirmed_seats:   myConfirmed?.seats || 0,
+      waitlist_seats:    myWaitlist?.seats  || 0,
+      has_confirmed:     !!myConfirmed,
+      has_waitlist:      !!myWaitlist,
+      waitlist_position,
     } : null
 
     const attendees = member.is_admin
