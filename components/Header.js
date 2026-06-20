@@ -52,7 +52,7 @@ export default function Header() {
         <img
           src="/logo_hex_bee.png"
           alt="The Social Hive"
-          style={{ width: 32, height: 32, flexShrink: 0, borderRadius: 4 }}
+          style={{ width: 36, height: 36, flexShrink: 0 }}
         />
         <div style={{ minWidth: 0 }}>
           <div style={{
