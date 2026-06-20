@@ -12,7 +12,7 @@ const HUB_TYPES = [
   { value: 'bookclub', label: 'Book Club', icon: '📚' },
 ]
 const HUB_COLOUR = { movie:'var(--teal)', social:'var(--terracotta)', outings:'var(--green)', bookclub:'var(--purple)' }
-const TABS = ['Events', 'Notices', 'Members', 'Bar', 'Tools']
+const TABS = ['Events', 'Notices', 'Members', 'Bar', 'Books', 'Tools']
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 function fmtDate(str) {
@@ -511,6 +511,128 @@ function BarProductsTab() {
 }
 
 
+// ── BOOKS TAB ─────────────────────────────────────────────────────────────────
+function BookForm({ book, onSave, onClose }) {
+  const isEdit = !!book?.id
+  const [form, setForm] = useState({
+    title:     book?.title     || '',
+    author:    book?.author    || '',
+    cover_url: book?.cover_url || '',
+    summary:   book?.summary   || '',
+    rating:    book?.rating    || '',
+  })
+  const [saving,   setSaving]   = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirm,  setConfirm]  = useState(false)
+  const [err,      setErr]      = useState('')
+
+  function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+
+  async function save() {
+    if (!form.title.trim()) return setErr('Title is required')
+    setSaving(true); setErr('')
+    const payload = {
+      title:     form.title.trim(),
+      author:    form.author    || null,
+      cover_url: form.cover_url || null,
+      summary:   form.summary   || null,
+      rating:    form.rating    || null,
+    }
+    const { error } = isEdit
+      ? await supabase.from('books').update(payload).eq('id', book.id)
+      : await supabase.from('books').insert(payload)
+    if (error) { setErr(error.message); setSaving(false); return }
+    onSave()
+  }
+
+  async function del() {
+    setDeleting(true)
+    await supabase.from('books').delete().eq('id', book.id)
+    onSave()
+  }
+
+  return (
+    <div>
+      <Field label="Title"><input style={inputStyle} value={form.title} onChange={e=>set('title',e.target.value)} placeholder="Book title" /></Field>
+      <Field label="Author"><input style={inputStyle} value={form.author} onChange={e=>set('author',e.target.value)} placeholder="Author name" /></Field>
+      <Field label="Cover Image URL"><input style={inputStyle} value={form.cover_url} onChange={e=>set('cover_url',e.target.value)} placeholder="https://…" /></Field>
+      <Field label="Rating"><input style={inputStyle} value={form.rating} onChange={e=>set('rating',e.target.value)} placeholder="e.g. 4.2" /></Field>
+      <Field label="Summary / Description">
+        <textarea style={{ ...inputStyle, minHeight:100, resize:'vertical' }} value={form.summary} onChange={e=>set('summary',e.target.value)} placeholder="Brief description…" />
+      </Field>
+      {err && <div style={{ color:'var(--danger)', fontSize:'0.85rem', marginBottom:'0.75rem' }}>{err}</div>}
+      <button onClick={save} disabled={saving} style={btnPrimary('var(--purple)')}>
+        {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Book'}
+      </button>
+      {isEdit && !confirm && (
+        <button onClick={()=>setConfirm(true)} style={{ ...btnDanger, background:'none', color:'var(--danger)', border:'1px solid var(--danger)', marginTop:'0.5rem' }}>Remove Book</button>
+      )}
+      {confirm && (
+        <div style={{ marginTop:'0.5rem', background:'var(--danger)10', borderRadius:'10px', padding:'0.75rem', border:'1px solid var(--danger)' }}>
+          <div style={{ fontSize:'0.85rem', marginBottom:'0.5rem' }}>Remove this book from the reading list?</div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.5rem' }}>
+            <button onClick={()=>setConfirm(false)} style={{ padding:'0.65rem', borderRadius:'10px', border:'1px solid var(--border)', background:'var(--surface)', cursor:'pointer', fontWeight:600 }}>Cancel</button>
+            <button onClick={del} disabled={deleting} style={{ padding:'0.65rem', borderRadius:'10px', background:'var(--danger)', color:'#fff', border:'none', cursor:'pointer', fontWeight:700 }}>{deleting?'Removing…':'Remove'}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BooksTab() {
+  const [books,    setBooks]    = useState([])
+  const [loading,  setLoading]  = useState(true)
+  const [selected, setSelected] = useState(null)
+  const [search,   setSearch]   = useState('')
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from('books').select('*').order('added_at', { ascending: false })
+    setBooks(data || [])
+    setLoading(false)
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  const filtered = books.filter(b =>
+    !search || b.title?.toLowerCase().includes(search.toLowerCase()) || b.author?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem', gap:'0.5rem' }}>
+        <input style={{ ...inputStyle, flex:1 }} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search books…" />
+        <button onClick={()=>setSelected({})} style={{ background:'var(--purple)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.5rem 0.9rem', fontSize:'0.82rem', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>+ Add</button>
+      </div>
+      {loading ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)' }}>Loading…</div>
+       : filtered.length === 0 ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)', fontSize:'0.9rem' }}>No books yet</div>
+       : (
+        <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+          {filtered.map(b => (
+            <div key={b.id} onClick={()=>setSelected(b)}
+              style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.8rem 1rem', cursor:'pointer', display:'flex', alignItems:'center', gap:'0.85rem' }}>
+              {b.cover_url
+                ? <img src={b.cover_url} alt={b.title} style={{ width:40, height:56, objectFit:'cover', borderRadius:'5px', flexShrink:0 }} />
+                : <div style={{ width:40, height:56, borderRadius:'5px', background:'var(--purple)20', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem', flexShrink:0 }}>📖</div>
+              }
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontWeight:700, fontSize:'0.9rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{b.title}</div>
+                {b.author && <div style={{ fontSize:'0.78rem', color:'var(--text-dim)' }}>by {b.author}</div>}
+              </div>
+              {b.rating && <div style={{ fontSize:'0.82rem', color:'var(--purple)', fontWeight:700, flexShrink:0 }}>★ {b.rating}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+      {selected !== null && (
+        <SlideOver title={selected.id ? 'Edit Book' : 'Add Book'} onClose={()=>setSelected(null)}>
+          <BookForm book={selected.id ? selected : null} onSave={()=>{setSelected(null);load()}} onClose={()=>setSelected(null)} />
+        </SlideOver>
+      )}
+    </div>
+  )
+}
+
+
 // ── TOOLS TAB ─────────────────────────────────────────────────────────────────
 function ToolsTab() {
   const [status, setStatus] = useState('idle')
@@ -591,6 +713,7 @@ export default function AdminPage() {
       {tab === 'Notices' && <NoticesTab />}
       {tab === 'Members' && <MembersTab />}
       {tab === 'Bar'     && <BarProductsTab />}
+      {tab === 'Books'   && <BooksTab />}
       {tab === 'Tools'   && <ToolsTab />}
     </div>
   )
