@@ -1,91 +1,457 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useUser } from '@/lib/UserContext'
+import { useRouter } from 'next/navigation'
 
-function EnrichCard() {
-  const [status, setStatus]   = useState('idle') // idle | running | done | error
-  const [result, setResult]   = useState(null)
-  const [totalDone, setTotal] = useState(0)
+// ── Constants ────────────────────────────────────────────────────────────────
+const HUB_TYPES = [
+  { value: 'movie',    label: 'Cinema',    icon: '🎬' },
+  { value: 'social',   label: 'Social',    icon: '🎉' },
+  { value: 'outings',  label: 'Outings',   icon: '🚌' },
+  { value: 'bookclub', label: 'Book Club', icon: '📚' },
+]
+const HUB_COLOUR = { movie:'var(--teal)', social:'var(--terracotta)', outings:'var(--green)', bookclub:'var(--purple)' }
+const TABS = ['Events', 'Notices', 'Members', 'Tools']
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+function fmtDate(str) {
+  if (!str) return ''
+  const [y,m,d] = str.split('-').map(Number)
+  return new Date(y,m-1,d).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'})
+}
+function fmtTime(str) {
+  if (!str) return ''
+  const [h,m] = str.split(':').map(Number)
+  return `${h%12||12}:${String(m).padStart(2,'0')}${h>=12?'pm':'am'}`
+}
+function Badge({ label, colour }) {
+  return <span style={{ background: colour + '20', color: colour, fontSize:'0.68rem', fontWeight:700, padding:'0.2rem 0.5rem', borderRadius:'20px' }}>{label}</span>
+}
+
+// ── Slide-over shell ──────────────────────────────────────────────────────────
+function SlideOver({ title, onClose, children }) {
+  return (
+    <>
+      <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', zIndex:200 }} />
+      <div style={{ position:'fixed', bottom:0, left:0, right:0, background:'var(--bg)', borderRadius:'20px 20px 0 0', zIndex:201, maxHeight:'92vh', display:'flex', flexDirection:'column' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'1rem 1.25rem 0.75rem', borderBottom:'1px solid var(--border)' }}>
+          <div style={{ fontWeight:700, fontSize:'1rem' }}>{title}</div>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:'1.3rem', cursor:'pointer', color:'var(--text-dim)', lineHeight:1 }}>✕</button>
+        </div>
+        <div style={{ overflowY:'auto', padding:'1.25rem', flex:1 }}>{children}</div>
+      </div>
+    </>
+  )
+}
+
+// ── Field components ──────────────────────────────────────────────────────────
+function Field({ label, children }) {
+  return (
+    <div style={{ marginBottom:'1rem' }}>
+      <label style={{ display:'block', fontSize:'0.78rem', fontWeight:700, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.4rem' }}>{label}</label>
+      {children}
+    </div>
+  )
+}
+const inputStyle = { width:'100%', padding:'0.75rem 1rem', borderRadius:'10px', border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:'0.95rem', boxSizing:'border-box' }
+const btnPrimary = (colour='var(--teal)') => ({ background:colour, color:'#fff', border:'none', borderRadius:'10px', padding:'0.8rem 1.5rem', fontSize:'0.95rem', fontWeight:700, cursor:'pointer', width:'100%', marginTop:'0.5rem' })
+const btnDanger  = { background:'var(--danger)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.8rem 1.5rem', fontSize:'0.95rem', fontWeight:700, cursor:'pointer', width:'100%', marginTop:'0.5rem' }
+
+// ── EVENT FORM ────────────────────────────────────────────────────────────────
+function EventForm({ event, onSave, onDelete, onClose }) {
+  const isEdit = !!event?.id
+  const [movies, setMovies] = useState([])
+  const [form, setForm] = useState({
+    title:       event?.title       || '',
+    hub_type:    event?.hub_type    || 'movie',
+    event_date:  event?.event_date  || '',
+    event_time:  event?.event_time  || '',
+    location:    event?.location    || '',
+    description: event?.description || '',
+    max_seats:   event?.max_seats   != null ? String(event.max_seats) : '30',
+    cost:        event?.cost        != null ? String(event.cost)      : '0',
+    is_public:   event?.is_public   ?? true,
+    movie_id:    event?.movie_id    || '',
+  })
+  const [saving,   setSaving]   = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [confirm,  setConfirm]  = useState(false)
+  const [err,      setErr]      = useState('')
+
+  useEffect(() => {
+    supabase.from('movies').select('id, title').eq('we_own', false).order('title').then(({ data }) => setMovies(data || []))
+  }, [])
+
+  function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+
+  async function save() {
+    if (!form.title.trim())      return setErr('Title is required')
+    if (!form.event_date.trim()) return setErr('Date is required')
+    setSaving(true); setErr('')
+    const payload = {
+      title:       form.title.trim(),
+      hub_type:    form.hub_type,
+      event_date:  form.event_date,
+      event_time:  form.event_time || null,
+      location:    form.location   || null,
+      description: form.description || null,
+      max_seats:   parseInt(form.max_seats) || 30,
+      cost:        parseFloat(form.cost)    || 0,
+      is_public:   form.is_public,
+      movie_id:    form.hub_type === 'movie' && form.movie_id ? form.movie_id : null,
+    }
+    const { error } = isEdit
+      ? await supabase.from('events').update(payload).eq('id', event.id)
+      : await supabase.from('events').insert(payload)
+    if (error) { setErr(error.message); setSaving(false); return }
+    onSave()
+  }
+
+  async function del() {
+    setDeleting(true)
+    await supabase.from('events').update({ archived: true }).eq('id', event.id)
+    onDelete()
+  }
+
+  const colour = HUB_COLOUR[form.hub_type] || 'var(--teal)'
+
+  return (
+    <div>
+      <Field label="Hub">
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'0.4rem' }}>
+          {HUB_TYPES.map(h => (
+            <button key={h.value} onClick={() => set('hub_type', h.value)}
+              style={{ padding:'0.6rem 0.25rem', borderRadius:'10px', border:'2px solid', borderColor:form.hub_type===h.value ? HUB_COLOUR[h.value] : 'var(--border)', background:form.hub_type===h.value ? HUB_COLOUR[h.value]+'20' : 'var(--surface)', cursor:'pointer', fontSize:'0.75rem', fontWeight:600, color:form.hub_type===h.value ? HUB_COLOUR[h.value] : 'var(--text-dim)' }}>
+              {h.icon}<br/>{h.label}
+            </button>
+          ))}
+        </div>
+      </Field>
+      <Field label="Title"><input style={inputStyle} value={form.title} onChange={e=>set('title',e.target.value)} placeholder="Event name" /></Field>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.75rem' }}>
+        <Field label="Date"><input type="date" style={inputStyle} value={form.event_date} onChange={e=>set('event_date',e.target.value)} /></Field>
+        <Field label="Time"><input type="time" style={inputStyle} value={form.event_time} onChange={e=>set('event_time',e.target.value)} /></Field>
+      </div>
+      <Field label="Location"><input style={inputStyle} value={form.location} onChange={e=>set('location',e.target.value)} placeholder="Optional" /></Field>
+      <Field label="Description"><textarea style={{ ...inputStyle, minHeight:80, resize:'vertical' }} value={form.description} onChange={e=>set('description',e.target.value)} placeholder="Optional" /></Field>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.75rem' }}>
+        <Field label="Max Seats"><input type="number" style={inputStyle} value={form.max_seats} onChange={e=>set('max_seats',e.target.value)} min="1" /></Field>
+        <Field label="Cost ($)"><input type="number" style={inputStyle} value={form.cost} onChange={e=>set('cost',e.target.value)} min="0" step="0.50" /></Field>
+      </div>
+      {form.hub_type === 'movie' && (
+        <Field label="Linked Film">
+          <select style={inputStyle} value={form.movie_id} onChange={e=>set('movie_id',e.target.value)}>
+            <option value="">— No film linked —</option>
+            {movies.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
+          </select>
+        </Field>
+      )}
+      <Field label="">
+        <label style={{ display:'flex', alignItems:'center', gap:'0.6rem', fontSize:'0.9rem', cursor:'pointer' }}>
+          <input type="checkbox" checked={form.is_public} onChange={e=>set('is_public',e.target.checked)} style={{ width:18, height:18 }} />
+          Visible on public calendar
+        </label>
+      </Field>
+      {err && <div style={{ color:'var(--danger)', fontSize:'0.85rem', marginBottom:'0.75rem' }}>{err}</div>}
+      <button onClick={save} disabled={saving} style={btnPrimary(colour)}>{saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Event'}</button>
+      {isEdit && !confirm && (
+        <button onClick={()=>setConfirm(true)} style={{ ...btnDanger, background:'none', color:'var(--danger)', border:'1px solid var(--danger)', marginTop:'0.5rem' }}>Archive Event</button>
+      )}
+      {confirm && (
+        <div style={{ marginTop:'0.5rem', background:'var(--danger)10', borderRadius:'10px', padding:'0.75rem', border:'1px solid var(--danger)' }}>
+          <div style={{ fontSize:'0.85rem', marginBottom:'0.5rem' }}>Archive this event? Existing bookings are preserved.</div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.5rem' }}>
+            <button onClick={()=>setConfirm(false)} style={{ padding:'0.65rem', borderRadius:'10px', border:'1px solid var(--border)', background:'var(--surface)', cursor:'pointer', fontWeight:600 }}>Cancel</button>
+            <button onClick={del} disabled={deleting} style={{ padding:'0.65rem', borderRadius:'10px', background:'var(--danger)', color:'#fff', border:'none', cursor:'pointer', fontWeight:700 }}>{deleting?'Archiving…':'Archive'}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── EVENTS TAB ────────────────────────────────────────────────────────────────
+function EventsTab() {
+  const [events,  setEvents]  = useState([])
+  const [loading, setLoading] = useState(true)
+  const [hubFilter, setHub]   = useState('all')
+  const [selected,  setSelected] = useState(null)  // null=closed, {}=new, event=edit
+  const [showPast, setShowPast] = useState(false)
+
+  const load = useCallback(async () => {
+    const today = new Date().toISOString().split('T')[0]
+    let q = supabase.from('events').select('id, title, event_date, event_time, hub_type, max_seats, cost, is_public, location').eq('archived', false).order('event_date', { ascending: true })
+    if (!showPast) q = q.gte('event_date', today)
+    const { data } = await q
+    setEvents(data || [])
+    setLoading(false)
+  }, [showPast])
+
+  useEffect(() => { load() }, [load])
+
+  const filtered = hubFilter === 'all' ? events : events.filter(e => e.hub_type === hubFilter)
+  const today = new Date(); today.setHours(0,0,0,0)
+
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' }}>
+        <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap' }}>
+          {['all',...HUB_TYPES.map(h=>h.value)].map(v => (
+            <button key={v} onClick={()=>setHub(v)}
+              style={{ padding:'0.35rem 0.75rem', borderRadius:'20px', border:'1px solid', borderColor:hubFilter===v?'var(--teal)':'var(--border)', background:hubFilter===v?'var(--teal)':'var(--surface)', color:hubFilter===v?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' }}>
+              {v==='all'?'All':HUB_TYPES.find(h=>h.value===v)?.icon + ' ' + HUB_TYPES.find(h=>h.value===v)?.label}
+            </button>
+          ))}
+        </div>
+        <button onClick={()=>setSelected({})} style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.5rem 0.9rem', fontSize:'0.82rem', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>+ New</button>
+      </div>
+
+      <label style={{ display:'flex', alignItems:'center', gap:'0.5rem', fontSize:'0.82rem', color:'var(--text-dim)', marginBottom:'0.85rem', cursor:'pointer' }}>
+        <input type="checkbox" checked={showPast} onChange={e=>setShowPast(e.target.checked)} />
+        Include past events
+      </label>
+
+      {loading ? <div style={{ color:'var(--text-dim)', textAlign:'center', padding:'2rem' }}>Loading…</div>
+       : filtered.length === 0 ? <div style={{ color:'var(--text-dim)', textAlign:'center', padding:'2rem', fontSize:'0.9rem' }}>No events</div>
+       : (
+        <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+          {filtered.map(e => {
+            const col = HUB_COLOUR[e.hub_type] || 'var(--teal)'
+            const hub = HUB_TYPES.find(h=>h.value===e.hub_type)
+            const isPast = new Date(e.event_date+'T00:00:00') < today
+            return (
+              <div key={e.id} onClick={()=>setSelected(e)}
+                style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.8rem 1rem', cursor:'pointer', borderLeft:'4px solid '+col, opacity:isPast?0.65:1, display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'0.5rem' }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontWeight:700, fontSize:'0.9rem', marginBottom:'0.2rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{e.title}</div>
+                  <div style={{ fontSize:'0.78rem', color:'var(--text-dim)' }}>{fmtDate(e.event_date)}{e.event_time?' · '+fmtTime(e.event_time):''}{e.location?' · '+e.location:''}</div>
+                </div>
+                <div style={{ display:'flex', gap:'0.3rem', flexShrink:0, flexWrap:'wrap', justifyContent:'flex-end' }}>
+                  <Badge label={hub?.icon+' '+hub?.label} colour={col} />
+                  {e.cost > 0 && <Badge label={'$'+parseFloat(e.cost).toFixed(2)} colour="var(--amber-dark)" />}
+                  {!e.is_public && <Badge label="Private" colour="var(--text-dim)" />}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {selected !== null && (
+        <SlideOver title={selected.id ? 'Edit Event' : 'New Event'} onClose={()=>setSelected(null)}>
+          <EventForm event={selected.id ? selected : null} onSave={()=>{setSelected(null);load()}} onDelete={()=>{setSelected(null);load()}} onClose={()=>setSelected(null)} />
+        </SlideOver>
+      )}
+    </div>
+  )
+}
+
+// ── NOTICES TAB ───────────────────────────────────────────────────────────────
+function NoticesTab() {
+  const [notices, setNotices] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [form, setForm]       = useState({ type:'main', content:'' })
+  const [saving, setSaving]   = useState(false)
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from('notices').select('*').eq('archived', false).order('created_at',{ascending:false})
+    setNotices(data || [])
+    setLoading(false)
+  }, [])
+  useEffect(()=>{ load() },[load])
+
+  async function post() {
+    if (!form.content.trim()) return
+    setSaving(true)
+    await supabase.from('notices').insert({ type: form.type, content: form.content.trim() })
+    setForm({ type:'main', content:'' })
+    await load()
+    setSaving(false)
+  }
+
+  async function archive(id) {
+    await supabase.from('notices').update({ archived: true }).eq('id', id)
+    setNotices(n => n.filter(x => x.id !== id))
+  }
+
+  return (
+    <div>
+      {/* Quick post */}
+      <div style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', padding:'1rem', marginBottom:'1rem' }}>
+        <div style={{ display:'flex', gap:'0.5rem', marginBottom:'0.75rem' }}>
+          {['main','sub'].map(t => (
+            <button key={t} onClick={()=>setForm(f=>({...f,type:t}))}
+              style={{ flex:1, padding:'0.5rem', borderRadius:'8px', border:'1px solid', borderColor:form.type===t?'var(--teal)':'var(--border)', background:form.type===t?'var(--teal)20':'var(--surface)', fontWeight:600, fontSize:'0.82rem', cursor:'pointer', color:form.type===t?'var(--teal)':'var(--text-dim)' }}>
+              {t === 'main' ? '📢 Main Notice' : '📌 Sub Notice'}
+            </button>
+          ))}
+        </div>
+        <textarea
+          style={{ ...inputStyle, minHeight:72, resize:'vertical', marginBottom:'0.75rem' }}
+          value={form.content}
+          onChange={e=>setForm(f=>({...f,content:e.target.value}))}
+          placeholder="Type announcement…"
+        />
+        <button onClick={post} disabled={saving||!form.content.trim()} style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.65rem 1.25rem', fontWeight:700, fontSize:'0.9rem', cursor:'pointer', opacity:!form.content.trim()?0.5:1 }}>
+          {saving ? 'Posting…' : 'Post Notice'}
+        </button>
+      </div>
+
+      {/* Active notices */}
+      {loading ? <div style={{ color:'var(--text-dim)', textAlign:'center', padding:'1.5rem' }}>Loading…</div>
+       : notices.length === 0 ? <div style={{ color:'var(--text-dim)', textAlign:'center', padding:'1.5rem', fontSize:'0.9rem' }}>No active notices</div>
+       : notices.map(n => (
+        <div key={n.id} style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.9rem 1rem', marginBottom:'0.5rem', borderLeft:'4px solid '+(n.type==='main'?'var(--teal)':'var(--border)') }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'0.5rem' }}>
+            <div style={{ flex:1 }}>
+              <Badge label={n.type==='main'?'Main':'Sub'} colour={n.type==='main'?'var(--teal)':'var(--text-dim)'} />
+              <div style={{ fontSize:'0.88rem', marginTop:'0.4rem', lineHeight:1.5 }}>{n.content}</div>
+            </div>
+            <button onClick={()=>archive(n.id)} style={{ background:'none', border:'1px solid var(--border)', borderRadius:'8px', padding:'0.3rem 0.6rem', fontSize:'0.75rem', cursor:'pointer', color:'var(--text-dim)', whiteSpace:'nowrap' }}>Archive</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── MEMBERS TAB ───────────────────────────────────────────────────────────────
+function MembersTab() {
+  const [members, setMembers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search,  setSearch]  = useState('')
+  const { member: me } = useUser()
+
+  useEffect(()=>{
+    supabase.from('members').select('id, name, username, status, is_admin, bar_opt_in, joined_date').order('name').then(({data})=>{ setMembers(data||[]); setLoading(false) })
+  }, [])
+
+  async function toggle(id, field, val) {
+    await supabase.from('members').update({ [field]: val }).eq('id', id)
+    setMembers(ms => ms.map(m => m.id===id ? {...m, [field]:val} : m))
+  }
+
+  const filtered = members.filter(m =>
+    !search || m.name?.toLowerCase().includes(search.toLowerCase()) || m.username?.toLowerCase().includes(search.toLowerCase())
+  )
+
+  return (
+    <div>
+      <div style={{ marginBottom:'0.85rem', display:'flex', gap:'0.5rem', alignItems:'center' }}>
+        <input style={{ ...inputStyle, flex:1 }} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search members…" />
+        <span style={{ fontSize:'0.82rem', color:'var(--text-dim)', whiteSpace:'nowrap' }}>{filtered.length} members</span>
+      </div>
+      {loading ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)' }}>Loading…</div> : (
+        <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+          {filtered.map(m => (
+            <div key={m.id} style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.85rem 1rem' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'0.5rem' }}>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:'0.9rem' }}>{m.name} {m.id===me?.id && <span style={{ fontSize:'0.7rem', color:'var(--text-dim)' }}>(you)</span>}</div>
+                  <div style={{ fontSize:'0.78rem', color:'var(--text-dim)' }}>@{m.username}</div>
+                </div>
+                <div style={{ display:'flex', gap:'0.4rem', alignItems:'center' }}>
+                  <button
+                    onClick={()=> m.id!==me?.id && toggle(m.id,'is_admin',!m.is_admin)}
+                    style={{ padding:'0.3rem 0.6rem', borderRadius:'8px', border:'1px solid', borderColor:m.is_admin?'var(--amber)':'var(--border)', background:m.is_admin?'var(--amber)20':'var(--surface)', fontSize:'0.72rem', fontWeight:700, cursor:m.id===me?.id?'default':'pointer', color:m.is_admin?'var(--amber-dark)':'var(--text-dim)', opacity:m.id===me?.id?0.5:1 }}>
+                    {m.is_admin ? '⚙️ Admin' : 'Admin'}
+                  </button>
+                  <button
+                    onClick={()=>toggle(m.id,'bar_opt_in',!m.bar_opt_in)}
+                    style={{ padding:'0.3rem 0.6rem', borderRadius:'8px', border:'1px solid', borderColor:m.bar_opt_in?'var(--green)':'var(--border)', background:m.bar_opt_in?'var(--green)20':'var(--surface)', fontSize:'0.72rem', fontWeight:700, cursor:'pointer', color:m.bar_opt_in?'var(--green)':'var(--text-dim)' }}>
+                    {m.bar_opt_in ? '🍺 Bar' : 'Bar'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── TOOLS TAB ─────────────────────────────────────────────────────────────────
+function ToolsTab() {
+  const [status, setStatus] = useState('idle')
+  const [result, setResult] = useState(null)
+  const [total,  setTotal]  = useState(0)
 
   async function runBatch() {
     setStatus('running')
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch('/api/admin/enrich-dvd?limit=50', {
-        headers: { 'Authorization': `Bearer ${session.access_token}` }
-      })
+      const { data:{ session } } = await supabase.auth.getSession()
+      const res  = await fetch('/api/admin/enrich-dvd?limit=50', { headers:{ Authorization:`Bearer ${session.access_token}` } })
       const data = await res.json()
       setResult(data)
-      setTotal(prev => prev + (data.enriched || 0))
-      setStatus(data.enriched === 0 && data.skipped > 0 ? 'done' : 'idle')
-    } catch (err) {
-      setResult({ error: err.message })
+      setTotal(t => t + (data.enriched||0))
+      setStatus(data.enriched===0 && data.skipped>0 ? 'done' : 'idle')
+    } catch(err) {
+      setResult({ error:err.message })
       setStatus('error')
     }
   }
 
   return (
-    <div style={{ background: 'var(--surface)', borderRadius: '14px', border: '1px solid var(--border)', padding: '1.25rem', marginBottom: '1rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.5rem' }}>
-        <span style={{ fontSize: '1.3rem' }}>🖼️</span>
-        <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>Enrich DVD Library</div>
+    <div style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', padding:'1.25rem' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:'0.6rem', marginBottom:'0.5rem' }}>
+        <span style={{ fontSize:'1.3rem' }}>🖼️</span>
+        <div style={{ fontWeight:700, fontSize:'0.95rem' }}>Enrich DVD Library</div>
       </div>
-      <p style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginBottom: '1rem', lineHeight: 1.5 }}>
-        Fetches posters, plot, runtime, director and cast from TMDB / OMDb for DVD items missing images. Run in batches of 50 — click repeatedly until complete.
+      <p style={{ fontSize:'0.82rem', color:'var(--text-dim)', marginBottom:'1rem', lineHeight:1.5 }}>
+        Fetches posters, plot, runtime and cast from TMDB / OMDb. Run in batches of 50 — click repeatedly until all done.
       </p>
-
       {result && (
-        <div style={{ background: 'var(--surface2)', borderRadius: '10px', padding: '0.75rem', marginBottom: '0.85rem', fontSize: '0.8rem', lineHeight: 1.7 }}>
-          {result.error ? (
-            <span style={{ color: 'var(--danger)' }}>Error: {result.error}</span>
-          ) : (
+        <div style={{ background:'var(--surface2)', borderRadius:'10px', padding:'0.75rem', marginBottom:'0.85rem', fontSize:'0.8rem', lineHeight:1.8 }}>
+          {result.error ? <span style={{ color:'var(--danger)' }}>Error: {result.error}</span> : (
             <>
-              <div>✓ Enriched this batch: <strong>{result.enriched}</strong></div>
-              <div>↷ Skipped (already done / no match): <strong>{result.skipped}</strong></div>
-              {result.failed > 0 && <div style={{ color: 'var(--danger)' }}>✕ Failed: {result.failed}</div>}
-              <div style={{ color: 'var(--teal)', fontWeight: 600 }}>Total enriched this session: {totalDone}</div>
-              {result.enriched === 0 && result.skipped > 0 && (
-                <div style={{ color: '#15803d', fontWeight: 700, marginTop: '0.25rem' }}>All items processed!</div>
-              )}
+              <div>✓ Enriched: <strong>{result.enriched}</strong></div>
+              <div>↷ Skipped: <strong>{result.skipped}</strong></div>
+              {result.failed>0 && <div style={{ color:'var(--danger)' }}>✕ Failed: {result.failed}</div>}
+              <div style={{ color:'var(--teal)', fontWeight:600 }}>Session total: {total}</div>
+              {result.enriched===0&&result.skipped>0 && <div style={{ color:'#15803d', fontWeight:700 }}>All done!</div>}
             </>
           )}
         </div>
       )}
-
-      <button
-        onClick={runBatch}
-        disabled={status === 'running'}
-        style={{
-          background: status === 'done' ? '#15803d' : 'var(--teal)',
-          color: '#fff', border: 'none', borderRadius: '10px',
-          padding: '0.65rem 1.25rem', fontWeight: 700, fontSize: '0.88rem',
-          cursor: status === 'running' ? 'not-allowed' : 'pointer',
-          opacity: status === 'running' ? 0.6 : 1, fontFamily: 'inherit',
-        }}
-      >
-        {status === 'running' ? 'Enriching… (up to 30s)' : status === 'done' ? '✓ All done' : result ? 'Run next batch →' : 'Start enrichment'}
+      <button onClick={runBatch} disabled={status==='running'}
+        style={{ background:status==='done'?'#15803d':'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.75rem 1.5rem', fontWeight:700, fontSize:'0.9rem', cursor:status==='running'?'not-allowed':'pointer', opacity:status==='running'?0.7:1 }}>
+        {status==='running'?'Running…':status==='done'?'✓ All done':'Run next batch →'}
       </button>
     </div>
   )
 }
 
+// ── ROOT ──────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
+  const { member, loading } = useUser()
+  const router = useRouter()
+  const [tab, setTab] = useState('Events')
+
+  useEffect(()=>{
+    if (!loading && member && !member.is_admin) router.replace('/home')
+  }, [member, loading, router])
+
+  if (loading || !member) return null
+  if (!member.is_admin) return null
+
   return (
-    <div style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1rem 1rem 6rem' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.5rem' }}>
-        <span style={{ fontSize: '1.5rem' }}>⚙️</span>
-        <h1 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--amber)' }}>Admin</h1>
+    <div style={{ padding:'1rem 1rem 6rem' }}>
+      {/* Tab bar */}
+      <div style={{ display:'flex', gap:'0.4rem', marginBottom:'1.25rem', overflowX:'auto', paddingBottom:'0.25rem' }}>
+        {TABS.map(t => (
+          <button key={t} onClick={()=>setTab(t)}
+            style={{ padding:'0.5rem 1rem', borderRadius:'20px', border:'1px solid', borderColor:tab===t?'var(--teal)':'var(--border)', background:tab===t?'var(--teal)':'var(--surface)', color:tab===t?'#fff':'var(--text)', fontWeight:600, fontSize:'0.82rem', cursor:'pointer', whiteSpace:'nowrap' }}>
+            {t}
+          </button>
+        ))}
       </div>
 
-      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem' }}>
-        Data Tools
-      </div>
-
-      <EnrichCard />
-
-      <div style={{ marginTop: '2rem', padding: '1rem', background: 'var(--surface2)', borderRadius: '12px', fontSize: '0.78rem', color: 'var(--text-dim)', lineHeight: 1.6 }}>
-        <strong>More admin tools coming soon:</strong> manage members, screenings, events, bar products, and notices.
-      </div>
+      {tab === 'Events'  && <EventsTab />}
+      {tab === 'Notices' && <NoticesTab />}
+      {tab === 'Members' && <MembersTab />}
+      {tab === 'Tools'   && <ToolsTab />}
     </div>
   )
 }
