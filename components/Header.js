@@ -26,8 +26,15 @@ export default function Header() {
       boxShadow: "0 1px 8px rgba(0,0,0,0.07)",
     }}>
 
-      {/* Left: bee logo + brand */}
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+      {/* Left: bee logo + brand (taps to profile) */}
+      <button
+        onClick={() => router.push("/profile")}
+        style={{
+          display: "flex", alignItems: "center", gap: "0.5rem",
+          minWidth: 0, background: "none", border: "none",
+          cursor: "pointer", padding: 0, textAlign: "left",
+        }}
+      >
         <img
           src="/logo_hex_bee.png"
           alt="The Social Hive"
@@ -46,7 +53,7 @@ export default function Header() {
             {memberName ? "Welcome, " + memberName : "…"}
           </div>
         </div>
-      </div>
+      </button>
 
       {/* Centre: page title */}
       <div style={{

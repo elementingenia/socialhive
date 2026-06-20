@@ -44,23 +44,15 @@ const HUB_CONFIG = {
   },
 }
 
-const DEFAULT_ITEMS = [
-  { path: "/home",     label: "Home",     icon: "🏠" },
-  { path: "/calendar", label: "Calendar", icon: "📅" },
-  { id: "events",      label: "Events",   icon: "✦"  },
-  { path: "/bookings", label: "Bookings", icon: "🎟️" },
-]
-
 export default function BottomNav() {
   const pathname  = usePathname()
   const router    = useRouter()
-  const { isAdmin } = useUser()
+  const { isAdmin, barOptIn } = useUser()
   const [subMenuOpen, setSubMenuOpen] = useState(false)
 
   const activeHub = getActiveHub(pathname)
   const hub = activeHub ? HUB_CONFIG[activeHub] : null
 
-  // Close sub-menu on any route change
   useEffect(() => { setSubMenuOpen(false) }, [pathname])
 
   const navBase = {
@@ -88,7 +80,6 @@ export default function BottomNav() {
     return (
       <nav style={navBase}>
         {hub.items.map(({ path, label, icon }) => {
-          // Exact match for hub home pages, prefix for sub-pages
           const isHome = path === "/movies" || path === "/bookclub" ||
                          path === "/social" || path === "/outings"
           const active = isHome
@@ -111,16 +102,19 @@ export default function BottomNav() {
   }
 
   // ── Default nav ───────────────────────────────────────────────────────────
-  const defaultItems = isAdmin
-    ? [...DEFAULT_ITEMS, { path: "/admin", label: "Admin", icon: "⚙️" }]
-    : DEFAULT_ITEMS
+  const defaultItems = [
+    { path: "/home",     label: "Home",     icon: "🏠" },
+    { path: "/calendar", label: "Calendar", icon: "📅" },
+    { id: "events",      label: "Events",   icon: "✦"  },
+    { path: "/bookings", label: "Bookings", icon: "🎟️" },
+    ...(barOptIn && !isAdmin ? [{ path: "/bar", label: "Bar", icon: "🍺" }] : []),
+    ...(isAdmin ? [{ path: "/admin", label: "Admin", icon: "⚙️" }] : []),
+  ]
 
   return (
     <>
-      {/* Hub sub-menu */}
       {subMenuOpen && (
         <>
-          {/* Backdrop */}
           <div
             onClick={() => setSubMenuOpen(false)}
             style={{
@@ -128,19 +122,16 @@ export default function BottomNav() {
               background: "rgba(0,0,0,0.25)",
             }}
           />
-          {/* Menu panel */}
-          <div
-            style={{
-              position: "fixed", bottom: 62, left: 0, right: 0,
-              background: "var(--surface)",
-              borderTop: "1px solid var(--border)",
-              boxShadow: "0 -4px 24px rgba(0,0,0,0.14)",
-              display: "grid", gridTemplateColumns: "1fr 1fr",
-              gap: "0.75rem", padding: "1rem",
-              zIndex: 99,
-              animation: "slideUp 0.18s ease",
-            }}
-          >
+          <div style={{
+            position: "fixed", bottom: 62, left: 0, right: 0,
+            background: "var(--surface)",
+            borderTop: "1px solid var(--border)",
+            boxShadow: "0 -4px 24px rgba(0,0,0,0.14)",
+            display: "grid", gridTemplateColumns: "1fr 1fr",
+            gap: "0.75rem", padding: "1rem",
+            zIndex: 99,
+            animation: "slideUp 0.18s ease",
+          }}>
             {Object.entries(HUB_CONFIG).map(([key, cfg]) => (
               <button
                 key={key}
