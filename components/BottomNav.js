@@ -22,7 +22,8 @@ const HUB_CONFIG = {
     icon: "📖",
     items: [
       { path: "/bookclub",       label: "Book Club Home", icon: "🏠" },
-      { path: "/bookclub/books", label: "Books",          icon: "📚" },
+      { path: "/bookclub/events", label: "Meetings",       icon: "📅" },
+      { path: "/bookclub/books",  label: "Books",          icon: "📚" },
     ],
   },
   social: {

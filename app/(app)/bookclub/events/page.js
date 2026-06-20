@@ -73,7 +73,7 @@ function EventCard({ event, myBooking, onClick }) {
               <span style={{ background: "#fef3c7", color: "#d97706", borderRadius: "20px", padding: "0.2rem 0.55rem", fontSize: "0.7rem", fontWeight: 700 }}>Waitlisted</span>
             )}
             {daysLabel && !isBooked && !isWaitlist && (
-              <span style={{ background: "var(--green)20", color: "var(--green)", borderRadius: "20px", padding: "0.2rem 0.55rem", fontSize: "0.7rem", fontWeight: 700 }}>{daysLabel}</span>
+              <span style={{ background: "var(--purple)20", color: "var(--purple)", borderRadius: "20px", padding: "0.2rem 0.55rem", fontSize: "0.7rem", fontWeight: 700 }}>{daysLabel}</span>
             )}
           </div>
         </div>
@@ -110,7 +110,7 @@ export default function SocialEvents() {
     const query = supabase
       .from("events")
       .select("id, title, event_date, event_time, hub_type, location, description, image_url, max_seats, cost, bookings(id, status, seats)")
-      .eq("hub_type", "outings")
+      .eq("hub_type", "bookclub")
       .eq("archived", false)
       .order("event_date", { ascending: true })
 
@@ -149,8 +149,8 @@ export default function SocialEvents() {
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
       {upcoming.length === 0 && (
         <div style={{ background: "var(--surface)", borderRadius: "14px", padding: "1.5rem", border: "1px solid var(--border)", textAlign: "center", marginBottom: "1.25rem" }}>
-          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🚌</div>
-          <div style={{ color: "var(--text-dim)", fontSize: "0.9rem" }}>No upcoming outings</div>
+          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>📖</div>
+          <div style={{ color: "var(--text-dim)", fontSize: "0.9rem" }}>No upcoming meetings</div>
         </div>
       )}
 
