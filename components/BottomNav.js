@@ -77,19 +77,22 @@ export default function BottomNav() {
 
   // ── Hub nav ───────────────────────────────────────────────────────────────
   if (activeHub && hub) {
+    const hubNavItems = [
+      { path: "/home", label: "Home", icon: "🏠", exact: true },
+      ...hub.items.map(item => ({ ...item, exact: item.path === hub.items[0].path })),
+      ...(isAdmin ? [{ path: "/admin", label: "Admin", icon: "⚙️", exact: true }] : []),
+    ]
     return (
       <nav style={navBase}>
-        {hub.items.map(({ path, label, icon }) => {
-          const isHome = path === "/movies" || path === "/bookclub" ||
-                         path === "/social" || path === "/outings"
-          const active = isHome
+        {hubNavItems.map(({ path, label, icon, exact }) => {
+          const active = exact
             ? pathname === path
             : pathname === path || pathname.startsWith(path + "/")
           return (
             <button
               key={path}
               onClick={() => router.push(path)}
-              style={btn(active, hub.colour)}
+              style={btn(active, path === "/home" || path === "/admin" ? "var(--amber)" : hub.colour)}
               aria-current={active ? "page" : undefined}
             >
               <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>{icon}</span>
