@@ -130,7 +130,7 @@ export async function POST(req) {
   const { data: event, error } = await supabaseAdmin
     .from('events')
     .insert({
-      type: 'movie', title, movie_id: movie_id || null,
+      hub_type: 'movie', title, movie_id: movie_id || null,
       event_date, event_time, max_seats: max_seats || 20,
       notes: notes || null, created_by: member.id,
     })
