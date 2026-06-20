@@ -12,7 +12,7 @@ const HUB_TYPES = [
   { value: 'bookclub', label: 'Book Club', icon: '📚' },
 ]
 const HUB_COLOUR = { movie:'var(--teal)', social:'var(--terracotta)', outings:'var(--green)', bookclub:'var(--purple)' }
-const TABS = ['Events', 'Notices', 'Members', 'Tools']
+const TABS = ['Events', 'Notices', 'Members', 'Bar', 'Tools']
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 function fmtDate(str) {
@@ -372,6 +372,145 @@ function MembersTab() {
   )
 }
 
+// ── BAR PRODUCTS TAB ──────────────────────────────────────────────────────────
+const BAR_CATS = [
+  { value:'beer',    label:'Beer',        icon:'🍺' },
+  { value:'wine',    label:'Wine',        icon:'🍷' },
+  { value:'spirits', label:'Spirits',     icon:'🥃' },
+  { value:'soft',    label:'Soft Drinks', icon:'🥤' },
+]
+const DEFAULT_ICONS = { beer:'🍺', wine:'🍷', spirits:'🥃', soft:'🥤' }
+
+function BarProductForm({ product, onSave, onClose }) {
+  const isEdit = !!product?.id
+  const [form, setForm] = useState({
+    name:        product?.name        || '',
+    description: product?.description || '',
+    price:       product?.price       != null ? String(product.price) : '',
+    category:    product?.category    || 'beer',
+    icon:        product?.icon        || '🍺',
+    active:      product?.active      ?? true,
+  })
+  const [saving, setSaving] = useState(false)
+  const [err,    setErr]    = useState('')
+
+  function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+
+  async function save() {
+    if (!form.name.trim())          return setErr('Name is required')
+    if (!form.price || isNaN(parseFloat(form.price))) return setErr('Valid price required')
+    setSaving(true); setErr('')
+    const payload = {
+      name:        form.name.trim(),
+      description: form.description || null,
+      price:       parseFloat(form.price),
+      category:    form.category,
+      icon:        form.icon || DEFAULT_ICONS[form.category],
+      active:      form.active,
+    }
+    const { error } = isEdit
+      ? await supabase.from('bar_products').update(payload).eq('id', product.id)
+      : await supabase.from('bar_products').insert(payload)
+    if (error) { setErr(error.message); setSaving(false); return }
+    onSave()
+  }
+
+  return (
+    <div>
+      <Field label="Category">
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'0.4rem' }}>
+          {BAR_CATS.map(c => (
+            <button key={c.value} onClick={() => { set('category', c.value); set('icon', DEFAULT_ICONS[c.value]) }}
+              style={{ padding:'0.5rem 0.25rem', borderRadius:'10px', border:'2px solid', borderColor:form.category===c.value?'var(--amber)':'var(--border)', background:form.category===c.value?'var(--amber)20':'var(--surface)', cursor:'pointer', fontSize:'0.72rem', fontWeight:600, color:form.category===c.value?'var(--amber-dark)':'var(--text-dim)', textAlign:'center' }}>
+              {c.icon}<br/>{c.label}
+            </button>
+          ))}
+        </div>
+      </Field>
+      <Field label="Name"><input style={inputStyle} value={form.name} onChange={e=>set('name',e.target.value)} placeholder="e.g. Tooheys New" /></Field>
+      <Field label="Description"><input style={inputStyle} value={form.description} onChange={e=>set('description',e.target.value)} placeholder="Optional tagline" /></Field>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.75rem' }}>
+        <Field label="Price ($)"><input type="number" style={inputStyle} value={form.price} onChange={e=>set('price',e.target.value)} min="0" step="0.50" placeholder="3.00" /></Field>
+        <Field label="Icon (emoji)"><input style={inputStyle} value={form.icon} onChange={e=>set('icon',e.target.value)} placeholder="🍺" maxLength={4} /></Field>
+      </div>
+      <Field label="">
+        <label style={{ display:'flex', alignItems:'center', gap:'0.6rem', fontSize:'0.9rem', cursor:'pointer' }}>
+          <input type="checkbox" checked={form.active} onChange={e=>set('active',e.target.checked)} style={{ width:18, height:18 }} />
+          Active (visible on bar menu)
+        </label>
+      </Field>
+      {err && <div style={{ color:'var(--danger)', fontSize:'0.85rem', marginBottom:'0.75rem' }}>{err}</div>}
+      <button onClick={save} disabled={saving} style={btnPrimary('var(--amber)')}>
+        {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Product'}
+      </button>
+    </div>
+  )
+}
+
+function BarProductsTab() {
+  const [products,  setProducts]  = useState([])
+  const [loading,   setLoading]   = useState(true)
+  const [selected,  setSelected]  = useState(null)
+  const [catFilter, setCat]       = useState('all')
+
+  const load = useCallback(async () => {
+    const { data } = await supabase.from('bar_products').select('*').order('category').order('name')
+    setProducts(data || [])
+    setLoading(false)
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  async function toggleActive(p) {
+    await supabase.from('bar_products').update({ active: !p.active }).eq('id', p.id)
+    setProducts(ps => ps.map(x => x.id===p.id ? {...x, active:!x.active} : x))
+  }
+
+  const filtered = catFilter === 'all' ? products : products.filter(p => p.category === catFilter)
+
+  return (
+    <div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' }}>
+        <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap' }}>
+          {['all',...BAR_CATS.map(c=>c.value)].map(v => (
+            <button key={v} onClick={()=>setCat(v)}
+              style={{ padding:'0.3rem 0.65rem', borderRadius:'20px', border:'1px solid', borderColor:catFilter===v?'var(--amber)':'var(--border)', background:catFilter===v?'var(--amber)':'var(--surface)', color:catFilter===v?'#fff':'var(--text)', fontSize:'0.72rem', fontWeight:600, cursor:'pointer' }}>
+              {v==='all'?'All':BAR_CATS.find(c=>c.value===v)?.icon+' '+BAR_CATS.find(c=>c.value===v)?.label}
+            </button>
+          ))}
+        </div>
+        <button onClick={()=>setSelected({})} style={{ background:'var(--amber)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.5rem 0.9rem', fontSize:'0.82rem', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>+ Add</button>
+      </div>
+      {loading ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)' }}>Loading…</div>
+       : filtered.length === 0 ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)', fontSize:'0.9rem' }}>No products yet</div>
+       : (
+        <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+          {filtered.map(p => (
+            <div key={p.id} style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.8rem 1rem', display:'flex', alignItems:'center', gap:'0.75rem', opacity:p.active?1:0.55 }}
+              onClick={() => setSelected(p)}>
+              <span style={{ fontSize:'1.5rem' }}>{p.icon}</span>
+              <div style={{ flex:1 }}>
+                <div style={{ fontWeight:700, fontSize:'0.9rem' }}>{p.name}</div>
+                {p.description && <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{p.description}</div>}
+              </div>
+              <div style={{ fontWeight:800, color:'var(--amber-dark)', marginRight:'0.5rem' }}>${parseFloat(p.price).toFixed(2)}</div>
+              <button onClick={e=>{e.stopPropagation();toggleActive(p)}}
+                style={{ padding:'0.3rem 0.6rem', borderRadius:'8px', border:'1px solid var(--border)', background:p.active?'var(--green)20':'var(--surface2)', fontSize:'0.72rem', fontWeight:700, cursor:'pointer', color:p.active?'var(--green)':'var(--text-dim)', whiteSpace:'nowrap' }}>
+                {p.active ? 'Active' : 'Hidden'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {selected !== null && (
+        <SlideOver title={selected.id ? 'Edit Product' : 'New Product'} onClose={()=>setSelected(null)}>
+          <BarProductForm product={selected.id ? selected : null} onSave={()=>{setSelected(null);load()}} onClose={()=>setSelected(null)} />
+        </SlideOver>
+      )}
+    </div>
+  )
+}
+
+
 // ── TOOLS TAB ─────────────────────────────────────────────────────────────────
 function ToolsTab() {
   const [status, setStatus] = useState('idle')
@@ -451,6 +590,7 @@ export default function AdminPage() {
       {tab === 'Events'  && <EventsTab />}
       {tab === 'Notices' && <NoticesTab />}
       {tab === 'Members' && <MembersTab />}
+      {tab === 'Bar'     && <BarProductsTab />}
       {tab === 'Tools'   && <ToolsTab />}
     </div>
   )
