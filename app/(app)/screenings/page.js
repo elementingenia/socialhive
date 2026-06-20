@@ -138,10 +138,12 @@ function Overlay({ children, onClose }) {
 }
 
 // ── Seat Picker ───────────────────────────────────────────────────────────────
-function SeatPicker({ seatsRemaining, isFull, currentSeats, onPick, onCancel }) {
-  // When changing existing booking, overflow is not applicable — only show available up to max
+// allowOverflow: red overflow buttons shown even when changing (for confirmed→split change)
+// noOverflow: all seats above seatsRemaining are disabled (for split→confirm change)
+function SeatPicker({ seatsRemaining, isFull, currentSeats, onPick, onCancel, allowOverflow, noOverflow }) {
   const isChanging = !!currentSeats
-  const hasOverflowSeats = !isFull && !isChanging && seatsRemaining > 0 && seatsRemaining < 4
+  const showOverflowHint = !isFull && seatsRemaining > 0 && seatsRemaining < 4 &&
+    (!isChanging || allowOverflow)
 
   return (
     <div style={{ marginTop: '0.5rem' }}>
@@ -150,11 +152,12 @@ function SeatPicker({ seatsRemaining, isFull, currentSeats, onPick, onCancel }) 
       </div>
       <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
         {[1, 2, 3, 4].map(n => {
-          const isActive     = n === currentSeats
-          // When changing, disable seats beyond what's achievable (remaining + currently held)
-          const isDisabled   = isChanging && n > seatsRemaining
-          // When new booking: seats beyond remaining are overflow (red) but still clickable
-          const willOverflow = !isFull && !isChanging && n > seatsRemaining && seatsRemaining > 0
+          const isActive = n === currentSeats
+          // Disabled: changing without overflow allowed (e.g. split→confirm change caps at confirmed)
+          const isDisabled = isChanging && noOverflow && n > seatsRemaining
+          // Overflow (red): new booking OR change with allowOverflow
+          const willOverflow = !isFull && n > seatsRemaining && seatsRemaining > 0 &&
+            (!isChanging || allowOverflow) && !isDisabled
 
           let borderColor, bgColor, textColor, cursor
           if (isActive) {
@@ -183,7 +186,7 @@ function SeatPicker({ seatsRemaining, isFull, currentSeats, onPick, onCancel }) 
         })}
         <button onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', fontSize: '0.8rem', cursor: 'pointer', padding: '0 0.25rem' }}>✕</button>
       </div>
-      {hasOverflowSeats && (
+      {showOverflowHint && (
         <div style={{ fontSize: '0.7rem', color: 'var(--danger)', marginTop: '0.35rem' }}>
           Red seats will be placed on the waitlist
         </div>
@@ -301,22 +304,24 @@ function AddScreeningSheet({ session, onClose, onAdded, addToast }) {
 
 // ── Screening Card ────────────────────────────────────────────────────────────
 function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
-  const [acting,        setActing]        = useState(false)
-  const [pickingSeats,  setPickingSeats]  = useState(false)
-  const [changingSeats, setChangingSeats] = useState(false)
-  const [changingSplit, setChangingSplit] = useState(false)
-  const [confirmCancel, setConfirmCancel] = useState(false)
-  const [showAttendees, setShowAttendees] = useState(false)
-  const [splitOffer,    setSplitOffer]    = useState(null)
+  const [acting,           setActing]          = useState(false)
+  const [pickingSeats,     setPickingSeats]     = useState(false)
+  const [changingSeats,    setChangingSeats]    = useState(false)
+  const [changingSplit,    setChangingSplit]     = useState(false)
+  const [confirmCancel,    setConfirmCancel]    = useState(false)
+  const [showAttendees,    setShowAttendees]    = useState(false)
+  const [splitOffer,       setSplitOffer]       = useState(null)
+  const [changeSplitOffer, setChangeSplitOffer] = useState(null)
 
   const movie    = ev.movies
   const isFull   = ev.seats_remaining === 0
 
-  const hasConfirmed     = ev.my_booking?.has_confirmed     || false
-  const hasWaitlist      = ev.my_booking?.has_waitlist      || false
-  const myConfirmedSeats = ev.my_booking?.confirmed_seats   || 0
-  const myWaitlistSeats  = ev.my_booking?.waitlist_seats    || 0
-  const hasAnyBooking    = hasConfirmed || hasWaitlist
+  const hasConfirmed      = ev.my_booking?.has_confirmed      || false
+  const hasWaitlist       = ev.my_booking?.has_waitlist       || false
+  const myConfirmedSeats  = ev.my_booking?.confirmed_seats    || 0
+  const myWaitlistSeats   = ev.my_booking?.waitlist_seats     || 0
+  const myWaitlistPos     = ev.my_booking?.waitlist_position  || null
+  const hasAnyBooking     = hasConfirmed || hasWaitlist
 
   async function book(seats) {
     setPickingSeats(false)
@@ -363,6 +368,17 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
 
   async function doChange(newSeats) {
     setChangingSeats(false)
+    // If overflow into waitlist territory, show confirmation dialog first
+    const maxConfirmable = ev.seats_remaining + myConfirmedSeats
+    if (newSeats > maxConfirmable) {
+      setChangeSplitOffer({ newSeats, confirmed: maxConfirmable, waitlisted: newSeats - maxConfirmable })
+      return
+    }
+    await commitChange(newSeats)
+  }
+
+  async function commitChange(newSeats) {
+    setChangeSplitOffer(null)
     setActing(true)
     const res = await fetch('/api/bookings', {
       method: 'PATCH',
@@ -372,7 +388,12 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
     const data = await res.json()
     setActing(false)
     if (!res.ok) { addToast(data.error || 'Could not change seats', 'error'); return }
-    addToast('Changed to ' + newSeats + ' seat' + (newSeats > 1 ? 's' : '') + ' for ' + ev.title, 'success')
+    if (data.status === 'split_change') {
+      addToast(data.confirmed + ' seat' + (data.confirmed > 1 ? 's' : '') + ' confirmed for ' + ev.title, 'success')
+      setTimeout(() => addToast(data.waitlisted + ' seat' + (data.waitlisted > 1 ? 's' : '') + ' added to waitlist for ' + ev.title, 'warn'), 600)
+    } else {
+      addToast('Changed to ' + newSeats + ' seat' + (newSeats > 1 ? 's' : '') + ' for ' + ev.title, 'success')
+    }
     onRefresh()
   }
 
@@ -486,7 +507,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
                       ✓ {myConfirmedSeats} seat{myConfirmedSeats > 1 ? 's' : ''} confirmed
                     </span>
                     <span style={{ background: '#fef3c7', color: '#d97706', fontSize: '0.75rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: '20px' }}>
-                      ⏳ {myWaitlistSeats} on waitlist
+                      ⏳ {myWaitlistPos ? `#${myWaitlistPos} waitlist` : 'Waitlist'} — {myWaitlistSeats} seat{myWaitlistSeats > 1 ? 's' : ''}
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: '0.4rem' }}>
@@ -502,7 +523,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
                 </div>
               )}
 
-              {/* Split booking: Change seat picker */}
+              {/* Split booking: Change seat picker — capped at confirmed seats, no overflow */}
               {hasConfirmed && hasWaitlist && changingSplit && (
                 <div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--amber-dark)', fontWeight: 600, marginBottom: '0.3rem' }}>
@@ -514,6 +535,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
                     currentSeats={myConfirmedSeats}
                     onPick={doChangeSplit}
                     onCancel={() => setChangingSplit(false)}
+                    noOverflow={true}
                   />
                 </div>
               )}
@@ -535,7 +557,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
                 </div>
               )}
 
-              {/* Change seats picker */}
+              {/* Change seats picker — overflow (red) seats allowed, go to waitlist */}
               {hasConfirmed && !hasWaitlist && changingSeats && (
                 <SeatPicker
                   seatsRemaining={ev.seats_remaining + myConfirmedSeats}
@@ -543,6 +565,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
                   currentSeats={myConfirmedSeats}
                   onPick={doChange}
                   onCancel={() => setChangingSeats(false)}
+                  allowOverflow={true}
                 />
               )}
 
@@ -550,7 +573,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
               {!hasConfirmed && hasWaitlist && (
                 <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                   <span style={{ background: '#fef3c7', color: '#d97706', fontSize: '0.75rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: '20px' }}>
-                    ⏳ Waitlist — {myWaitlistSeats} seat{myWaitlistSeats > 1 ? 's' : ''}
+                    ⏳ {myWaitlistPos ? `#${myWaitlistPos} on waitlist` : 'Waitlist'} — {myWaitlistSeats} seat{myWaitlistSeats > 1 ? 's' : ''}
                   </span>
                   <button onClick={() => setConfirmCancel(true)} disabled={acting}
                     style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--text-dim)' }}>
@@ -647,6 +670,14 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
           offer={splitOffer}
           onAccept={acceptSplit}
           onDecline={() => setSplitOffer(null)}
+        />
+      )}
+
+      {changeSplitOffer && (
+        <SplitDialog
+          offer={{ confirmed: changeSplitOffer.confirmed, waitlisted: changeSplitOffer.waitlisted }}
+          onAccept={() => commitChange(changeSplitOffer.newSeats)}
+          onDecline={() => setChangeSplitOffer(null)}
         />
       )}
     </>
