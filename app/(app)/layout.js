@@ -1,9 +1,10 @@
 "use client"
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
-import BottomNav from '@/components/BottomNav'
-import Header from '@/components/Header'
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase"
+import { UserProvider } from "@/lib/UserContext"
+import BottomNav from "@/components/BottomNav"
+import Header from "@/components/Header"
 
 export default function AppLayout({ children }) {
   const router = useRouter()
@@ -11,26 +12,28 @@ export default function AppLayout({ children }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) router.replace('/login')
+      if (!session) router.replace("/login")
       else setReady(true)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      if (!session) router.replace('/login')
+      if (!session) router.replace("/login")
     })
     return () => subscription.unsubscribe()
   }, [router])
 
   if (!ready) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
       <div className="spinner" />
     </div>
   )
 
   return (
-    <div style={{ paddingBottom: 70 }}>
-      <Header />
-      {children}
-      <BottomNav />
-    </div>
+    <UserProvider>
+      <div style={{ paddingBottom: 70 }}>
+        <Header />
+        {children}
+        <BottomNav />
+      </div>
+    </UserProvider>
   )
 }
