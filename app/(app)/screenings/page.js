@@ -470,13 +470,14 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
 
             {(movie?.rating_imdb || movie?.rating_rt || ev.community_score) && (
               <div style={{ display: 'flex', gap: '0.65rem', fontSize: '0.75rem', alignItems: 'center' }}>
-                {movie?.rating_imdb && (
-                  <span style={{ color: 'var(--amber-dark)', fontWeight: 600 }}>★ {movie.rating_imdb}</span>
+                {movie?.rating_imdb && (movie?.imdb_id
+                  ? <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--amber-dark)', fontWeight: 600, textDecoration: 'none' }}>★ {movie.rating_imdb}</a>
+                  : <span style={{ color: 'var(--amber-dark)', fontWeight: 600 }}>★ {movie.rating_imdb}</span>
                 )}
                 {movie?.rating_rt && (
-                  <span style={{ color: '#fa320a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                  <a href={`https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title)}`} target="_blank" rel="noopener noreferrer" style={{ color: '#fa320a', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                     🍅 {movie.rating_rt}
-                  </span>
+                  </a>
                 )}
                 {ev.community_score && (
                   <CommunityScore communityScore={ev.community_score} />
