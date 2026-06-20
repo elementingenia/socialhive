@@ -33,10 +33,8 @@ export async function POST(req) {
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
 
   const { data: allBookings } = await supabaseAdmin
-    .from('bookings')
-    .select('id, member_id, status, seats')
-    .eq('event_id', event_id)
-    .neq('status', 'cancelled')
+    .from('bookings').select('id, member_id, status, seats')
+    .eq('event_id', event_id).neq('status', 'cancelled')
 
   const confirmedSeats = (allBookings || [])
     .filter(b => b.status === 'confirmed')
@@ -93,8 +91,8 @@ export async function POST(req) {
 }
 
 // PATCH — change seat count
-// Split booking (confirmed+waitlist): cancels waitlist, adjusts confirmed, promotes others if seats freed
-// Confirmed-only: allows overflow → creates new waitlist row at back of queue
+// newSeats is always the DESIRED TOTAL (confirmed + waitlist combined)
+// API maximises confirmed seats up to capacity; overflow goes to waitlist at back of queue
 export async function PATCH(req) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
   if (!token) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
@@ -117,25 +115,9 @@ export async function PATCH(req) {
 
   if (!myConfirmed) return NextResponse.json({ error: 'No confirmed booking found' }, { status: 404 })
 
-  const oldSeats = myConfirmed.seats || 1
+  const oldConfirmed = myConfirmed.seats || 1
 
-  // ── Split booking: cancel waitlist, adjust confirmed ─────────────────────────
-  if (myWaitlist) {
-    if (newSeats > oldSeats) {
-      return NextResponse.json(
-        { error: 'Cannot increase seats while on waitlist — cancel and rebook instead' },
-        { status: 409 }
-      )
-    }
-    await supabaseAdmin.from('bookings').update({ status: 'cancelled' }).eq('id', myWaitlist.id)
-    const { data: updated, error } = await supabaseAdmin
-      .from('bookings').update({ seats: newSeats }).eq('id', myConfirmed.id).select().single()
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    if (oldSeats - newSeats > 0) await promoteWaitlist(event_id, oldSeats - newSeats)
-    return NextResponse.json({ ...updated, waitlist_cancelled: true })
-  }
-
-  // ── Confirmed-only: calculate how many seats user can hold as confirmed ──────
+  // ── Shared: calculate confirmed capacity available to this user ───────────────
   const { data: event } = await supabaseAdmin
     .from('events').select('max_seats').eq('id', event_id).single()
   const { data: confirmedRows } = await supabaseAdmin
@@ -143,30 +125,41 @@ export async function PATCH(req) {
     .eq('event_id', event_id).eq('status', 'confirmed').neq('id', myConfirmed.id)
 
   const othersConfirmed = (confirmedRows || []).reduce((s, b) => s + (b.seats || 1), 0)
-  const maxCanConfirm   = (event?.max_seats || 0) - othersConfirmed
+  const maxCanConfirm   = (event?.max_seats || 0) - othersConfirmed  // max seats user can hold as confirmed
 
-  if (newSeats <= maxCanConfirm) {
-    // Straightforward update — no overflow
-    const { data: updated, error } = await supabaseAdmin
-      .from('bookings').update({ seats: newSeats }).eq('id', myConfirmed.id).select().single()
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    if (newSeats < oldSeats) await promoteWaitlist(event_id, oldSeats - newSeats)
-    return NextResponse.json(updated)
+  // newSeats = total desired (confirmed + waitlist)
+  const newConfirmed  = Math.min(newSeats, maxCanConfirm)
+  const newWaitlisted = newSeats - newConfirmed
+
+  // ── Cancel existing waitlist (always — we'll re-insert if still needed) ───────
+  if (myWaitlist) {
+    await supabaseAdmin.from('bookings').update({ status: 'cancelled' }).eq('id', myWaitlist.id)
   }
 
-  // Overflow: confirm up to capacity, rest go to waitlist at back of queue
-  const newWaitlisted = newSeats - maxCanConfirm
+  // ── Update confirmed seats ────────────────────────────────────────────────────
   const { error: updateErr } = await supabaseAdmin
-    .from('bookings').update({ seats: maxCanConfirm }).eq('id', myConfirmed.id)
+    .from('bookings').update({ seats: newConfirmed }).eq('id', myConfirmed.id)
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
 
-  const { error: insertErr } = await supabaseAdmin.from('bookings').insert({
-    event_id, member_id: member.id, seats: newWaitlisted,
-    status: 'waitlist', booked_at: new Date().toISOString(),
-  })
-  if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 })
+  // Promote other waitlisted users if confirmed seats were freed
+  if (newConfirmed < oldConfirmed) {
+    await promoteWaitlist(event_id, oldConfirmed - newConfirmed)
+  }
 
-  return NextResponse.json({ status: 'split_change', confirmed: maxCanConfirm, waitlisted: newWaitlisted })
+  // ── Re-insert waitlist if still needed (booked_at = now → back of queue) ──────
+  if (newWaitlisted > 0) {
+    const { error: insertErr } = await supabaseAdmin.from('bookings').insert({
+      event_id, member_id: member.id, seats: newWaitlisted,
+      status: 'waitlist', booked_at: new Date().toISOString(),
+    })
+    if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 })
+  }
+
+  return NextResponse.json({
+    status: newWaitlisted > 0 ? 'split_change' : 'confirmed_change',
+    confirmed: newConfirmed,
+    waitlisted: newWaitlisted,
+  })
 }
 
 async function promoteWaitlist(event_id, freedSeats) {
@@ -179,7 +172,7 @@ async function promoteWaitlist(event_id, freedSeats) {
     (confirmedRows || []).reduce((s, b) => s + (b.seats || 1), 0)
 
   const { data: waitlisted } = await supabaseAdmin
-    .from('bookings').select('id, seats, member_id')
+    .from('bookings').select('id, seats')
     .eq('event_id', event_id).eq('status', 'waitlist').order('booked_at')
 
   for (const waiter of (waitlisted || [])) {
@@ -203,20 +196,14 @@ export async function DELETE(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: myBookings } = await supabaseAdmin
-    .from('bookings')
-    .select('id, status, seats')
-    .eq('event_id', event_id)
-    .eq('member_id', member.id)
-    .neq('status', 'cancelled')
+    .from('bookings').select('id, status, seats')
+    .eq('event_id', event_id).eq('member_id', member.id).neq('status', 'cancelled')
 
   if (!myBookings?.length) {
     return NextResponse.json({ error: 'No active booking found' }, { status: 404 })
   }
 
-  const bookingIds = myBookings.map(b => b.id)
-  const { error: cancelError } = await supabaseAdmin
-    .from('bookings').update({ status: 'cancelled' }).in('id', bookingIds)
-  if (cancelError) return NextResponse.json({ error: cancelError.message }, { status: 500 })
+  await supabaseAdmin.from('bookings').update({ status: 'cancelled' }).in('id', myBookings.map(b => b.id))
 
   const freedSeats = myBookings
     .filter(b => b.status === 'confirmed')
