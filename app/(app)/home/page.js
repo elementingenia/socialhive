@@ -5,7 +5,7 @@ export default function Home() {
         <img
           src="/wordmark_final.png"
           alt="The Social Hive"
-          style={{ height: 144, width: 'auto', display: 'block', maxWidth: '100%' }}
+          style={{ maxHeight: 144, width: 'auto', height: 'auto', maxWidth: '100%', display: 'block' }}
         />
       </div>
       <div style={{ background: 'var(--surface)', borderRadius: '12px', padding: '1.5rem', border: '1px solid var(--border)', textAlign: 'center' }}>
@@ -14,3 +14,4 @@ export default function Home() {
     </div>
   )
 }
+
