@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabaseClient"
+import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 
 const STATUS_STYLES = {
