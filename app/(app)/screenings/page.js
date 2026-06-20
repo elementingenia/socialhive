@@ -304,6 +304,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
   const [acting,        setActing]        = useState(false)
   const [pickingSeats,  setPickingSeats]  = useState(false)
   const [changingSeats, setChangingSeats] = useState(false)
+  const [changingSplit, setChangingSplit] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [showAttendees, setShowAttendees] = useState(false)
   const [splitOffer,    setSplitOffer]    = useState(null)
@@ -372,6 +373,24 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
     setActing(false)
     if (!res.ok) { addToast(data.error || 'Could not change seats', 'error'); return }
     addToast('Changed to ' + newSeats + ' seat' + (newSeats > 1 ? 's' : '') + ' for ' + ev.title, 'success')
+    onRefresh()
+  }
+
+  async function doChangeSplit(newSeats) {
+    setChangingSplit(false)
+    setActing(true)
+    const res = await fetch('/api/bookings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ event_id: ev.id, seats: newSeats }),
+    })
+    const data = await res.json()
+    setActing(false)
+    if (!res.ok) { addToast(data.error || 'Could not change seats', 'error'); return }
+    addToast(newSeats + ' seat' + (newSeats > 1 ? 's' : '') + ' confirmed for ' + ev.title, 'success')
+    setTimeout(() => {
+      addToast('Waitlist place removed for ' + ev.title, 'warn')
+    }, 600)
     onRefresh()
   }
 
@@ -459,8 +478,8 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
             {/* Actions */}
             <div style={{ paddingTop: '0.2rem' }}>
 
-              {/* Split booking: both confirmed + waitlisted */}
-              {hasConfirmed && hasWaitlist && (
+              {/* Split booking: both confirmed + waitlisted — badges + buttons */}
+              {hasConfirmed && hasWaitlist && !changingSplit && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                   <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
                     <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.75rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: '20px' }}>
@@ -470,10 +489,32 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
                       ⏳ {myWaitlistSeats} on waitlist
                     </span>
                   </div>
-                  <button onClick={() => setConfirmCancel(true)} disabled={acting}
-                    style={{ alignSelf: 'flex-start', background: 'none', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--text-dim)' }}>
-                    Cancel all
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.4rem' }}>
+                    <button onClick={() => setChangingSplit(true)} disabled={acting}
+                      style={{ background: 'none', border: '1px solid var(--teal)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--teal)', fontWeight: 600 }}>
+                      Change
+                    </button>
+                    <button onClick={() => setConfirmCancel(true)} disabled={acting}
+                      style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--text-dim)' }}>
+                      Cancel all
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Split booking: Change seat picker */}
+              {hasConfirmed && hasWaitlist && changingSplit && (
+                <div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--amber-dark)', fontWeight: 600, marginBottom: '0.3rem' }}>
+                    ⚠ Changing removes your waitlist place
+                  </div>
+                  <SeatPicker
+                    seatsRemaining={myConfirmedSeats}
+                    isFull={false}
+                    currentSeats={myConfirmedSeats}
+                    onPick={doChangeSplit}
+                    onCancel={() => setChangingSplit(false)}
+                  />
                 </div>
               )}
 
@@ -689,3 +730,4 @@ export default function Screenings() {
     </div>
   )
 }
+
