@@ -217,7 +217,7 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
             )}
             {movie.rating_rt && (
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fa320a' }}>🍅 {movie.rating_rt}</div>
+                <a href={`https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title)}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fa320a', textDecoration: 'none' }}>🍅 {movie.rating_rt}</a>
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>Rotten Tomatoes</div>
               </div>
             )}
@@ -421,8 +421,13 @@ function MovieCard({ movie, myVote, avgData, onClick }) {
           <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', textAlign: 'right' }}>Not yet<br/>rated</div>
         )}
         {myVote && <div style={{ fontSize: '0.7rem', color: 'var(--teal)', fontWeight: 700 }}>you: {myVote}</div>}
-        {movie.rating_imdb && <div style={{ fontSize: '0.7rem', color: 'var(--amber-dark)', fontWeight: 600 }}>★ {movie.rating_imdb}</div>}
-        {movie.rating_rt   && <div style={{ fontSize: '0.7rem', color: '#fa320a', fontWeight: 600 }}>🍅 {movie.rating_rt}</div>}
+        {movie.rating_imdb && (movie.imdb_id
+          ? <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.7rem', color: 'var(--amber-dark)', fontWeight: 600, textDecoration: 'none', display: 'block' }}>★ {movie.rating_imdb}</a>
+          : <div style={{ fontSize: '0.7rem', color: 'var(--amber-dark)', fontWeight: 600 }}>★ {movie.rating_imdb}</div>
+        )}
+        {movie.rating_rt && (
+          <a href={`https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title)}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.7rem', color: '#fa320a', fontWeight: 600, textDecoration: 'none', display: 'block' }}>🍅 {movie.rating_rt}</a>
+        )}
       </div>
     </div>
   )
