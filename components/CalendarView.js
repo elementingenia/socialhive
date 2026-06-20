@@ -15,7 +15,6 @@ function addDays(d, n) {
 }
 
 function localDate(dateStr) {
-  // parse YYYY-MM-DD without timezone shift
   const [y, m, day] = dateStr.split("-").map(Number)
   return new Date(y, m - 1, day)
 }
@@ -44,6 +43,16 @@ function hubLabel(hub_type) {
   return labels[hub_type] || hub_type
 }
 
+// Monday of the week containing date d
+function getMondayOf(d) {
+  const copy = new Date(d)
+  const dow = copy.getDay() // 0=Sun
+  const offset = dow === 0 ? -6 : 1 - dow // shift to Monday
+  copy.setDate(copy.getDate() + offset)
+  copy.setHours(0, 0, 0, 0)
+  return copy
+}
+
 // ── Event Chip ────────────────────────────────────────────────────────────────
 function EventChip({ event, onTap, compact = false }) {
   const colour = HUB_COLOURS[event.hub_type] || "var(--amber)"
@@ -66,26 +75,26 @@ function EventChip({ event, onTap, compact = false }) {
         borderRight: "none",
         borderBottom: "none",
         borderRadius: "0 8px 8px 0",
-        padding: compact ? "5px 8px" : "10px 12px",
+        padding: compact ? "4px 6px" : "10px 12px",
         marginBottom: compact ? 2 : 6,
         cursor: "pointer",
-        position: "relative",
       }}
     >
       <div style={{
-        fontWeight: 600,
-        fontSize: compact ? 12 : 15,
+        fontWeight: compact ? 500 : 600,
+        fontSize: compact ? 11 : 15,
         color: isPrivate ? "#888" : "var(--text)",
         lineHeight: 1.2,
         fontStyle: isPrivate ? "italic" : "normal",
+        whiteSpace: compact ? "nowrap" : "normal",
+        overflow: compact ? "hidden" : "visible",
+        textOverflow: compact ? "ellipsis" : "unset",
       }}>
-        {isPrivate ? "Residents Only" : event.title}
+        {isPrivate ? "Private" : event.title}
       </div>
       {!compact && !isPrivate && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
-          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>
-            {fmtTime(event.event_time)}
-          </span>
+          <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{fmtTime(event.event_time)}</span>
           <span style={{
             fontSize: 11,
             background: colour + "30",
@@ -93,33 +102,21 @@ function EventChip({ event, onTap, compact = false }) {
             padding: "1px 6px",
             borderRadius: 4,
             fontWeight: 500,
-          }}>
-            {hubLabel(event.hub_type)}
-          </span>
+          }}>{hubLabel(event.hub_type)}</span>
           {max > 0 && (
             <span style={{ fontSize: 12, color: booked >= max ? "var(--danger)" : "var(--text-dim)" }}>
-              {booked >= max ? "Full" : `${max - booked} left`}
+              {booked}/{max}
             </span>
           )}
+          {hasMyBooking && <span style={{ fontSize: 11, color: "#15803d", fontWeight: 700 }}>✓ Booked</span>}
+          {hasWaitlist  && <span style={{ fontSize: 11, color: "var(--amber-dark)", fontWeight: 700 }}>Waitlisted</span>}
         </div>
-      )}
-      {/* My booking indicator */}
-      {(hasMyBooking || hasWaitlist) && (
-        <div style={{
-          position: "absolute",
-          top: compact ? 3 : 6,
-          right: 8,
-          width: 8,
-          height: 8,
-          borderRadius: "50%",
-          background: hasMyBooking ? colour : "var(--amber)",
-        }} />
       )}
     </button>
   )
 }
 
-// ── Week View (list by day) ───────────────────────────────────────────────────
+// ── Week View ─────────────────────────────────────────────────────────────────
 function WeekView({ days, eventsByDate, onEventTap }) {
   const today = toDateStr(new Date())
 
@@ -131,14 +128,14 @@ function WeekView({ days, eventsByDate, onEventTap }) {
         const isToday = key === today
 
         return (
-          <div key={key} style={{ marginBottom: 16 }}>
+          <div key={key} style={{ marginBottom: dayEvents.length > 0 ? 16 : 4 }}>
             <div style={{
               fontWeight: isToday ? 700 : 600,
-              fontSize: isToday ? 15 : 14,
+              fontSize: isToday ? 15 : 13,
               color: isToday ? "var(--amber-dark)" : "var(--text-dim)",
-              padding: "8px 0 6px",
+              padding: isToday ? "8px 0 6px" : "5px 0 4px",
               borderBottom: "1px solid var(--border)",
-              marginBottom: 8,
+              marginBottom: dayEvents.length > 0 ? 8 : 0,
               display: "flex",
               alignItems: "center",
               gap: 8,
@@ -155,15 +152,9 @@ function WeekView({ days, eventsByDate, onEventTap }) {
                 }}>Today</span>
               )}
             </div>
-            {dayEvents.length === 0 ? (
-              <div style={{ fontSize: 13, color: "#ccc", paddingLeft: 4, paddingBottom: 4 }}>
-                No events
-              </div>
-            ) : (
-              dayEvents.map(ev => (
-                <EventChip key={ev.id} event={ev} onTap={onEventTap} />
-              ))
-            )}
+            {dayEvents.map(ev => (
+              <EventChip key={ev.id} event={ev} onTap={onEventTap} />
+            ))}
           </div>
         )
       })}
@@ -171,59 +162,58 @@ function WeekView({ days, eventsByDate, onEventTap }) {
   )
 }
 
-// ── 4-Week View (compact grid) ────────────────────────────────────────────────
+// ── 4-Week View ───────────────────────────────────────────────────────────────
 function FourWeekView({ days, eventsByDate, onEventTap }) {
   const today = toDateStr(new Date())
-  // Group into weeks of 7
   const weeks = []
   for (let i = 0; i < days.length; i += 7) {
     weeks.push(days.slice(i, i + 7))
   }
 
+  // Upcoming events sorted
+  const upcoming = days
+    .flatMap(d => eventsByDate[toDateStr(d)] || [])
+    .filter(ev => ev.event_date >= today)
+    .sort((a, b) => a.event_date.localeCompare(b.event_date) || (a.event_time || "").localeCompare(b.event_time || ""))
+
+  // Group upcoming by date for list
+  const upcomingByDate = {}
+  for (const ev of upcoming) {
+    if (!upcomingByDate[ev.event_date]) upcomingByDate[ev.event_date] = []
+    upcomingByDate[ev.event_date].push(ev)
+  }
+
   return (
     <div style={{ padding: "0 16px 16px" }}>
-      {/* Day-of-week header */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(7, 1fr)",
-        marginBottom: 4,
-      }}>
+      {/* Day-of-week header — always Mon–Sun since grid starts on Monday */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", marginBottom: 4 }}>
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => (
-          <div key={d} style={{
-            textAlign: "center",
-            fontSize: 11,
-            fontWeight: 600,
-            color: "var(--text-dim)",
-            padding: "4px 0",
-          }}>{d}</div>
+          <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 600, color: "var(--text-dim)", padding: "4px 0" }}>{d}</div>
         ))}
       </div>
       {weeks.map((week, wi) => (
-        <div key={wi} style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(7, 1fr)",
-          gap: 3,
-          marginBottom: 8,
-        }}>
+        <div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3, marginBottom: 6 }}>
           {week.map(day => {
             const key = toDateStr(day)
             const dayEvents = eventsByDate[key] || []
             const isToday = key === today
+            const isPast  = key < today
 
             return (
               <div key={key} style={{
-                minHeight: 60,
+                minHeight: 48,
                 background: isToday ? "var(--amber-light)" : "var(--surface2)",
                 borderRadius: 8,
                 padding: "4px 3px",
                 border: isToday ? "1px solid var(--amber)" : "1px solid transparent",
+                opacity: isPast ? 0.5 : 1,
               }}>
                 <div style={{
                   fontSize: 11,
                   fontWeight: isToday ? 700 : 500,
                   color: isToday ? "var(--amber-dark)" : "var(--text-dim)",
                   textAlign: "center",
-                  marginBottom: 3,
+                  marginBottom: 2,
                 }}>
                   {day.getDate()}
                 </div>
@@ -235,6 +225,75 @@ function FourWeekView({ days, eventsByDate, onEventTap }) {
           })}
         </div>
       ))}
+
+      {/* Upcoming events list */}
+      {Object.keys(upcomingByDate).length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text)", marginBottom: 10 }}>Upcoming</div>
+          {Object.entries(upcomingByDate)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([dateStr, evs]) => (
+              <div key={dateStr} style={{ marginBottom: 12 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 5, paddingBottom: 3, borderBottom: "1px solid var(--border)" }}>
+                  {fmtShortDate(localDate(dateStr))}
+                </div>
+                {evs.map(ev => <EventChip key={ev.id} event={ev} onTap={onEventTap} />)}
+              </div>
+            ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Day picker overlay (for days with multiple events) ────────────────────────
+function DayPickerOverlay({ date, events, onSelect, onClose }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 50, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ width: "100%", maxWidth: 480, background: "var(--surface)", borderRadius: "20px 20px 0 0", padding: "1.25rem" }}
+      >
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{fmtShortDate(date)}</div>
+        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 12 }}>{events.length} events — tap to open</div>
+        {events.map(ev => (
+          <button
+            key={ev.id}
+            onClick={() => { onClose(); onSelect(ev) }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              width: "100%",
+              background: "var(--surface2)",
+              border: "none",
+              borderLeft: `4px solid ${HUB_COLOURS[ev.hub_type] || "var(--amber)"}`,
+              borderRadius: "0 10px 10px 0",
+              padding: "0.75rem 1rem",
+              marginBottom: 8,
+              cursor: "pointer",
+              textAlign: "left",
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{ev.title}</div>
+              <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>
+                {fmtTime(ev.event_time)} · {hubLabel(ev.hub_type)}
+              </div>
+            </div>
+            <span style={{ color: "var(--text-dim)", fontSize: 16 }}>›</span>
+          </button>
+        ))}
+        <button
+          onClick={onClose}
+          style={{ width: "100%", padding: "0.7rem", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontWeight: 600, color: "var(--text-dim)", cursor: "pointer", marginTop: 4 }}
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   )
 }
@@ -245,9 +304,9 @@ function MonthView({ events, onEventTap }) {
     const d = new Date()
     return new Date(d.getFullYear(), d.getMonth(), 1)
   })
+  const [pickerDay, setPickerDay] = useState(null) // { date, events } for multi-event picker
   const today = toDateStr(new Date())
 
-  // Events in current month
   const monthStart = toDateStr(viewMonth)
   const monthEndDate = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0)
   const monthEnd = toDateStr(monthEndDate)
@@ -259,12 +318,10 @@ function MonthView({ events, onEventTap }) {
     eventsByDate[ev.event_date].push(ev)
   }
 
-  // Build calendar grid (Mon-first)
-  const firstDay = viewMonth
-  let startDow = firstDay.getDay() // 0=Sun
-  if (startDow === 0) startDow = 7 // Mon=1..Sun=7
+  // Build grid (Mon-first)
+  let startDow = viewMonth.getDay()
+  if (startDow === 0) startDow = 7
   const offsetDays = startDow - 1
-
   const daysInMonth = monthEndDate.getDate()
   const totalCells = Math.ceil((offsetDays + daysInMonth) / 7) * 7
 
@@ -274,59 +331,38 @@ function MonthView({ events, onEventTap }) {
     if (dayNum < 1 || dayNum > daysInMonth) {
       cells.push(null)
     } else {
-      const d = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), dayNum)
-      cells.push(d)
+      cells.push(new Date(viewMonth.getFullYear(), viewMonth.getMonth(), dayNum))
+    }
+  }
+
+  function handleDayTap(day, dayEvents) {
+    if (dayEvents.length === 0) return
+    if (dayEvents.length === 1) {
+      onEventTap(dayEvents[0])
+    } else {
+      setPickerDay({ date: day, events: dayEvents })
     }
   }
 
   return (
     <div style={{ padding: "0 16px 16px" }}>
       {/* Month nav */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        marginBottom: 12,
-      }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <button
           onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() - 1, 1))}
-          style={{
-            background: "var(--surface2)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            padding: "6px 14px",
-            fontSize: 18,
-            cursor: "pointer",
-            color: "var(--text)",
-          }}
+          style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 14px", fontSize: 18, cursor: "pointer", color: "var(--text)" }}
         >‹</button>
-        <div style={{ fontWeight: 700, fontSize: 16, color: "var(--text)" }}>
-          {fmtMonthYear(viewMonth)}
-        </div>
+        <div style={{ fontWeight: 700, fontSize: 16, color: "var(--text)" }}>{fmtMonthYear(viewMonth)}</div>
         <button
           onClick={() => setViewMonth(new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 1))}
-          style={{
-            background: "var(--surface2)",
-            border: "1px solid var(--border)",
-            borderRadius: 8,
-            padding: "6px 14px",
-            fontSize: 18,
-            cursor: "pointer",
-            color: "var(--text)",
-          }}
+          style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 14px", fontSize: 18, cursor: "pointer", color: "var(--text)" }}
         >›</button>
       </div>
 
       {/* Day-of-week headers */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", marginBottom: 4 }}>
         {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-          <div key={i} style={{
-            textAlign: "center",
-            fontSize: 11,
-            fontWeight: 600,
-            color: "var(--text-dim)",
-            padding: "4px 0",
-          }}>{d}</div>
+          <div key={i} style={{ textAlign: "center", fontSize: 11, fontWeight: 600, color: "var(--text-dim)", padding: "4px 0" }}>{d}</div>
         ))}
       </div>
 
@@ -340,13 +376,18 @@ function MonthView({ events, onEventTap }) {
           const hasEvents = dayEvents.length > 0
 
           return (
-            <div key={key} style={{
-              minHeight: 44,
-              background: isToday ? "var(--amber-light)" : hasEvents ? "var(--surface2)" : "transparent",
-              borderRadius: 8,
-              padding: "4px 3px",
-              border: isToday ? "1px solid var(--amber)" : "1px solid transparent",
-            }}>
+            <div
+              key={key}
+              onClick={() => handleDayTap(day, dayEvents)}
+              style={{
+                minHeight: 44,
+                background: isToday ? "var(--amber-light)" : hasEvents ? "var(--surface2)" : "transparent",
+                borderRadius: 8,
+                padding: "4px 3px",
+                border: isToday ? "1px solid var(--amber)" : "1px solid transparent",
+                cursor: hasEvents ? "pointer" : "default",
+              }}
+            >
               <div style={{
                 fontSize: 12,
                 fontWeight: isToday ? 700 : 400,
@@ -358,19 +399,10 @@ function MonthView({ events, onEventTap }) {
                 {dayEvents.map(ev => {
                   const colour = ev.is_public === false ? "#bbb" : (HUB_COLOURS[ev.hub_type] || "var(--amber)")
                   return (
-                    <button
+                    <div
                       key={ev.id}
-                      onClick={() => onEventTap(ev)}
-                      title={ev.is_public === false ? "Residents Only" : ev.title}
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: "50%",
-                        background: colour,
-                        border: "none",
-                        cursor: "pointer",
-                        padding: 0,
-                      }}
+                      title={ev.is_public === false ? "Private" : ev.title}
+                      style={{ width: 8, height: 8, borderRadius: "50%", background: colour }}
                     />
                   )
                 })}
@@ -380,32 +412,34 @@ function MonthView({ events, onEventTap }) {
         })}
       </div>
 
-      {/* Selected day events — show below grid when month dots are small */}
+      {/* Upcoming events list */}
       {monthEvents.length > 0 && (
         <div style={{ marginTop: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 14, color: "var(--text)", marginBottom: 10 }}>
             Upcoming this month
           </div>
           {Object.entries(eventsByDate)
+            .filter(([d]) => d >= today)
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([dateStr, evs]) => (
               <div key={dateStr} style={{ marginBottom: 12 }}>
-                <div style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "var(--text-dim)",
-                  marginBottom: 5,
-                  paddingBottom: 3,
-                  borderBottom: "1px solid var(--border)",
-                }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 5, paddingBottom: 3, borderBottom: "1px solid var(--border)" }}>
                   {fmtShortDate(localDate(dateStr))}
                 </div>
-                {evs.map(ev => (
-                  <EventChip key={ev.id} event={ev} onTap={onEventTap} />
-                ))}
+                {evs.map(ev => <EventChip key={ev.id} event={ev} onTap={onEventTap} />)}
               </div>
             ))}
         </div>
+      )}
+
+      {/* Multi-event day picker */}
+      {pickerDay && (
+        <DayPickerOverlay
+          date={pickerDay.date}
+          events={pickerDay.events}
+          onSelect={onEventTap}
+          onClose={() => setPickerDay(null)}
+        />
       )}
     </div>
   )
@@ -418,10 +452,13 @@ export default function CalendarView({ events = [], onEventTap }) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const weekDays  = useMemo(() => Array.from({ length: 7  }, (_, i) => addDays(today, i)), [])
-  const month4Days = useMemo(() => Array.from({ length: 28 }, (_, i) => addDays(today, i)), [])
+  // Week view: 7 days from today
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(today, i)), [])
 
-  // Build eventsByDate map
+  // 4-week view: 28 days starting from Monday of the current week
+  const monday = useMemo(() => getMondayOf(today), [])
+  const month4Days = useMemo(() => Array.from({ length: 28 }, (_, i) => addDays(monday, i)), [monday])
+
   const eventsByDate = useMemo(() => {
     const map = {}
     for (const ev of events) {
@@ -432,20 +469,15 @@ export default function CalendarView({ events = [], onEventTap }) {
   }, [events])
 
   const viewBtns = [
-    { id: "week",   label: "Week" },
-    { id: "4week",  label: "4 Weeks" },
-    { id: "month",  label: "Month" },
+    { id: "week",  label: "Week"    },
+    { id: "4week", label: "4 Weeks" },
+    { id: "month", label: "Month"   },
   ]
 
   return (
     <div>
       {/* View toggle */}
-      <div style={{
-        display: "flex",
-        gap: 6,
-        padding: "12px 16px",
-        borderBottom: "1px solid var(--border)",
-      }}>
+      <div style={{ display: "flex", gap: 6, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
         {viewBtns.map(btn => (
           <button
             key={btn.id}
@@ -462,20 +494,12 @@ export default function CalendarView({ events = [], onEventTap }) {
               cursor: "pointer",
               transition: "all 0.15s",
             }}
-          >
-            {btn.label}
-          </button>
+          >{btn.label}</button>
         ))}
       </div>
 
       {/* Hub legend */}
-      <div style={{
-        display: "flex",
-        gap: 12,
-        padding: "8px 16px",
-        overflowX: "auto",
-        borderBottom: "1px solid var(--border)",
-      }}>
+      <div style={{ display: "flex", gap: 12, padding: "8px 16px", overflowX: "auto", borderBottom: "1px solid var(--border)" }}>
         {[
           { key: "movie",    label: "Movie Night" },
           { key: "bookclub", label: "Book Club"   },
@@ -489,10 +513,9 @@ export default function CalendarView({ events = [], onEventTap }) {
         ))}
       </div>
 
-      {/* Views */}
-      {view === "week"  && <WeekView   days={weekDays}   eventsByDate={eventsByDate} onEventTap={onEventTap} />}
+      {view === "week"  && <WeekView     days={weekDays}   eventsByDate={eventsByDate} onEventTap={onEventTap} />}
       {view === "4week" && <FourWeekView days={month4Days} eventsByDate={eventsByDate} onEventTap={onEventTap} />}
-      {view === "month" && <MonthView   events={events}   onEventTap={onEventTap} />}
+      {view === "month" && <MonthView    events={events}   onEventTap={onEventTap} />}
     </div>
   )
 }

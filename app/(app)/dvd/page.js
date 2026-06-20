@@ -41,35 +41,37 @@ function DvdDetailSheet({ movie, isAdmin, session, onClose, onDeleted, addToast 
             <div style={{ position:'relative', height:180, overflow:'hidden', borderRadius:'20px 20px 0 0' }}>
               <img src={movie.poster_url} alt={movie.title} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', filter:'blur(2px) brightness(0.6)', transform:'scale(1.05)' }} />
               <img src={movie.poster_url} alt={movie.title} style={{ position:'absolute', left:'1.25rem', bottom:'-40px', width:80, height:120, objectFit:'cover', borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,0.4)' }} />
-              <button onClick={onClose} style={{ position:'absolute', top:'0.75rem', right:'0.75rem', width:32, height:32, borderRadius:'50%', background:'rgba(0,0,0,0.5)', border:'none', color:'#fff', fontSize:'1.1rem', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>x</button>
+              <button onClick={onClose} style={{ position:'absolute', top:'0.75rem', right:'0.75rem', width:32, height:32, borderRadius:'50%', background:'rgba(0,0,0,0.5)', border:'none', color:'#fff', fontSize:'1.1rem', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
             </div>
           )}
           <div style={{ padding:movie.poster_url?'3rem 1.25rem 2rem':'1.5rem 1.25rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
-            {!movie.poster_url && <div style={{ display:'flex', justifyContent:'flex-end' }}><button onClick={onClose} style={{ background:'none', border:'none', fontSize:'1.5rem', cursor:'pointer', color:'var(--text-dim)' }}>x</button></div>}
+            {!movie.poster_url && <div style={{ display:'flex', justifyContent:'flex-end' }}><button onClick={onClose} style={{ background:'none', border:'none', fontSize:'1.5rem', cursor:'pointer', color:'var(--text-dim)' }}>✕</button></div>}
             <div>
               <div style={{ fontWeight:800, fontSize:'1.2rem', lineHeight:1.2 }}>{movie.title}</div>
-              {movie.year && <div style={{ color:'var(--text-dim)', fontSize:'0.85rem', marginTop:'0.2rem' }}>{movie.year}{movie.runtime ? ' - ' + movie.runtime : ''}</div>}
+              {movie.year && <div style={{ color:'var(--text-dim)', fontSize:'0.85rem', marginTop:'0.2rem' }}>{movie.year}{movie.runtime ? ' · ' + movie.runtime : ''}</div>}
             </div>
-            <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', alignItems:'center' }}>
-              {genres.map(g=><span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', color:'var(--text-dim)' }}>{g}</span>)}
-              <span style={{ background:'#dcfce7', color:'#15803d', borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', fontWeight:700 }}>Free</span>
-              <span style={{ background:'rgba(0,128,128,0.08)', color:'var(--teal)', borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', fontWeight:700 }}>DVD</span>
-            </div>
-            <div style={{ display:'flex', gap:'1.25rem', flexWrap:'wrap', alignItems:'flex-end' }}>
+
+            {genres.length > 0 && (
+              <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem' }}>
+                {genres.map(g=><span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', color:'var(--text-dim)' }}>{g}</span>)}
+              </div>
+            )}
+
+            {/* Ratings row: maturity rating + IMDB score side by side */}
+            <div style={{ display:'flex', gap:'0.75rem', alignItems:'center', flexWrap:'wrap' }}>
+              {movie.rating && (
+                <span style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'6px', padding:'0.2rem 0.5rem', fontSize:'0.78rem', fontWeight:700, color:'var(--text-dim)', letterSpacing:'0.04em' }}>{movie.rating}</span>
+              )}
               {movie.rating_imdb && (
-                <div style={{ textAlign:'center' }}>
-                  {imdbUrl ? <a href={imdbUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize:'1.4rem', fontWeight:800, color:'var(--amber-dark)', textDecoration:'none' }}>&#9733; {movie.rating_imdb}</a>
-                    : <div style={{ fontSize:'1.4rem', fontWeight:800, color:'var(--amber-dark)' }}>&#9733; {movie.rating_imdb}</div>}
-                  <div style={{ fontSize:'0.7rem', color:'var(--text-dim)' }}>IMDB</div>
-                </div>
+                imdbUrl
+                  ? <a href={imdbUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize:'0.88rem', fontWeight:700, color:'var(--amber-dark)', textDecoration:'none' }}>⭐ {movie.rating_imdb} IMDb</a>
+                  : <span style={{ fontSize:'0.88rem', fontWeight:700, color:'var(--amber-dark)' }}>⭐ {movie.rating_imdb} IMDb</span>
               )}
               {movie.rating_rt && (
-                <div style={{ textAlign:'center' }}>
-                  <a href={'https://www.rottentomatoes.com/search?search=' + encodeURIComponent(movie.title)} target="_blank" rel="noopener noreferrer" style={{ fontSize:'1.4rem', fontWeight:800, color:'#fa320a', textDecoration:'none' }}>RT {movie.rating_rt}</a>
-                  <div style={{ fontSize:'0.7rem', color:'var(--text-dim)' }}>Rotten Tomatoes</div>
-                </div>
+                <a href={'https://www.rottentomatoes.com/search?search=' + encodeURIComponent(movie.title)} target="_blank" rel="noopener noreferrer" style={{ fontSize:'0.88rem', fontWeight:700, color:'#fa320a', textDecoration:'none' }}>🍅 {movie.rating_rt}</a>
               )}
             </div>
+
             {movie.director && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Director:</strong> {movie.director}</div>}
             {movie.actors   && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Cast:</strong> {movie.actors}</div>}
             {movie.plot     && <div style={{ fontSize:'0.88rem', lineHeight:1.6, color:'var(--text)' }}>{movie.plot}</div>}
@@ -103,26 +105,28 @@ function DvdDetailSheet({ movie, isAdmin, session, onClose, onDeleted, addToast 
 
 function DvdCard({ movie, onClick }) {
   const genres = parseGenres(movie.genre)
-  const imdbUrl = movie.imdb_id ? 'https://www.imdb.com/title/' + movie.imdb_id + '/' : null
+  const leadActor = movie.actors ? movie.actors.split(',')[0].trim() : null
   return (
     <div onClick={onClick} style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', borderLeft:'3px solid var(--teal)', display:'flex', overflow:'hidden', boxShadow:'var(--shadow)', cursor:'pointer', minHeight:110 }}>
       {movie.poster_url
         ? <img src={movie.poster_url} alt={movie.title} style={{ width:75, objectFit:'cover', flexShrink:0 }} />
-        : <div style={{ width:75, background:'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.8rem', flexShrink:0 }}>CD</div>}
+        : <div style={{ width:75, background:'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.8rem', flexShrink:0 }}>💿</div>}
       <div style={{ flex:1, padding:'0.75rem', display:'flex', flexDirection:'column', justifyContent:'center', gap:'0.3rem', overflow:'hidden' }}>
         <div style={{ fontWeight:700, fontSize:'0.9rem', lineHeight:1.2 }}>{movie.title}</div>
-        {movie.year && <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{movie.year}{movie.runtime ? ' - ' + movie.runtime : ''}</div>}
-        {genres.length>0 && (
-          <div style={{ display:'flex', flexWrap:'wrap', gap:'0.25rem' }}>
-            {genres.slice(0,2).map(g=><span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.12rem 0.45rem', fontSize:'0.68rem', color:'var(--text-dim)' }}>{g}</span>)}
+        {leadActor && (
+          <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>
+            {leadActor}
+            {movie.rating_imdb && <span style={{ color:'var(--amber-dark)', fontWeight:600 }}> ({movie.rating_imdb})</span>}
           </div>
         )}
-        <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', flexWrap:'wrap' }}>
-          <span style={{ background:'#dcfce7', color:'#15803d', borderRadius:'20px', padding:'0.12rem 0.5rem', fontSize:'0.72rem', fontWeight:700 }}>Free</span>
-          <span style={{ background:'rgba(0,128,128,0.08)', color:'var(--teal)', borderRadius:'20px', padding:'0.12rem 0.5rem', fontSize:'0.72rem', fontWeight:700 }}>DVD</span>
-          {movie.rating_imdb && (imdbUrl
-            ? <a href={imdbUrl} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ fontSize:'0.72rem', color:'var(--amber-dark)', fontWeight:600, textDecoration:'none' }}>&#9733; {movie.rating_imdb}</a>
-            : <span style={{ fontSize:'0.72rem', color:'var(--amber-dark)', fontWeight:600 }}>&#9733; {movie.rating_imdb}</span>)}
+        {!leadActor && movie.year && (
+          <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{movie.year}</div>
+        )}
+        <div style={{ display:'flex', alignItems:'center', gap:'0.4rem', flexWrap:'wrap', marginTop:'0.1rem' }}>
+          {movie.rating && (
+            <span style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'4px', padding:'0.1rem 0.35rem', fontSize:'0.68rem', fontWeight:700, color:'var(--text-dim)' }}>{movie.rating}</span>
+          )}
+          {genres.slice(0,2).map(g=><span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.1rem 0.4rem', fontSize:'0.68rem', color:'var(--text-dim)' }}>{g}</span>)}
         </div>
       </div>
     </div>
@@ -130,14 +134,15 @@ function DvdCard({ movie, onClick }) {
 }
 
 export default function DvdPage() {
-  const [movies,  setMovies]  = useState([])
-  const [member,  setMember]  = useState(null)
-  const [session, setSession] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [search,  setSearch]  = useState('')
-  const [sortBy,  setSortBy]  = useState('az')
-  const [selected, setSelected] = useState(null)
-  const [toasts, setToasts] = useState([])
+  const [movies,      setMovies]      = useState([])
+  const [member,      setMember]      = useState(null)
+  const [session,     setSession]     = useState(null)
+  const [loading,     setLoading]     = useState(true)
+  const [search,      setSearch]      = useState('')
+  const [sortBy,      setSortBy]      = useState('az')
+  const [genreFilter, setGenreFilter] = useState('')
+  const [selected,    setSelected]    = useState(null)
+  const [toasts,      setToasts]      = useState([])
 
   function addToast(message, type='success') {
     const id = Date.now()
@@ -159,7 +164,17 @@ export default function DvdPage() {
     loadData()
   }, [loadData])
 
-  const filtered = movies.filter(m => !search || m.title.toLowerCase().includes(search.toLowerCase()))
+  const allGenres = [...new Set(movies.flatMap(m => parseGenres(m.genre)))].sort()
+
+  const filtered = movies.filter(m => {
+    const q = search.toLowerCase()
+    const matchesSearch = !search
+      || m.title.toLowerCase().includes(q)
+      || (m.actors && m.actors.toLowerCase().includes(q))
+    const matchesGenre = !genreFilter || parseGenres(m.genre).includes(genreFilter)
+    return matchesSearch && matchesGenre
+  })
+
   const sorted = [...filtered].sort((a,b) =>
     sortBy==='imdb' ? (parseFloat(b.rating_imdb)||0)-(parseFloat(a.rating_imdb)||0) : a.title.localeCompare(b.title)
   )
@@ -171,26 +186,46 @@ export default function DvdPage() {
       <div style={{ padding:'1rem 1rem 6rem' }}>
         <div style={{ background:'var(--surface)', borderRadius:'14px', padding:'1rem', marginBottom:'1rem', border:'1px solid var(--border)', borderLeft:'4px solid var(--teal)', fontSize:'0.88rem', lineHeight:1.6 }}>
           <div style={{ display:'flex', alignItems:'flex-start', gap:'0.6rem' }}>
-            <span style={{ fontSize:'1.4rem', flexShrink:0 }}>CD</span>
+            <span style={{ fontSize:'1.4rem', flexShrink:0 }}>💿</span>
             <div>
               <div style={{ fontWeight:700, color:'var(--teal)', fontSize:'0.8rem', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'0.2rem' }}>DVD Library</div>
-              DVDs available in the cinema for residents to enjoy. All titles are <strong>free to watch</strong>.
+              DVDs available in the cinema for residents to enjoy. Ask a team member to borrow one.
             </div>
           </div>
         </div>
 
-        <div style={{ position:'relative', marginBottom:'0.85rem' }}>
-          <span style={{ position:'absolute', left:'0.85rem', top:'50%', transform:'translateY(-50%)', color:'var(--text-dim)' }}>Search</span>
-          <input placeholder="Search DVDs..." value={search} onChange={e=>setSearch(e.target.value)}
-            style={{ width:'100%', padding:'0.7rem 0.85rem 0.7rem 2.4rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
+        <div style={{ marginBottom:'0.75rem' }}>
+          <input
+            placeholder="Search by title or actor..."
+            value={search}
+            onChange={e=>setSearch(e.target.value)}
+            style={{ width:'100%', padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }}
+          />
         </div>
+
+        {allGenres.length > 0 && (
+          <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap', marginBottom:'0.85rem' }}>
+            <button
+              onClick={()=>setGenreFilter('')}
+              style={{ padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px solid', borderColor:!genreFilter?'var(--teal)':'var(--border)', background:!genreFilter?'var(--teal)':'var(--surface)', color:!genreFilter?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' }}>
+              All
+            </button>
+            {allGenres.map(g=>(
+              <button key={g}
+                onClick={()=>setGenreFilter(g===genreFilter?'':g)}
+                style={{ padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px solid', borderColor:genreFilter===g?'var(--teal)':'var(--border)', background:genreFilter===g?'var(--teal)':'var(--surface)', color:genreFilter===g?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' }}>
+                {g}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' }}>
           <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--teal)', letterSpacing:'0.08em', textTransform:'uppercase' }}>
             {sorted.length} title{sorted.length!==1?'s':''}
           </div>
           <div style={{ display:'flex', gap:'0.4rem' }}>
-            {[['az','A-Z'],['imdb','IMDB']].map(([k,l])=>(
+            {[['az','A–Z'],['imdb','IMDb']].map(([k,l])=>(
               <button key={k} onClick={()=>setSortBy(k)}
                 style={{ padding:'0.3rem 0.75rem', borderRadius:'10px', border:'1.5px solid', borderColor:sortBy===k?'var(--teal)':'var(--border)', background:sortBy===k?'var(--teal)':'var(--surface)', color:sortBy===k?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' }}>
                 {l}
@@ -203,9 +238,8 @@ export default function DvdPage() {
           <div style={{ display:'flex', justifyContent:'center', padding:'3rem' }}><div className="spinner" /></div>
         ) : sorted.length===0 ? (
           <div style={{ textAlign:'center', color:'var(--text-dim)', padding:'3rem' }}>
-            <div style={{ fontSize:'2.5rem', marginBottom:'0.75rem' }}>CD</div>
-            <div style={{ fontSize:'0.9rem', fontWeight:600 }}>{search ? 'No DVDs match your search' : 'No DVDs in the library yet'}</div>
-            {!search && <div style={{ fontSize:'0.82rem', marginTop:'0.4rem' }}>Admin can add DVDs by marking movies as owned in the system.</div>}
+            <div style={{ fontSize:'2.5rem', marginBottom:'0.75rem' }}>💿</div>
+            <div style={{ fontSize:'0.9rem', fontWeight:600 }}>{search || genreFilter ? 'No DVDs match your search' : 'No DVDs in the library yet'}</div>
           </div>
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:'0.65rem' }}>
