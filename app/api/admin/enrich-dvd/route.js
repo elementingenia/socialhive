@@ -17,13 +17,6 @@ async function getMember(token) {
   return data
 }
 
-// Strip season/series suffixes from TV titles before searching
-// e.g. "Friends (Season 1)" → "Friends"
-function stripSeason(title) {
-  return title.replace(/\s*\((?:Season|Series|Complete|Reunion|Specials?|S\d+)[^)]*\)/gi, '').trim()
-}
-
-// Also strip common DVD edition suffixes for cleaner search
 function cleanTitle(title) {
   return title
     .replace(/\s*—\s*(Special|Collector'?s?|Extended|Director'?s?|Limited|Platinum|Deluxe|Widescreen|Ultimate|2\s*Disc|Rockin'?|Anniversary|Uncorked)[^,]*/gi, '')
@@ -38,15 +31,16 @@ async function enrichFromOmdb(imdbId) {
   const data = await res.json()
   if (data.Response === 'False') return null
   return {
-    title_check: data.Title,
-    poster_url:  data.Poster && data.Poster !== 'N/A' ? data.Poster : null,
-    plot:        data.Plot   && data.Plot   !== 'N/A' ? data.Plot   : null,
+    poster_url:  data.Poster  && data.Poster  !== 'N/A' ? data.Poster  : null,
+    plot:        data.Plot    && data.Plot    !== 'N/A' ? data.Plot    : null,
     runtime:     data.Runtime && data.Runtime !== 'N/A' ? data.Runtime : null,
     director:    data.Director && data.Director !== 'N/A' ? data.Director : null,
-    actors:      data.Actors && data.Actors !== 'N/A' ? data.Actors : null,
+    actors:      data.Actors  && data.Actors  !== 'N/A' ? data.Actors  : null,
     rating_imdb: data.imdbRating && data.imdbRating !== 'N/A' ? data.imdbRating : null,
     imdb_id:     imdbId,
     year:        data.Year && data.Year !== 'N/A' ? data.Year.slice(0, 4) : null,
+    genre:       data.Genre && data.Genre !== 'N/A' ? data.Genre : null,
+    rating:      data.Rated && data.Rated !== 'N/A' ? data.Rated : null,
   }
 }
 
@@ -55,50 +49,36 @@ async function enrichFromTmdb(title, isTV) {
   const clean = cleanTitle(title)
   const searchUrl = `https://api.themoviedb.org/3/search/${searchType}?api_key=${TMDB_KEY}&query=${encodeURIComponent(clean)}&language=en-AU`
   const searchRes = await fetch(searchUrl)
-  if (!searchRes.ok) return null
+  if (!searchRes.ok) return { _apiError: true, reason: `TMDB search HTTP ${searchRes.status}` }
   const searchData = await searchRes.json()
   const result = searchData.results?.[0]
-  if (!result) return null
+  if (!result) return null   // genuinely not found
 
   const detailUrl = `https://api.themoviedb.org/3/${searchType}/${result.id}?api_key=${TMDB_KEY}&language=en-AU&append_to_response=credits,external_ids`
   const detailRes = await fetch(detailUrl)
-  if (!detailRes.ok) return null
+  if (!detailRes.ok) return { _apiError: true, reason: `TMDB detail HTTP ${detailRes.status}` }
   const d = await detailRes.json()
 
-  const imdb_id = d.external_ids?.imdb_id || null
-  const poster  = d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : null
-  const runtime = isTV
+  const imdb_id  = d.external_ids?.imdb_id || null
+  const poster   = d.poster_path ? `https://image.tmdb.org/t/p/w500${d.poster_path}` : null
+  const runtime  = isTV
     ? (d.episode_run_time?.[0] ? `${d.episode_run_time[0]} min` : null)
     : (d.runtime ? `${d.runtime} min` : null)
-  const director = !isTV
-    ? d.credits?.crew?.find(c => c.job === 'Director')?.name || null
-    : null
-  const actors = d.credits?.cast?.slice(0, 4).map(c => c.name).join(', ') || null
-  const overview = d.overview || null
-  const releaseYear = isTV
-    ? d.first_air_date?.slice(0, 4)
-    : d.release_date?.slice(0, 4)
+  const director = !isTV ? d.credits?.crew?.find(c => c.job === 'Director')?.name || null : null
+  const actors   = d.credits?.cast?.slice(0, 4).map(c => c.name).join(', ') || null
+  const releaseYear = isTV ? d.first_air_date?.slice(0, 4) : d.release_date?.slice(0, 4)
 
-  // Also try OMDb for the IMDB rating if we have the ID
   let rating_imdb = null
+  let rating = null
   if (imdb_id) {
     const omdb = await enrichFromOmdb(imdb_id)
     rating_imdb = omdb?.rating_imdb || null
+    rating = omdb?.rating || null
   }
 
-  return {
-    poster_url:  poster,
-    plot:        overview,
-    runtime,
-    director,
-    actors,
-    rating_imdb,
-    imdb_id,
-    year:        releaseYear || null,
-  }
+  return { poster_url: poster, plot: d.overview || null, runtime, director, actors, rating_imdb, rating, imdb_id, year: releaseYear || null }
 }
 
-// Small delay to respect rate limits
 const delay = ms => new Promise(r => setTimeout(r, ms))
 
 export async function GET(req) {
@@ -108,86 +88,114 @@ export async function GET(req) {
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
   const { searchParams } = new URL(req.url)
-  const limit = Math.min(parseInt(searchParams.get('limit') || '30'), 50)
+  const limit        = Math.min(parseInt(searchParams.get('limit') || '30'), 50)
   const forceRefresh = searchParams.get('force') === 'true'
+  // catalogue=true returns all failure records rather than running enrichment
+  const catalogue    = searchParams.get('catalogue') === 'true'
 
-  // Fetch DVD movies missing enrichment data
+  if (catalogue) {
+    const { data } = await supabaseAdmin
+      .from('movies')
+      .select('id, title, enrichment_status, genre')
+      .in('enrichment_status', ['no_match', 'api_error'])
+      .order('enrichment_status')
+      .order('title')
+    return NextResponse.json({ failures: data || [] })
+  }
+
+  // Fetch movies that need enrichment:
+  // - poster_url IS NULL (still unenriched)
+  // - AND enrichment_status is NULL or 'api_error' (retry api_errors; skip no_match)
+  // - Unless forceRefresh=true (retry everything)
   let query = supabaseAdmin
     .from('movies')
-    .select('id, title, imdb_id, poster_url, plot, genre')
+    .select('id, title, imdb_id, poster_url, plot, genre, enrichment_status')
     .eq('we_own', true)
     .limit(limit)
 
   if (!forceRefresh) {
-    query = query.is('poster_url', null)
+    query = query
+      .is('poster_url', null)
+      .or('enrichment_status.is.null,enrichment_status.eq.api_error')
   }
 
   const { data: movies, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!movies?.length) return NextResponse.json({ message: 'All DVD items already enriched', enriched: 0 })
+  if (!movies?.length) return NextResponse.json({ message: 'All DVD items enriched or no_match catalogued', enriched: 0, processed: 0 })
 
   const results = { enriched: 0, skipped: 0, failed: 0, details: [] }
 
   for (const movie of movies) {
-    const isTV = movie.genre?.includes('TV Series')
+    const isTV = movie.genre?.toLowerCase().includes('tv') || movie.genre?.toLowerCase().includes('series')
 
     try {
       let enriched = null
+      let failReason = null
 
       if (movie.imdb_id) {
         enriched = await enrichFromOmdb(movie.imdb_id)
-        if (!enriched?.poster_url && !enriched?.plot) {
-          // OMDb had no useful data — fall back to TMDB
+        if (!enriched?.poster_url) {
           const tmdb = await enrichFromTmdb(movie.title, isTV)
-          if (tmdb) enriched = { ...enriched, ...tmdb }
+          if (tmdb?._apiError) {
+            failReason = tmdb.reason
+            enriched = enriched || null
+          } else if (tmdb) {
+            enriched = { ...enriched, ...tmdb }
+          }
         }
-        await delay(150) // OMDb rate limit
+        await delay(150)
       } else {
-        enriched = await enrichFromTmdb(movie.title, isTV)
-        await delay(250) // TMDB rate limit buffer
+        const tmdb = await enrichFromTmdb(movie.title, isTV)
+        if (tmdb?._apiError) {
+          failReason = tmdb.reason
+        } else {
+          enriched = tmdb
+        }
+        await delay(250)
+      }
+
+      if (failReason) {
+        // API error — mark so it gets retried next time but logged
+        await supabaseAdmin.from('movies').update({ enrichment_status: 'api_error' }).eq('id', movie.id)
+        results.failed++
+        results.details.push({ id: movie.id, title: movie.title, status: 'api_error', reason: failReason })
+        continue
       }
 
       if (!enriched) {
+        // Genuinely not found — mark no_match so it's skipped in future runs
+        await supabaseAdmin.from('movies').update({ enrichment_status: 'no_match' }).eq('id', movie.id)
         results.skipped++
-        results.details.push({ title: movie.title, status: 'no_match' })
+        results.details.push({ id: movie.id, title: movie.title, status: 'no_match', reason: 'Not found on TMDB or OMDb' })
         continue
       }
 
-      // Only update fields that are currently NULL or being forced
-      const update = {}
-      if (!movie.poster_url && enriched.poster_url) update.poster_url = enriched.poster_url
-      if (!movie.plot        && enriched.plot)       update.plot        = enriched.plot
-      if (enriched.runtime)   update.runtime   = enriched.runtime
-      if (enriched.director)  update.director  = enriched.director
-      if (enriched.actors)    update.actors    = enriched.actors
+      // Build update — only set non-null values
+      const update = { enrichment_status: 'ok' }
+      if (enriched.poster_url)  update.poster_url  = enriched.poster_url
+      if (enriched.plot)        update.plot        = enriched.plot
+      if (enriched.runtime)     update.runtime     = enriched.runtime
+      if (enriched.director)    update.director    = enriched.director
+      if (enriched.actors)      update.actors      = enriched.actors
       if (enriched.rating_imdb) update.rating_imdb = enriched.rating_imdb
+      if (enriched.rating)      update.rating      = enriched.rating
+      if (enriched.year)        update.year        = enriched.year
       if (enriched.imdb_id && !movie.imdb_id) update.imdb_id = enriched.imdb_id
-      if (enriched.year)      update.year      = enriched.year
+      if (enriched.genre && !movie.genre)     update.genre   = enriched.genre
 
-      if (Object.keys(update).length === 0) {
-        results.skipped++
-        results.details.push({ title: movie.title, status: 'nothing_to_update' })
-        continue
-      }
-
-      const { error: updateErr } = await supabaseAdmin
-        .from('movies').update(update).eq('id', movie.id)
+      const { error: updateErr } = await supabaseAdmin.from('movies').update(update).eq('id', movie.id)
 
       if (updateErr) {
         results.failed++
-        results.details.push({ title: movie.title, status: 'update_failed', error: updateErr.message })
+        results.details.push({ id: movie.id, title: movie.title, status: 'api_error', reason: `DB update failed: ${updateErr.message}` })
       } else {
         results.enriched++
-        results.details.push({
-          title: movie.title,
-          status: 'ok',
-          fields: Object.keys(update),
-          poster: !!update.poster_url,
-        })
+        results.details.push({ id: movie.id, title: movie.title, status: 'ok', fields: Object.keys(update).filter(k => k !== 'enrichment_status') })
       }
     } catch (err) {
+      await supabaseAdmin.from('movies').update({ enrichment_status: 'api_error' }).eq('id', movie.id)
       results.failed++
-      results.details.push({ title: movie.title, status: 'error', error: err.message })
+      results.details.push({ id: movie.id, title: movie.title, status: 'api_error', reason: err.message })
       await delay(500)
     }
   }
@@ -195,6 +203,5 @@ export async function GET(req) {
   return NextResponse.json({
     processed: movies.length,
     ...results,
-    message: `Enriched ${results.enriched}, skipped ${results.skipped}, failed ${results.failed}. Run again to continue.`,
   })
 }
