@@ -1,10 +1,22 @@
 "use client"
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
+// Separate component so useSearchParams is inside Suspense
+function InactivityNotice({ onNotice }) {
+  const searchParams = useSearchParams()
+  useEffect(() => {
+    if (searchParams.get('reason') === 'inactive') {
+      onNotice('You have been signed out after 14 days of inactivity.')
+    }
+  }, [searchParams, onNotice])
+  return null
+}
+
 export default function Login() {
-  const [tab, setTab] = useState('signin')
+  const [tab, setTab]       = useState('signin')
+  const [notice, setNotice] = useState(null)
   const router = useRouter()
 
   return (
@@ -21,6 +33,12 @@ export default function Login() {
         />
       </div>
 
+      <Suspense fallback={null}><InactivityNotice onNotice={setNotice} /></Suspense>
+      {notice && (
+        <div style={{ background:'#fef3c7', border:'1px solid #d97706', borderRadius:'10px', padding:'0.75rem 1rem', marginBottom:'1rem', fontSize:'0.85rem', color:'#92400e', textAlign:'center', maxWidth:400, width:'100%' }}>
+          ⏱ {notice}
+        </div>
+      )}
       <div style={{
         width: '100%', maxWidth: 400,
         background: 'var(--surface)', borderRadius: '16px',
