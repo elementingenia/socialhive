@@ -14,6 +14,23 @@ function parseGenres(g) {
   return g.split(/[,|\/]/).map(x => x.trim()).filter(Boolean)
 }
 
+function GenreChips({ genres, max = 4 }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!genres.length) return null
+  const shown = expanded ? genres : genres.slice(0, max)
+  const hidden = genres.length - max
+  return (
+    <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem' }}>
+      {shown.map(g => (
+        <span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', color:'var(--text-dim)' }}>{g}</span>
+      ))}
+      {!expanded && hidden > 0 && (
+        <span onClick={()=>setExpanded(true)} style={{ background:'transparent', border:'1px dashed var(--border)', borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', color:'var(--text-dim)', opacity:0.6, cursor:'pointer' }}>+{hidden} more</span>
+      )}
+    </div>
+  )
+}
+
 function Toast({ toasts }) {
   return (
     <div style={{ position:'fixed', top:'1rem', left:'50%', transform:'translateX(-50%)', zIndex:999, display:'flex', flexDirection:'column', gap:'0.5rem', pointerEvents:'none', minWidth:260, maxWidth:'90vw' }}>
@@ -136,7 +153,7 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
             {movie.year && <div style={{ color:'var(--text-dim)', fontSize:'0.85rem', marginTop:'0.2rem' }}>{movie.year}{movie.runtime&&` · ${movie.runtime}`}</div>}
           </div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', alignItems:'center' }}>
-            {genres.map(g=><span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', color:'var(--text-dim)' }}>{g}</span>)}
+            <GenreChips genres={genres} />
             {pill && <span style={{ background:pill.bg, color:pill.color, borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', fontWeight:700 }}>● {pill.label}</span>}
           </div>
           <div style={{ display:'flex', gap:'1.25rem', flexWrap:'wrap', alignItems:'flex-end' }}>
@@ -428,3 +445,4 @@ export default function LibraryPage() {
     </div>
   )
 }
+
