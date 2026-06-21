@@ -53,6 +53,8 @@ function SignIn({ router }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showDevicePrompt, setShowDevicePrompt] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -70,8 +72,47 @@ function SignIn({ router }) {
         password: data.authPassword
       })
       if (authError) { setError('Sign-in failed. Please try again.'); setLoading(false) }
-      else router.replace('/home')
+      else {
+        setLoading(false)
+        setShowDevicePrompt(true)
+      }
     } catch { setError('Network error. Please try again.'); setLoading(false) }
+  }
+
+  async function signOutOthers() {
+    setSigningOut(true)
+    await supabase.auth.signOut({ scope: 'others' })
+    router.replace('/home')
+  }
+
+  function continueWithAll() {
+    router.replace('/home')
+  }
+
+  if (showDevicePrompt) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div style={{ textAlign: 'center', padding: '0.5rem 0' }}>
+          <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>📱</div>
+          <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '0.4rem' }}>Signed in!</div>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', lineHeight: 1.5 }}>
+            Would you like to sign out of any other devices where you&apos;re currently signed in?
+          </div>
+        </div>
+        <button
+          onClick={signOutOthers}
+          disabled={signingOut}
+          style={{ padding: '0.85rem', background: 'var(--amber)', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '0.92rem', fontWeight: 700, cursor: signingOut ? 'not-allowed' : 'pointer', opacity: signingOut ? 0.7 : 1 }}>
+          {signingOut ? 'Signing out…' : 'Yes, sign out other devices'}
+        </button>
+        <button
+          onClick={continueWithAll}
+          disabled={signingOut}
+          style={{ padding: '0.85rem', background: 'var(--surface2)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '0.92rem', fontWeight: 600, cursor: 'pointer' }}>
+          No, keep all sessions
+        </button>
+      </div>
+    )
   }
 
   return (
