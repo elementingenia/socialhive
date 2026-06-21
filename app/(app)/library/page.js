@@ -14,7 +14,7 @@ function parseGenres(g) {
   return g.split(/[,|\/]/).map(x => x.trim()).filter(Boolean)
 }
 
-function GenreChips({ genres, max = 6 }) {
+function GenreChips({ genres, max = 4 }) {
   const [expanded, setExpanded] = useState(false)
   if (!genres || !genres.length) return null
   const needsTrunc = !expanded && genres.length > max
@@ -444,4 +444,3 @@ export default function LibraryPage() {
     </div>
   )
 }
-
