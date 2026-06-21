@@ -425,6 +425,7 @@ export default function LibraryPage() {
               {shownGenres.map(g => <button key={g} onClick={()=>setGenreFilter(g)} style={btnStyle(genreFilter===g)}>{g}</button>)}
               {selectedHidden && <button onClick={()=>setGenreFilter('all')} style={btnStyle(true)}>{genreFilter}</button>}
               {needsCollapse && <button onClick={()=>setFilterExpanded(true)} style={moreStyle}>+{hidden} more</button>}
+              {filterExpanded && allGenres.length > VISIBLE && <button onClick={()=>setFilterExpanded(false)} style={moreStyle}>Show less</button>}
             </div>
           )
         })()}
@@ -455,3 +456,4 @@ export default function LibraryPage() {
     </div>
   )
 }
+
