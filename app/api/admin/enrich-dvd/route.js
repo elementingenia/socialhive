@@ -93,16 +93,9 @@ export async function GET(req) {
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
   const { searchParams } = new URL(req.url)
-  const limit     = Math.min(parseInt(searchParams.get('limit') || '20'), 30)
+  const limit     = Math.min(parseInt(searchParams.get('limit') || '10'), 20)
   const catalogue = searchParams.get('catalogue') === 'true'
 
-  // Service-role client — bypasses RLS for all writes
-  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  try {
-    const p = JSON.parse(Buffer.from((svcKey||'').split('.')[1]||'e30=','base64').toString())
-    console.log(`[cfg] role:${p.role} ref:${p.ref} url:${supabaseUrl?.slice(-20)}`)
-  } catch(e) { console.log('[cfg] key-err:', e.message) }
   const supabaseAdmin = makeAdminClient()
 
   if (catalogue) {
@@ -115,7 +108,7 @@ export async function GET(req) {
     return NextResponse.json({ failures: data || [] })
   }
 
-  const { data: movies, error } = await supabaseAdmin
+  const { data: movies, error: queryErr } = await supabaseAdmin
     .from('movies')
     .select('id, title, imdb_id, poster_url, genre, enrichment_status')
     .eq('we_own', true)
@@ -123,7 +116,8 @@ export async function GET(req) {
     .or('enrichment_status.is.null,enrichment_status.eq.api_error')
     .limit(limit)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  console.log(`[q] found:${movies?.length ?? 'null'} err:${queryErr?.code ?? 'none'}`)
+  if (queryErr) return NextResponse.json({ error: queryErr.message }, { status: 500 })
   if (!movies?.length) return NextResponse.json({ processed: 0, enriched: 0, failed: 0, skipped: 0, results: [] })
 
   let enriched = 0, failed = 0, skipped = 0
@@ -152,19 +146,20 @@ export async function GET(req) {
       }
 
       if (failReason) {
-        await supabaseAdmin.from('movies').update({ enrichment_status: 'api_error' }).eq('id', movie.id)
+        const { error: wErr } = await supabaseAdmin.from('movies').update({ enrichment_status: 'api_error' }).eq('id', movie.id)
+        console.log(`[api_err] "${movie.title}" write_err:${wErr?.code ?? 'none'}`)
         failed++
         results.push({ id: movie.id, title: movie.title, status: 'api_error', reason: failReason })
         continue
       }
       if (!data) {
-        await supabaseAdmin.from('movies').update({ enrichment_status: 'no_match' }).eq('id', movie.id)
+        const { error: wErr } = await supabaseAdmin.from('movies').update({ enrichment_status: 'no_match' }).eq('id', movie.id)
+        console.log(`[no_match] "${movie.title}" write_err:${wErr?.code ?? 'none'}`)
         skipped++
         results.push({ id: movie.id, title: movie.title, status: 'no_match' })
         continue
       }
 
-      // Build update fields — only non-null values
       const fields = { enrichment_status: 'ok' }
       if (data.poster_url)  fields.poster_url  = data.poster_url
       if (data.plot)        fields.plot        = data.plot
@@ -177,7 +172,7 @@ export async function GET(req) {
       if (data.imdb_id && !movie.imdb_id) fields.imdb_id = data.imdb_id
 
       const { data: writeData, error: writeErr } = await supabaseAdmin.from('movies').update(fields).eq('id', movie.id).select('id')
-      console.log(`[w]r:${writeData?.length}e:${writeErr?.code||0}`)
+      console.log(`[ok] "${movie.title}" rows:${writeData?.length ?? 0} err:${writeErr?.code ?? 'none'}`)
       if (writeErr) {
         failed++
         results.push({ id: movie.id, title: movie.title, status: 'db_error', reason: writeErr.message })
@@ -187,6 +182,7 @@ export async function GET(req) {
       }
 
     } catch (err) {
+      console.log(`[exc] "${movie.title}" ${err.message}`)
       failed++
       results.push({ id: movie.id, title: movie.title, status: 'exception', reason: err.message })
     }
