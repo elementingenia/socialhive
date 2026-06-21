@@ -113,7 +113,7 @@ export async function GET(req) {
     .select('id, title, imdb_id, poster_url, genre, enrichment_status')
     .eq('we_own', true)
     .is('poster_url', null)
-    .or('enrichment_status.is.null,enrichment_status.eq.api_error')
+    .is('enrichment_status', null)
     .limit(limit)
 
   console.log(`[q] found:${movies?.length ?? 'null'} err:${queryErr?.code ?? 'none'}`)
