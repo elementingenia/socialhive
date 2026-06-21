@@ -1,18 +1,24 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
-
 const TMDB_KEY = process.env.TMDB_API_KEY || '0e0ec3c6d62df378f31f7ddb78a83b49'
 const OMDB_KEY = process.env.OMDB_API_KEY || 'ed1ed939'
 
+function makeAdminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
+
 async function getMember(token) {
-  const { data: { user } } = await supabaseAdmin.auth.getUser(token)
+  // Use a dedicated auth client so getUser() cannot contaminate the admin DB client
+  const authClient = makeAdminClient()
+  const { data: { user } } = await authClient.auth.getUser(token)
   if (!user) return null
-  const { data } = await supabaseAdmin
+  const db = makeAdminClient()
+  const { data } = await db
     .from('members').select('id, is_admin').eq('auth_id', user.id).single()
   return data
 }
@@ -79,7 +85,7 @@ async function enrichFromTmdb(title, isTV) {
   return { poster_url: poster, plot: d.overview || null, runtime, director, actors, rating_imdb, rating, imdb_id, year: releaseYear || null }
 }
 
-async function dbUpdate(movieId, fields) {
+async function dbUpdate(supabaseAdmin, movieId, fields) {
   const { data, error } = await supabaseAdmin
     .from('movies')
     .update(fields)
@@ -95,6 +101,9 @@ export async function GET(req) {
   if (!token) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
   const member = await getMember(token)
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+
+  // Fresh admin client for all DB writes — isolated from auth.getUser() state
+  const supabaseAdmin = makeAdminClient()
 
   const { searchParams } = new URL(req.url)
   const limit        = Math.min(parseInt(searchParams.get('limit') || '30'), 50)
@@ -168,7 +177,7 @@ export async function GET(req) {
       }
 
       if (failReason) {
-        const { error: ue, count: uc } = await dbUpdate(movie.id, { enrichment_status: 'api_error' })
+        const { error: ue, count: uc } = await dbUpdate(supabaseAdmin, movie.id, { enrichment_status: 'api_error' })
         if (ue || uc === 0) {
           results.dbWriteErrors++
           results.details.push({ id: movie.id, title: movie.title, status: 'db_write_failed', reason: `api_error mark failed: ${ue?.message || '0 rows affected'}` })
@@ -180,7 +189,7 @@ export async function GET(req) {
       }
 
       if (!enriched) {
-        const { error: ue, count: uc } = await dbUpdate(movie.id, { enrichment_status: 'no_match' })
+        const { error: ue, count: uc } = await dbUpdate(supabaseAdmin, movie.id, { enrichment_status: 'no_match' })
         if (ue || uc === 0) {
           results.dbWriteErrors++
           results.details.push({ id: movie.id, title: movie.title, status: 'db_write_failed', reason: `no_match mark failed: ${ue?.message || '0 rows affected'}` })
@@ -203,7 +212,7 @@ export async function GET(req) {
       if (enriched.imdb_id && !movie.imdb_id) update.imdb_id = enriched.imdb_id
       if (enriched.genre && !movie.genre)     update.genre   = enriched.genre
 
-      const { error: updateErr, count: updateCount } = await dbUpdate(movie.id, update)
+      const { error: updateErr, count: updateCount } = await dbUpdate(supabaseAdmin, movie.id, update)
 
       if (updateErr) {
         results.dbWriteErrors++
@@ -216,7 +225,7 @@ export async function GET(req) {
         results.details.push({ id: movie.id, title: movie.title, status: 'ok', fields: Object.keys(update).filter(k => k !== 'enrichment_status') })
       }
     } catch (err) {
-      const { error: ue, count: uc } = await dbUpdate(movie.id, { enrichment_status: 'api_error' })
+      const { error: ue, count: uc } = await dbUpdate(supabaseAdmin, movie.id, { enrichment_status: 'api_error' })
       if (ue || uc === 0) {
         results.dbWriteErrors++
       } else {
