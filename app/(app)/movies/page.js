@@ -45,28 +45,46 @@ function NextScreeningCard({ event, myBooking }) {
         <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.78rem', fontWeight: 600 }}>{daysLabel} ›</span>
       </div>
       <div style={{ display: 'flex' }}>
-        {movie?.poster_url && (
-          <img src={movie.poster_url} alt={movie.title} style={{ width: 90, objectFit: 'cover', flexShrink: 0 }} />
+        {movie?.poster_url ? (
+          <img src={movie.poster_url} alt={movie.title} style={{ width: 100, objectFit: 'cover', flexShrink: 0 }} />
+        ) : (
+          <div style={{ width: 100, minHeight: 130, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', flexShrink: 0 }}>🎬</div>
         )}
-        <div style={{ flex: 1, padding: '0.9rem 1rem' }}>
-          <div style={{ fontWeight: 800, fontSize: '1rem', lineHeight: 1.2, marginBottom: '0.3rem' }}>{movie?.title || event.title}</div>
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginBottom: '0.2rem' }}>{fmtDate(event.event_date)}</div>
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginBottom: '0.5rem' }}>
-            {fmtTime(event.event_time)}{event.location ? ` · ${event.location}` : ''}
+        <div style={{ flex: 1, padding: '0.9rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+          <div style={{ fontWeight: 800, fontSize: '1.05rem', lineHeight: 1.2 }}>{movie?.title || event.title}</div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--teal)', fontWeight: 600 }}>
+            {fmtDate(event.event_date)} · {fmtTime(event.event_time)}
           </div>
-          {isBooked ? (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: '#dcfce7', color: '#15803d', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
-              ✓ Booked · {myBooking.confirmed_seats} seat{myBooking.confirmed_seats !== 1 ? 's' : ''}
-            </div>
-          ) : isWaitlist ? (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: '#fef3c7', color: '#d97706', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
-              Waitlisted
-            </div>
-          ) : (
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(0,128,128,0.1)', color: 'var(--teal)', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
-              Tap to book
+          {(movie?.rating_imdb || movie?.rating_rt) && (
+            <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+              {movie.rating_imdb && (
+                <span style={{ background: 'rgba(180,150,0,0.15)', color: 'var(--amber-dark)', fontWeight: 700, fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '20px' }}>IMDb {movie.rating_imdb}</span>
+              )}
+              {movie.rating_rt && (
+                <span style={{ background: 'rgba(220,50,30,0.12)', color: '#c0392b', fontWeight: 700, fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '20px' }}>🍅 RT {movie.rating_rt}</span>
+              )}
             </div>
           )}
+          {movie?.plot && (
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+              {movie.plot}
+            </div>
+          )}
+          <div style={{ marginTop: '0.1rem' }}>
+            {isBooked ? (
+              <div style={{ display: 'inline-flex', alignItems: 'center', background: '#dcfce7', color: '#15803d', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
+                ✓ Booked · {myBooking.confirmed_seats} seat{myBooking.confirmed_seats !== 1 ? 's' : ''}
+              </div>
+            ) : isWaitlist ? (
+              <div style={{ display: 'inline-flex', alignItems: 'center', background: '#fef3c7', color: '#d97706', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
+                ⏳ Waitlisted
+              </div>
+            ) : (
+              <div style={{ display: 'inline-flex', alignItems: 'center', background: 'rgba(0,128,128,0.1)', color: 'var(--teal)', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
+                Tap to book →
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -175,8 +193,7 @@ function MyMovieBookingsSheet({ bookings, session, onClose, onRefresh }) {
 }
 
 // ── My Bookings Card (→ /bookings) ────────────────────────────────────────────
-function MyBookingsCard({ bookings }) {
-  const router = useRouter()
+function MyBookingsCard({ bookings, onViewAll }) {
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const upcoming = bookings
     .filter(b => b.status !== 'cancelled' && b.events?.hub_type === 'movie' && localDate(b.events?.event_date) >= today)
@@ -186,7 +203,7 @@ function MyBookingsCard({ bookings }) {
 
   return (
     <div
-      onClick={() => setShowMyBookings(true)}
+      onClick={onViewAll}
       style={{ background: 'var(--surface)', borderRadius: '16px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow)', marginBottom: '1.25rem', cursor: 'pointer' }}
     >
       <div style={{ background: 'var(--amber)', padding: '0.6rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -416,7 +433,7 @@ export default function MoviesHomePage() {
       { data: votesData },
     ] = await Promise.all([
       supabase.from('events')
-        .select('*, movies(id, title, poster_url, genre, runtime, year)')
+        .select('*, movies(id, title, poster_url, genre, runtime, year, rating_imdb, rating_rt, imdb_id, plot)')
         .eq('hub_type', 'movie')
         .gte('event_date', today)
         .order('event_date', { ascending: true })
@@ -478,7 +495,7 @@ export default function MoviesHomePage() {
         </div>
       )}
 
-      <MyBookingsCard bookings={myBookings} />
+      <MyBookingsCard bookings={myBookings} onViewAll={() => setShowMyBookings(true)} />
 
       {!swiperDone && unvoted.length > 0 && memberId && (
         <RatingSwiper movies={unvoted} memberId={memberId} onDone={() => setSwiperDone(true)} />

@@ -10,12 +10,25 @@ function fmtDate(dateStr) {
   })
 }
 
+function fmtDateLong(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString('en-AU', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  }).toUpperCase()
+}
+
 function fmtTime(timeStr) {
   if (!timeStr) return ''
   const [h, m] = timeStr.split(':').map(Number)
   const ampm = h >= 12 ? 'pm' : 'am'
   const h12 = h % 12 || 12
   return `${h12}:${String(m).padStart(2, '0')}${ampm}`
+}
+
+function fmtTime24(timeStr) {
+  if (!timeStr) return ''
+  const [h, m] = timeStr.split(':').map(Number)
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
 // ── Capacity Bar ──────────────────────────────────────────────────────────────
@@ -450,25 +463,25 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
         <div style={{ display: 'flex' }}>
           {/* Poster */}
           {movie?.poster_url ? (
-            <img src={movie.poster_url} alt={movie.title} style={{ width: 90, minHeight: 130, objectFit: 'cover', flexShrink: 0 }} />
+            <img src={movie.poster_url} alt={movie.title} style={{ width: 100, minHeight: 140, objectFit: 'cover', flexShrink: 0 }} />
           ) : (
-            <div style={{ width: 90, minHeight: 130, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', flexShrink: 0 }}>🎬</div>
+            <div style={{ width: 100, minHeight: 140, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', flexShrink: 0 }}>🎬</div>
           )}
 
           {/* Info */}
           <div style={{ flex: 1, padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-            <div style={{ fontWeight: 700, fontSize: '0.95rem', lineHeight: 1.3 }}>{ev.title}</div>
-
-            <div style={{ color: 'var(--teal)', fontSize: '0.82rem', fontWeight: 600 }}>
-              {fmtDate(ev.event_date)} · {fmtTime(ev.event_time)}
+            <div style={{ color: 'var(--teal)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', lineHeight: 1.2 }}>
+              {fmtDateLong(ev.event_date)}{ev.event_time ? ' · ' + fmtTime24(ev.event_time) : ''}
             </div>
 
+            <div style={{ fontWeight: 800, fontSize: '1.1rem', lineHeight: 1.2 }}>{movie?.title || ev.title}</div>
+
             {movie?.genre && (
-              <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem' }}>{movie.genre}</div>
+              <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>{movie.genre}</div>
             )}
 
             {movie?.plot && (
-              <div style={{ color: 'var(--text-dim)', fontSize: '0.77rem', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+              <div style={{ color: 'var(--text-dim)', fontSize: '0.8rem', lineHeight: 1.5 }}>
                 {movie.plot}
               </div>
             )}
@@ -494,6 +507,9 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
               </div>
             )}
 
+            {(ev.cost === 0 || ev.cost === null) && (
+              <span style={{ display: 'inline-block', background: '#dcfce7', color: '#15803d', fontWeight: 700, fontSize: '0.72rem', padding: '0.2rem 0.55rem', borderRadius: '20px' }}>● Free</span>
+            )}
             <div style={{ marginTop: '0.2rem' }}>
               <CapacityBar
                 confirmedSeats={ev.confirmed_seats}
@@ -547,17 +563,17 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
 
               {/* Confirmed only */}
               {hasConfirmed && !hasWaitlist && !changingSeats && (
-                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.75rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: '20px' }}>
-                    ✓ {myConfirmedSeats} seat{myConfirmedSeats > 1 ? 's' : ''} booked
-                  </span>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button disabled style={{ background: '#15803d', color: '#fff', border: 'none', borderRadius: '8px', padding: '0.45rem 0.85rem', fontSize: '0.8rem', fontWeight: 700, cursor: 'default' }}>
+                    ✓ Booked × {myConfirmedSeats}
+                  </button>
                   <button onClick={() => setChangingSeats(true)} disabled={acting}
-                    style={{ background: 'none', border: '1px solid var(--teal)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: 'pointer', color: 'var(--teal)', fontWeight: 600 }}>
-                    Change
+                    style={{ background: 'none', border: '1.5px solid var(--border)', borderRadius: '8px', padding: '0.4rem 0.75rem', fontSize: '0.8rem', cursor: 'pointer', color: 'var(--text)', fontWeight: 600 }}>
+                    Change seats
                   </button>
                   <button onClick={() => setConfirmCancel(true)} disabled={acting}
-                    style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--text-dim)' }}>
-                    Cancel
+                    style={{ background: 'none', border: '1.5px solid var(--danger)', borderRadius: '8px', padding: '0.4rem 0.75rem', fontSize: '0.8rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--danger)', fontWeight: 600 }}>
+                    Cancel booking
                   </button>
                 </div>
               )}
@@ -576,13 +592,13 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
 
               {/* Waitlist only */}
               {!hasConfirmed && hasWaitlist && (
-                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                  <span style={{ background: '#fef3c7', color: '#d97706', fontSize: '0.75rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: '20px' }}>
-                    ⏳ {myWaitlistPos ? `#${myWaitlistPos} on waitlist` : 'Waitlist'} — {myWaitlistSeats} seat{myWaitlistSeats > 1 ? 's' : ''}
-                  </span>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button disabled style={{ background: '#d97706', color: '#fff', border: 'none', borderRadius: '8px', padding: '0.45rem 0.85rem', fontSize: '0.8rem', fontWeight: 700, cursor: 'default' }}>
+                    ⏳ {myWaitlistPos ? `#${myWaitlistPos} waitlist` : 'Waitlist'} — {myWaitlistSeats} seat{myWaitlistSeats > 1 ? 's' : ''}
+                  </button>
                   <button onClick={() => setConfirmCancel(true)} disabled={acting}
-                    style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--text-dim)' }}>
-                    Leave
+                    style={{ background: 'none', border: '1.5px solid var(--danger)', borderRadius: '8px', padding: '0.4rem 0.75rem', fontSize: '0.8rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--danger)', fontWeight: 600 }}>
+                    Leave waitlist
                   </button>
                 </div>
               )}
