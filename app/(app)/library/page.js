@@ -320,6 +320,7 @@ export default function LibraryPage() {
   const [search,      setSearch]      = useState('')
   const [sortBy,      setSortBy]      = useState('community')
   const [genreFilter, setGenreFilter] = useState('all')
+  const [filterExpanded, setFilterExpanded] = useState(false)
   const [selectedId,  setSelectedId]  = useState(null)
   const [showSuggest, setShowSuggest] = useState(false)
   const [toasts, setToasts] = useState([])
@@ -409,14 +410,24 @@ export default function LibraryPage() {
           ))}
         </div>
 
-        <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', marginBottom:'1rem' }}>
-          {[['all','All'],['unscored','Unscored'],...allGenres.map(g=>[g,g])].map(([k,l])=>(
-            <button key={k} onClick={()=>setGenreFilter(k)}
-              style={{ padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px solid', borderColor:genreFilter===k?'var(--teal)':'var(--border)', background:genreFilter===k?'var(--teal)':'transparent', color:genreFilter===k?'#fff':'var(--text)', fontSize:'0.78rem', fontWeight:genreFilter===k?700:400, cursor:'pointer' }}>
-              {l}
-            </button>
-          ))}
-        </div>
+        {(() => {
+          const FIXED = [['all','All'],['unscored','Unscored']]
+          const VISIBLE = 6
+          const btnStyle = (active) => ({ padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px solid', borderColor:active?'var(--teal)':'var(--border)', background:active?'var(--teal)':'transparent', color:active?'#fff':'var(--text)', fontSize:'0.78rem', fontWeight:active?700:400, cursor:'pointer' })
+          const moreStyle = { padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px dashed var(--border)', background:'transparent', color:'var(--text-dim)', fontSize:'0.78rem', fontWeight:400, cursor:'pointer', opacity:0.7 }
+          const needsCollapse = !filterExpanded && allGenres.length > VISIBLE
+          const shownGenres = needsCollapse ? allGenres.slice(0, VISIBLE - 1) : allGenres
+          const hidden = allGenres.length - (VISIBLE - 1)
+          const selectedHidden = needsCollapse && !['all','unscored'].includes(genreFilter) && !shownGenres.includes(genreFilter)
+          return (
+            <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', marginBottom:'1rem' }}>
+              {FIXED.map(([k,l]) => <button key={k} onClick={()=>setGenreFilter(k)} style={btnStyle(genreFilter===k)}>{l}</button>)}
+              {shownGenres.map(g => <button key={g} onClick={()=>setGenreFilter(g)} style={btnStyle(genreFilter===g)}>{g}</button>)}
+              {selectedHidden && <button onClick={()=>setGenreFilter('all')} style={btnStyle(true)}>{genreFilter}</button>}
+              {needsCollapse && <button onClick={()=>setFilterExpanded(true)} style={moreStyle}>+{hidden} more</button>}
+            </div>
+          )
+        })()}
 
         {loading ? (
           <div style={{ display:'flex', justifyContent:'center', padding:'3rem' }}><div className="spinner" /></div>
