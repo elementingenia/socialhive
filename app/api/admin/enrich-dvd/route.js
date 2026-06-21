@@ -85,13 +85,24 @@ async function enrichFromTmdb(title, isTV) {
   return { poster_url: poster, plot: d.overview || null, runtime, director, actors, rating_imdb, rating, imdb_id, year: releaseYear || null }
 }
 
-async function dbUpdate(supabaseAdmin, movieId, fields) {
-  const { data, error } = await supabaseAdmin
-    .from('movies')
-    .update(fields)
-    .eq('id', movieId)
-    .select('id')
-  return { error, count: data?.length ?? 0 }
+async function dbUpdate(_unused, movieId, fields) {
+  // Use raw HTTP PATCH to bypass any SDK auth-state issues
+  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/movies?id=eq.${movieId}`
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY,
+      'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Prefer': 'return=minimal',
+    },
+    body: JSON.stringify(fields),
+  })
+  if (!res.ok) {
+    const msg = await res.text()
+    return { error: { message: `HTTP ${res.status}: ${msg}` }, count: 0 }
+  }
+  return { error: null, count: 1 }
 }
 
 const delay = ms => new Promise(r => setTimeout(r, ms))
