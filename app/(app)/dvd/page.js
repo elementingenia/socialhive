@@ -162,10 +162,35 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, active
               <div style={{ position:'relative', height:180, overflow:'hidden' }}>
                 <img src={movie.poster_url} alt={movie.title} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', filter:'blur(2px) brightness(0.6)', transform:'scale(1.05)' }} />
                 <img src={movie.poster_url} alt={movie.title} style={{ position:'absolute', left:'1.25rem', bottom:'-40px', width:80, height:120, objectFit:'cover', borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,0.4)' }} />
+                {/* Loan status tile — top right of banner */}
+                {activeLoan && (
+                  <div style={{ position:'absolute', top:'0.75rem', right:'0.75rem', background:iMineToReturn?'var(--teal)':'rgba(0,0,0,0.62)', backdropFilter:'blur(6px)', borderRadius:'10px', padding:'0.45rem 0.7rem', textAlign:'center', minWidth:80 }}>
+                    <div style={{ fontSize:'0.68rem', fontWeight:800, color:'#fff', textTransform:'uppercase', letterSpacing:'0.05em', lineHeight:1.2 }}>
+                      {iMineToReturn ? '📀 On Loan' : '📤 On Loan'}
+                    </div>
+                    <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.88)', marginTop:'0.2rem', lineHeight:1.3 }}>
+                      {iMineToReturn ? 'You · ' + fmtDate(activeLoan.borrowed_at) : (activeLoan.members?.name || 'Resident') + '
+' + fmtDate(activeLoan.borrowed_at)}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
             <div style={{ padding:movie.poster_url?'3rem 1.25rem 2.5rem':'1.25rem 1.25rem 2.5rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
+              {/* No-poster loan tile */}
+              {!movie.poster_url && activeLoan && (
+                <div style={{ display:'inline-flex', alignItems:'center', gap:'0.5rem', background:iMineToReturn?'var(--teal)':'var(--surface2)', borderRadius:'10px', padding:'0.5rem 0.85rem', alignSelf:'flex-start', border:'1px solid ' + (iMineToReturn?'var(--teal)':'var(--border)') }}>
+                  <span style={{ fontSize:'1rem' }}>{iMineToReturn?'📀':'📤'}</span>
+                  <div>
+                    <div style={{ fontSize:'0.72rem', fontWeight:800, color:iMineToReturn?'#fff':'var(--text)', textTransform:'uppercase', letterSpacing:'0.04em' }}>On Loan</div>
+                    <div style={{ fontSize:'0.68rem', color:iMineToReturn?'rgba(255,255,255,0.85)':'var(--text-dim)' }}>
+                      {iMineToReturn ? 'You · ' + fmtDate(activeLoan.borrowed_at) : (activeLoan.members?.name || 'Resident') + ' · ' + fmtDate(activeLoan.borrowed_at)}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {movie.year && <div style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>{movie.year}{movie.runtime ? ' · ' + movie.runtime : ''}</div>}
 
               {genres.length > 0 && <GenreChips genres={genres} />}
@@ -188,40 +213,22 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, active
               {movie.actors   && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Cast:</strong> {movie.actors}</div>}
               {movie.plot     && <div style={{ fontSize:'0.88rem', lineHeight:1.6, color:'var(--text)' }}>{movie.plot}</div>}
 
-              {/* Borrow / Return / Status */}
+              {/* Borrow / Return actions — no info boxes, just buttons */}
               {iMineToReturn ? (
-                <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
-                  <div style={{ background:'rgba(0,128,128,0.06)', border:'1px solid rgba(0,128,128,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
-                    📀 You borrowed this on {fmtDate(activeLoan.borrowed_at)}. Return it to the cinema when you&apos;re done.
-                  </div>
-                  <button onClick={handleReturn} disabled={returning}
-                    style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:returning?'not-allowed':'pointer', opacity:returning?0.6:1, width:'100%' }}>
-                    {returning ? 'Returning…' : '↩ Return this DVD'}
-                  </button>
-                </div>
-              ) : onLoanByOther ? (
-                <div style={{ background:'rgba(220,38,38,0.06)', border:'1px solid rgba(220,38,38,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
-                  📤 On loan to {activeLoan.members?.name || 'a resident'} since {fmtDate(activeLoan.borrowed_at)}. Check back soon.
-                </div>
+                <button onClick={handleReturn} disabled={returning}
+                  style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:returning?'not-allowed':'pointer', opacity:returning?0.6:1, width:'100%' }}>
+                  {returning ? 'Returning…' : '↩ Return this DVD'}
+                </button>
               ) : canBorrow ? (
-                <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
-                  <div style={{ background:'rgba(0,128,128,0.06)', border:'1px solid rgba(0,128,128,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
-                    💿 Available to borrow. Return it to the cinema when you&apos;re done.
-                  </div>
-                  <button onClick={handleBorrow} disabled={borrowing || !memberId}
-                    style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:(borrowing||!memberId)?'not-allowed':'pointer', opacity:(borrowing||!memberId)?0.6:1, width:'100%' }}>
-                    {borrowing ? 'Borrowing…' : '📀 Borrow this DVD'}
-                  </button>
-                </div>
+                <button onClick={handleBorrow} disabled={borrowing || !memberId}
+                  style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:(borrowing||!memberId)?'not-allowed':'pointer', opacity:(borrowing||!memberId)?0.6:1, width:'100%' }}>
+                  {borrowing ? 'Borrowing…' : '📀 Borrow this DVD'}
+                </button>
               ) : !activeLoan && myLoanCount >= 3 ? (
-                <div style={{ background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.3)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
-                  ⚠️ You already have 3 DVDs on loan. Please return one before borrowing another.
+                <div style={{ background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.3)', borderRadius:'10px', padding:'0.75rem 1rem', fontSize:'0.85rem', color:'var(--text)', textAlign:'center' }}>
+                  ⚠️ You have 3 DVDs on loan — return one first.
                 </div>
-              ) : (
-                <div style={{ background:'rgba(0,128,128,0.06)', border:'1px solid rgba(0,128,128,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
-                  💿 Available in the cinema. Ask a team member to borrow.
-                </div>
-              )}
+              ) : null}
 
               {isAdmin && (
                 <button onClick={() => setConfirmDelete(true)} disabled={deleting}
@@ -488,3 +495,4 @@ export default function DvdPage() {
     </div>
   )
 }
+
