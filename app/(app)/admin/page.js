@@ -905,7 +905,7 @@ function ToolsTab() {
         setBatchCount(batches)
         setFailures([...allFailures])
 
-        if (!data.error && (data.enriched === 0 || data.processed === 0)) {
+        if (!data.error && data.processed === 0) {
           setStatus('done')
           return
         }
