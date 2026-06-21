@@ -327,12 +327,17 @@ function SuggestSheet({ session, onClose, onAdded, addToast }) {
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  async function search() {
-    if (!query.trim()) return
+  // Live search — fires 400ms after user stops typing, min 3 chars
+  React.useEffect(() => {
+    if (query.trim().length < 3) { setResults([]); return }
     setSearching(true)
-    const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}`)
-    setResults(await res.json() || []); setSearching(false)
-  }
+    const timer = setTimeout(async () => {
+      const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query.trim())}`)
+      setResults(await res.json() || [])
+      setSearching(false)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [query])
   async function pickMovie(tmdbId) {
     setLoadingPreview(true); setResults([])
     const res = await fetch(`/api/tmdb/details?id=${tmdbId}`)
@@ -355,14 +360,16 @@ function SuggestSheet({ session, onClose, onAdded, addToast }) {
       </div>
       {!preview && (
         <>
-          <div style={{ display:'flex', gap:'0.5rem', marginBottom:'0.75rem' }}>
-            <input placeholder="Search by title…" value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&search()} autoFocus
-              style={{ flex:1, padding:'0.65rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'10px', fontSize:'0.9rem', background:'var(--surface2)', fontFamily:'inherit' }} />
-            <button onClick={search} disabled={searching}
-              style={{ padding:'0.65rem 1rem', background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', fontWeight:600, cursor:searching?'not-allowed':'pointer', opacity:searching?0.6:1 }}>
-              {searching?'…':'Search'}
-            </button>
+          <div style={{ position:'relative', marginBottom:'0.75rem' }}>
+            <input placeholder="Type 3+ characters to search…" value={query} onChange={e=>setQuery(e.target.value)} autoFocus
+              style={{ width:'100%', padding:'0.65rem 2.2rem 0.65rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'10px', fontSize:'0.9rem', background:'var(--surface2)', fontFamily:'inherit', boxSizing:'border-box' }} />
+            {searching && (
+              <div style={{ position:'absolute', right:'0.75rem', top:'50%', transform:'translateY(-50%)', width:16, height:16, border:'2px solid var(--teal)', borderTopColor:'transparent', borderRadius:'50%', animation:'spin 0.7s linear infinite' }} />
+            )}
           </div>
+          {query.length > 0 && query.length < 3 && (
+            <div style={{ fontSize:'0.82rem', color:'var(--text-dim)', textAlign:'center', padding:'0.5rem 0' }}>Keep typing…</div>
+          )}
           <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
             {results.map(r=>(
               <div key={r.tmdb_id} onClick={()=>pickMovie(r.tmdb_id)}
