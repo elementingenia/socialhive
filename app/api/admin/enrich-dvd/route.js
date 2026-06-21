@@ -86,15 +86,16 @@ async function enrichFromTmdb(title, isTV) {
 }
 
 async function dbUpdate(_unused, movieId, fields) {
-  // Use raw HTTP PATCH to bypass any SDK auth-state issues
+  // Use raw HTTP PATCH — return=representation so we can verify rows were actually updated
+  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()
   const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/movies?id=eq.${movieId}`
   const res = await fetch(url, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
-      'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY,
-      'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
-      'Prefer': 'return=minimal',
+      'apikey': key,
+      'Authorization': `Bearer ${key}`,
+      'Prefer': 'return=representation',
     },
     body: JSON.stringify(fields),
   })
@@ -102,7 +103,9 @@ async function dbUpdate(_unused, movieId, fields) {
     const msg = await res.text()
     return { error: { message: `HTTP ${res.status}: ${msg}` }, count: 0 }
   }
-  return { error: null, count: 1 }
+  const data = await res.json()
+  // data is array of updated rows — empty means 0 rows affected (RLS or wrong ID)
+  return { error: data.length === 0 ? { message: '0 rows affected — key may be invalid or RLS blocked' } : null, count: data.length }
 }
 
 const delay = ms => new Promise(r => setTimeout(r, ms))
