@@ -96,7 +96,7 @@ export async function GET(req) {
   const limit     = Math.min(parseInt(searchParams.get('limit') || '20'), 30)
   const catalogue = searchParams.get('catalogue') === 'true'
 
-  // Fresh admin client for reads only
+  // Service-role client — bypasses RLS for all writes
   const supabaseAdmin = makeAdminClient()
 
   if (catalogue) {
@@ -118,60 +118,72 @@ export async function GET(req) {
     .limit(limit)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!movies?.length) return NextResponse.json({ processed: 0, results: [] })
+  if (!movies?.length) return NextResponse.json({ processed: 0, enriched: 0, failed: 0, skipped: 0, results: [] })
 
-  // Lookup enrichment data — NO DB writes here, client handles writes
+  let enriched = 0, failed = 0, skipped = 0
   const results = []
 
   for (const movie of movies) {
     const isTV = movie.genre?.toLowerCase().includes('tv') || movie.genre?.toLowerCase().includes('series')
 
     try {
-      let enriched = null
+      let data = null
       let failReason = null
 
       if (movie.imdb_id) {
-        enriched = await enrichFromOmdb(movie.imdb_id)
-        if (!enriched?.poster_url) {
+        data = await enrichFromOmdb(movie.imdb_id)
+        if (!data?.poster_url) {
           const tmdb = await enrichFromTmdb(movie.title, isTV)
-          if (tmdb?._apiError) { failReason = tmdb.reason; enriched = enriched || null }
-          else if (tmdb) enriched = { ...enriched, ...tmdb }
+          if (tmdb?._apiError) { failReason = tmdb.reason }
+          else if (tmdb) data = { ...data, ...tmdb }
         }
         await delay(150)
       } else {
         const tmdb = await enrichFromTmdb(movie.title, isTV)
         if (tmdb?._apiError) failReason = tmdb.reason
-        else enriched = tmdb
+        else data = tmdb
         await delay(250)
       }
 
       if (failReason) {
+        await supabaseAdmin.from('movies').update({ enrichment_status: 'api_error' }).eq('id', movie.id)
+        failed++
         results.push({ id: movie.id, title: movie.title, status: 'api_error', reason: failReason })
         continue
       }
-      if (!enriched) {
+      if (!data) {
+        await supabaseAdmin.from('movies').update({ enrichment_status: 'no_match' }).eq('id', movie.id)
+        skipped++
         results.push({ id: movie.id, title: movie.title, status: 'no_match' })
         continue
       }
 
-      // Build fields — only non-null values
+      // Build update fields — only non-null values
       const fields = { enrichment_status: 'ok' }
-      if (enriched.poster_url)  fields.poster_url  = enriched.poster_url
-      if (enriched.plot)        fields.plot        = enriched.plot
-      if (enriched.runtime)     fields.runtime     = enriched.runtime
-      if (enriched.director)    fields.director    = enriched.director
-      if (enriched.actors)      fields.actors      = enriched.actors
-      if (enriched.rating_imdb) fields.rating_imdb = enriched.rating_imdb
-      if (enriched.rating)      fields.rating      = enriched.rating
-      if (enriched.year)        fields.year        = enriched.year
-      if (enriched.imdb_id && !movie.imdb_id) fields.imdb_id = enriched.imdb_id
+      if (data.poster_url)  fields.poster_url  = data.poster_url
+      if (data.plot)        fields.plot        = data.plot
+      if (data.runtime)     fields.runtime     = data.runtime
+      if (data.director)    fields.director    = data.director
+      if (data.actors)      fields.actors      = data.actors
+      if (data.rating_imdb) fields.rating_imdb = data.rating_imdb
+      if (data.rating)      fields.rating      = data.rating
+      if (data.year)        fields.year        = data.year
+      if (data.imdb_id && !movie.imdb_id) fields.imdb_id = data.imdb_id
 
-      results.push({ id: movie.id, title: movie.title, status: 'ok', fields })
+      const { error: writeErr } = await supabaseAdmin.from('movies').update(fields).eq('id', movie.id)
+      if (writeErr) {
+        failed++
+        results.push({ id: movie.id, title: movie.title, status: 'db_error', reason: writeErr.message })
+      } else {
+        enriched++
+        results.push({ id: movie.id, title: movie.title, status: 'ok' })
+      }
 
     } catch (err) {
+      failed++
       results.push({ id: movie.id, title: movie.title, status: 'exception', reason: err.message })
     }
   }
 
-  return NextResponse.json({ processed: movies.length, results })
+  return NextResponse.json({ processed: movies.length, enriched, failed, skipped, results })
 }
