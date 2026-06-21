@@ -886,47 +886,22 @@ function ToolsTab() {
 
     while (!stopRef.current) {
       try {
-        // Refresh session each batch — prevents silent write failures from JWT expiry
-        const { data:{ session }, error: refreshErr } = await supabase.auth.refreshSession()
-        if (refreshErr || !session) {
-          setLastBatch({ error: 'Session expired — please sign out and back in' })
-          setStatus('error')
-          return
-        }
-        // Route does TMDB/OMDb lookups only — client writes to Supabase directly
+        // Server-side writes — route uses service role, no RLS issues
+        const { data:{ session } } = await supabase.auth.getSession()
         const res  = await fetch('/api/admin/enrich-dvd?limit=20', { headers:{ Authorization:`Bearer ${session.access_token}` } })
         const data = await res.json()
         if (data.error) { setStatus('error'); return }
         batches++
 
-        if (!data.error && data.processed === 0) {
+        if (data.processed === 0) {
           setStatus('done')
           return
         }
 
-        // Write results from browser using authenticated Supabase session
-        let batchEnriched = 0, batchFailed = 0, batchSkipped = 0
-        const batchFails = []
-
-        for (const r of (data.results || [])) {
-          if (r.status === 'ok') {
-            const { error: writeErr } = await supabase.from('movies').update(r.fields).eq('id', r.id)
-            if (writeErr) {
-              batchFailed++
-              batchFails.push({ ...r, status: 'db_error', reason: writeErr.message })
-            } else {
-              batchEnriched++
-            }
-          } else if (r.status === 'no_match') {
-            await supabase.from('movies').update({ enrichment_status: 'no_match' }).eq('id', r.id)
-            batchSkipped++
-            batchFails.push(r)
-          } else {
-            await supabase.from('movies').update({ enrichment_status: 'api_error' }).eq('id', r.id)
-            batchFailed++
-            batchFails.push(r)
-          }
-        }
+        const batchEnriched = data.enriched  || 0
+        const batchFailed   = data.failed    || 0
+        const batchSkipped  = data.skipped   || 0
+        const batchFails    = (data.results  || []).filter(r => r.status !== 'ok')
 
         runningEnriched += batchEnriched
         runningFailed   += batchFailed
@@ -1101,4 +1076,5 @@ export default function AdminPage() {
     </div>
   )
 }
+
 
