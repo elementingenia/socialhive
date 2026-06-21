@@ -713,9 +713,6 @@ function ToolsTab() {
   function stop() { stopRef.current = true }
 
   const isRunning = status === 'running'
-  const noMatches  = failures.filter(f => f.status === 'no_match')
-  const apiErrors  = failures.filter(f => f.status === 'api_error')
-
   const catNoMatch = catalogue?.filter(f => f.enrichment_status === 'no_match') || []
   const catApiErr  = catalogue?.filter(f => f.enrichment_status === 'api_error') || []
 
@@ -776,31 +773,7 @@ function ToolsTab() {
         </div>
       </div>
 
-      {/* ── Session failures (from current run) ── */}
-      {failures.length > 0 && (
-        <div style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', padding:'1.25rem' }}>
-          <div style={{ fontWeight:700, fontSize:'0.9rem', marginBottom:'0.75rem' }}>
-            This run — {failures.length} title{failures.length!==1?'s':''} not enriched
-          </div>
-          {[['no_match','Not found on TMDB / OMDb', noMatches],['api_error','API / network error', apiErrors]].map(([key,label,items]) =>
-            items.length > 0 && (
-              <div key={key} style={{ marginBottom:'0.85rem' }}>
-                <div style={{ fontSize:'0.75rem', fontWeight:700, color: key==='api_error'?'var(--danger)':'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'0.4rem' }}>
-                  {label} ({items.length})
-                </div>
-                <div style={{ display:'flex', flexDirection:'column', gap:'0.3rem' }}>
-                  {items.map((f,i) => (
-                    <div key={i} style={{ background:'var(--surface2)', borderRadius:'8px', padding:'0.5rem 0.75rem', fontSize:'0.8rem', display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'0.5rem' }}>
-                      <span style={{ fontWeight:600 }}>{f.title}</span>
-                      {f.reason && <span style={{ color:'var(--text-dim)', fontSize:'0.72rem', textAlign:'right', flexShrink:0 }}>{f.reason}</span>}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          )}
-        </div>
-      )}
+
 
       {/* ── Persistent catalogue (from DB) ── */}
       <div style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', padding:'1.25rem' }}>
