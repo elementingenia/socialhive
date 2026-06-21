@@ -1,5 +1,6 @@
 'use client'
 import React, { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 function streamingPill(streamingAu, weOwn) {
@@ -12,6 +13,129 @@ function streamingPill(streamingAu, weOwn) {
 function parseGenres(g) {
   if (!g) return []
   return g.split(/[,|\/]/).map(x => x.trim()).filter(Boolean)
+}
+
+
+// ── Rapid-fire Rating Swiper ──────────────────────────────────────────────────
+function RatingSwiper({ movies, memberId, onDone }) {
+  const [idx, setIdx]         = useState(0)
+  const [rated, setRated]     = useState(0)
+  const [submitting, setSub]  = useState(false)
+  const [ignored, setIgnored] = useState(new Set())
+  const [allDone, setAllDone] = useState(false)
+
+  const queue = movies.filter(m => !ignored.has(m.id))
+  const movie  = queue[idx] || null
+  const total  = queue.length
+  const isLast = idx >= total - 1
+
+  async function submitRating(score) {
+    if (!movie || submitting) return
+    setSub(true)
+    await supabase.from('votes').upsert(
+      { member_id: memberId, movie_id: movie.id, score },
+      { onConflict: 'member_id,movie_id' }
+    )
+    setSub(false)
+    setRated(r => r + 1)
+    advance()
+  }
+
+  function skipOne() {
+    setIgnored(prev => new Set([...prev, movie.id]))
+    if (idx >= queue.length - 2) { setAllDone(true); onDone() }
+  }
+
+  function advance() {
+    if (isLast) { setAllDone(true); onDone() }
+    else setIdx(i => i + 1)
+  }
+
+  function skipAll() { setAllDone(true); onDone() }
+
+  if (allDone || total === 0) {
+    return (
+      <div style={{ textAlign:'center', padding:'1.5rem 0' }}>
+        <div style={{ fontSize:'2rem', marginBottom:'0.4rem' }}>🎉</div>
+        <div style={{ fontWeight:700, marginBottom:'0.25rem' }}>
+          {rated > 0 ? `${rated} film${rated !== 1 ? 's' : ''} rated!` : 'All caught up'}
+        </div>
+        <div style={{ fontSize:'0.82rem', color:'var(--text-dim)' }}>Browse the full list below</div>
+      </div>
+    )
+  }
+
+  const genres = parseGenres(movie.genre)
+
+  return (
+    <div style={{ marginBottom:'1rem' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'baseline', marginBottom:'0.75rem' }}>
+        <div>
+          <div style={{ fontWeight:700, fontSize:'0.95rem' }}>Rate a Film</div>
+          <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{idx + 1} of {total} unrated</div>
+        </div>
+        <button onClick={skipAll}
+          style={{ background:'none', border:'1px solid var(--border)', color:'var(--text-dim)', borderRadius:'20px', padding:'0.25rem 0.65rem', fontSize:'0.72rem', fontWeight:600, cursor:'pointer' }}>
+          Skip all
+        </button>
+      </div>
+
+      <div style={{ height:3, background:'var(--surface2)', borderRadius:2, marginBottom:'1rem', overflow:'hidden' }}>
+        <div style={{ height:'100%', width:`${(idx / total) * 100}%`, background:'var(--teal)', borderRadius:2, transition:'width 0.3s ease' }} />
+      </div>
+
+      <div style={{ background:'var(--surface)', borderRadius:'16px', border:'1px solid var(--border)', overflow:'hidden', boxShadow:'var(--shadow)', marginBottom:'0.75rem' }}>
+        <div style={{ display:'flex', minHeight:120 }}>
+          {movie.poster_url
+            ? <img src={movie.poster_url} alt={movie.title} style={{ width:90, objectFit:'cover', flexShrink:0 }} />
+            : <div style={{ width:90, background:'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem', flexShrink:0 }}>🎬</div>}
+          <div style={{ flex:1, padding:'0.9rem 1rem' }}>
+            <div style={{ fontWeight:800, fontSize:'1rem', lineHeight:1.2, marginBottom:'0.25rem' }}>{movie.title}</div>
+            {movie.year && <div style={{ fontSize:'0.78rem', color:'var(--text-dim)', marginBottom:'0.35rem' }}>{movie.year}{movie.runtime ? ` · ${movie.runtime}` : ''}</div>}
+            {genres.length > 0 && (
+              <div style={{ display:'flex', flexWrap:'wrap', gap:'0.25rem' }}>
+                {genres.slice(0, 3).map(g => (
+                  <span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.1rem 0.4rem', fontSize:'0.65rem', color:'var(--text-dim)' }}>{g}</span>
+                ))}
+              </div>
+            )}
+            {movie.rating_imdb && <div style={{ fontSize:'0.75rem', color:'var(--amber-dark)', fontWeight:600, marginTop:'0.3rem' }}>★ {movie.rating_imdb}</div>}
+          </div>
+        </div>
+        <div style={{ padding:'0.75rem 0.85rem 0.85rem', borderTop:'1px solid var(--border)' }}>
+          <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'0.5rem', textAlign:'center' }}>
+            How keen are you to watch this?
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:'0.35rem', marginBottom:'0.5rem' }}>
+            {[1,2,3,4,5,6,7,8,9,10].map(score => (
+              <button key={score} onClick={() => submitRating(score)} disabled={submitting}
+                style={{ padding:'0.5rem 0', borderRadius:'10px', border:'1.5px solid var(--border)', background:score>=8?'rgba(0,128,128,0.08)':'var(--surface)', color:score>=8?'var(--teal)':'var(--text)', fontSize:'0.9rem', fontWeight:700, cursor:submitting?'not-allowed':'pointer', opacity:submitting?0.5:1 }}>
+                {score}
+              </button>
+            ))}
+          </div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:'0.68rem', color:'var(--text-dim)', paddingLeft:'0.1rem', paddingRight:'0.1rem', marginBottom:'0.6rem' }}>
+            <span>Not interested</span><span>Can&apos;t wait!</span>
+          </div>
+          <button onClick={skipOne}
+            style={{ width:'100%', padding:'0.5rem', background:'none', border:'1px solid var(--border)', borderRadius:'10px', fontSize:'0.8rem', fontWeight:600, color:'var(--text-dim)', cursor:'pointer' }}>
+            Skip this one
+          </button>
+        </div>
+      </div>
+
+      <div style={{ display:'flex', justifyContent:'space-between', gap:'0.5rem' }}>
+        <button onClick={() => setIdx(i => Math.max(0, i - 1))} disabled={idx === 0}
+          style={{ flex:1, padding:'0.5rem', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', fontSize:'0.8rem', fontWeight:600, color:idx===0?'var(--text-dim)':'var(--text)', cursor:idx===0?'not-allowed':'pointer', opacity:idx===0?0.4:1 }}>
+          ‹ Prev
+        </button>
+        <button onClick={advance} disabled={isLast}
+          style={{ flex:1, padding:'0.5rem', background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', fontSize:'0.8rem', fontWeight:600, color:isLast?'var(--text-dim)':'var(--text)', cursor:isLast?'not-allowed':'pointer', opacity:isLast?0.4:1 }}>
+          Next ›
+        </button>
+      </div>
+    </div>
+  )
 }
 
 function GenreChips({ genres, max = 4 }) {
@@ -323,6 +447,7 @@ export default function LibraryPage() {
   const [filterExpanded, setFilterExpanded] = useState(false)
   const [selectedId,  setSelectedId]  = useState(null)
   const [showSuggest, setShowSuggest] = useState(false)
+  const [swiperDone, setSwiperDone] = useState(false)
   const [toasts, setToasts] = useState([])
 
   function addToast(message, type='success') {
@@ -350,6 +475,7 @@ export default function LibraryPage() {
   }, [loadData])
 
   const myVotes = Object.fromEntries(votes.filter(v=>v.member_id===member?.id).map(v=>[v.movie_id,v.score]))
+  const unvoted = movies.filter(m => !myVotes[m.id])
   const avgVotes = movies.reduce((acc,m) => {
     const mv = votes.filter(v=>v.movie_id===m.id)
     if (mv.length>0) acc[m.id] = { avg: mv.reduce((s,v)=>s+v.score,0)/mv.length, count:mv.length }
@@ -376,6 +502,10 @@ export default function LibraryPage() {
     <div style={{ background:'var(--bg)', minHeight:'100vh' }}>
       <Toast toasts={toasts} />
       <div style={{ padding:'1rem 1rem 6rem' }}>
+        {!swiperDone && unvoted.length > 0 && member?.id && (
+          <RatingSwiper movies={unvoted} memberId={member.id} onDone={() => setSwiperDone(true)} />
+        )}
+
         <div style={{ background:'var(--surface)', borderRadius:'14px', padding:'1rem', marginBottom:'1rem', border:'1px solid var(--border)', borderLeft:'4px solid var(--teal)', fontSize:'0.88rem', lineHeight:1.6 }}>
           <div style={{ display:'flex', alignItems:'flex-start', gap:'0.6rem' }}>
             <span style={{ fontSize:'1.4rem', flexShrink:0 }}>🗳️</span>
