@@ -683,10 +683,8 @@ function ReconcileTab() {
   const [recon,          setRecon]          = useState(null)
   const [running,        setRunning]        = useState(false)
 
-  const [allMembers,   setAllMembers]   = useState([])
   const [settleId,     setSettleId]     = useState('')
   const [settlePrev,   setSettlePrev]   = useState(null)
-  const [loadingSettle,setLoadingSettle]= useState(false)
   const [settling,     setSettling]     = useState(false)
   const [settledOk,    setSettledOk]    = useState(false)
 
@@ -702,19 +700,13 @@ function ReconcileTab() {
     setLoadingPreview(false)
   }
 
-  useEffect(() => {
-    supabase.from('members').select('id, name').eq('bar_opt_in', true).order('name')
-      .then(({ data }) => setAllMembers(data || []))
-    loadPreview()
-  }, [])
+  useEffect(() => { loadPreview() }, [])
 
-  async function loadSettlePreview(mid) {
-    if (!mid) { setSettlePrev(null); return }
-    setLoadingSettle(true)
-    const h = await authHeader()
-    const data = await fetch(`/api/admin/bar-reconcile?member_id=${mid}`, { headers: h }).then(r => r.json())
-    setSettlePrev(data.members?.[0] || null)
-    setLoadingSettle(false)
+  function selectSettle(mid) {
+    setSettleId(mid)
+    setSettledOk(false)
+    if (!mid || !preview?.members) { setSettlePrev(null); return }
+    setSettlePrev(preview.members.find(m => m.member_id === mid) || null)
   }
 
   async function settleAccount() {
@@ -769,15 +761,13 @@ function ReconcileTab() {
       <div style={card}>
         <div style={heading}>Settle an Account</div>
         <select value={settleId}
-          onChange={e => { setSettleId(e.target.value); setSettledOk(false); loadSettlePreview(e.target.value) }}
+          onChange={e => selectSettle(e.target.value)}
           style={{ ...inputStyle, marginBottom:'0.75rem' }}>
           <option value="">Select a member…</option>
-          {allMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+          {(preview?.members || []).map(m => <option key={m.member_id} value={m.member_id}>{m.name}</option>)}
         </select>
 
-        {loadingSettle && <div style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>Loading…</div>}
-
-        {settleId && !loadingSettle && settlePrev === null && (
+        {settleId && !settlePrev && (
           <div style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>No outstanding tab for this member.</div>
         )}
 
