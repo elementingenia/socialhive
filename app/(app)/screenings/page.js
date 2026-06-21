@@ -19,7 +19,7 @@ function fmtTime(timeStr) {
 }
 
 // ── Capacity Bar ──────────────────────────────────────────────────────────────
-function CapacityBar({ confirmedSeats, maxSeats, waitlistCount }) {
+function CapacityBar({ confirmedSeats, maxSeats, waitlistSeats }) {
   const pct       = maxSeats > 0 ? Math.min(100, (confirmedSeats / maxSeats) * 100) : 0
   const remaining = Math.max(0, maxSeats - confirmedSeats)
   const barColor   = pct >= 85 ? 'var(--danger)' : pct >= 55 ? 'var(--amber)' : 'var(--green)'
@@ -35,8 +35,8 @@ function CapacityBar({ confirmedSeats, maxSeats, waitlistCount }) {
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem' }}>
         <span style={{ color: 'var(--text-dim)' }}>
-          {confirmedSeats}/{maxSeats} seats taken
-          {waitlistCount > 0 && <span style={{ color: 'var(--amber-dark)', marginLeft: '0.4rem' }}>· {waitlistCount} waiting</span>}
+          <strong style={{ color: 'var(--text)' }}>{Math.max(0, maxSeats - confirmedSeats)}</strong> of {maxSeats} seats left
+          {waitlistSeats > 0 && <span style={{ color: 'var(--amber-dark)', marginLeft: '0.4rem' }}>· {waitlistSeats} seat{waitlistSeats !== 1 ? 's' : ''} on waitlist</span>}
         </span>
         <span style={{ color: labelColor, fontWeight: 600 }}>
           {remaining === 0 ? 'Full' : `${remaining} left`}
@@ -251,19 +251,21 @@ function AddScreeningSheet({ session, onClose, onAdded, addToast }) {
           </div>
         ) : (
           <>
-            <input placeholder="Search movies…" value={movieSearch} onChange={e => setMovieSearch(e.target.value)}
-              style={{ width: '100%', padding: '0.65rem 0.85rem', border: '1.5px solid var(--border)', borderRadius: '10px', fontSize: '0.9rem', background: 'var(--surface2)', marginBottom: '0.5rem', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-            <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '10px' }}>
-              {filtered.slice(0, 30).map(m => (
-                <div key={m.id} onClick={() => { setPickedMovie(m); setMovieSearch('') }}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0.6rem 0.85rem', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
-                  {m.poster_url && <img src={m.poster_url} alt="" style={{ width: 28, height: 42, objectFit: 'cover', borderRadius: 3 }} />}
-                  <span style={{ fontSize: '0.88rem' }}>{m.title}</span>
-                  {m.year && <span style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginLeft: 'auto' }}>{m.year}</span>}
-                </div>
-              ))}
-              {filtered.length === 0 && <div style={{ padding: '0.75rem', color: 'var(--text-dim)', fontSize: '0.85rem' }}>No movies found</div>}
-            </div>
+            <input placeholder="Type to search movies…" value={movieSearch} onChange={e => setMovieSearch(e.target.value)} autoComplete="off"
+              style={{ width: '100%', padding: '0.65rem 0.85rem', border: '1.5px solid var(--border)', borderRadius: movieSearch ? '10px 10px 0 0' : '10px', fontSize: '0.9rem', background: 'var(--surface2)', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+            {movieSearch.length > 0 && (
+              <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 10px 10px', background: 'var(--surface)' }}>
+                {filtered.slice(0, 40).map(m => (
+                  <div key={m.id} onClick={() => { setPickedMovie(m); setMovieSearch('') }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0.6rem 0.85rem', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
+                    {m.poster_url && <img src={m.poster_url} alt="" style={{ width: 28, height: 42, objectFit: 'cover', borderRadius: 3 }} />}
+                    <span style={{ fontSize: '0.88rem' }}>{m.title}</span>
+                    {m.year && <span style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginLeft: 'auto' }}>{m.year}</span>}
+                  </div>
+                ))}
+                {filtered.length === 0 && <div style={{ padding: '0.75rem', color: 'var(--text-dim)', fontSize: '0.85rem' }}>No movies found</div>}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -472,18 +474,22 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
             )}
 
             {(movie?.rating_imdb || movie?.rating_rt || ev.community_score) && (
-              <div style={{ display: 'flex', gap: '0.65rem', fontSize: '0.75rem', alignItems: 'center' }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.2rem' }}>
                 {movie?.rating_imdb && (movie?.imdb_id
-                  ? <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--amber-dark)', fontWeight: 600, textDecoration: 'none' }}>★ {movie.rating_imdb}</a>
-                  : <span style={{ color: 'var(--amber-dark)', fontWeight: 600 }}>★ {movie.rating_imdb}</span>
+                  ? <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+                      <span style={{ display: 'inline-block', background: 'rgba(180,150,0,0.15)', color: 'var(--amber-dark)', fontWeight: 700, fontSize: '0.72rem', padding: '0.2rem 0.55rem', borderRadius: '20px', border: '1px solid rgba(180,150,0,0.3)' }}>IMDb {movie.rating_imdb}</span>
+                    </a>
+                  : <span style={{ display: 'inline-block', background: 'rgba(180,150,0,0.15)', color: 'var(--amber-dark)', fontWeight: 700, fontSize: '0.72rem', padding: '0.2rem 0.55rem', borderRadius: '20px', border: '1px solid rgba(180,150,0,0.3)' }}>IMDb {movie.rating_imdb}</span>
                 )}
                 {movie?.rating_rt && (
-                  <a href={`https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title)}`} target="_blank" rel="noopener noreferrer" style={{ color: '#fa320a', fontWeight: 600, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                    🍅 {movie.rating_rt}
+                  <a href={`https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title)}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+                    <span style={{ display: 'inline-block', background: 'rgba(220,50,30,0.12)', color: '#c0392b', fontWeight: 700, fontSize: '0.72rem', padding: '0.2rem 0.55rem', borderRadius: '20px', border: '1px solid rgba(220,50,30,0.25)' }}>🍅 RT {movie.rating_rt}</span>
                   </a>
                 )}
-                {ev.community_score && (
-                  <CommunityScore communityScore={ev.community_score} />
+                {ev.community_score?.count > 0 && (
+                  <span style={{ display: 'inline-block', background: 'rgba(0,128,128,0.12)', color: 'var(--teal)', fontWeight: 700, fontSize: '0.72rem', padding: '0.2rem 0.55rem', borderRadius: '20px', border: '1px solid rgba(0,128,128,0.25)' }}>
+                    Community {ev.community_score.avg.toFixed(1)}
+                  </span>
                 )}
               </div>
             )}
@@ -492,7 +498,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
               <CapacityBar
                 confirmedSeats={ev.confirmed_seats}
                 maxSeats={ev.max_seats}
-                waitlistCount={ev.waitlist_count}
+                waitlistSeats={ev.waitlist_seats}
               />
             </div>
 
@@ -611,7 +617,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
             >
               <span>
                 <strong style={{ color: 'var(--green)' }}>{ev.confirmed_seats} seats confirmed</strong>
-                {ev.waitlist_count > 0 && <span style={{ color: 'var(--amber-dark)', marginLeft: '0.5rem' }}>· {ev.waitlist_count} on waitlist</span>}
+                {ev.waitlist_seats > 0 && <span style={{ color: 'var(--amber-dark)', marginLeft: '0.5rem' }}>· {ev.waitlist_seats} seat{ev.waitlist_seats !== 1 ? 's' : ''} on waitlist</span>}
                 <span style={{ marginLeft: '0.5rem' }}>of {ev.max_seats}</span>
               </span>
               <span style={{ fontSize: '0.65rem', color: 'var(--teal)' }}>{showAttendees ? '▲ Hide' : '▼ Attendees'}</span>

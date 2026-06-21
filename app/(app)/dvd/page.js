@@ -169,8 +169,7 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, active
                       {iMineToReturn ? '📀 On Loan' : '📤 On Loan'}
                     </div>
                     <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.88)', marginTop:'0.2rem', lineHeight:1.3 }}>
-                      {iMineToReturn ? 'You · ' + fmtDate(activeLoan.borrowed_at) : (activeLoan.members?.name || 'Resident') + '
-' + fmtDate(activeLoan.borrowed_at)}
+                      {iMineToReturn ? `You · ${fmtDate(activeLoan.borrowed_at)}` : `${activeLoan.members?.name || 'Resident'} · ${fmtDate(activeLoan.borrowed_at)}`}
                     </div>
                   </div>
                 )}

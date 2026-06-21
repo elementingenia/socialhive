@@ -73,19 +73,120 @@ function NextScreeningCard({ event, myBooking }) {
   )
 }
 
+// ── My Movie Bookings Sheet ───────────────────────────────────────────────────
+function MyMovieBookingsSheet({ bookings, session, onClose, onRefresh }) {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const [cancelling, setCancelling] = useState(null)
+  const [confirmId, setConfirmId] = useState(null)
+  const [toast, setToast] = useState(null)
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 3500)
+  }
+
+  const upcoming = bookings
+    .filter(b => b.status !== 'cancelled' && b.events?.hub_type === 'movie' && localDate(b.events?.event_date) >= today)
+    .sort((a, b) => localDate(a.events?.event_date) - localDate(b.events?.event_date))
+
+  async function doCancel(eventId, title) {
+    setConfirmId(null)
+    setCancelling(eventId)
+    const res = await fetch('/api/bookings', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ event_id: eventId }),
+    })
+    setCancelling(null)
+    if (!res.ok) { showToast('Could not cancel — please try again'); return }
+    showToast('Booking cancelled for ' + title)
+    onRefresh()
+  }
+
+  return (
+    <>
+      {toast && (
+        <div style={{ position:'fixed', top:'1rem', left:'50%', transform:'translateX(-50%)', zIndex:400, background:'#15803d', color:'#fff', padding:'0.75rem 1.1rem', borderRadius:'12px', fontSize:'0.88rem', fontWeight:600, boxShadow:'0 4px 20px rgba(0,0,0,0.2)', pointerEvents:'none', minWidth:240 }}>
+          ✓ {toast}
+        </div>
+      )}
+      <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:200 }} />
+      <div style={{ position:'fixed', inset:0, background:'var(--bg)', zIndex:201, overflowY:'auto', display:'flex', flexDirection:'column' }}>
+        {/* Header */}
+        <div style={{ position:'sticky', top:0, background:'var(--bg)', borderBottom:'1px solid var(--border)', padding:'1rem 1.25rem', display:'flex', alignItems:'center', gap:'0.75rem', zIndex:10 }}>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:'1.1rem', cursor:'pointer', color:'var(--teal)', fontWeight:700, padding:'0.25rem 0.5rem 0.25rem 0', lineHeight:1 }}>‹ Movies</button>
+          <div style={{ fontWeight:700, fontSize:'1rem' }}>My Movie Bookings</div>
+        </div>
+        <div style={{ padding:'1rem 1.25rem 5rem', flex:1 }}>
+          {upcoming.length === 0 ? (
+            <div style={{ textAlign:'center', color:'var(--text-dim)', padding:'3rem 0', fontSize:'0.9rem' }}>No upcoming movie bookings.</div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:'0.85rem' }}>
+              {upcoming.map(b => {
+                const ev = b.events
+                const movie = ev?.movies
+                const seats = b.seats || 1
+                const isWaitlist = b.status === 'waitlist'
+                return (
+                  <div key={b.id} style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', borderLeft:'3px solid ' + (isWaitlist ? 'var(--amber)' : 'var(--teal)'), overflow:'hidden', boxShadow:'var(--shadow)' }}>
+                    <div style={{ display:'flex' }}>
+                      {movie?.poster_url ? (
+                        <img src={movie.poster_url} alt="" style={{ width:80, minHeight:110, objectFit:'cover', flexShrink:0 }} />
+                      ) : (
+                        <div style={{ width:80, minHeight:110, background:'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem', flexShrink:0 }}>🎬</div>
+                      )}
+                      <div style={{ flex:1, padding:'0.85rem 1rem' }}>
+                        <div style={{ fontWeight:700, fontSize:'0.95rem', lineHeight:1.2, marginBottom:'0.25rem' }}>{movie?.title || ev?.title}</div>
+                        <div style={{ fontSize:'0.8rem', color:'var(--teal)', fontWeight:600, marginBottom:'0.15rem' }}>{fmtDate(ev?.event_date)}</div>
+                        {ev?.event_time && <div style={{ fontSize:'0.78rem', color:'var(--text-dim)', marginBottom:'0.4rem' }}>{fmtTime(ev.event_time)}</div>}
+                        <div style={{ display:'flex', gap:'0.4rem', alignItems:'center', flexWrap:'wrap' }}>
+                          <span style={{ background: isWaitlist ? '#fef3c7' : '#dcfce7', color: isWaitlist ? '#d97706' : '#15803d', fontSize:'0.72rem', fontWeight:700, padding:'0.2rem 0.55rem', borderRadius:'20px' }}>
+                            {isWaitlist ? '⏳ Waitlist' : '✓ Confirmed'} · {seats} seat{seats !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {confirmId === b.id ? (
+                      <div style={{ padding:'0.75rem 1rem', borderTop:'1px solid var(--border)', background:'var(--surface2)', display:'flex', gap:'0.5rem', alignItems:'center' }}>
+                        <span style={{ fontSize:'0.82rem', color:'var(--text-dim)', flex:1 }}>Cancel this booking?</span>
+                        <button onClick={() => setConfirmId(null)} style={{ background:'none', border:'1px solid var(--border)', borderRadius:'8px', padding:'0.35rem 0.65rem', fontSize:'0.78rem', cursor:'pointer', color:'var(--text-dim)' }}>Keep</button>
+                        <button onClick={() => doCancel(b.event_id, movie?.title || ev?.title)} disabled={cancelling === b.event_id}
+                          style={{ background:'var(--danger)', color:'#fff', border:'none', borderRadius:'8px', padding:'0.35rem 0.65rem', fontSize:'0.78rem', fontWeight:600, cursor:'pointer', opacity:cancelling===b.event_id?0.6:1 }}>
+                          {cancelling === b.event_id ? '…' : 'Yes, cancel'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ padding:'0.5rem 1rem', borderTop:'1px solid var(--border)', display:'flex', gap:'0.5rem' }}>
+                        <button onClick={() => setConfirmId(b.id)} disabled={!!cancelling}
+                          style={{ background:'none', border:'1px solid var(--border)', borderRadius:'8px', padding:'0.35rem 0.75rem', fontSize:'0.78rem', cursor:'pointer', color:'var(--text-dim)' }}>
+                          Cancel booking
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  )
+}
+
 // ── My Bookings Card (→ /bookings) ────────────────────────────────────────────
 function MyBookingsCard({ bookings }) {
   const router = useRouter()
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const upcoming = bookings
-    .filter(b => b.status !== 'cancelled' && localDate(b.events?.event_date) >= today)
+    .filter(b => b.status !== 'cancelled' && b.events?.hub_type === 'movie' && localDate(b.events?.event_date) >= today)
     .sort((a, b) => localDate(a.events?.event_date) - localDate(b.events?.event_date))
 
   if (!upcoming.length) return null
 
   return (
     <div
-      onClick={() => router.push('/bookings')}
+      onClick={() => setShowMyBookings(true)}
       style={{ background: 'var(--surface)', borderRadius: '16px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow)', marginBottom: '1.25rem', cursor: 'pointer' }}
     >
       <div style={{ background: 'var(--amber)', padding: '0.6rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -247,8 +348,8 @@ function RatingSwiper({ movies, memberId, onDone }) {
                   padding: '0.5rem 0',
                   borderRadius: '10px',
                   border: '1.5px solid var(--border)',
-                  background: score >= 8 ? 'rgba(0,128,128,0.08)' : 'var(--surface)',
-                  color: score >= 8 ? 'var(--teal)' : 'var(--text)',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
                   fontSize: '0.9rem',
                   fontWeight: 700,
                   cursor: submitting ? 'not-allowed' : 'pointer',
@@ -293,10 +394,13 @@ export default function MoviesHomePage() {
   const [unvoted, setUnvoted]     = useState([])
   const [memberId, setMemberId]   = useState(null)
   const [swiperDone, setSwiperDone] = useState(false)
+  const [showMyBookings, setShowMyBookings] = useState(false)
+  const [session, setSession] = useState(null)
 
   const load = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setLoading(false); return }
+    setSession(session)
 
     const { data: memberData } = await supabase
       .from('members').select('id').eq('auth_id', session.user.id).single()
@@ -320,7 +424,7 @@ export default function MoviesHomePage() {
         .limit(1),
 
       supabase.from('bookings')
-        .select('id, event_id, status, seats, booked_at, events(id, event_date, event_time, title, movies(id, title, poster_url))')
+        .select('id, event_id, status, seats, booked_at, events(id, event_date, event_time, title, hub_type, movies(id, title, poster_url))')
         .eq('member_id', memberData.id)
         .neq('status', 'cancelled'),
 
@@ -378,6 +482,15 @@ export default function MoviesHomePage() {
 
       {!swiperDone && unvoted.length > 0 && memberId && (
         <RatingSwiper movies={unvoted} memberId={memberId} onDone={() => setSwiperDone(true)} />
+      )}
+
+      {showMyBookings && session && (
+        <MyMovieBookingsSheet
+          bookings={myBookings}
+          session={session}
+          onClose={() => setShowMyBookings(false)}
+          onRefresh={load}
+        />
       )}
 
       {(swiperDone || unvoted.length === 0) && (

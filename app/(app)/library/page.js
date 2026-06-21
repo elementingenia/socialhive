@@ -109,7 +109,7 @@ function RatingSwiper({ movies, memberId, onDone }) {
           <div style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:'0.35rem', marginBottom:'0.5rem' }}>
             {[1,2,3,4,5,6,7,8,9,10].map(score => (
               <button key={score} onClick={() => submitRating(score)} disabled={submitting}
-                style={{ padding:'0.5rem 0', borderRadius:'10px', border:'1.5px solid var(--border)', background:score>=8?'rgba(0,128,128,0.08)':'var(--surface)', color:score>=8?'var(--teal)':'var(--text)', fontSize:'0.9rem', fontWeight:700, cursor:submitting?'not-allowed':'pointer', opacity:submitting?0.5:1 }}>
+                style={{ padding:'0.5rem 0', borderRadius:'10px', border:'1.5px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:'0.9rem', fontWeight:700, cursor:submitting?'not-allowed':'pointer', opacity:submitting?0.5:1 }}>
                 {score}
               </button>
             ))}
@@ -427,9 +427,9 @@ function MovieCard({ movie, myVote, avgData, onClick }) {
         ) : <div style={{ fontSize:'0.7rem', color:'var(--text-dim)', textAlign:'right' }}>Not yet<br/>rated</div>}
         {myVote && <div style={{ fontSize:'0.7rem', color:'var(--teal)', fontWeight:700 }}>you: {myVote}</div>}
         {movie.rating_imdb && (movie.imdb_id
-          ? <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} target="_blank" rel="noopener noreferrer" style={{ fontSize:'0.7rem', color:'var(--amber-dark)', fontWeight:600, textDecoration:'none', display:'block' }}>★ {movie.rating_imdb}</a>
+          ? <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ fontSize:'0.7rem', color:'var(--amber-dark)', fontWeight:600, textDecoration:'none', display:'block' }}>★ {movie.rating_imdb}</a>
           : <div style={{ fontSize:'0.7rem', color:'var(--amber-dark)', fontWeight:600 }}>★ {movie.rating_imdb}</div>)}
-        {movie.rating_rt && <a href={`https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title)}`} target="_blank" rel="noopener noreferrer" style={{ fontSize:'0.7rem', color:'#fa320a', fontWeight:600, textDecoration:'none', display:'block' }}>🍅 {movie.rating_rt}</a>}
+        {movie.rating_rt && <a href={`https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title)}`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ fontSize:'0.7rem', color:'#fa320a', fontWeight:600, textDecoration:'none', display:'block' }}>🍅 {movie.rating_rt}</a>}
       </div>
     </div>
   )
@@ -448,6 +448,7 @@ export default function LibraryPage() {
   const [selectedId,  setSelectedId]  = useState(null)
   const [showSuggest, setShowSuggest] = useState(false)
   const [swiperDone, setSwiperDone] = useState(false)
+  const [showSwiper, setShowSwiper] = useState(false)
   const [toasts, setToasts] = useState([])
 
   function addToast(message, type='success') {
@@ -502,10 +503,6 @@ export default function LibraryPage() {
     <div style={{ background:'var(--bg)', minHeight:'100vh' }}>
       <Toast toasts={toasts} />
       <div style={{ padding:'1rem 1rem 6rem' }}>
-        {!swiperDone && unvoted.length > 0 && member?.id && (
-          <RatingSwiper movies={unvoted} memberId={member.id} onDone={() => setSwiperDone(true)} />
-        )}
-
         <div style={{ background:'var(--surface)', borderRadius:'14px', padding:'1rem', marginBottom:'1rem', border:'1px solid var(--border)', borderLeft:'4px solid var(--teal)', fontSize:'0.88rem', lineHeight:1.6 }}>
           <div style={{ display:'flex', alignItems:'flex-start', gap:'0.6rem' }}>
             <span style={{ fontSize:'1.4rem', flexShrink:0 }}>🗳️</span>
@@ -526,9 +523,16 @@ export default function LibraryPage() {
           <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--teal)', letterSpacing:'0.08em', textTransform:'uppercase' }}>
             ✦ {sorted.length} film{sorted.length!==1?'s':''} — tap to view &amp; vote
           </div>
-          <button onClick={()=>setShowSuggest(true)} style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'20px', padding:'0.4rem 0.9rem', fontSize:'0.8rem', fontWeight:700, cursor:'pointer' }}>
-            + Suggest
-          </button>
+          <div style={{ display:'flex', gap:'0.45rem', alignItems:'center' }}>
+            {!swiperDone && unvoted.length > 0 && member?.id && (
+              <button onClick={()=>setShowSwiper(true)} style={{ background:'var(--surface)', border:'1.5px solid var(--teal)', color:'var(--teal)', borderRadius:'20px', padding:'0.35rem 0.7rem', fontSize:'0.76rem', fontWeight:700, cursor:'pointer' }}>
+                ⚡ Rate ({unvoted.length})
+              </button>
+            )}
+            <button onClick={()=>setShowSuggest(true)} style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'20px', padding:'0.4rem 0.9rem', fontSize:'0.8rem', fontWeight:700, cursor:'pointer' }}>
+              + Suggest
+            </button>
+          </div>
         </div>
 
         <div style={{ display:'flex', gap:'0.4rem', marginBottom:'0.85rem' }}>
@@ -577,6 +581,17 @@ export default function LibraryPage() {
         <Overlay onClose={()=>setSelectedId(null)}>
           <DetailSheet movie={selectedMovie} myVote={myVotes[selectedMovie.id]} avgData={avgVotes[selectedMovie.id]} memberId={member?.id} isAdmin={member?.is_admin} session={session} onClose={()=>setSelectedId(null)} onVoted={loadData} onDeleted={()=>{ setSelectedId(null); loadData() }} addToast={addToast} />
         </Overlay>
+      )}
+      {showSwiper && (
+        <div onClick={()=>setShowSwiper(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:200, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+          <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, background:'var(--surface)', borderRadius:'20px 20px 0 0', padding:'1.25rem', maxHeight:'90vh', overflowY:'auto' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.5rem' }}>
+              <div style={{ fontWeight:700, fontSize:'0.95rem' }}>Rate Films</div>
+              <button onClick={()=>setShowSwiper(false)} style={{ background:'none', border:'none', fontSize:'1.3rem', cursor:'pointer', color:'var(--text-dim)', lineHeight:1 }}>✕</button>
+            </div>
+            <RatingSwiper movies={unvoted} memberId={member.id} onDone={()=>{ setSwiperDone(true); setShowSwiper(false) }} />
+          </div>
+        </div>
       )}
       {showSuggest && (
         <SuggestOverlay onClose={()=>setShowSuggest(false)}>

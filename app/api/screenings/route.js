@@ -65,6 +65,7 @@ export async function GET(req) {
 
     const confirmed_seats = confirmedBookings.reduce((sum, b) => sum + (b.seats || 1), 0)
     const waitlist_count  = waitlistBookings.length
+    const waitlist_seats  = waitlistBookings.reduce((sum, b) => sum + (b.seats || 1), 0)
 
     const myBookings  = evBookings.filter(b => b.member_id === member.id)
     const myConfirmed = myBookings.find(b => b.status === 'confirmed') || null
@@ -98,6 +99,7 @@ export async function GET(req) {
       ...ev,
       confirmed_seats,
       waitlist_count,
+      waitlist_seats,
       seats_remaining: Math.max(0, ev.max_seats - confirmed_seats),
       my_booking,
       community_score: ev.movie_id ? (communityAvg[ev.movie_id] || null) : null,

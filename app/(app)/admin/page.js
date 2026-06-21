@@ -12,7 +12,7 @@ const HUB_TYPES = [
   { value: 'bookclub', label: 'Book Club', icon: '📚' },
 ]
 const HUB_COLOUR = { movie:'var(--teal)', social:'var(--terracotta)', outings:'var(--green)', bookclub:'var(--purple)' }
-const TABS = ['Events', 'Notices', 'Members', 'Bar', 'Books', 'Tools']
+const TABS = ['Notices', 'Members', 'Bar', 'Books', 'Tools']
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 function fmtDate(str) {
