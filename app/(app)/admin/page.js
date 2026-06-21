@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
@@ -635,24 +635,52 @@ function BooksTab() {
 
 // ── TOOLS TAB ─────────────────────────────────────────────────────────────────
 function ToolsTab() {
-  const [status, setStatus] = useState('idle')
-  const [result, setResult] = useState(null)
-  const [total,  setTotal]  = useState(0)
+  const [status,        setStatus]        = useState('idle')
+  const [lastBatch,     setLastBatch]     = useState(null)
+  const [totalEnriched, setTotalEnriched] = useState(0)
+  const [batchCount,    setBatchCount]    = useState(0)
+  const stopRef = useRef(false)
 
-  async function runBatch() {
+  async function runAll() {
+    stopRef.current = false
     setStatus('running')
-    try {
-      const { data:{ session } } = await supabase.auth.getSession()
-      const res  = await fetch('/api/admin/enrich-dvd?limit=50', { headers:{ Authorization:`Bearer ${session.access_token}` } })
-      const data = await res.json()
-      setResult(data)
-      setTotal(t => t + (data.enriched||0))
-      setStatus(data.enriched===0 && data.skipped>0 ? 'done' : 'idle')
-    } catch(err) {
-      setResult({ error:err.message })
-      setStatus('error')
+    setTotalEnriched(0)
+    setBatchCount(0)
+    setLastBatch(null)
+
+    const { data:{ session } } = await supabase.auth.getSession()
+    let runningTotal = 0
+    let batches = 0
+
+    while (!stopRef.current) {
+      try {
+        const res  = await fetch('/api/admin/enrich-dvd?limit=50', { headers:{ Authorization:`Bearer ${session.access_token}` } })
+        const data = await res.json()
+        batches++
+        runningTotal += (data.enriched || 0)
+        setLastBatch(data)
+        setTotalEnriched(runningTotal)
+        setBatchCount(batches)
+
+        if (!data.error && (data.enriched === 0 || data.processed === 0)) {
+          setStatus('done')
+          return
+        }
+        if (data.error) { setStatus('error'); return }
+
+        await new Promise(r => setTimeout(r, 800))
+      } catch(err) {
+        setLastBatch({ error: err.message })
+        setStatus('error')
+        return
+      }
     }
+    setStatus('stopped')
   }
+
+  function stop() { stopRef.current = true }
+
+  const isRunning = status === 'running'
 
   return (
     <div style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', padding:'1.25rem' }}>
@@ -661,25 +689,44 @@ function ToolsTab() {
         <div style={{ fontWeight:700, fontSize:'0.95rem' }}>Enrich DVD Library</div>
       </div>
       <p style={{ fontSize:'0.82rem', color:'var(--text-dim)', marginBottom:'1rem', lineHeight:1.5 }}>
-        Fetches posters, plot, runtime and cast from TMDB / OMDb. Run in batches of 50 — click repeatedly until all done.
+        Auto-runs batches of 50 until all DVDs are enriched. Keep this tab open while it runs.
       </p>
-      {result && (
-        <div style={{ background:'var(--surface2)', borderRadius:'10px', padding:'0.75rem', marginBottom:'0.85rem', fontSize:'0.8rem', lineHeight:1.8 }}>
-          {result.error ? <span style={{ color:'var(--danger)' }}>Error: {result.error}</span> : (
-            <>
-              <div>✓ Enriched: <strong>{result.enriched}</strong></div>
-              <div>↷ Skipped: <strong>{result.skipped}</strong></div>
-              {result.failed>0 && <div style={{ color:'var(--danger)' }}>✕ Failed: {result.failed}</div>}
-              <div style={{ color:'var(--teal)', fontWeight:600 }}>Session total: {total}</div>
-              {result.enriched===0&&result.skipped>0 && <div style={{ color:'#15803d', fontWeight:700 }}>All done!</div>}
-            </>
+
+      {(isRunning || status === 'done' || status === 'stopped' || status === 'error') && (
+        <div style={{ background:'var(--surface2)', borderRadius:'10px', padding:'0.75rem', marginBottom:'0.85rem', fontSize:'0.8rem', lineHeight:1.9 }}>
+          <div style={{ fontWeight:700, color: status==='done' ? '#15803d' : status==='error' ? 'var(--danger)' : 'var(--teal)', marginBottom:'0.35rem' }}>
+            {status==='running' && `⏳ Running… batch ${batchCount}`}
+            {status==='done'    && '✅ All done!'}
+            {status==='stopped' && `⏸ Stopped after ${batchCount} batches`}
+            {status==='error'   && '✕ Error — see below'}
+          </div>
+          <div>Total enriched this session: <strong>{totalEnriched}</strong></div>
+          <div>Batches completed: <strong>{batchCount}</strong></div>
+          {lastBatch && !lastBatch.error && (
+            <div style={{ marginTop:'0.35rem', color:'var(--text-dim)' }}>
+              Last batch: {lastBatch.enriched} enriched, {lastBatch.skipped} skipped{lastBatch.failed>0?`, ${lastBatch.failed} failed`:''}
+            </div>
           )}
+          {lastBatch?.error && <div style={{ color:'var(--danger)', marginTop:'0.35rem' }}>Error: {lastBatch.error}</div>}
         </div>
       )}
-      <button onClick={runBatch} disabled={status==='running'}
-        style={{ background:status==='done'?'#15803d':'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.75rem 1.5rem', fontWeight:700, fontSize:'0.9rem', cursor:status==='running'?'not-allowed':'pointer', opacity:status==='running'?0.7:1 }}>
-        {status==='running'?'Running…':status==='done'?'✓ All done':'Run next batch →'}
-      </button>
+
+      <div style={{ display:'flex', gap:'0.6rem' }}>
+        <button onClick={runAll} disabled={isRunning}
+          style={{ flex:1, background:status==='done'?'#15803d':'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.75rem', fontWeight:700, fontSize:'0.88rem', cursor:isRunning?'not-allowed':'pointer', opacity:isRunning?0.6:1 }}>
+          {status==='idle'    && 'Run enrichment →'}
+          {status==='running' && 'Running…'}
+          {status==='done'    && '✓ Done — run again?'}
+          {status==='stopped' && 'Resume'}
+          {status==='error'   && 'Retry'}
+        </button>
+        {isRunning && (
+          <button onClick={stop}
+            style={{ background:'none', border:'1.5px solid var(--danger)', color:'var(--danger)', borderRadius:'10px', padding:'0.75rem 1rem', fontWeight:700, fontSize:'0.88rem', cursor:'pointer' }}>
+            Stop
+          </button>
+        )}
+      </div>
     </div>
   )
 }
