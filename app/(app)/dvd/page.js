@@ -317,6 +317,7 @@ export default function DvdPage() {
                 {shown.map(g => <button key={g} onClick={()=>setGenreFilter(g===genreFilter?'':g)} style={btnStyle(genreFilter===g)}>{g}</button>)}
                 {selectedHidden && <button onClick={()=>setGenreFilter('')} style={btnStyle(true)}>{genreFilter}</button>}
                 {needsCollapse && <button onClick={()=>setFilterExpanded(true)} style={moreStyle}>+{hidden} more</button>}
+                {filterExpanded && allGenres.length > VISIBLE && <button onClick={()=>setFilterExpanded(false)} style={moreStyle}>Show less</button>}
               </div>
             ) : null
           })()}
