@@ -1,7 +1,7 @@
 "use client"
 import { usePathname, useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
-import { getModuleColour, getPageTitle } from "@/lib/navUtils"
+import { getModuleColour, getPageTitle, BACK_ROUTES } from "@/lib/navUtils"
 
 export default function Header() {
   const { memberName } = useUser()
@@ -9,6 +9,7 @@ export default function Header() {
   const router         = useRouter()
   const moduleColour   = getModuleColour(pathname)
   const pageTitle      = getPageTitle(pathname)
+  const backRoute      = BACK_ROUTES[pathname] || null
 
   async function signOut() {
     const { supabase } = await import("@/lib/supabase")
@@ -26,34 +27,49 @@ export default function Header() {
       boxShadow: "0 1px 8px rgba(0,0,0,0.07)",
     }}>
 
-      {/* Left: bee logo + brand (taps to profile) */}
-      <button
-        onClick={() => router.push("/profile")}
-        style={{
-          display: "flex", alignItems: "center", gap: "0.5rem",
-          minWidth: 0, background: "none", border: "none",
-          cursor: "pointer", padding: 0, textAlign: "left",
-        }}
-      >
-        <img
-          src="/logo_hex_bee.png"
-          alt="The Social Hive"
-          style={{ width: 36, height: 36, flexShrink: 0 }}
-        />
-        <div style={{ minWidth: 0 }}>
-          <div style={{
-            fontSize: "0.58rem", fontWeight: 700, letterSpacing: "0.1em",
-            color: moduleColour, textTransform: "uppercase", lineHeight: 1,
-            whiteSpace: "nowrap",
-          }}>The Social Hive</div>
-          <div style={{
-            fontSize: "0.72rem", color: "var(--text-dim)", lineHeight: 1.2,
-            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-          }}>
-            {memberName ? "Welcome, " + memberName : "…"}
+      {/* Left: back button OR logo */}
+      {backRoute ? (
+        <button
+          onClick={() => router.push(backRoute.to)}
+          style={{
+            display: "flex", alignItems: "center", gap: "0.3rem",
+            background: "none", border: "none", cursor: "pointer",
+            color: moduleColour, fontWeight: 700, fontSize: "0.88rem",
+            padding: "0.25rem 0", minWidth: 0, flexShrink: 0,
+          }}
+        >
+          <span style={{ fontSize: "1.1rem", lineHeight: 1 }}>←</span>
+          <span>{backRoute.label}</span>
+        </button>
+      ) : (
+        <button
+          onClick={() => router.push("/profile")}
+          style={{
+            display: "flex", alignItems: "center", gap: "0.5rem",
+            minWidth: 0, background: "none", border: "none",
+            cursor: "pointer", padding: 0, textAlign: "left",
+          }}
+        >
+          <img
+            src="/logo_hex_bee.png"
+            alt="The Social Hive"
+            style={{ width: 36, height: 36, flexShrink: 0 }}
+          />
+          <div style={{ minWidth: 0 }}>
+            <div style={{
+              fontSize: "0.58rem", fontWeight: 700, letterSpacing: "0.1em",
+              color: moduleColour, textTransform: "uppercase", lineHeight: 1,
+              whiteSpace: "nowrap",
+            }}>The Social Hive</div>
+            <div style={{
+              fontSize: "0.72rem", color: "var(--text-dim)", lineHeight: 1.2,
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+            }}>
+              {memberName ? "Welcome, " + memberName : "…"}
+            </div>
           </div>
-        </div>
-      </button>
+        </button>
+      )}
 
       {/* Centre: page title */}
       <div style={{
