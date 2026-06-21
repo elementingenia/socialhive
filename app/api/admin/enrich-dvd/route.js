@@ -80,11 +80,12 @@ async function enrichFromTmdb(title, isTV) {
 }
 
 async function dbUpdate(movieId, fields) {
-  const { error, count } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from('movies')
-    .update(fields, { count: 'exact' })
+    .update(fields)
     .eq('id', movieId)
-  return { error, count }
+    .select('id')
+  return { error, count: data?.length ?? 0 }
 }
 
 const delay = ms => new Promise(r => setTimeout(r, ms))
