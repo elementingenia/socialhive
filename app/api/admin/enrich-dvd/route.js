@@ -52,7 +52,7 @@ async function enrichFromTmdb(title, isTV) {
   if (!searchRes.ok) return { _apiError: true, reason: `TMDB search HTTP ${searchRes.status}` }
   const searchData = await searchRes.json()
   const result = searchData.results?.[0]
-  if (!result) return null   // genuinely not found
+  if (!result) return null
 
   const detailUrl = `https://api.themoviedb.org/3/${searchType}/${result.id}?api_key=${TMDB_KEY}&language=en-AU&append_to_response=credits,external_ids`
   const detailRes = await fetch(detailUrl)
@@ -79,6 +79,14 @@ async function enrichFromTmdb(title, isTV) {
   return { poster_url: poster, plot: d.overview || null, runtime, director, actors, rating_imdb, rating, imdb_id, year: releaseYear || null }
 }
 
+async function dbUpdate(movieId, fields) {
+  const { error, count } = await supabaseAdmin
+    .from('movies')
+    .update(fields, { count: 'exact' })
+    .eq('id', movieId)
+  return { error, count }
+}
+
 const delay = ms => new Promise(r => setTimeout(r, ms))
 
 export async function GET(req) {
@@ -90,8 +98,12 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url)
   const limit        = Math.min(parseInt(searchParams.get('limit') || '30'), 50)
   const forceRefresh = searchParams.get('force') === 'true'
-  // catalogue=true returns all failure records rather than running enrichment
   const catalogue    = searchParams.get('catalogue') === 'true'
+
+  // Diagnostic: confirm which key the function actually has
+  const keySnippet   = searchParams.get('diag') === 'true'
+    ? (process.env.SUPABASE_SERVICE_ROLE_KEY || 'MISSING').slice(0, 30) + '...'
+    : undefined
 
   if (catalogue) {
     const { data } = await supabaseAdmin
@@ -103,10 +115,6 @@ export async function GET(req) {
     return NextResponse.json({ failures: data || [] })
   }
 
-  // Fetch movies that need enrichment:
-  // - poster_url IS NULL (still unenriched)
-  // - AND enrichment_status is NULL or 'api_error' (retry api_errors; skip no_match)
-  // - Unless forceRefresh=true (retry everything)
   let query = supabaseAdmin
     .from('movies')
     .select('id, title, imdb_id, poster_url, plot, genre, enrichment_status')
@@ -121,9 +129,13 @@ export async function GET(req) {
 
   const { data: movies, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!movies?.length) return NextResponse.json({ message: 'All DVD items enriched or no_match catalogued', enriched: 0, processed: 0 })
+  if (!movies?.length) return NextResponse.json({
+    message: 'All DVD items enriched or no_match catalogued',
+    enriched: 0, processed: 0,
+    ...(keySnippet ? { _keySnippet: keySnippet } : {})
+  })
 
-  const results = { enriched: 0, skipped: 0, failed: 0, details: [] }
+  const results = { enriched: 0, skipped: 0, failed: 0, dbWriteErrors: 0, details: [] }
 
   for (const movie of movies) {
     const isTV = movie.genre?.toLowerCase().includes('tv') || movie.genre?.toLowerCase().includes('series')
@@ -155,22 +167,29 @@ export async function GET(req) {
       }
 
       if (failReason) {
-        // API error — mark so it gets retried next time but logged
-        await supabaseAdmin.from('movies').update({ enrichment_status: 'api_error' }).eq('id', movie.id)
-        results.failed++
-        results.details.push({ id: movie.id, title: movie.title, status: 'api_error', reason: failReason })
+        const { error: ue, count: uc } = await dbUpdate(movie.id, { enrichment_status: 'api_error' })
+        if (ue || uc === 0) {
+          results.dbWriteErrors++
+          results.details.push({ id: movie.id, title: movie.title, status: 'db_write_failed', reason: `api_error mark failed: ${ue?.message || '0 rows affected'}` })
+        } else {
+          results.failed++
+          results.details.push({ id: movie.id, title: movie.title, status: 'api_error', reason: failReason })
+        }
         continue
       }
 
       if (!enriched) {
-        // Genuinely not found — mark no_match so it's skipped in future runs
-        await supabaseAdmin.from('movies').update({ enrichment_status: 'no_match' }).eq('id', movie.id)
-        results.skipped++
-        results.details.push({ id: movie.id, title: movie.title, status: 'no_match', reason: 'Not found on TMDB or OMDb' })
+        const { error: ue, count: uc } = await dbUpdate(movie.id, { enrichment_status: 'no_match' })
+        if (ue || uc === 0) {
+          results.dbWriteErrors++
+          results.details.push({ id: movie.id, title: movie.title, status: 'db_write_failed', reason: `no_match mark failed: ${ue?.message || '0 rows affected'}` })
+        } else {
+          results.skipped++
+          results.details.push({ id: movie.id, title: movie.title, status: 'no_match', reason: 'Not found on TMDB or OMDb' })
+        }
         continue
       }
 
-      // Build update — only set non-null values
       const update = { enrichment_status: 'ok' }
       if (enriched.poster_url)  update.poster_url  = enriched.poster_url
       if (enriched.plot)        update.plot        = enriched.plot
@@ -183,19 +202,26 @@ export async function GET(req) {
       if (enriched.imdb_id && !movie.imdb_id) update.imdb_id = enriched.imdb_id
       if (enriched.genre && !movie.genre)     update.genre   = enriched.genre
 
-      const { error: updateErr } = await supabaseAdmin.from('movies').update(update).eq('id', movie.id)
+      const { error: updateErr, count: updateCount } = await dbUpdate(movie.id, update)
 
       if (updateErr) {
-        results.failed++
-        results.details.push({ id: movie.id, title: movie.title, status: 'api_error', reason: `DB update failed: ${updateErr.message}` })
+        results.dbWriteErrors++
+        results.details.push({ id: movie.id, title: movie.title, status: 'db_write_failed', reason: `DB error: ${updateErr.message}` })
+      } else if (updateCount === 0) {
+        results.dbWriteErrors++
+        results.details.push({ id: movie.id, title: movie.title, status: 'db_write_failed', reason: '0 rows affected — RLS blocked write (check service role key)' })
       } else {
         results.enriched++
         results.details.push({ id: movie.id, title: movie.title, status: 'ok', fields: Object.keys(update).filter(k => k !== 'enrichment_status') })
       }
     } catch (err) {
-      await supabaseAdmin.from('movies').update({ enrichment_status: 'api_error' }).eq('id', movie.id)
-      results.failed++
-      results.details.push({ id: movie.id, title: movie.title, status: 'api_error', reason: err.message })
+      const { error: ue, count: uc } = await dbUpdate(movie.id, { enrichment_status: 'api_error' })
+      if (ue || uc === 0) {
+        results.dbWriteErrors++
+      } else {
+        results.failed++
+      }
+      results.details.push({ id: movie.id, title: movie.title, status: 'exception', reason: err.message })
       await delay(500)
     }
   }
@@ -203,5 +229,6 @@ export async function GET(req) {
   return NextResponse.json({
     processed: movies.length,
     ...results,
+    ...(keySnippet ? { _keySnippet: keySnippet } : {})
   })
 }
