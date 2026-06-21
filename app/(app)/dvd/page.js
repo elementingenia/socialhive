@@ -27,7 +27,7 @@ function Toast({ toasts }) {
   return (
     <div style={{ position:'fixed', top:'1rem', left:'50%', transform:'translateX(-50%)', zIndex:999, display:'flex', flexDirection:'column', gap:'0.5rem', pointerEvents:'none', minWidth:260, maxWidth:'90vw' }}>
       {toasts.map(t => (
-        <div key={t.id} style={{ background: t.type==='error'?'var(--danger)':'#15803d', color:'#fff', padding:'0.75rem 1.1rem', borderRadius:'12px', fontSize:'0.88rem', fontWeight:600, boxShadow:'0 4px 20px rgba(0,0,0,0.2)', display:'flex', alignItems:'center', gap:'0.5rem' }}>
+        <div key={t.id} style={{ background:t.type==='error'?'var(--danger)':'#15803d', color:'#fff', padding:'0.75rem 1.1rem', borderRadius:'12px', fontSize:'0.88rem', fontWeight:600, boxShadow:'0 4px 20px rgba(0,0,0,0.2)', display:'flex', alignItems:'center', gap:'0.5rem' }}>
           <span>{t.type==='error'?'✕':'✓'}</span>{t.message}
         </div>
       ))}
@@ -40,11 +40,70 @@ function fmtDate(str) {
   return new Date(str).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' })
 }
 
+// ── My Loans slide-out ────────────────────────────────────────────────────────
+function MyLoansSheet({ myLoans, movies, onReturn, onClose, addToast }) {
+  const [returning, setReturning] = useState(null)
+
+  async function handleReturn(loan) {
+    setReturning(loan.id)
+    const { error } = await supabase.from('dvd_loans').update({ returned_at: new Date().toISOString() }).eq('id', loan.id)
+    setReturning(null)
+    if (error) { addToast('Could not return — ' + error.message, 'error'); return }
+    const movie = movies.find(m => m.id === loan.movie_id)
+    addToast((movie?.title || 'DVD') + ' returned — thanks!')
+    onReturn()
+  }
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:200, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, background:'var(--surface)', borderRadius:'20px 20px 0 0', maxHeight:'80vh', display:'flex', flexDirection:'column' }}>
+        {/* Header */}
+        <div style={{ padding:'0.6rem 1.25rem 0', display:'flex', justifyContent:'center' }}>
+          <div style={{ width:40, height:4, background:'var(--border)', borderRadius:2 }} />
+        </div>
+        <div style={{ padding:'0.75rem 1.25rem 0.75rem', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+          <div style={{ fontWeight:700, fontSize:'1rem' }}>📀 My Borrowed DVDs</div>
+          <button onClick={onClose} style={{ width:32, height:32, borderRadius:'50%', background:'var(--surface2)', border:'none', fontSize:'1.1rem', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-dim)' }}>✕</button>
+        </div>
+        {/* List */}
+        <div style={{ overflowY:'auto', flex:1, padding:'0.75rem 1.25rem 2rem' }}>
+          {myLoans.length === 0 ? (
+            <div style={{ textAlign:'center', color:'var(--text-dim)', padding:'2rem', fontSize:'0.9rem' }}>No DVDs on loan</div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:'0.75rem' }}>
+              {myLoans.map(loan => {
+                const movie = movies.find(m => m.id === loan.movie_id)
+                if (!movie) return null
+                return (
+                  <div key={loan.id} style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'var(--surface2)', borderRadius:'12px', padding:'0.75rem', border:'1px solid var(--border)' }}>
+                    {movie.poster_url
+                      ? <img src={movie.poster_url} alt={movie.title} style={{ width:46, height:68, objectFit:'cover', borderRadius:6, flexShrink:0 }} />
+                      : <div style={{ width:46, height:68, background:'var(--surface)', borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.4rem', flexShrink:0 }}>💿</div>}
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:700, fontSize:'0.92rem', lineHeight:1.2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{movie.title}</div>
+                      <div style={{ fontSize:'0.75rem', color:'var(--text-dim)', marginTop:'0.2rem' }}>Borrowed {fmtDate(loan.borrowed_at)}</div>
+                    </div>
+                    <button onClick={() => handleReturn(loan)} disabled={returning === loan.id}
+                      style={{ flexShrink:0, background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.55rem 1rem', fontSize:'0.82rem', fontWeight:700, cursor:returning===loan.id?'not-allowed':'pointer', opacity:returning===loan.id?0.6:1, whiteSpace:'nowrap' }}>
+                      {returning === loan.id ? '…' : 'Return'}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── DVD Detail sheet ──────────────────────────────────────────────────────────
 function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, activeLoan, onClose, onDeleted, onLoansChanged, addToast }) {
-  const [deleting,       setDeleting]       = useState(false)
-  const [confirmDelete,  setConfirmDelete]  = useState(false)
-  const [borrowing,      setBorrowing]      = useState(false)
-  const [returning,      setReturning]      = useState(false)
+  const [deleting,      setDeleting]      = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [borrowing,     setBorrowing]     = useState(false)
+  const [returning,     setReturning]     = useState(false)
   const genres  = parseGenres(movie.genre)
   const imdbUrl = movie.imdb_id ? 'https://www.imdb.com/title/' + movie.imdb_id + '/' : null
 
@@ -82,93 +141,106 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, active
   return (
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
-        <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, background:'var(--surface)', borderRadius:'20px 20px 0 0', maxHeight:'92vh', overflowY:'auto' }}>
-          {movie.poster_url && (
-            <div style={{ position:'relative', height:180, overflow:'hidden', borderRadius:'20px 20px 0 0' }}>
-              <img src={movie.poster_url} alt={movie.title} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', filter:'blur(2px) brightness(0.6)', transform:'scale(1.05)' }} />
-              <img src={movie.poster_url} alt={movie.title} style={{ position:'absolute', left:'1.25rem', bottom:'-40px', width:80, height:120, objectFit:'cover', borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,0.4)' }} />
-              <button onClick={onClose} style={{ position:'absolute', top:'0.75rem', right:'0.75rem', width:32, height:32, borderRadius:'50%', background:'rgba(0,0,0,0.5)', border:'none', color:'#fff', fontSize:'1.1rem', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+        <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, background:'var(--surface)', borderRadius:'20px 20px 0 0', maxHeight:'92vh', display:'flex', flexDirection:'column' }}>
+
+          {/* ── Sticky header — always visible ── */}
+          <div style={{ flexShrink:0 }}>
+            {/* Drag handle */}
+            <div style={{ padding:'0.6rem 1.25rem 0', display:'flex', justifyContent:'center' }}>
+              <div style={{ width:40, height:4, background:'var(--border)', borderRadius:2 }} />
             </div>
-          )}
-          <div style={{ padding:movie.poster_url?'3rem 1.25rem 2rem':'1.5rem 1.25rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
-            {!movie.poster_url && <div style={{ display:'flex', justifyContent:'flex-end' }}><button onClick={onClose} style={{ background:'none', border:'none', fontSize:'1.5rem', cursor:'pointer', color:'var(--text-dim)' }}>✕</button></div>}
-            <div>
-              <div style={{ fontWeight:800, fontSize:'1.2rem', lineHeight:1.2 }}>{movie.title}</div>
-              {movie.year && <div style={{ color:'var(--text-dim)', fontSize:'0.85rem', marginTop:'0.2rem' }}>{movie.year}{movie.runtime ? ' · ' + movie.runtime : ''}</div>}
+            {/* Title bar with close */}
+            <div style={{ padding:'0.6rem 1.25rem 0.6rem', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid var(--border)' }}>
+              <div style={{ fontWeight:800, fontSize:'1rem', lineHeight:1.2, flex:1, marginRight:'0.75rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{movie.title}</div>
+              <button onClick={onClose} style={{ flexShrink:0, width:34, height:34, borderRadius:'50%', background:'var(--surface2)', border:'1px solid var(--border)', fontSize:'1rem', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-dim)', fontWeight:700 }}>✕</button>
             </div>
+          </div>
 
-            {genres.length > 0 && <GenreChips genres={genres} />}
-
-            {/* Ratings row */}
-            <div style={{ display:'flex', gap:'0.75rem', alignItems:'center', flexWrap:'wrap' }}>
-              {movie.rating && (
-                <span style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'6px', padding:'0.2rem 0.5rem', fontSize:'0.78rem', fontWeight:700, color:'var(--text-dim)', letterSpacing:'0.04em' }}>{movie.rating}</span>
-              )}
-              {movie.rating_imdb && (
-                imdbUrl
-                  ? <a href={imdbUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize:'0.88rem', fontWeight:700, color:'var(--amber-dark)', textDecoration:'none' }}>⭐ {movie.rating_imdb} IMDb</a>
-                  : <span style={{ fontSize:'0.88rem', fontWeight:700, color:'var(--amber-dark)' }}>⭐ {movie.rating_imdb} IMDb</span>
-              )}
-              {movie.rating_rt && (
-                <a href={'https://www.rottentomatoes.com/search?search=' + encodeURIComponent(movie.title)} target="_blank" rel="noopener noreferrer" style={{ fontSize:'0.88rem', fontWeight:700, color:'#fa320a', textDecoration:'none' }}>🍅 {movie.rating_rt}</a>
-              )}
-            </div>
-
-            {movie.director && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Director:</strong> {movie.director}</div>}
-            {movie.actors   && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Cast:</strong> {movie.actors}</div>}
-            {movie.plot     && <div style={{ fontSize:'0.88rem', lineHeight:1.6, color:'var(--text)' }}>{movie.plot}</div>}
-
-            {/* Borrow / Return / On Loan status */}
-            {iMineToReturn ? (
-              <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
-                <div style={{ background:'rgba(0,128,128,0.06)', border:'1px solid rgba(0,128,128,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
-                  📀 You borrowed this on {fmtDate(activeLoan.borrowed_at)}. Return it to the cinema when you&apos;re done.
-                </div>
-                <button onClick={handleReturn} disabled={returning}
-                  style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.8rem', fontSize:'0.95rem', fontWeight:700, cursor:returning?'not-allowed':'pointer', opacity:returning?0.6:1, width:'100%' }}>
-                  {returning ? 'Returning…' : 'Return DVD'}
-                </button>
-              </div>
-            ) : onLoanByOther ? (
-              <div style={{ background:'rgba(220,38,38,0.06)', border:'1px solid rgba(220,38,38,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
-                📤 On loan to {activeLoan.members?.name || 'a resident'} since {fmtDate(activeLoan.borrowed_at)}. Check back soon.
-              </div>
-            ) : canBorrow ? (
-              <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
-                <div style={{ background:'rgba(0,128,128,0.06)', border:'1px solid rgba(0,128,128,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
-                  💿 This DVD is available. You can borrow it and return it when you&apos;re done.
-                </div>
-                <button onClick={handleBorrow} disabled={borrowing || !memberId}
-                  style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.8rem', fontSize:'0.95rem', fontWeight:700, cursor:(borrowing||!memberId)?'not-allowed':'pointer', opacity:(borrowing||!memberId)?0.6:1, width:'100%' }}>
-                  {borrowing ? 'Borrowing…' : 'Borrow DVD'}
-                </button>
-              </div>
-            ) : !activeLoan && myLoanCount >= 3 ? (
-              <div style={{ background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.3)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
-                ⚠️ You have 3 DVDs on loan. Please return one before borrowing another.
-              </div>
-            ) : (
-              <div style={{ background:'rgba(0,128,128,0.06)', border:'1px solid rgba(0,128,128,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
-                💿 This DVD is available in the cinema. Ask a team member if you would like to borrow it.
+          {/* ── Scrollable body ── */}
+          <div style={{ overflowY:'auto', flex:1 }}>
+            {movie.poster_url && (
+              <div style={{ position:'relative', height:180, overflow:'hidden' }}>
+                <img src={movie.poster_url} alt={movie.title} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', filter:'blur(2px) brightness(0.6)', transform:'scale(1.05)' }} />
+                <img src={movie.poster_url} alt={movie.title} style={{ position:'absolute', left:'1.25rem', bottom:'-40px', width:80, height:120, objectFit:'cover', borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,0.4)' }} />
               </div>
             )}
 
-            {isAdmin && (
-              <button onClick={()=>setConfirmDelete(true)} disabled={deleting}
-                style={{ background:'none', border:'1px solid var(--danger)', borderRadius:'10px', color:'var(--danger)', fontSize:'0.82rem', fontWeight:600, padding:'0.55rem', cursor:deleting?'not-allowed':'pointer', width:'100%', opacity:deleting?0.5:1 }}>
-                {deleting?'Removing...':'Remove from DVD library'}
-              </button>
-            )}
+            <div style={{ padding:movie.poster_url?'3rem 1.25rem 2.5rem':'1.25rem 1.25rem 2.5rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
+              {movie.year && <div style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>{movie.year}{movie.runtime ? ' · ' + movie.runtime : ''}</div>}
+
+              {genres.length > 0 && <GenreChips genres={genres} />}
+
+              <div style={{ display:'flex', gap:'0.75rem', alignItems:'center', flexWrap:'wrap' }}>
+                {movie.rating && (
+                  <span style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'6px', padding:'0.2rem 0.5rem', fontSize:'0.78rem', fontWeight:700, color:'var(--text-dim)', letterSpacing:'0.04em' }}>{movie.rating}</span>
+                )}
+                {movie.rating_imdb && (
+                  imdbUrl
+                    ? <a href={imdbUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize:'0.88rem', fontWeight:700, color:'var(--amber-dark)', textDecoration:'none' }}>⭐ {movie.rating_imdb} IMDb</a>
+                    : <span style={{ fontSize:'0.88rem', fontWeight:700, color:'var(--amber-dark)' }}>⭐ {movie.rating_imdb} IMDb</span>
+                )}
+                {movie.rating_rt && (
+                  <a href={'https://www.rottentomatoes.com/search?search=' + encodeURIComponent(movie.title)} target="_blank" rel="noopener noreferrer" style={{ fontSize:'0.88rem', fontWeight:700, color:'#fa320a', textDecoration:'none' }}>🍅 {movie.rating_rt}</a>
+                )}
+              </div>
+
+              {movie.director && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Director:</strong> {movie.director}</div>}
+              {movie.actors   && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Cast:</strong> {movie.actors}</div>}
+              {movie.plot     && <div style={{ fontSize:'0.88rem', lineHeight:1.6, color:'var(--text)' }}>{movie.plot}</div>}
+
+              {/* Borrow / Return / Status */}
+              {iMineToReturn ? (
+                <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+                  <div style={{ background:'rgba(0,128,128,0.06)', border:'1px solid rgba(0,128,128,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
+                    📀 You borrowed this on {fmtDate(activeLoan.borrowed_at)}. Return it to the cinema when you&apos;re done.
+                  </div>
+                  <button onClick={handleReturn} disabled={returning}
+                    style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:returning?'not-allowed':'pointer', opacity:returning?0.6:1, width:'100%' }}>
+                    {returning ? 'Returning…' : '↩ Return this DVD'}
+                  </button>
+                </div>
+              ) : onLoanByOther ? (
+                <div style={{ background:'rgba(220,38,38,0.06)', border:'1px solid rgba(220,38,38,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
+                  📤 On loan to {activeLoan.members?.name || 'a resident'} since {fmtDate(activeLoan.borrowed_at)}. Check back soon.
+                </div>
+              ) : canBorrow ? (
+                <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+                  <div style={{ background:'rgba(0,128,128,0.06)', border:'1px solid rgba(0,128,128,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
+                    💿 Available to borrow. Return it to the cinema when you&apos;re done.
+                  </div>
+                  <button onClick={handleBorrow} disabled={borrowing || !memberId}
+                    style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:(borrowing||!memberId)?'not-allowed':'pointer', opacity:(borrowing||!memberId)?0.6:1, width:'100%' }}>
+                    {borrowing ? 'Borrowing…' : '📀 Borrow this DVD'}
+                  </button>
+                </div>
+              ) : !activeLoan && myLoanCount >= 3 ? (
+                <div style={{ background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.3)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
+                  ⚠️ You already have 3 DVDs on loan. Please return one before borrowing another.
+                </div>
+              ) : (
+                <div style={{ background:'rgba(0,128,128,0.06)', border:'1px solid rgba(0,128,128,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
+                  💿 Available in the cinema. Ask a team member to borrow.
+                </div>
+              )}
+
+              {isAdmin && (
+                <button onClick={() => setConfirmDelete(true)} disabled={deleting}
+                  style={{ background:'none', border:'1px solid var(--danger)', borderRadius:'10px', color:'var(--danger)', fontSize:'0.82rem', fontWeight:600, padding:'0.65rem', cursor:deleting?'not-allowed':'pointer', width:'100%', opacity:deleting?0.5:1, marginTop:'0.5rem' }}>
+                  {deleting ? 'Removing…' : '🗑 Remove from DVD library'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
+
       {confirmDelete && (
-        <div onClick={()=>setConfirmDelete(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'1.5rem' }}>
+        <div onClick={() => setConfirmDelete(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'1.5rem' }}>
           <div onClick={e=>e.stopPropagation()} style={{ background:'var(--surface)', borderRadius:'16px', padding:'1.5rem', width:'100%', maxWidth:320 }}>
             <div style={{ fontWeight:700, marginBottom:'0.5rem' }}>Remove DVD?</div>
             <div style={{ fontSize:'0.88rem', color:'var(--text-dim)', marginBottom:'1.25rem', lineHeight:1.5 }}>Remove &quot;{movie.title}&quot; from the DVD library?</div>
             <div style={{ display:'flex', gap:'0.75rem' }}>
-              <button onClick={()=>setConfirmDelete(false)} style={{ flex:1, padding:'0.75rem', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'10px', fontSize:'0.9rem', fontWeight:600, cursor:'pointer', color:'var(--text)' }}>Cancel</button>
+              <button onClick={() => setConfirmDelete(false)} style={{ flex:1, padding:'0.75rem', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'10px', fontSize:'0.9rem', fontWeight:600, cursor:'pointer', color:'var(--text)' }}>Cancel</button>
               <button onClick={handleDelete} style={{ flex:1, padding:'0.75rem', background:'var(--danger)', border:'none', borderRadius:'10px', fontSize:'0.9rem', fontWeight:600, cursor:'pointer', color:'#fff' }}>Remove</button>
             </div>
           </div>
@@ -178,56 +250,71 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, active
   )
 }
 
-function DvdCard({ movie, activeLoan, onClick }) {
-  const genres   = parseGenres(movie.genre)
+// ── DVD Card ──────────────────────────────────────────────────────────────────
+function DvdCard({ movie, activeLoan, myLoan, onClick }) {
+  const genres    = parseGenres(movie.genre)
   const leadActor = movie.actors ? movie.actors.split(',')[0].trim() : null
+
+  // Loan badge config
+  const loanBadge = myLoan
+    ? { label:'On Loan', sub:'Tap to return', bg:'var(--teal)', color:'#fff' }
+    : activeLoan
+    ? { label:'On Loan', sub:'Unavailable', bg:'var(--surface2)', color:'var(--text-dim)' }
+    : null
+
   return (
-    <div onClick={onClick} style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', borderLeft:'3px solid ' + (activeLoan ? 'var(--text-dim)' : 'var(--teal)'), display:'flex', overflow:'hidden', boxShadow:'var(--shadow)', cursor:'pointer', minHeight:110, opacity: activeLoan ? 0.85 : 1 }}>
+    <div onClick={onClick} style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', borderLeft:'3px solid ' + (myLoan ? 'var(--teal)' : activeLoan ? 'var(--border)' : 'var(--teal)'), display:'flex', overflow:'hidden', boxShadow:'var(--shadow)', cursor:'pointer', minHeight:110, opacity:activeLoan && !myLoan ? 0.75 : 1 }}>
+      {/* Poster */}
       {movie.poster_url
         ? <img src={movie.poster_url} alt={movie.title} style={{ width:75, objectFit:'cover', flexShrink:0 }} />
         : <div style={{ width:75, background:'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.8rem', flexShrink:0 }}>💿</div>}
-      <div style={{ flex:1, padding:'0.75rem', display:'flex', flexDirection:'column', justifyContent:'center', gap:'0.3rem', overflow:'hidden' }}>
-        <div style={{ fontWeight:700, fontSize:'0.9rem', lineHeight:1.2 }}>{movie.title}</div>
-        {activeLoan ? (
-          <div style={{ fontSize:'0.72rem', color:'var(--text-dim)', fontWeight:600 }}>
-            📤 On loan — {activeLoan.members?.name || 'Resident'}
+
+      {/* Main content */}
+      <div style={{ flex:1, padding:'0.75rem', display:'flex', flexDirection:'column', justifyContent:'center', gap:'0.3rem', overflow:'hidden', minWidth:0 }}>
+        <div style={{ fontWeight:700, fontSize:'0.9rem', lineHeight:1.2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{movie.title}</div>
+        {leadActor && (
+          <div style={{ fontSize:'0.75rem', color:'var(--text-dim)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+            {leadActor}
+            {movie.rating_imdb && !activeLoan && <span style={{ color:'var(--amber-dark)', fontWeight:600 }}> · ⭐{movie.rating_imdb}</span>}
           </div>
-        ) : (
-          <>
-            {leadActor && (
-              <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>
-                {leadActor}
-                {movie.rating_imdb && <span style={{ color:'var(--amber-dark)', fontWeight:600 }}> ({movie.rating_imdb})</span>}
-              </div>
-            )}
-            {!leadActor && movie.year && (
-              <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{movie.year}</div>
-            )}
-          </>
         )}
-        <div style={{ display:'flex', alignItems:'center', gap:'0.4rem', flexWrap:'wrap', marginTop:'0.1rem' }}>
-          {movie.rating && (
-            <span style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'4px', padding:'0.1rem 0.35rem', fontSize:'0.68rem', fontWeight:700, color:'var(--text-dim)' }}>{movie.rating}</span>
-          )}
-          {!activeLoan && genres.slice(0,2).map(g=><span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.1rem 0.4rem', fontSize:'0.68rem', color:'var(--text-dim)' }}>{g}</span>)}
-        </div>
+        {!leadActor && movie.year && <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{movie.year}</div>}
+        {!activeLoan && genres.length > 0 && (
+          <div style={{ display:'flex', alignItems:'center', gap:'0.3rem', flexWrap:'wrap', marginTop:'0.1rem' }}>
+            {movie.rating && <span style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'4px', padding:'0.1rem 0.35rem', fontSize:'0.65rem', fontWeight:700, color:'var(--text-dim)' }}>{movie.rating}</span>}
+            {genres.slice(0,2).map(g=><span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.1rem 0.4rem', fontSize:'0.65rem', color:'var(--text-dim)' }}>{g}</span>)}
+          </div>
+        )}
       </div>
+
+      {/* Right badge — prominent on-loan indicator */}
+      {loanBadge && (
+        <div style={{ flexShrink:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'0.75rem 0.85rem', gap:'0.25rem', minWidth:72 }}>
+          <div style={{ background:loanBadge.bg, color:loanBadge.color, borderRadius:'10px', padding:'0.35rem 0.55rem', textAlign:'center' }}>
+            <div style={{ fontSize:'1.25rem', lineHeight:1 }}>📀</div>
+            <div style={{ fontSize:'0.6rem', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.04em', marginTop:'0.2rem', lineHeight:1.1 }}>{loanBadge.label}</div>
+          </div>
+          <div style={{ fontSize:'0.6rem', color:'var(--text-dim)', textAlign:'center', lineHeight:1.2 }}>{loanBadge.sub}</div>
+        </div>
+      )}
     </div>
   )
 }
 
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function DvdPage() {
-  const [movies,      setMovies]      = useState([])
-  const [loans,       setLoans]       = useState([])   // active loans
-  const [member,      setMember]      = useState(null)
-  const [session,     setSession]     = useState(null)
-  const [loading,     setLoading]     = useState(true)
-  const [search,      setSearch]      = useState('')
-  const [sortBy,      setSortBy]      = useState('az')
-  const [genreFilter, setGenreFilter] = useState('')
-  const [filterExpanded, setFilterExpanded] = useState(false)
-  const [selected,    setSelected]    = useState(null)
-  const [toasts,      setToasts]      = useState([])
+  const [movies,        setMovies]        = useState([])
+  const [loans,         setLoans]         = useState([])
+  const [member,        setMember]        = useState(null)
+  const [session,       setSession]       = useState(null)
+  const [loading,       setLoading]       = useState(true)
+  const [search,        setSearch]        = useState('')
+  const [sortBy,        setSortBy]        = useState('az')
+  const [genreFilter,   setGenreFilter]   = useState('')
+  const [filterExpanded,setFilterExpanded]= useState(false)
+  const [selected,      setSelected]      = useState(null)
+  const [showMyLoans,   setShowMyLoans]   = useState(false)
+  const [toasts,        setToasts]        = useState([])
 
   function addToast(message, type='success') {
     const id = Date.now()
@@ -258,18 +345,16 @@ export default function DvdPage() {
     loadLoans()
   }, [loadData, loadLoans])
 
-  // Build loans map keyed by movie_id
-  const loansMap = Object.fromEntries(loans.map(l => [l.movie_id, l]))
+  const loansMap    = Object.fromEntries(loans.map(l => [l.movie_id, l]))
   const myLoanCount = member ? loans.filter(l => l.member_id === member.id).length : 0
+  const myLoans     = member ? loans.filter(l => l.member_id === member.id) : []
 
   const allGenres = [...new Set(movies.flatMap(m => parseGenres(m.genre)))].sort()
 
   const filtered = movies.filter(m => {
     const q = search.toLowerCase()
-    const matchesSearch = !search
-      || m.title.toLowerCase().includes(q)
-      || (m.actors && m.actors.toLowerCase().includes(q))
-    const matchesGenre = !genreFilter || parseGenres(m.genre).includes(genreFilter)
+    const matchesSearch = !search || m.title.toLowerCase().includes(q) || (m.actors && m.actors.toLowerCase().includes(q))
+    const matchesGenre  = !genreFilter || parseGenres(m.genre).includes(genreFilter)
     return matchesSearch && matchesGenre
   })
 
@@ -283,45 +368,60 @@ export default function DvdPage() {
     <div style={{ background:'var(--bg)', minHeight:'100vh' }}>
       <Toast toasts={toasts} />
       <div style={{ padding:'1rem 1rem 6rem' }}>
+
+        {/* My Loans banner — shows when you have DVDs out */}
+        {myLoanCount > 0 && (
+          <button onClick={() => setShowMyLoans(true)}
+            style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', background:'var(--teal)', color:'#fff', border:'none', borderRadius:'14px', padding:'0.85rem 1.1rem', marginBottom:'1rem', cursor:'pointer', boxShadow:'0 2px 8px rgba(0,128,128,0.25)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'0.65rem' }}>
+              <span style={{ fontSize:'1.5rem' }}>📀</span>
+              <div style={{ textAlign:'left' }}>
+                <div style={{ fontWeight:700, fontSize:'0.92rem' }}>You have {myLoanCount} DVD{myLoanCount>1?'s':''} on loan</div>
+                <div style={{ fontSize:'0.75rem', opacity:0.88 }}>Tap to view &amp; return</div>
+              </div>
+            </div>
+            <span style={{ fontSize:'1.3rem', opacity:0.9 }}>›</span>
+          </button>
+        )}
+
+        {/* Info card */}
         <div style={{ background:'var(--surface)', borderRadius:'14px', padding:'1rem', marginBottom:'1rem', border:'1px solid var(--border)', borderLeft:'4px solid var(--teal)', fontSize:'0.88rem', lineHeight:1.6 }}>
           <div style={{ display:'flex', alignItems:'flex-start', gap:'0.6rem' }}>
             <span style={{ fontSize:'1.4rem', flexShrink:0 }}>💿</span>
             <div>
               <div style={{ fontWeight:700, color:'var(--teal)', fontSize:'0.8rem', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'0.2rem' }}>DVD Library</div>
               DVDs available in the cinema for residents to borrow. Tap a title to borrow or return.
-              {myLoanCount > 0 && <span style={{ display:'block', marginTop:'0.25rem', fontWeight:600, color:'var(--teal)' }}>You have {myLoanCount} DVD{myLoanCount>1?'s':''} on loan.</span>}
             </div>
           </div>
         </div>
 
+        {/* Search */}
         <div style={{ marginBottom:'0.75rem' }}>
-          <input
-            placeholder="Search by title or actor..."
-            value={search}
-            onChange={e=>setSearch(e.target.value)}
-            style={{ width:'100%', padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }}
-          />
+          <input placeholder="Search by title or actor..." value={search} onChange={e=>setSearch(e.target.value)}
+            style={{ width:'100%', padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
         </div>
 
+        {/* Genre filter */}
         {(() => {
-            const VISIBLE = 8
-            const btnStyle = (active) => ({ padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px solid', borderColor:active?'var(--teal)':'var(--border)', background:active?'var(--teal)':'var(--surface)', color:active?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' })
-            const moreStyle = { padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px dashed var(--border)', background:'transparent', color:'var(--text-dim)', fontSize:'0.75rem', fontWeight:500, cursor:'pointer', opacity:0.7 }
-            const needsCollapse = !filterExpanded && allGenres.length > VISIBLE
-            const shown = needsCollapse ? allGenres.slice(0, VISIBLE - 1) : allGenres
-            const hidden = allGenres.length - (VISIBLE - 1)
-            const selectedHidden = needsCollapse && genreFilter && !shown.includes(genreFilter)
-            return allGenres.length > 0 ? (
-              <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap', marginBottom:'0.85rem' }}>
-                <button onClick={()=>setGenreFilter('')} style={btnStyle(!genreFilter)}>All</button>
-                {shown.map(g => <button key={g} onClick={()=>setGenreFilter(g===genreFilter?'':g)} style={btnStyle(genreFilter===g)}>{g}</button>)}
-                {selectedHidden && <button onClick={()=>setGenreFilter('')} style={btnStyle(true)}>{genreFilter}</button>}
-                {needsCollapse && <button onClick={()=>setFilterExpanded(true)} style={moreStyle}>+{hidden} more</button>}
-                {filterExpanded && allGenres.length > VISIBLE && <button onClick={()=>setFilterExpanded(false)} style={moreStyle}>Show less</button>}
-              </div>
-            ) : null
-          })()}
+          const VISIBLE = 8
+          const btnStyle = (active) => ({ padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px solid', borderColor:active?'var(--teal)':'var(--border)', background:active?'var(--teal)':'var(--surface)', color:active?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' })
+          const moreStyle = { padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px dashed var(--border)', background:'transparent', color:'var(--text-dim)', fontSize:'0.75rem', fontWeight:500, cursor:'pointer', opacity:0.7 }
+          const needsCollapse = !filterExpanded && allGenres.length > VISIBLE
+          const shown = needsCollapse ? allGenres.slice(0, VISIBLE - 1) : allGenres
+          const hidden = allGenres.length - (VISIBLE - 1)
+          const selectedHidden = needsCollapse && genreFilter && !shown.includes(genreFilter)
+          return allGenres.length > 0 ? (
+            <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap', marginBottom:'0.85rem' }}>
+              <button onClick={()=>setGenreFilter('')} style={btnStyle(!genreFilter)}>All</button>
+              {shown.map(g => <button key={g} onClick={()=>setGenreFilter(g===genreFilter?'':g)} style={btnStyle(genreFilter===g)}>{g}</button>)}
+              {selectedHidden && <button onClick={()=>setGenreFilter('')} style={btnStyle(true)}>{genreFilter}</button>}
+              {needsCollapse && <button onClick={()=>setFilterExpanded(true)} style={moreStyle}>+{hidden} more</button>}
+              {filterExpanded && allGenres.length > VISIBLE && <button onClick={()=>setFilterExpanded(false)} style={moreStyle}>Show less</button>}
+            </div>
+          ) : null
+        })()}
 
+        {/* Sort + count */}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' }}>
           <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--teal)', letterSpacing:'0.08em', textTransform:'uppercase' }}>
             {sorted.length} title{sorted.length!==1?'s':''}
@@ -336,6 +436,7 @@ export default function DvdPage() {
           </div>
         </div>
 
+        {/* List */}
         {loading ? (
           <div style={{ display:'flex', justifyContent:'center', padding:'3rem' }}><div className="spinner" /></div>
         ) : sorted.length === 0 ? (
@@ -346,12 +447,19 @@ export default function DvdPage() {
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:'0.65rem' }}>
             {sorted.map(m => (
-              <DvdCard key={m.id} movie={m} activeLoan={loansMap[m.id] || null} onClick={()=>setSelected(m.id)} />
+              <DvdCard
+                key={m.id}
+                movie={m}
+                activeLoan={loansMap[m.id] || null}
+                myLoan={loansMap[m.id] && member && loansMap[m.id].member_id === member.id ? loansMap[m.id] : null}
+                onClick={()=>setSelected(m.id)}
+              />
             ))}
           </div>
         )}
       </div>
 
+      {/* Detail sheet */}
       {selectedMovie && (
         <DvdDetailSheet
           movie={selectedMovie}
@@ -362,11 +470,21 @@ export default function DvdPage() {
           activeLoan={loansMap[selectedMovie.id] || null}
           onClose={()=>setSelected(null)}
           onDeleted={()=>{ setSelected(null); loadData() }}
-          onLoansChanged={()=>{ loadLoans() }}
+          onLoansChanged={()=>{ loadLoans(); setSelected(null) }}
+          addToast={addToast}
+        />
+      )}
+
+      {/* My Loans sheet */}
+      {showMyLoans && (
+        <MyLoansSheet
+          myLoans={myLoans}
+          movies={movies}
+          onReturn={loadLoans}
+          onClose={()=>setShowMyLoans(false)}
           addToast={addToast}
         />
       )}
     </div>
   )
 }
-
