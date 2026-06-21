@@ -98,7 +98,11 @@ export async function GET(req) {
 
   // Service-role client — bypasses RLS for all writes
   const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  console.log('[enrich] svc key present:', !!svcKey, 'prefix:', svcKey?.slice(0,20))
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  try {
+    const p = JSON.parse(Buffer.from((svcKey||'').split('.')[1]||'e30=','base64').toString())
+    console.log(`[cfg] role:${p.role} ref:${p.ref} url:${supabaseUrl?.slice(-20)}`)
+  } catch(e) { console.log('[cfg] key-err:', e.message) }
   const supabaseAdmin = makeAdminClient()
 
   if (catalogue) {
@@ -173,7 +177,7 @@ export async function GET(req) {
       if (data.imdb_id && !movie.imdb_id) fields.imdb_id = data.imdb_id
 
       const { data: writeData, error: writeErr } = await supabaseAdmin.from('movies').update(fields).eq('id', movie.id).select('id')
-      console.log('[enrich] write', movie.title.slice(0,20), '→ rows:', writeData?.length, 'err:', writeErr?.message)
+      console.log(`[w]r:${writeData?.length}e:${writeErr?.code||0}`)
       if (writeErr) {
         failed++
         results.push({ id: movie.id, title: movie.title, status: 'db_error', reason: writeErr.message })
