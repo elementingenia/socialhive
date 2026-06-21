@@ -14,19 +14,18 @@ function parseGenres(g) {
   return g.split(/[,|\/]/).map(x => x.trim()).filter(Boolean)
 }
 
-function GenreChips({ genres, max = 4 }) {
+function GenreChips({ genres, max = 6 }) {
   const [expanded, setExpanded] = useState(false)
-  if (!genres.length) return null
-  const shown = expanded ? genres : genres.slice(0, max)
-  const hidden = genres.length - max
+  if (!genres || !genres.length) return null
+  const needsTrunc = !expanded && genres.length > max
+  const shown = needsTrunc ? genres.slice(0, max - 1) : genres
+  const hidden = genres.length - (max - 1)
+  const chipStyle = { background:'var(--surface2)', borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', color:'var(--text-dim)', whiteSpace:'nowrap' }
+  const moreStyle = { ...chipStyle, background:'transparent', border:'1px dashed var(--border)', opacity:0.65, cursor:'pointer' }
   return (
     <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem' }}>
-      {shown.map(g => (
-        <span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', color:'var(--text-dim)' }}>{g}</span>
-      ))}
-      {!expanded && hidden > 0 && (
-        <span onClick={()=>setExpanded(true)} style={{ background:'transparent', border:'1px dashed var(--border)', borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', color:'var(--text-dim)', opacity:0.6, cursor:'pointer' }}>+{hidden} more</span>
-      )}
+      {shown.map(g => <span key={g} style={chipStyle}>{g}</span>)}
+      {needsTrunc && <span style={moreStyle} onClick={() => setExpanded(true)}>+{hidden} more</span>}
     </div>
   )
 }
