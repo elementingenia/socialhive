@@ -13,7 +13,6 @@ function makeAdminClient() {
 }
 
 async function getMember(token) {
-  // Use a dedicated auth client so getUser() cannot contaminate the admin DB client
   const authClient = makeAdminClient()
   const { data: { user } } = await authClient.auth.getUser(token)
   if (!user) return null
@@ -85,29 +84,6 @@ async function enrichFromTmdb(title, isTV) {
   return { poster_url: poster, plot: d.overview || null, runtime, director, actors, rating_imdb, rating, imdb_id, year: releaseYear || null }
 }
 
-async function dbUpdate(_unused, movieId, fields) {
-  // Use raw HTTP PATCH — return=representation so we can verify rows were actually updated
-  const key = (process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()
-  const url = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/movies?id=eq.${movieId}`
-  const res = await fetch(url, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': key,
-      'Authorization': `Bearer ${key}`,
-      'Prefer': 'return=representation',
-    },
-    body: JSON.stringify(fields),
-  })
-  if (!res.ok) {
-    const msg = await res.text()
-    return { error: { message: `HTTP ${res.status}: ${msg}` }, count: 0 }
-  }
-  const data = await res.json()
-  // data is array of updated rows — empty means 0 rows affected (RLS or wrong ID)
-  return { error: data.length === 0 ? { message: '0 rows affected — key may be invalid or RLS blocked' } : null, count: data.length }
-}
-
 const delay = ms => new Promise(r => setTimeout(r, ms))
 
 export async function GET(req) {
@@ -116,18 +92,12 @@ export async function GET(req) {
   const member = await getMember(token)
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  // Fresh admin client for all DB writes — isolated from auth.getUser() state
-  const supabaseAdmin = makeAdminClient()
-
   const { searchParams } = new URL(req.url)
-  const limit        = Math.min(parseInt(searchParams.get('limit') || '30'), 50)
-  const forceRefresh = searchParams.get('force') === 'true'
-  const catalogue    = searchParams.get('catalogue') === 'true'
+  const limit     = Math.min(parseInt(searchParams.get('limit') || '20'), 30)
+  const catalogue = searchParams.get('catalogue') === 'true'
 
-  // Diagnostic: confirm which key the function actually has
-  const keySnippet   = searchParams.get('diag') === 'true'
-    ? (process.env.SUPABASE_SERVICE_ROLE_KEY || 'MISSING').slice(0, 30) + '...'
-    : undefined
+  // Fresh admin client for reads only
+  const supabaseAdmin = makeAdminClient()
 
   if (catalogue) {
     const { data } = await supabaseAdmin
@@ -139,27 +109,19 @@ export async function GET(req) {
     return NextResponse.json({ failures: data || [] })
   }
 
-  let query = supabaseAdmin
+  const { data: movies, error } = await supabaseAdmin
     .from('movies')
-    .select('id, title, imdb_id, poster_url, plot, genre, enrichment_status')
+    .select('id, title, imdb_id, poster_url, genre, enrichment_status')
     .eq('we_own', true)
+    .is('poster_url', null)
+    .or('enrichment_status.is.null,enrichment_status.eq.api_error')
     .limit(limit)
 
-  if (!forceRefresh) {
-    query = query
-      .is('poster_url', null)
-      .or('enrichment_status.is.null,enrichment_status.eq.api_error')
-  }
-
-  const { data: movies, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!movies?.length) return NextResponse.json({
-    message: 'All DVD items enriched or no_match catalogued',
-    enriched: 0, processed: 0,
-    ...(keySnippet ? { _keySnippet: keySnippet } : {})
-  })
+  if (!movies?.length) return NextResponse.json({ processed: 0, results: [] })
 
-  const results = { enriched: 0, skipped: 0, failed: 0, dbWriteErrors: 0, details: [] }
+  // Lookup enrichment data — NO DB writes here, client handles writes
+  const results = []
 
   for (const movie of movies) {
     const isTV = movie.genre?.toLowerCase().includes('tv') || movie.genre?.toLowerCase().includes('series')
@@ -172,87 +134,44 @@ export async function GET(req) {
         enriched = await enrichFromOmdb(movie.imdb_id)
         if (!enriched?.poster_url) {
           const tmdb = await enrichFromTmdb(movie.title, isTV)
-          if (tmdb?._apiError) {
-            failReason = tmdb.reason
-            enriched = enriched || null
-          } else if (tmdb) {
-            enriched = { ...enriched, ...tmdb }
-          }
+          if (tmdb?._apiError) { failReason = tmdb.reason; enriched = enriched || null }
+          else if (tmdb) enriched = { ...enriched, ...tmdb }
         }
         await delay(150)
       } else {
         const tmdb = await enrichFromTmdb(movie.title, isTV)
-        if (tmdb?._apiError) {
-          failReason = tmdb.reason
-        } else {
-          enriched = tmdb
-        }
+        if (tmdb?._apiError) failReason = tmdb.reason
+        else enriched = tmdb
         await delay(250)
       }
 
       if (failReason) {
-        const { error: ue, count: uc } = await dbUpdate(supabaseAdmin, movie.id, { enrichment_status: 'api_error' })
-        if (ue || uc === 0) {
-          results.dbWriteErrors++
-          results.details.push({ id: movie.id, title: movie.title, status: 'db_write_failed', reason: `api_error mark failed: ${ue?.message || '0 rows affected'}` })
-        } else {
-          results.failed++
-          results.details.push({ id: movie.id, title: movie.title, status: 'api_error', reason: failReason })
-        }
+        results.push({ id: movie.id, title: movie.title, status: 'api_error', reason: failReason })
         continue
       }
-
       if (!enriched) {
-        const { error: ue, count: uc } = await dbUpdate(supabaseAdmin, movie.id, { enrichment_status: 'no_match' })
-        if (ue || uc === 0) {
-          results.dbWriteErrors++
-          results.details.push({ id: movie.id, title: movie.title, status: 'db_write_failed', reason: `no_match mark failed: ${ue?.message || '0 rows affected'}` })
-        } else {
-          results.skipped++
-          results.details.push({ id: movie.id, title: movie.title, status: 'no_match', reason: 'Not found on TMDB or OMDb' })
-        }
+        results.push({ id: movie.id, title: movie.title, status: 'no_match' })
         continue
       }
 
-      const update = { enrichment_status: 'ok' }
-      if (enriched.poster_url)  update.poster_url  = enriched.poster_url
-      if (enriched.plot)        update.plot        = enriched.plot
-      if (enriched.runtime)     update.runtime     = enriched.runtime
-      if (enriched.director)    update.director    = enriched.director
-      if (enriched.actors)      update.actors      = enriched.actors
-      if (enriched.rating_imdb) update.rating_imdb = enriched.rating_imdb
-      if (enriched.rating)      update.rating      = enriched.rating
-      if (enriched.year)        update.year        = enriched.year
-      if (enriched.imdb_id && !movie.imdb_id) update.imdb_id = enriched.imdb_id
-      if (enriched.genre && !movie.genre)     update.genre   = enriched.genre
+      // Build fields — only non-null values
+      const fields = { enrichment_status: 'ok' }
+      if (enriched.poster_url)  fields.poster_url  = enriched.poster_url
+      if (enriched.plot)        fields.plot        = enriched.plot
+      if (enriched.runtime)     fields.runtime     = enriched.runtime
+      if (enriched.director)    fields.director    = enriched.director
+      if (enriched.actors)      fields.actors      = enriched.actors
+      if (enriched.rating_imdb) fields.rating_imdb = enriched.rating_imdb
+      if (enriched.rating)      fields.rating      = enriched.rating
+      if (enriched.year)        fields.year        = enriched.year
+      if (enriched.imdb_id && !movie.imdb_id) fields.imdb_id = enriched.imdb_id
 
-      const { error: updateErr, count: updateCount } = await dbUpdate(supabaseAdmin, movie.id, update)
+      results.push({ id: movie.id, title: movie.title, status: 'ok', fields })
 
-      if (updateErr) {
-        results.dbWriteErrors++
-        results.details.push({ id: movie.id, title: movie.title, status: 'db_write_failed', reason: `DB error: ${updateErr.message}` })
-      } else if (updateCount === 0) {
-        results.dbWriteErrors++
-        results.details.push({ id: movie.id, title: movie.title, status: 'db_write_failed', reason: '0 rows affected — RLS blocked write (check service role key)' })
-      } else {
-        results.enriched++
-        results.details.push({ id: movie.id, title: movie.title, status: 'ok', fields: Object.keys(update).filter(k => k !== 'enrichment_status') })
-      }
     } catch (err) {
-      const { error: ue, count: uc } = await dbUpdate(supabaseAdmin, movie.id, { enrichment_status: 'api_error' })
-      if (ue || uc === 0) {
-        results.dbWriteErrors++
-      } else {
-        results.failed++
-      }
-      results.details.push({ id: movie.id, title: movie.title, status: 'exception', reason: err.message })
-      await delay(500)
+      results.push({ id: movie.id, title: movie.title, status: 'exception', reason: err.message })
     }
   }
 
-  return NextResponse.json({
-    processed: movies.length,
-    ...results,
-    ...(keySnippet ? { _keySnippet: keySnippet } : {})
-  })
+  return NextResponse.json({ processed: movies.length, results })
 }

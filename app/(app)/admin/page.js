@@ -887,31 +887,54 @@ function ToolsTab() {
 
     while (!stopRef.current) {
       try {
-        const res  = await fetch('/api/admin/enrich-dvd?limit=50', { headers:{ Authorization:`Bearer ${session.access_token}` } })
+        // Route does TMDB/OMDb lookups only — client writes to Supabase directly
+        const res  = await fetch('/api/admin/enrich-dvd?limit=20', { headers:{ Authorization:`Bearer ${session.access_token}` } })
         const data = await res.json()
+        if (data.error) { setStatus('error'); return }
         batches++
-        runningEnriched += (data.enriched || 0)
-        runningFailed   += (data.failed   || 0)
-        runningSkipped  += (data.skipped  || 0)
 
-        // Collect failures (no_match + api_error) from this batch
-        const batchFails = (data.details || []).filter(d => d.status !== 'ok')
+        if (!data.error && data.processed === 0) {
+          setStatus('done')
+          return
+        }
+
+        // Write results from browser using authenticated Supabase session
+        let batchEnriched = 0, batchFailed = 0, batchSkipped = 0
+        const batchFails = []
+
+        for (const r of (data.results || [])) {
+          if (r.status === 'ok') {
+            const { error: writeErr } = await supabase.from('movies').update(r.fields).eq('id', r.id)
+            if (writeErr) {
+              batchFailed++
+              batchFails.push({ ...r, status: 'db_error', reason: writeErr.message })
+            } else {
+              batchEnriched++
+            }
+          } else if (r.status === 'no_match') {
+            await supabase.from('movies').update({ enrichment_status: 'no_match' }).eq('id', r.id)
+            batchSkipped++
+            batchFails.push(r)
+          } else {
+            await supabase.from('movies').update({ enrichment_status: 'api_error' }).eq('id', r.id)
+            batchFailed++
+            batchFails.push(r)
+          }
+        }
+
+        runningEnriched += batchEnriched
+        runningFailed   += batchFailed
+        runningSkipped  += batchSkipped
         allFailures = [...allFailures, ...batchFails]
 
-        setLastBatch(data)
+        setLastBatch({ enriched: batchEnriched, failed: batchFailed, skipped: batchSkipped, processed: data.processed })
         setTotalEnriched(runningEnriched)
         setTotalFailed(runningFailed)
         setTotalSkipped(runningSkipped)
         setBatchCount(batches)
         setFailures([...allFailures])
 
-        if (!data.error && data.processed === 0) {
-          setStatus('done')
-          return
-        }
-        if (data.error) { setStatus('error'); return }
-
-        await new Promise(r => setTimeout(r, 800))
+        await new Promise(r => setTimeout(r, 500))
       } catch(err) {
         setLastBatch({ error: err.message })
         setStatus('error')
