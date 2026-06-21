@@ -633,6 +633,237 @@ function BooksTab() {
 }
 
 
+
+// ── BAR TAB (sub-tabs wrapper) ────────────────────────────────────────────────
+function BarTab() {
+  const [sub, setSub] = useState('Products')
+  return (
+    <div>
+      <div style={{ display:'flex', gap:'0.4rem', marginBottom:'1rem' }}>
+        {['Products', 'Reconcile'].map(s => (
+          <button key={s} onClick={() => setSub(s)}
+            style={{ padding:'0.35rem 0.85rem', borderRadius:'20px', border:'1px solid',
+              borderColor: sub===s ? 'var(--amber)' : 'var(--border)',
+              background:  sub===s ? 'var(--amber)' : 'var(--surface)',
+              color:       sub===s ? '#fff' : 'var(--text)',
+              fontWeight:600, fontSize:'0.8rem', cursor:'pointer' }}>
+            {s}
+          </button>
+        ))}
+      </div>
+      {sub === 'Products'  && <BarProductsTab />}
+      {sub === 'Reconcile' && <ReconcileTab />}
+    </div>
+  )
+}
+
+// Helper: item breakdown for a single member
+function MemberBreakdown({ member }) {
+  return (
+    <div style={{ background:'var(--surface2)', borderRadius:'10px', padding:'0.65rem 0.75rem' }}>
+      <div style={{ fontWeight:700, fontSize:'0.88rem', marginBottom:'0.4rem' }}>{member.name}</div>
+      {member.items.map(i => (
+        <div key={i.product_id} style={{ display:'flex', justifyContent:'space-between', fontSize:'0.82rem', color:'var(--text-dim)', padding:'0.15rem 0' }}>
+          <span>{i.icon} {i.product_name} ×{i.quantity}</span>
+          <span>${i.line_total.toFixed(2)}</span>
+        </div>
+      ))}
+      <div style={{ borderTop:'1px solid var(--border)', marginTop:'0.4rem', paddingTop:'0.4rem', display:'flex', justifyContent:'space-between', fontWeight:700, fontSize:'0.88rem' }}>
+        <span>Total</span>
+        <span style={{ color:'var(--amber-dark)' }}>${member.total.toFixed(2)}</span>
+      </div>
+    </div>
+  )
+}
+
+// ── BAR RECONCILE TAB ─────────────────────────────────────────────────────────
+function ReconcileTab() {
+  const [preview,        setPreview]        = useState(null)
+  const [loadingPreview, setLoadingPreview] = useState(true)
+  const [recon,          setRecon]          = useState(null)
+  const [running,        setRunning]        = useState(false)
+
+  const [allMembers,   setAllMembers]   = useState([])
+  const [settleId,     setSettleId]     = useState('')
+  const [settlePrev,   setSettlePrev]   = useState(null)
+  const [loadingSettle,setLoadingSettle]= useState(false)
+  const [settling,     setSettling]     = useState(false)
+  const [settledOk,    setSettledOk]    = useState(false)
+
+  async function authHeader() {
+    const { data: { session } } = await supabase.auth.getSession()
+    return { Authorization: `Bearer ${session.access_token}` }
+  }
+
+  async function loadPreview() {
+    const h = await authHeader()
+    const data = await fetch('/api/admin/bar-reconcile', { headers: h }).then(r => r.json())
+    setPreview(data)
+    setLoadingPreview(false)
+  }
+
+  useEffect(() => {
+    supabase.from('members').select('id, name').eq('bar_opt_in', true).order('name')
+      .then(({ data }) => setAllMembers(data || []))
+    loadPreview()
+  }, [])
+
+  async function loadSettlePreview(mid) {
+    if (!mid) { setSettlePrev(null); return }
+    setLoadingSettle(true)
+    const h = await authHeader()
+    const data = await fetch(`/api/admin/bar-reconcile?member_id=${mid}`, { headers: h }).then(r => r.json())
+    setSettlePrev(data.members?.[0] || null)
+    setLoadingSettle(false)
+  }
+
+  async function settleAccount() {
+    setSettling(true)
+    const h = await authHeader()
+    const data = await fetch('/api/admin/bar-reconcile', {
+      method: 'POST',
+      headers: { ...h, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ member_id: settleId }),
+    }).then(r => r.json())
+    if (data.error) { alert(data.error); setSettling(false); return }
+    setSettledOk(true); setSettlePrev(null); setSettleId('')
+    setLoadingPreview(true); loadPreview()
+    setSettling(false)
+    setTimeout(() => setSettledOk(false), 3000)
+  }
+
+  async function runFullRecon() {
+    setRunning(true)
+    const h = await authHeader()
+    const data = await fetch('/api/admin/bar-reconcile', {
+      method: 'POST',
+      headers: { ...h, 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }).then(r => r.json())
+    if (data.error) { alert(data.error); setRunning(false); return }
+    setRecon(data)
+    setPreview({ members: [], total_amount: 0, item_count: 0 })
+    setRunning(false)
+  }
+
+  async function markPaid(reconId, member) {
+    const h = await authHeader()
+    const data = await fetch('/api/admin/bar-reconcile', {
+      method: 'PATCH',
+      headers: { ...h, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reconciliation_id: reconId, member_id: member.member_id, total_amount: member.total }),
+    }).then(r => r.json())
+    if (data.error) { alert(data.error); return }
+    setRecon(r => ({
+      ...r,
+      members: r.members.map(m => m.member_id === member.member_id ? { ...m, paid: true, paid_at: data.paid_at } : m)
+    }))
+  }
+
+  const card = { background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', padding:'1rem', marginBottom:'1rem' }
+  const heading = { fontWeight:700, fontSize:'0.95rem', marginBottom:'0.75rem' }
+
+  return (
+    <div>
+      {/* ── SETTLE SINGLE ACCOUNT ── */}
+      <div style={card}>
+        <div style={heading}>Settle an Account</div>
+        <select value={settleId}
+          onChange={e => { setSettleId(e.target.value); setSettledOk(false); loadSettlePreview(e.target.value) }}
+          style={{ ...inputStyle, marginBottom:'0.75rem' }}>
+          <option value="">Select a member…</option>
+          {allMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+
+        {loadingSettle && <div style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>Loading…</div>}
+
+        {settleId && !loadingSettle && settlePrev === null && (
+          <div style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>No outstanding tab for this member.</div>
+        )}
+
+        {settlePrev && (
+          <>
+            <MemberBreakdown member={settlePrev} />
+            <button onClick={settleAccount} disabled={settling}
+              style={{ width:'100%', marginTop:'0.75rem', background:'var(--amber)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.75rem', fontWeight:700, fontSize:'0.9rem', cursor:'pointer', opacity:settling?0.7:1 }}>
+              {settling ? 'Settling…' : `Settle & Mark Paid — $${settlePrev.total.toFixed(2)}`}
+            </button>
+          </>
+        )}
+
+        {settledOk && (
+          <div style={{ background:'var(--green)20', border:'1px solid var(--green)', borderRadius:'10px', padding:'0.65rem 1rem', color:'var(--green)', fontWeight:700, fontSize:'0.85rem' }}>
+            ✓ Account settled and marked paid
+          </div>
+        )}
+      </div>
+
+      {/* ── FULL RECONCILIATION ── */}
+      <div style={card}>
+        <div style={heading}>Full Reconciliation</div>
+
+        {loadingPreview ? (
+          <div style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>Loading…</div>
+        ) : !recon && preview?.members?.length === 0 ? (
+          <div style={{ color:'var(--text-dim)', fontSize:'0.85rem', textAlign:'center', padding:'0.75rem' }}>
+            No outstanding tabs — all accounts are clear.
+          </div>
+        ) : !recon ? (
+          <div>
+            <div style={{ fontSize:'0.88rem', color:'var(--text-dim)', marginBottom:'0.85rem' }}>
+              <strong style={{ color:'var(--text)' }}>{preview.members.length}</strong> member{preview.members.length !== 1 ? 's' : ''}{'  ·  '}
+              <strong style={{ color:'var(--text)' }}>{preview.item_count}</strong> item{preview.item_count !== 1 ? 's' : ''}{'  ·  '}
+              <strong style={{ color:'var(--amber-dark)' }}>${(preview.total_amount||0).toFixed(2)}</strong> outstanding
+            </div>
+            {preview.members.map(m => (
+              <div key={m.member_id} style={{ marginBottom:'0.4rem', padding:'0.5rem 0.75rem', background:'var(--surface2)', borderRadius:'10px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <span style={{ fontWeight:600, fontSize:'0.88rem' }}>{m.name}</span>
+                <span style={{ fontWeight:700, color:'var(--amber-dark)', fontSize:'0.88rem' }}>${m.total.toFixed(2)}</span>
+              </div>
+            ))}
+            <button onClick={runFullRecon} disabled={running}
+              style={{ width:'100%', marginTop:'0.85rem', background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.75rem', fontWeight:700, fontSize:'0.9rem', cursor:'pointer', opacity:running?0.7:1 }}>
+              {running ? 'Running…' : 'Run Reconciliation'}
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div style={{ fontSize:'0.85rem', color:'var(--text-dim)', marginBottom:'0.75rem' }}>
+              Period {recon.period_start} → {recon.period_end}{'  ·  '}
+              <strong style={{ color:'var(--amber-dark)' }}>${recon.total_amount.toFixed(2)}</strong> total
+            </div>
+            {recon.members.map(m => (
+              <div key={m.member_id} style={{ marginBottom:'0.6rem', borderRadius:'12px', border:'1px solid var(--border)', overflow:'hidden' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.65rem 0.85rem', background: m.paid ? 'var(--green)10' : 'var(--surface2)' }}>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:'0.9rem' }}>{m.name}</div>
+                    <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>
+                      {m.items.map(i => `${i.icon} ${i.product_name} ×${i.quantity}`).join(' · ')}
+                    </div>
+                  </div>
+                  <div style={{ fontWeight:800, color:'var(--amber-dark)', marginRight:'0.5rem' }}>${m.total.toFixed(2)}</div>
+                  {m.paid
+                    ? <span style={{ fontSize:'0.8rem', fontWeight:700, color:'var(--green)', background:'var(--green)20', padding:'0.3rem 0.6rem', borderRadius:'8px', whiteSpace:'nowrap' }}>✓ Paid</span>
+                    : <button onClick={() => markPaid(recon.reconciliation_id, m)}
+                        style={{ background:'var(--amber)', color:'#fff', border:'none', borderRadius:'8px', padding:'0.35rem 0.7rem', fontSize:'0.8rem', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                        Mark Paid
+                      </button>
+                  }
+                </div>
+              </div>
+            ))}
+            <button onClick={() => { setRecon(null); setLoadingPreview(true); loadPreview() }}
+              style={{ marginTop:'0.5rem', background:'none', border:'1px solid var(--border)', borderRadius:'10px', padding:'0.6rem', width:'100%', cursor:'pointer', fontSize:'0.85rem', color:'var(--text-dim)', fontWeight:600 }}>
+              ← Back
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
 // ── TOOLS TAB ─────────────────────────────────────────────────────────────────
 function ToolsTab() {
   const [status,        setStatus]        = useState('idle')
@@ -845,7 +1076,7 @@ export default function AdminPage() {
       {tab === 'Events'  && <EventsTab />}
       {tab === 'Notices' && <NoticesTab />}
       {tab === 'Members' && <MembersTab />}
-      {tab === 'Bar'     && <BarProductsTab />}
+      {tab === 'Bar'     && <BarTab />}
       {tab === 'Books'   && <BooksTab />}
       {tab === 'Tools'   && <ToolsTab />}
     </div>
