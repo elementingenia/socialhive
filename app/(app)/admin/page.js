@@ -878,7 +878,6 @@ function ToolsTab() {
     setLastBatch(null)
     setFailures([])
 
-    const { data:{ session } } = await supabase.auth.getSession()
     let runningEnriched = 0
     let runningFailed   = 0
     let runningSkipped  = 0
@@ -887,6 +886,13 @@ function ToolsTab() {
 
     while (!stopRef.current) {
       try {
+        // Refresh session each batch — prevents silent write failures from JWT expiry
+        const { data:{ session }, error: refreshErr } = await supabase.auth.refreshSession()
+        if (refreshErr || !session) {
+          setLastBatch({ error: 'Session expired — please sign out and back in' })
+          setStatus('error')
+          return
+        }
         // Route does TMDB/OMDb lookups only — client writes to Supabase directly
         const res  = await fetch('/api/admin/enrich-dvd?limit=20', { headers:{ Authorization:`Bearer ${session.access_token}` } })
         const data = await res.json()
@@ -1095,3 +1101,4 @@ export default function AdminPage() {
     </div>
   )
 }
+
