@@ -97,6 +97,8 @@ export async function GET(req) {
   const catalogue = searchParams.get('catalogue') === 'true'
 
   // Service-role client — bypasses RLS for all writes
+  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  console.log('[enrich] svc key present:', !!svcKey, 'prefix:', svcKey?.slice(0,20))
   const supabaseAdmin = makeAdminClient()
 
   if (catalogue) {
@@ -170,7 +172,8 @@ export async function GET(req) {
       if (data.year)        fields.year        = data.year
       if (data.imdb_id && !movie.imdb_id) fields.imdb_id = data.imdb_id
 
-      const { error: writeErr } = await supabaseAdmin.from('movies').update(fields).eq('id', movie.id)
+      const { data: writeData, error: writeErr } = await supabaseAdmin.from('movies').update(fields).eq('id', movie.id).select('id')
+      console.log('[enrich] write', movie.title.slice(0,20), '→ rows:', writeData?.length, 'err:', writeErr?.message)
       if (writeErr) {
         failed++
         results.push({ id: movie.id, title: movie.title, status: 'db_error', reason: writeErr.message })
