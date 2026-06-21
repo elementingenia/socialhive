@@ -36,11 +36,41 @@ function Toast({ toasts }) {
   )
 }
 
-function DvdDetailSheet({ movie, isAdmin, session, onClose, onDeleted, addToast }) {
-  const [deleting, setDeleting] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const genres = parseGenres(movie.genre)
+function fmtDate(str) {
+  if (!str) return ''
+  return new Date(str).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' })
+}
+
+function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, activeLoan, onClose, onDeleted, onLoansChanged, addToast }) {
+  const [deleting,       setDeleting]       = useState(false)
+  const [confirmDelete,  setConfirmDelete]  = useState(false)
+  const [borrowing,      setBorrowing]      = useState(false)
+  const [returning,      setReturning]      = useState(false)
+  const genres  = parseGenres(movie.genre)
   const imdbUrl = movie.imdb_id ? 'https://www.imdb.com/title/' + movie.imdb_id + '/' : null
+
+  const iMineToReturn = activeLoan && activeLoan.member_id === memberId
+  const onLoanByOther = activeLoan && activeLoan.member_id !== memberId
+  const canBorrow     = !activeLoan && myLoanCount < 3
+
+  async function handleBorrow() {
+    if (!memberId) { addToast('Sign in to borrow DVDs', 'error'); return }
+    setBorrowing(true)
+    const { error } = await supabase.from('dvd_loans').insert({ movie_id: movie.id, member_id: memberId })
+    setBorrowing(false)
+    if (error) { addToast('Could not borrow — ' + error.message, 'error'); return }
+    addToast('Borrowed! Enjoy ' + movie.title)
+    onLoansChanged()
+  }
+
+  async function handleReturn() {
+    setReturning(true)
+    const { error } = await supabase.from('dvd_loans').update({ returned_at: new Date().toISOString() }).eq('id', activeLoan.id)
+    setReturning(false)
+    if (error) { addToast('Could not return — ' + error.message, 'error'); return }
+    addToast(movie.title + ' returned — thanks!')
+    onLoansChanged()
+  }
 
   async function handleDelete() {
     setConfirmDelete(false); setDeleting(true)
@@ -70,7 +100,7 @@ function DvdDetailSheet({ movie, isAdmin, session, onClose, onDeleted, addToast 
 
             {genres.length > 0 && <GenreChips genres={genres} />}
 
-            {/* Ratings row: maturity rating + IMDB score side by side */}
+            {/* Ratings row */}
             <div style={{ display:'flex', gap:'0.75rem', alignItems:'center', flexWrap:'wrap' }}>
               {movie.rating && (
                 <span style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'6px', padding:'0.2rem 0.5rem', fontSize:'0.78rem', fontWeight:700, color:'var(--text-dim)', letterSpacing:'0.04em' }}>{movie.rating}</span>
@@ -88,9 +118,42 @@ function DvdDetailSheet({ movie, isAdmin, session, onClose, onDeleted, addToast 
             {movie.director && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Director:</strong> {movie.director}</div>}
             {movie.actors   && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Cast:</strong> {movie.actors}</div>}
             {movie.plot     && <div style={{ fontSize:'0.88rem', lineHeight:1.6, color:'var(--text)' }}>{movie.plot}</div>}
-            <div style={{ background:'rgba(0,128,128,0.06)', border:'1px solid rgba(0,128,128,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
-              This DVD is available in the cinema. Ask a team member if you would like to borrow it for a home viewing session.
-            </div>
+
+            {/* Borrow / Return / On Loan status */}
+            {iMineToReturn ? (
+              <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+                <div style={{ background:'rgba(0,128,128,0.06)', border:'1px solid rgba(0,128,128,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
+                  📀 You borrowed this on {fmtDate(activeLoan.borrowed_at)}. Return it to the cinema when you&apos;re done.
+                </div>
+                <button onClick={handleReturn} disabled={returning}
+                  style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.8rem', fontSize:'0.95rem', fontWeight:700, cursor:returning?'not-allowed':'pointer', opacity:returning?0.6:1, width:'100%' }}>
+                  {returning ? 'Returning…' : 'Return DVD'}
+                </button>
+              </div>
+            ) : onLoanByOther ? (
+              <div style={{ background:'rgba(220,38,38,0.06)', border:'1px solid rgba(220,38,38,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
+                📤 On loan to {activeLoan.members?.name || 'a resident'} since {fmtDate(activeLoan.borrowed_at)}. Check back soon.
+              </div>
+            ) : canBorrow ? (
+              <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+                <div style={{ background:'rgba(0,128,128,0.06)', border:'1px solid rgba(0,128,128,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
+                  💿 This DVD is available. You can borrow it and return it when you&apos;re done.
+                </div>
+                <button onClick={handleBorrow} disabled={borrowing || !memberId}
+                  style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.8rem', fontSize:'0.95rem', fontWeight:700, cursor:(borrowing||!memberId)?'not-allowed':'pointer', opacity:(borrowing||!memberId)?0.6:1, width:'100%' }}>
+                  {borrowing ? 'Borrowing…' : 'Borrow DVD'}
+                </button>
+              </div>
+            ) : !activeLoan && myLoanCount >= 3 ? (
+              <div style={{ background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.3)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
+                ⚠️ You have 3 DVDs on loan. Please return one before borrowing another.
+              </div>
+            ) : (
+              <div style={{ background:'rgba(0,128,128,0.06)', border:'1px solid rgba(0,128,128,0.2)', borderRadius:'12px', padding:'0.85rem 1rem', fontSize:'0.88rem', color:'var(--text)', lineHeight:1.5 }}>
+                💿 This DVD is available in the cinema. Ask a team member if you would like to borrow it.
+              </div>
+            )}
+
             {isAdmin && (
               <button onClick={()=>setConfirmDelete(true)} disabled={deleting}
                 style={{ background:'none', border:'1px solid var(--danger)', borderRadius:'10px', color:'var(--danger)', fontSize:'0.82rem', fontWeight:600, padding:'0.55rem', cursor:deleting?'not-allowed':'pointer', width:'100%', opacity:deleting?0.5:1 }}>
@@ -116,30 +179,38 @@ function DvdDetailSheet({ movie, isAdmin, session, onClose, onDeleted, addToast 
   )
 }
 
-function DvdCard({ movie, onClick }) {
-  const genres = parseGenres(movie.genre)
+function DvdCard({ movie, activeLoan, onClick }) {
+  const genres   = parseGenres(movie.genre)
   const leadActor = movie.actors ? movie.actors.split(',')[0].trim() : null
   return (
-    <div onClick={onClick} style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', borderLeft:'3px solid var(--teal)', display:'flex', overflow:'hidden', boxShadow:'var(--shadow)', cursor:'pointer', minHeight:110 }}>
+    <div onClick={onClick} style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', borderLeft:'3px solid ' + (activeLoan ? 'var(--text-dim)' : 'var(--teal)'), display:'flex', overflow:'hidden', boxShadow:'var(--shadow)', cursor:'pointer', minHeight:110, opacity: activeLoan ? 0.85 : 1 }}>
       {movie.poster_url
         ? <img src={movie.poster_url} alt={movie.title} style={{ width:75, objectFit:'cover', flexShrink:0 }} />
         : <div style={{ width:75, background:'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.8rem', flexShrink:0 }}>💿</div>}
       <div style={{ flex:1, padding:'0.75rem', display:'flex', flexDirection:'column', justifyContent:'center', gap:'0.3rem', overflow:'hidden' }}>
         <div style={{ fontWeight:700, fontSize:'0.9rem', lineHeight:1.2 }}>{movie.title}</div>
-        {leadActor && (
-          <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>
-            {leadActor}
-            {movie.rating_imdb && <span style={{ color:'var(--amber-dark)', fontWeight:600 }}> ({movie.rating_imdb})</span>}
+        {activeLoan ? (
+          <div style={{ fontSize:'0.72rem', color:'var(--text-dim)', fontWeight:600 }}>
+            📤 On loan — {activeLoan.members?.name || 'Resident'}
           </div>
-        )}
-        {!leadActor && movie.year && (
-          <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{movie.year}</div>
+        ) : (
+          <>
+            {leadActor && (
+              <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>
+                {leadActor}
+                {movie.rating_imdb && <span style={{ color:'var(--amber-dark)', fontWeight:600 }}> ({movie.rating_imdb})</span>}
+              </div>
+            )}
+            {!leadActor && movie.year && (
+              <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{movie.year}</div>
+            )}
+          </>
         )}
         <div style={{ display:'flex', alignItems:'center', gap:'0.4rem', flexWrap:'wrap', marginTop:'0.1rem' }}>
           {movie.rating && (
             <span style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'4px', padding:'0.1rem 0.35rem', fontSize:'0.68rem', fontWeight:700, color:'var(--text-dim)' }}>{movie.rating}</span>
           )}
-          {genres.slice(0,2).map(g=><span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.1rem 0.4rem', fontSize:'0.68rem', color:'var(--text-dim)' }}>{g}</span>)}
+          {!activeLoan && genres.slice(0,2).map(g=><span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.1rem 0.4rem', fontSize:'0.68rem', color:'var(--text-dim)' }}>{g}</span>)}
         </div>
       </div>
     </div>
@@ -148,6 +219,7 @@ function DvdCard({ movie, onClick }) {
 
 export default function DvdPage() {
   const [movies,      setMovies]      = useState([])
+  const [loans,       setLoans]       = useState([])   // active loans
   const [member,      setMember]      = useState(null)
   const [session,     setSession]     = useState(null)
   const [loading,     setLoading]     = useState(true)
@@ -163,19 +235,32 @@ export default function DvdPage() {
     setTimeout(()=>setToasts(prev=>prev.filter(t=>t.id!==id)),4000)
   }
 
+  const loadLoans = useCallback(async () => {
+    const { data } = await supabase
+      .from('dvd_loans')
+      .select('id, movie_id, member_id, borrowed_at, members(name)')
+      .is('returned_at', null)
+    setLoans(data || [])
+  }, [])
+
   const loadData = useCallback(async () => {
     const { data } = await supabase.from('movies').select('*').eq('we_own', true).order('title')
-    setMovies(data||[])
+    setMovies(data || [])
     setLoading(false)
   }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data:{ session:s } }) => {
       setSession(s)
-      if (s) supabase.from('members').select('id, is_admin').eq('auth_id',s.user.id).single().then(({data})=>setMember(data))
+      if (s) supabase.from('members').select('id, is_admin').eq('auth_id', s.user.id).single().then(({ data }) => setMember(data))
     })
     loadData()
-  }, [loadData])
+    loadLoans()
+  }, [loadData, loadLoans])
+
+  // Build loans map keyed by movie_id
+  const loansMap = Object.fromEntries(loans.map(l => [l.movie_id, l]))
+  const myLoanCount = member ? loans.filter(l => l.member_id === member.id).length : 0
 
   const allGenres = [...new Set(movies.flatMap(m => parseGenres(m.genre)))].sort()
 
@@ -188,10 +273,11 @@ export default function DvdPage() {
     return matchesSearch && matchesGenre
   })
 
-  const sorted = [...filtered].sort((a,b) =>
-    sortBy==='imdb' ? (parseFloat(b.rating_imdb)||0)-(parseFloat(a.rating_imdb)||0) : a.title.localeCompare(b.title)
+  const sorted = [...filtered].sort((a, b) =>
+    sortBy === 'imdb' ? (parseFloat(b.rating_imdb)||0) - (parseFloat(a.rating_imdb)||0) : a.title.localeCompare(b.title)
   )
-  const selectedMovie = selected ? movies.find(m=>m.id===selected) : null
+
+  const selectedMovie = selected ? movies.find(m => m.id === selected) : null
 
   return (
     <div style={{ background:'var(--bg)', minHeight:'100vh' }}>
@@ -202,7 +288,8 @@ export default function DvdPage() {
             <span style={{ fontSize:'1.4rem', flexShrink:0 }}>💿</span>
             <div>
               <div style={{ fontWeight:700, color:'var(--teal)', fontSize:'0.8rem', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'0.2rem' }}>DVD Library</div>
-              DVDs available in the cinema for residents to enjoy. Ask a team member to borrow one.
+              DVDs available in the cinema for residents to borrow. Tap a title to borrow or return.
+              {myLoanCount > 0 && <span style={{ display:'block', marginTop:'0.25rem', fontWeight:600, color:'var(--teal)' }}>You have {myLoanCount} DVD{myLoanCount>1?'s':''} on loan.</span>}
             </div>
           </div>
         </div>
@@ -218,14 +305,12 @@ export default function DvdPage() {
 
         {allGenres.length > 0 && (
           <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap', marginBottom:'0.85rem' }}>
-            <button
-              onClick={()=>setGenreFilter('')}
+            <button onClick={()=>setGenreFilter('')}
               style={{ padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px solid', borderColor:!genreFilter?'var(--teal)':'var(--border)', background:!genreFilter?'var(--teal)':'var(--surface)', color:!genreFilter?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' }}>
               All
             </button>
-            {allGenres.map(g=>(
-              <button key={g}
-                onClick={()=>setGenreFilter(g===genreFilter?'':g)}
+            {allGenres.map(g => (
+              <button key={g} onClick={()=>setGenreFilter(g===genreFilter?'':g)}
                 style={{ padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px solid', borderColor:genreFilter===g?'var(--teal)':'var(--border)', background:genreFilter===g?'var(--teal)':'var(--surface)', color:genreFilter===g?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' }}>
                 {g}
               </button>
@@ -238,7 +323,7 @@ export default function DvdPage() {
             {sorted.length} title{sorted.length!==1?'s':''}
           </div>
           <div style={{ display:'flex', gap:'0.4rem' }}>
-            {[['az','A–Z'],['imdb','IMDb']].map(([k,l])=>(
+            {[['az','A–Z'],['imdb','IMDb']].map(([k,l]) => (
               <button key={k} onClick={()=>setSortBy(k)}
                 style={{ padding:'0.3rem 0.75rem', borderRadius:'10px', border:'1.5px solid', borderColor:sortBy===k?'var(--teal)':'var(--border)', background:sortBy===k?'var(--teal)':'var(--surface)', color:sortBy===k?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' }}>
                 {l}
@@ -249,24 +334,34 @@ export default function DvdPage() {
 
         {loading ? (
           <div style={{ display:'flex', justifyContent:'center', padding:'3rem' }}><div className="spinner" /></div>
-        ) : sorted.length===0 ? (
+        ) : sorted.length === 0 ? (
           <div style={{ textAlign:'center', color:'var(--text-dim)', padding:'3rem' }}>
             <div style={{ fontSize:'2.5rem', marginBottom:'0.75rem' }}>💿</div>
             <div style={{ fontSize:'0.9rem', fontWeight:600 }}>{search || genreFilter ? 'No DVDs match your search' : 'No DVDs in the library yet'}</div>
           </div>
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:'0.65rem' }}>
-            {sorted.map(m=>(
-              <DvdCard key={m.id} movie={m} onClick={()=>setSelected(m.id)} />
+            {sorted.map(m => (
+              <DvdCard key={m.id} movie={m} activeLoan={loansMap[m.id] || null} onClick={()=>setSelected(m.id)} />
             ))}
           </div>
         )}
       </div>
 
       {selectedMovie && (
-        <DvdDetailSheet movie={selectedMovie} isAdmin={member?.is_admin} session={session} onClose={()=>setSelected(null)} onDeleted={()=>{ setSelected(null); loadData() }} addToast={addToast} />
+        <DvdDetailSheet
+          movie={selectedMovie}
+          isAdmin={member?.is_admin}
+          session={session}
+          memberId={member?.id || null}
+          myLoanCount={myLoanCount}
+          activeLoan={loansMap[selectedMovie.id] || null}
+          onClose={()=>setSelected(null)}
+          onDeleted={()=>{ setSelected(null); loadData() }}
+          onLoansChanged={()=>{ loadLoans() }}
+          addToast={addToast}
+        />
       )}
     </div>
   )
 }
-
