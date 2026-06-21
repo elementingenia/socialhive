@@ -225,6 +225,7 @@ export default function DvdPage() {
   const [search,      setSearch]      = useState('')
   const [sortBy,      setSortBy]      = useState('az')
   const [genreFilter, setGenreFilter] = useState('')
+  const [filterExpanded, setFilterExpanded] = useState(false)
   const [selected,    setSelected]    = useState(null)
   const [toasts,      setToasts]      = useState([])
 
@@ -303,18 +304,23 @@ export default function DvdPage() {
         </div>
 
         {allGenres.length > 0 && (
-          <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap', marginBottom:'0.85rem' }}>
-            <button onClick={()=>setGenreFilter('')}
-              style={{ padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px solid', borderColor:!genreFilter?'var(--teal)':'var(--border)', background:!genreFilter?'var(--teal)':'var(--surface)', color:!genreFilter?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' }}>
-              All
-            </button>
-            {allGenres.map(g => (
-              <button key={g} onClick={()=>setGenreFilter(g===genreFilter?'':g)}
-                style={{ padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px solid', borderColor:genreFilter===g?'var(--teal)':'var(--border)', background:genreFilter===g?'var(--teal)':'var(--surface)', color:genreFilter===g?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' }}>
-                {g}
-              </button>
-            ))}
-          </div>
+          {(() => {
+            const VISIBLE = 8
+            const btnStyle = (active) => ({ padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px solid', borderColor:active?'var(--teal)':'var(--border)', background:active?'var(--teal)':'var(--surface)', color:active?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' })
+            const moreStyle = { padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px dashed var(--border)', background:'transparent', color:'var(--text-dim)', fontSize:'0.75rem', fontWeight:500, cursor:'pointer', opacity:0.7 }
+            const needsCollapse = !filterExpanded && allGenres.length > VISIBLE
+            const shown = needsCollapse ? allGenres.slice(0, VISIBLE - 1) : allGenres
+            const hidden = allGenres.length - (VISIBLE - 1)
+            const selectedHidden = needsCollapse && genreFilter && !shown.includes(genreFilter)
+            return (
+              <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap', marginBottom:'0.85rem' }}>
+                <button onClick={()=>setGenreFilter('')} style={btnStyle(!genreFilter)}>All</button>
+                {shown.map(g => <button key={g} onClick={()=>setGenreFilter(g===genreFilter?'':g)} style={btnStyle(genreFilter===g)}>{g}</button>)}
+                {selectedHidden && <button onClick={()=>setGenreFilter('')} style={btnStyle(true)}>{genreFilter}</button>}
+                {needsCollapse && <button onClick={()=>setFilterExpanded(true)} style={moreStyle}>+{hidden} more</button>}
+              </div>
+            )
+          })()}
         )}
 
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' }}>
