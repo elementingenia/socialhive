@@ -119,18 +119,6 @@ export default function HomePage() {
 
   return (
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
-      {/* Wordmark + greeting */}
-      <div style={{ marginBottom: "1.25rem", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <img
-          src="/wordmark_final.png"
-          alt="The Social Hive"
-          style={{ maxHeight: 52, width: "auto", height: "auto", maxWidth: "65%" }}
-        />
-        <div style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}>
-          {"Hey, " + firstName + " 👋"}
-        </div>
-      </div>
-
       {loading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
           {[72, 48, 96, 56].map((h, i) => (
