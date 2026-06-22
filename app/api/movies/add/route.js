@@ -28,20 +28,24 @@ export async function POST(req) {
   if (authErr || !user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   const { data: member } = await supabaseAdmin
-    .from('members').select('id, is_admin').eq('auth_id', user.id).single()
-  if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+    .from('members').select('id').eq('auth_id', user.id).single()
+  if (!member) return NextResponse.json({ error: 'Member not found' }, { status: 403 })
 
   const body = await req.json()
   const { tmdb_id, imdb_id, title, year, genre, plot, poster_url, runtime, director, actors, rating_imdb } = body
 
   if (!title) return NextResponse.json({ error: 'Title required' }, { status: 400 })
 
-  // Check duplicate
-  const { data: existing } = await supabaseAdmin
-    .from('movies').select('id').ilike('title', title).maybeSingle()
-  if (existing) return NextResponse.json({ error: `"${title}" is already in the library` }, { status: 409 })
+  // Check duplicate by tmdb_id first, then title
+  const dupQuery = tmdb_id
+    ? supabaseAdmin.from('movies').select('id, title, we_own').eq('tmdb_id', tmdb_id.toString()).maybeSingle()
+    : supabaseAdmin.from('movies').select('id, title, we_own').ilike('title', title).maybeSingle()
+  const { data: existing } = await dupQuery
+  if (existing) {
+    const where = existing.we_own ? 'the DVD library' : 'the suggestions list'
+    return NextResponse.json({ error: `"${title}" is already in ${where}` }, { status: 409 })
+  }
 
-  // Fetch RT rating from OMDb
   const rating_rt = await getRtRating(imdb_id)
 
   const { data: movie, error } = await supabaseAdmin
@@ -52,6 +56,7 @@ export async function POST(req) {
       title, year, genre, plot, poster_url, runtime, director, actors,
       rating_imdb: rating_imdb || null,
       rating_rt,
+      we_own: false,
       suggested_by: member.id,
     })
     .select().single()
