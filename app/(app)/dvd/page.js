@@ -313,6 +313,91 @@ function DvdCard({ movie, activeLoan, myLoan, onClick }) {
   )
 }
 
+// ── Add DVD Sheet (admin only) ────────────────────────────────────────────────
+function AddDvdSheet({ session, onAdded, onClose, addToast }) {
+  const [search,    setSearch]    = useState('')
+  const [results,   setResults]   = useState([])
+  const [searching, setSearching] = useState(false)
+  const [selected,  setSelected]  = useState(null)
+  const [adding,    setAdding]    = useState(false)
+
+  async function doSearch(q) {
+    setSearch(q); setSelected(null)
+    if (!q.trim()) { setResults([]); return }
+    setSearching(true)
+    const res = await fetch('/api/tmdb/search?q=' + encodeURIComponent(q))
+    setResults(await res.json())
+    setSearching(false)
+  }
+
+  async function handleAdd() {
+    if (!selected) return
+    setAdding(true)
+    const res = await fetch('/api/admin/dvd-add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session?.access_token },
+      body: JSON.stringify({ tmdb_id: selected.tmdb_id }),
+    })
+    const data = await res.json()
+    setAdding(false)
+    if (!res.ok) { addToast(data.error || 'Add failed', 'error'); return }
+    addToast(data.title + ' added to DVD Library')
+    onAdded()
+  }
+
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:200, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, background:'var(--surface)', borderRadius:'20px 20px 0 0', maxHeight:'80vh', display:'flex', flexDirection:'column' }}>
+        {/* Handle */}
+        <div style={{ padding:'0.6rem 1.25rem 0', display:'flex', justifyContent:'center' }}>
+          <div style={{ width:40, height:4, background:'var(--border)', borderRadius:2 }} />
+        </div>
+        {/* Header */}
+        <div style={{ padding:'0.6rem 1.25rem 0.75rem', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid var(--border)', flexShrink:0 }}>
+          <div style={{ fontWeight:700, fontSize:'1rem' }}>➕ Add DVD to Library</div>
+          <button onClick={onClose} style={{ width:32, height:32, borderRadius:'50%', background:'var(--surface2)', border:'none', fontSize:'1.1rem', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-dim)' }}>✕</button>
+        </div>
+        {/* Body */}
+        <div style={{ padding:'1rem 1.25rem 2rem', overflowY:'auto', flex:1, display:'flex', flexDirection:'column', gap:'0.75rem' }}>
+          <div style={{ position:'relative' }}>
+            <input value={search} onChange={e => doSearch(e.target.value)}
+              placeholder="Search movie title…"
+              style={{ width:'100%', padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
+            {searching && <div style={{ position:'absolute', right:'0.75rem', top:'50%', transform:'translateY(-50%)', fontSize:'0.75rem', color:'var(--text-dim)' }}>…</div>}
+            {results.length > 0 && !selected && (
+              <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', zIndex:50, overflow:'hidden', boxShadow:'0 4px 16px rgba(0,0,0,0.2)', marginTop:'0.25rem' }}>
+                {results.map(r => (
+                  <div key={r.tmdb_id} onClick={() => { setSelected(r); setSearch(r.title + (r.year ? ` (${r.year})` : '')); setResults([]) }}
+                    style={{ display:'flex', alignItems:'center', gap:'0.65rem', padding:'0.65rem 0.85rem', cursor:'pointer', borderBottom:'1px solid var(--border)' }}>
+                    {r.poster_url ? <img src={r.poster_url} alt={r.title} style={{ width:32, height:46, objectFit:'cover', borderRadius:4 }} /> : <div style={{ width:32, height:46, background:'var(--surface2)', borderRadius:4 }} />}
+                    <div>
+                      <div style={{ fontWeight:700, fontSize:'0.9rem' }}>{r.title}</div>
+                      {r.year && <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{r.year}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          {selected && (
+            <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'var(--surface2)', borderRadius:'12px', padding:'0.75rem', border:'1px solid var(--teal)' }}>
+              {selected.poster_url ? <img src={selected.poster_url} alt={selected.title} style={{ width:46, height:68, objectFit:'cover', borderRadius:6 }} /> : <div style={{ width:46, height:68, background:'var(--surface)', borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem' }}>💿</div>}
+              <div>
+                <div style={{ fontWeight:700, fontSize:'0.95rem' }}>{selected.title}</div>
+                {selected.year && <div style={{ fontSize:'0.8rem', color:'var(--text-dim)' }}>{selected.year}</div>}
+              </div>
+            </div>
+          )}
+          <button onClick={handleAdd} disabled={!selected || adding}
+            style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'12px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:(!selected||adding)?'not-allowed':'pointer', opacity:(!selected||adding)?0.5:1 }}>
+            {adding ? 'Adding to Library…' : '💿 Add to DVD Library'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function DvdPage() {
   const [movies,        setMovies]        = useState([])
@@ -326,6 +411,7 @@ export default function DvdPage() {
   const [filterExpanded,setFilterExpanded]= useState(false)
   const [selected,      setSelected]      = useState(null)
   const [showMyLoans,   setShowMyLoans]   = useState(false)
+  const [showAddDvd,    setShowAddDvd]    = useState(false)
   const [toasts,        setToasts]        = useState([])
 
   function addToast(message, type='success') {
@@ -433,12 +519,18 @@ export default function DvdPage() {
           ) : null
         })()}
 
-        {/* Sort + count */}
+        {/* Sort + count + admin Add DVD */}
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' }}>
           <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--teal)', letterSpacing:'0.08em', textTransform:'uppercase' }}>
             {sorted.length} title{sorted.length!==1?'s':''}
           </div>
-          <div style={{ display:'flex', gap:'0.4rem' }}>
+          <div style={{ display:'flex', gap:'0.4rem', alignItems:'center' }}>
+            {member?.is_admin && (
+              <button onClick={() => setShowAddDvd(true)}
+                style={{ padding:'0.3rem 0.75rem', borderRadius:'10px', border:'1.5px solid var(--teal)', background:'var(--teal)', color:'#fff', fontSize:'0.75rem', fontWeight:700, cursor:'pointer' }}>
+                + Add DVD
+              </button>
+            )}
             {[['az','A–Z'],['imdb','IMDb']].map(([k,l]) => (
               <button key={k} onClick={()=>setSortBy(k)}
                 style={{ padding:'0.3rem 0.75rem', borderRadius:'10px', border:'1.5px solid', borderColor:sortBy===k?'var(--teal)':'var(--border)', background:sortBy===k?'var(--teal)':'var(--surface)', color:sortBy===k?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' }}>
@@ -494,6 +586,16 @@ export default function DvdPage() {
           movies={movies}
           onReturn={loadLoans}
           onClose={()=>setShowMyLoans(false)}
+          addToast={addToast}
+        />
+      )}
+
+      {/* Add DVD sheet — admin only */}
+      {showAddDvd && (
+        <AddDvdSheet
+          session={session}
+          onAdded={() => { loadData(); setShowAddDvd(false) }}
+          onClose={() => setShowAddDvd(false)}
           addToast={addToast}
         />
       )}

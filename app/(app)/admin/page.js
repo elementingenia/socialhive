@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
+import { computeFreeCost } from '@/lib/freeCost'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const HUB_TYPES = [
@@ -12,7 +13,7 @@ const HUB_TYPES = [
   { value: 'bookclub', label: 'Book Club', icon: '📚' },
 ]
 const HUB_COLOUR = { movie:'var(--teal)', social:'var(--terracotta)', outings:'var(--green)', bookclub:'var(--purple)' }
-const TABS = ['Notices', 'Members', 'Bar', 'Books', 'Tools']
+const TABS = ['Events', 'Notices', 'Members', 'Movies', 'Bar', 'Books', 'Tools']
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 function fmtDate(str) {
@@ -1052,6 +1053,343 @@ function ToolsTab() {
   )
 }
 
+// ── MOVIES TAB ────────────────────────────────────────────────────────────────
+
+// Suggested Movies sub-tab — read-only FREE/COST view
+function SuggestedMoviesView() {
+  const [movies,         setMovies]         = useState([])
+  const [dvdTmdbIds,     setDvdTmdbIds]     = useState(new Set())
+  const [dvdImdbIds,     setDvdImdbIds]     = useState(new Set())
+  const [streamingSvcs,  setStreamingSvcs]  = useState([])
+  const [ownershipRecs,  setOwnershipRecs]  = useState([])
+  const [loading,        setLoading]        = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const [movRes, dvdRes, settRes, ownRes] = await Promise.all([
+        supabase.from('movies').select('id, title, year, poster_url, tmdb_id, imdb_id, streaming_au, actors').eq('we_own', false).order('title'),
+        supabase.from('movies').select('tmdb_id, imdb_id').eq('we_own', true),
+        supabase.from('settings').select('value').eq('key', 'our_streaming_services').single(),
+        supabase.from('movie_ownership').select('movie_id, ownership_type, members(name)'),
+      ])
+      setMovies(movRes.data || [])
+      const dvds = dvdRes.data || []
+      setDvdTmdbIds(new Set(dvds.map(d => d.tmdb_id).filter(Boolean)))
+      setDvdImdbIds(new Set(dvds.map(d => d.imdb_id).filter(Boolean)))
+      try { setStreamingSvcs(JSON.parse(settRes.data?.value || '[]')) } catch { setStreamingSvcs([]) }
+      setOwnershipRecs((ownRes.data || []).map(o => ({ movie_id: o.movie_id, ownership_type: o.ownership_type, member_name: o.members?.name || 'Resident' })))
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  if (loading) return <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)' }}>Loading…</div>
+
+  const pillStyle = (free) => ({
+    display:'inline-block', borderRadius:'20px', padding:'0.18rem 0.55rem',
+    fontSize:'0.7rem', fontWeight:700,
+    background: free ? '#dcfce7' : '#fef3c7',
+    color:       free ? '#15803d' : '#d97706',
+  })
+  const tagStyle = { background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'6px', padding:'0.15rem 0.45rem', fontSize:'0.68rem', color:'var(--text-dim)', whiteSpace:'nowrap' }
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+      {movies.length === 0 && <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)', fontSize:'0.9rem' }}>No suggested movies yet</div>}
+      {movies.map(m => {
+        const { isFree, reasons } = computeFreeCost(m, { streamingServices: streamingSvcs, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecs })
+        return (
+          <div key={m.id} style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.65rem', overflow:'hidden' }}>
+            {m.poster_url
+              ? <img src={m.poster_url} alt={m.title} style={{ width:40, height:58, objectFit:'cover', borderRadius:5, flexShrink:0 }} />
+              : <div style={{ width:40, height:58, background:'var(--surface2)', borderRadius:5, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem' }}>🎬</div>}
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontWeight:700, fontSize:'0.88rem', lineHeight:1.2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{m.title}{m.year ? ` (${m.year})` : ''}</div>
+              {m.actors && <div style={{ fontSize:'0.72rem', color:'var(--text-dim)', marginTop:'0.1rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{m.actors.split(',')[0].trim()}</div>}
+              {reasons.length > 0 && (
+                <div style={{ display:'flex', gap:'0.3rem', flexWrap:'wrap', marginTop:'0.35rem' }}>
+                  {reasons.map((r, i) => <span key={i} style={tagStyle}>{r}</span>)}
+                </div>
+              )}
+            </div>
+            <span style={pillStyle(isFree)}>{isFree ? 'FREE' : 'COST'}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// Private Ownership sub-tab
+function PrivateOwnershipTab({ addToast }) {
+  const [records,   setRecords]   = useState([])
+  const [members,   setMembers]   = useState([])
+  const [loading,   setLoading]   = useState(true)
+  const [search,    setSearch]    = useState('')
+  const [results,   setResults]   = useState([])
+  const [searching, setSearching] = useState(false)
+  const [selected,  setSelected]  = useState(null)   // { tmdb_id, title, year, poster_url }
+  const [ownerId,   setOwnerId]   = useState('')
+  const [ownType,   setOwnType]   = useState('dvd')
+  const [adding,    setAdding]    = useState(false)
+  const [removing,  setRemoving]  = useState(null)
+  const searchRef = useRef(null)
+
+  async function load() {
+    const [recRes, memRes] = await Promise.all([
+      supabase.from('movie_ownership').select('id, ownership_type, created_at, movies(id, title, year, actors), members(id, name)').order('created_at', { ascending: false }),
+      supabase.from('members').select('id, name').order('name'),
+    ])
+    setRecords(recRes.data || [])
+    setMembers(memRes.data || [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function doSearch(q) {
+    setSearch(q); setSelected(null)
+    if (!q.trim()) { setResults([]); return }
+    setSearching(true)
+    const res = await fetch('/api/tmdb/search?q=' + encodeURIComponent(q))
+    setResults(await res.json())
+    setSearching(false)
+  }
+
+  async function handleAdd() {
+    if (!selected || !ownerId) return
+    setAdding(true)
+    // Fetch full TMDB details to get imdb_id etc. (may already exist in DB)
+    const detRes = await fetch('/api/tmdb/details?id=' + selected.tmdb_id)
+    const details = await detRes.json()
+    // Upsert movie if not already in DB (ownership-only entry — we_own stays false unless it's a DVD library item)
+    const { data: existingMov } = await supabase.from('movies').select('id').eq('tmdb_id', selected.tmdb_id).maybeSingle()
+    let movieId = existingMov?.id
+    if (!movieId) {
+      const { data: newMov, error: insErr } = await supabase.from('movies').insert({
+        tmdb_id: selected.tmdb_id, imdb_id: details.imdb_id || null,
+        title: details.title || selected.title, year: details.year || selected.year,
+        poster_url: details.poster_url || selected.poster_url,
+        genre: details.genre || null, plot: details.plot || null,
+        runtime: details.runtime || null, director: details.director || null,
+        actors: details.actors || null, rating_imdb: details.rating_imdb || null,
+        rating_rt: details.rating_rt || null, rating: details.rating || null,
+        we_own: false,
+      }).select('id').single()
+      if (insErr) { addToast('Could not add movie: ' + insErr.message, 'error'); setAdding(false); return }
+      movieId = newMov.id
+    }
+    const { error } = await supabase.from('movie_ownership').insert({ movie_id: movieId, member_id: ownerId, ownership_type: ownType })
+    setAdding(false)
+    if (error) { addToast(error.code === '23505' ? 'That ownership record already exists' : error.message, 'error'); return }
+    addToast('Ownership record added')
+    setSearch(''); setResults([]); setSelected(null); setOwnerId(''); setOwnType('dvd')
+    load()
+  }
+
+  async function handleRemove(id) {
+    setRemoving(id)
+    await supabase.from('movie_ownership').delete().eq('id', id)
+    setRemoving(null)
+    addToast('Record removed')
+    load()
+  }
+
+  const canAdd = selected && ownerId
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
+      {/* Add form */}
+      <div style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', padding:'1.1rem' }}>
+        <div style={{ fontWeight:700, fontSize:'0.88rem', marginBottom:'0.75rem' }}>Add Ownership Record</div>
+        {/* Search */}
+        <div style={{ position:'relative', marginBottom:'0.6rem' }}>
+          <input ref={searchRef} value={search} onChange={e => doSearch(e.target.value)}
+            placeholder="Search by movie title…" style={inputStyle} />
+          {searching && <div style={{ position:'absolute', right:'0.75rem', top:'50%', transform:'translateY(-50%)', fontSize:'0.75rem', color:'var(--text-dim)' }}>…</div>}
+          {results.length > 0 && !selected && (
+            <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', zIndex:50, overflow:'hidden', boxShadow:'0 4px 16px rgba(0,0,0,0.2)', marginTop:'0.25rem' }}>
+              {results.map(r => (
+                <div key={r.tmdb_id} onClick={() => { setSelected(r); setSearch(r.title + (r.year ? ` (${r.year})` : '')); setResults([]) }}
+                  style={{ display:'flex', alignItems:'center', gap:'0.6rem', padding:'0.6rem 0.75rem', cursor:'pointer', borderBottom:'1px solid var(--border)' }}>
+                  {r.poster_url ? <img src={r.poster_url} alt={r.title} style={{ width:28, height:40, objectFit:'cover', borderRadius:3 }} /> : <div style={{ width:28, height:40, background:'var(--surface2)', borderRadius:3 }} />}
+                  <div style={{ fontSize:'0.85rem', fontWeight:600 }}>{r.title}{r.year ? <span style={{ fontWeight:400, color:'var(--text-dim)' }}> ({r.year})</span> : ''}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        {/* Owner + type */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.6rem', marginBottom:'0.75rem' }}>
+          <div>
+            <div style={{ fontSize:'0.75rem', fontWeight:600, color:'var(--text-dim)', marginBottom:'0.3rem' }}>Owner (resident)</div>
+            <select style={inputStyle} value={ownerId} onChange={e => setOwnerId(e.target.value)}>
+              <option value="">— Select resident —</option>
+              {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize:'0.75rem', fontWeight:600, color:'var(--text-dim)', marginBottom:'0.3rem' }}>Ownership type</div>
+            <select style={inputStyle} value={ownType} onChange={e => setOwnType(e.target.value)}>
+              <option value="dvd">DVD</option>
+              <option value="digital">Digital</option>
+            </select>
+          </div>
+        </div>
+        <button onClick={handleAdd} disabled={!canAdd || adding}
+          style={{ ...btnPrimary(), opacity: (!canAdd || adding) ? 0.5 : 1, cursor: (!canAdd || adding) ? 'not-allowed' : 'pointer' }}>
+          {adding ? 'Adding…' : '+ Add Record'}
+        </button>
+      </div>
+
+      {/* Existing records */}
+      {loading ? <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text-dim)' }}>Loading…</div> : records.length === 0 ? (
+        <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text-dim)', fontSize:'0.9rem' }}>No ownership records yet</div>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+          {records.map(r => (
+            <div key={r.id} style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.65rem' }}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontWeight:700, fontSize:'0.88rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                  {r.movies?.title}{r.movies?.year ? ` (${r.movies.year})` : ''}
+                </div>
+                {r.movies?.actors && <div style={{ fontSize:'0.72rem', color:'var(--text-dim)' }}>{r.movies.actors.split(',')[0].trim()}</div>}
+                <div style={{ fontSize:'0.72rem', color:'var(--text-dim)', marginTop:'0.2rem' }}>
+                  {r.members?.name} · {r.ownership_type === 'dvd' ? '📀 DVD' : '💾 Digital'}
+                </div>
+              </div>
+              <button onClick={() => handleRemove(r.id)} disabled={removing === r.id}
+                style={{ flexShrink:0, background:'none', border:'1px solid var(--danger)', borderRadius:'8px', padding:'0.3rem 0.6rem', fontSize:'0.72rem', fontWeight:700, color:'var(--danger)', cursor:removing===r.id?'not-allowed':'pointer', opacity:removing===r.id?0.5:1 }}>
+                {removing === r.id ? '…' : 'Remove'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Streaming Services sub-tab
+function StreamingServicesTab({ addToast }) {
+  const [services, setServices] = useState([])
+  const [input,    setInput]    = useState('')
+  const [saving,   setSaving]   = useState(false)
+  const [loading,  setLoading]  = useState(true)
+
+  async function loadServices() {
+    const { data } = await supabase.from('settings').select('value').eq('key', 'our_streaming_services').single()
+    try { setServices(JSON.parse(data?.value || '[]')) } catch { setServices([]) }
+    setLoading(false)
+  }
+
+  useEffect(() => { loadServices() }, [])
+
+  async function saveServices(updated) {
+    setSaving(true)
+    await supabase.from('settings').update({ value: JSON.stringify(updated), updated_at: new Date().toISOString() }).eq('key', 'our_streaming_services')
+    setSaving(false)
+  }
+
+  async function handleAdd() {
+    const svc = input.trim()
+    if (!svc) return
+    if (services.some(s => s.toLowerCase() === svc.toLowerCase())) { addToast('Already in the list', 'error'); return }
+    const updated = [...services, svc]
+    setServices(updated)
+    setInput('')
+    await saveServices(updated)
+    addToast(svc + ' added')
+  }
+
+  async function handleRemove(svc) {
+    const updated = services.filter(s => s !== svc)
+    setServices(updated)
+    await saveServices(updated)
+    addToast(svc + ' removed')
+  }
+
+  const chipStyle = { display:'inline-flex', alignItems:'center', gap:'0.35rem', background:'var(--teal)', color:'#fff', borderRadius:'20px', padding:'0.3rem 0.65rem', fontSize:'0.78rem', fontWeight:600 }
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
+      <div style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', padding:'1.1rem' }}>
+        <div style={{ fontWeight:700, fontSize:'0.88rem', marginBottom:'0.5rem' }}>Community Streaming Subscriptions</div>
+        <div style={{ fontSize:'0.8rem', color:'var(--text-dim)', marginBottom:'0.85rem', lineHeight:1.5 }}>
+          Movies available on these services show as FREE in Viewing Suggestions and screening tiles.
+        </div>
+        {/* Add input */}
+        <div style={{ display:'flex', gap:'0.5rem', marginBottom:'0.85rem' }}>
+          <input value={input} onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+            placeholder="e.g. Netflix, Stan, Disney+" style={{ ...inputStyle, flex:1 }} />
+          <button onClick={handleAdd} disabled={!input.trim() || saving}
+            style={{ ...btnPrimary(), width:'auto', padding:'0 1.1rem', marginTop:0, opacity:(!input.trim()||saving)?0.5:1, cursor:(!input.trim()||saving)?'not-allowed':'pointer' }}>
+            Add
+          </button>
+        </div>
+        {/* Chips */}
+        {loading ? <div style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>Loading…</div>
+          : services.length === 0
+            ? <div style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>No services added yet</div>
+            : (
+              <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem' }}>
+                {services.map(s => (
+                  <span key={s} style={chipStyle}>
+                    {s}
+                    <button onClick={() => handleRemove(s)} style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.8)', fontSize:'0.9rem', padding:0, lineHeight:1, display:'flex', alignItems:'center' }}>✕</button>
+                  </span>
+                ))}
+              </div>
+            )}
+        {saving && <div style={{ fontSize:'0.72rem', color:'var(--text-dim)', marginTop:'0.5rem' }}>Saving…</div>}
+      </div>
+    </div>
+  )
+}
+
+// Movies tab wrapper
+function MoviesTab() {
+  const [sub, setSub] = useState('Suggested')
+  const [toasts, setToasts] = useState([])
+
+  function addToast(message, type = 'success') {
+    const id = Date.now()
+    setToasts(p => [...p, { id, message, type }])
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4000)
+  }
+
+  const subBtnStyle = (active) => ({
+    padding:'0.35rem 0.85rem', borderRadius:'20px', border:'1px solid',
+    borderColor: active ? 'var(--teal)' : 'var(--border)',
+    background:  active ? 'var(--teal)' : 'var(--surface)',
+    color:       active ? '#fff' : 'var(--text)',
+    fontWeight:600, fontSize:'0.78rem', cursor:'pointer', whiteSpace:'nowrap',
+  })
+
+  return (
+    <div>
+      {/* Toast */}
+      <div style={{ position:'fixed', top:'1rem', left:'50%', transform:'translateX(-50%)', zIndex:999, display:'flex', flexDirection:'column', gap:'0.5rem', pointerEvents:'none', minWidth:260, maxWidth:'90vw' }}>
+        {toasts.map(t => (
+          <div key={t.id} style={{ background:t.type==='error'?'var(--danger)':'#15803d', color:'#fff', padding:'0.75rem 1.1rem', borderRadius:'12px', fontSize:'0.88rem', fontWeight:600, boxShadow:'0 4px 20px rgba(0,0,0,0.2)', display:'flex', alignItems:'center', gap:'0.5rem' }}>
+            <span>{t.type==='error'?'✕':'✓'}</span>{t.message}
+          </div>
+        ))}
+      </div>
+      {/* Sub-tabs */}
+      <div style={{ display:'flex', gap:'0.4rem', marginBottom:'1rem', overflowX:'auto' }}>
+        {['Suggested', 'Ownership', 'Streaming'].map(s => (
+          <button key={s} onClick={() => setSub(s)} style={subBtnStyle(sub === s)}>{s}</button>
+        ))}
+      </div>
+      {sub === 'Suggested'  && <SuggestedMoviesView />}
+      {sub === 'Ownership'  && <PrivateOwnershipTab addToast={addToast} />}
+      {sub === 'Streaming'  && <StreamingServicesTab addToast={addToast} />}
+    </div>
+  )
+}
+
 // ── ROOT ──────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const { member, loading } = useUser()
@@ -1080,6 +1418,7 @@ export default function AdminPage() {
       {tab === 'Events'  && <EventsTab />}
       {tab === 'Notices' && <NoticesTab />}
       {tab === 'Members' && <MembersTab />}
+      {tab === 'Movies'  && <MoviesTab />}
       {tab === 'Bar'     && <BarTab />}
       {tab === 'Books'   && <BooksTab />}
       {tab === 'Tools'   && <ToolsTab />}

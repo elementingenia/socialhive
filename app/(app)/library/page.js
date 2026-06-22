@@ -2,14 +2,7 @@
 import React, { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-
-function streamingPill(streamingAu, weOwn) {
-  if (weOwn) return { label: 'Free', bg: '#dcfce7', color: '#15803d' }
-  if (!streamingAu) return null
-  const s = streamingAu.trim().toLowerCase()
-  if (s.startsWith('rent') || s.startsWith('buy')) return { label: 'Cost', bg: '#fef3c7', color: '#d97706' }
-  return { label: 'Free', bg: '#dcfce7', color: '#15803d' }
-}
+import { computeFreeCost } from '@/lib/freeCost'
 function parseGenres(g) {
   if (!g) return []
   return g.split(/[,|\/]/).map(x => x.trim()).filter(Boolean)
@@ -227,11 +220,10 @@ function SuggestOverlay({ children, onClose }) {
   )
 }
 
-function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClose, onVoted, onDeleted, addToast }) {
+function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClose, onVoted, onDeleted, addToast, freeCostData }) {
   const [voting, setVoting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const pill = streamingPill(movie.streaming_au, movie.we_own)
   const genres = parseGenres(movie.genre)
   const imdbUrl = movie.imdb_id ? `https://www.imdb.com/title/${movie.imdb_id}/` : null
 
@@ -277,7 +269,7 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
           </div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', alignItems:'center' }}>
             <GenreChips genres={genres} />
-            {pill && <span style={{ background:pill.bg, color:pill.color, borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', fontWeight:700 }}>● {pill.label}</span>}
+            {freeCostData && <span style={{ background:freeCostData.isFree?'#dcfce7':'#fef3c7', color:freeCostData.isFree?'#15803d':'#d97706', borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', fontWeight:700 }}>● {freeCostData.isFree?'Free':'Cost'}</span>}
           </div>
           <div style={{ display:'flex', gap:'1.25rem', flexWrap:'wrap', alignItems:'flex-end' }}>
             {avgData?.count>0 && (
@@ -534,6 +526,10 @@ export default function LibraryPage() {
   const [showSwiper, setShowSwiper] = useState(false)
   const [toasts, setToasts] = useState([])
   const [introExpanded, setIntroExpanded] = useState(false)
+  const [streamingServices, setStreamingServices] = useState([])
+  const [dvdTmdbIds,        setDvdTmdbIds]        = useState(new Set())
+  const [dvdImdbIds,        setDvdImdbIds]        = useState(new Set())
+  const [ownedMovieIds,     setOwnedMovieIds]     = useState(new Set())
 
   function addToast(message, type='success') {
     const id = Date.now()
@@ -543,16 +539,25 @@ export default function LibraryPage() {
 
   const loadData = useCallback(async () => {
     const today = new Date().toISOString().split('T')[0]
-    const [{ data: moviesData }, { data: votesData }, { data: eventsData }] = await Promise.all([
+    const [{ data: moviesData }, { data: votesData }, { data: eventsData }, { data: dvdData }, settingsRes, { data: ownData }] = await Promise.all([
       supabase.from('movies').select('*').order('title'),
       supabase.from('votes').select('movie_id, member_id, score'),
       supabase.from('events').select('movie_id').gte('event_date', today).not('movie_id', 'is', null),
+      supabase.from('movies').select('tmdb_id, imdb_id').eq('we_own', true),
+      supabase.from('settings').select('value').eq('key', 'our_streaming_services').single(),
+      supabase.from('movie_ownership').select('movie_id'),
     ])
     // Show suggestions (we_own=false) + any we_own=true movies that have upcoming events
     const scheduledMovieIds = new Set((eventsData||[]).map(e => e.movie_id))
     const filtered = (moviesData||[]).filter(m => !m.we_own || scheduledMovieIds.has(m.id))
     setMovies(filtered)
     setVotes(votesData||[])
+    // Store FREE/COST supporting data
+    const dvds = dvdData || []
+    setDvdTmdbIds(new Set(dvds.map(d => d.tmdb_id).filter(Boolean)))
+    setDvdImdbIds(new Set(dvds.map(d => d.imdb_id).filter(Boolean)))
+    try { setStreamingServices(JSON.parse(settingsRes.data?.value || '[]')) } catch { setStreamingServices([]) }
+    setOwnedMovieIds(new Set((ownData||[]).map(o => o.movie_id)))
     setLoading(false)
   }, [])
 
@@ -677,7 +682,24 @@ export default function LibraryPage() {
 
       {selectedMovie && (
         <Overlay onClose={()=>setSelectedId(null)}>
-          <DetailSheet movie={selectedMovie} myVote={myVotes[selectedMovie.id]} avgData={avgVotes[selectedMovie.id]} memberId={member?.id} isAdmin={member?.is_admin} session={session} onClose={()=>setSelectedId(null)} onVoted={loadData} onDeleted={()=>{ setSelectedId(null); loadData() }} addToast={addToast} />
+          <DetailSheet
+            movie={selectedMovie}
+            myVote={myVotes[selectedMovie.id]}
+            avgData={avgVotes[selectedMovie.id]}
+            memberId={member?.id}
+            isAdmin={member?.is_admin}
+            session={session}
+            onClose={()=>setSelectedId(null)}
+            onVoted={loadData}
+            onDeleted={()=>{ setSelectedId(null); loadData() }}
+            addToast={addToast}
+            freeCostData={computeFreeCost(selectedMovie, {
+              streamingServices,
+              dvdTmdbIds,
+              dvdImdbIds,
+              ownershipRecords: ownedMovieIds.has(selectedMovie.id) ? [{ movie_id: selectedMovie.id, ownership_type: 'digital' }] : [],
+            })}
+          />
         </Overlay>
       )}
       {showSwiper && (
