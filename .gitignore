@@ -21,3 +21,4 @@ out/
 .DS_Store
 *.pem
 npm-debug.log*
+tests/e2e/.auth/
