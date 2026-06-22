@@ -1460,7 +1460,7 @@ export default function AdminPage() {
       <div style={{ padding:'0 1rem 6rem' }}>
         <button onClick={() => setTab(null)}
           style={{ display:'flex', alignItems:'center', gap:'0.4rem', background:'none', border:'none', color:'var(--teal)', fontWeight:600, fontSize:'0.88rem', cursor:'pointer', padding:'1rem 0', fontFamily:'inherit' }}>
-          ← {section?.icon} {section?.label}
+          ← Admin
         </button>
         {tab === 'Events'  && <EventsTab />}
         {tab === 'Notices' && <NoticesTab />}
