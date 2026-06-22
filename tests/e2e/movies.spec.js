@@ -72,8 +72,8 @@ test.describe('Scheduled page', () => {
     await expect(page.getByText(/seats left/i).first()).toBeVisible()
   })
 
-  test('Booked button shown for confirmed user (testbot)', async ({ page }) => {
-    await expect(page.getByText(/✓ Booked/i)).toBeVisible()
+  test('Booking badge shown for confirmed user (testbot)', async ({ page }) => {
+    await expect(page.getByText(/Seat.*Booked/i).first()).toBeVisible()
   })
 })
 
