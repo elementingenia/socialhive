@@ -31,6 +31,11 @@ function fmtTime24(timeStr) {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
+function parseGenres(g) {
+  if (!g) return []
+  return g.split(/[,|\/]/).map(x => x.trim()).filter(Boolean)
+}
+
 // ── Capacity Bar ──────────────────────────────────────────────────────────────
 function CapacityBar({ confirmedSeats, maxSeats, waitlistSeats }) {
   const pct       = maxSeats > 0 ? Math.min(100, (confirmedSeats / maxSeats) * 100) : 0
@@ -477,9 +482,11 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
 
             <div style={{ fontWeight: 800, fontSize: '1.1rem', lineHeight: 1.2 }}>{movie?.title || ev.title}</div>
 
-            {movie?.genre && (
-              <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>{movie.genre}</div>
-            )}
+            {(() => { const genres = parseGenres(movie?.genre); return genres.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                {genres.map(g => <span key={g} style={{ background: 'var(--surface2)', borderRadius: '20px', padding: '0.15rem 0.5rem', fontSize: '0.7rem', color: 'var(--text-dim)' }}>{g}</span>)}
+              </div>
+            )})()}
 
             {(movie?.actors || movie?.rating) && (
               <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
