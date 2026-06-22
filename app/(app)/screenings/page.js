@@ -573,7 +573,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
                   currentSeats={myConfirmedSeats + myWaitlistSeats}
                   onPick={doChangeSplit}
                   onCancel={() => setChangingSplit(false)}
-                  allowOverflow={true}
+                  noOverflow={true}
                 />
               )}
 
