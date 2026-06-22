@@ -369,7 +369,7 @@ function SuggestSheet({ session, onClose, onAdded, addToast }) {
   const leadActor = preview?.actors?.split(',')[0]?.trim()
 
   return (
-    <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', minHeight: '60vh', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.25rem 0.75rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         {preview ? (
