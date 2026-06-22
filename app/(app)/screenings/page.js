@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { computeFreeCost } from '@/lib/freeCost'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -323,7 +324,7 @@ function AddScreeningSheet({ session, onClose, onAdded, addToast }) {
 }
 
 // ── Screening Card ────────────────────────────────────────────────────────────
-function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
+function ScreeningCard({ ev, session, isAdmin, freeCostData, onRefresh, addToast }) {
   const [acting,           setActing]          = useState(false)
   const [pickingSeats,     setPickingSeats]     = useState(false)
   const [changingSeats,    setChangingSeats]    = useState(false)
@@ -480,7 +481,14 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
               {fmtDateLong(ev.event_date)}{ev.event_time ? ' · ' + fmtTime24(ev.event_time) : ''}
             </div>
 
-            <div style={{ fontWeight: 800, fontSize: '1.1rem', lineHeight: 1.2 }}>{movie?.title || ev.title}</div>
+            <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', flexWrap:'wrap' }}>
+              <div style={{ fontWeight: 800, fontSize: '1.1rem', lineHeight: 1.2 }}>{movie?.title || ev.title}</div>
+              {isAdmin && freeCostData && (
+                <span style={{ background:freeCostData.isFree?'#dcfce7':'#fef3c7', color:freeCostData.isFree?'#15803d':'#d97706', borderRadius:'20px', padding:'0.15rem 0.55rem', fontSize:'0.68rem', fontWeight:700, whiteSpace:'nowrap' }}>
+                  ● {freeCostData.isFree ? (freeCostData.reasons[0] || 'Free') : 'Cost'}
+                </span>
+              )}
+            </div>
 
             {(movie?.actors || movie?.rating) && (
               <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
@@ -735,6 +743,10 @@ export default function Screenings() {
   const [member,     setMember]     = useState(null)
   const [showAdd,    setShowAdd]    = useState(false)
   const [toasts,     setToasts]     = useState([])
+  const [streamingServices, setStreamingServices] = useState([])
+  const [dvdTmdbIds,        setDvdTmdbIds]        = useState(new Set())
+  const [dvdImdbIds,        setDvdImdbIds]        = useState(new Set())
+  const [ownershipRecords,  setOwnershipRecords]  = useState([])
 
   function addToast(message, type = 'success') {
     const id = Date.now()
@@ -755,11 +767,19 @@ export default function Screenings() {
   const loadScreenings = useCallback(async () => {
     if (!session) return
     setLoading(true)
-    const res = await fetch('/api/screenings', {
-      headers: { 'Authorization': 'Bearer ' + session.access_token },
-    })
-    const data = await res.json()
+    const [screeningsRes, { data: dvdData }, settingsRes, { data: ownData }] = await Promise.all([
+      fetch('/api/screenings', { headers: { 'Authorization': 'Bearer ' + session.access_token } }),
+      supabase.from('movies').select('tmdb_id, imdb_id').eq('we_own', true),
+      supabase.from('settings').select('value').eq('key', 'our_streaming_services').single(),
+      supabase.from('movie_ownership').select('movie_id, ownership_type, members(name)'),
+    ])
+    const data = await screeningsRes.json()
     setScreenings(Array.isArray(data) ? data : [])
+    const dvds = dvdData || []
+    setDvdTmdbIds(new Set(dvds.map(d => d.tmdb_id).filter(Boolean)))
+    setDvdImdbIds(new Set(dvds.map(d => d.imdb_id).filter(Boolean)))
+    try { setStreamingServices(JSON.parse(settingsRes.data?.value || '[]')) } catch { setStreamingServices([]) }
+    setOwnershipRecords((ownData||[]).map(o => ({ movie_id: o.movie_id, ownership_type: o.ownership_type, member_name: o.members?.name || null })))
     setLoading(false)
   }, [session])
 
@@ -791,7 +811,7 @@ export default function Screenings() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
           {screenings.map(ev => (
-            <ScreeningCard key={ev.id} ev={ev} session={session} isAdmin={member?.is_admin} onRefresh={loadScreenings} addToast={addToast} />
+            <ScreeningCard key={ev.id} ev={ev} session={session} isAdmin={member?.is_admin} freeCostData={member?.is_admin && ev.movies ? computeFreeCost(ev.movies, { streamingServices, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecords.filter(o => o.movie_id === ev.movie_id) }) : null} onRefresh={loadScreenings} addToast={addToast} />
           ))}
         </div>
       )}

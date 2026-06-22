@@ -269,7 +269,11 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
           </div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', alignItems:'center' }}>
             <GenreChips genres={genres} />
-            {freeCostData && <span style={{ background:freeCostData.isFree?'#dcfce7':'#fef3c7', color:freeCostData.isFree?'#15803d':'#d97706', borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', fontWeight:700 }}>● {freeCostData.isFree?'Free':'Cost'}</span>}
+            {isAdmin && freeCostData && (
+              <span style={{ background:freeCostData.isFree?'#dcfce7':'#fef3c7', color:freeCostData.isFree?'#15803d':'#d97706', borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', fontWeight:700 }}>
+                ● {freeCostData.isFree ? (freeCostData.reasons[0] || 'Free') : 'Cost'}
+              </span>
+            )}
           </div>
           <div style={{ display:'flex', gap:'1.25rem', flexWrap:'wrap', alignItems:'flex-end' }}>
             {avgData?.count>0 && (
@@ -470,7 +474,7 @@ function SuggestSheet({ session, onClose, onAdded, addToast }) {
   )
 }
 
-function MovieCard({ movie, myVote, avgData, onClick }) {
+function MovieCard({ movie, myVote, avgData, isAdmin, freeCostData, onClick }) {
   const genres = parseGenres(movie.genre)
   const leadActor = movie.actors?.split(',')[0]?.trim()
   return (
@@ -488,6 +492,13 @@ function MovieCard({ movie, myVote, avgData, onClick }) {
         {genres.length>0 && (
           <div style={{ display:'flex', flexWrap:'wrap', gap:'0.2rem', marginTop:'0.25rem' }}>
             {genres.slice(0,2).map(g=><span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.1rem 0.4rem', fontSize:'0.65rem', color:'var(--text-dim)' }}>{g}</span>)}
+          </div>
+        )}
+        {isAdmin && freeCostData && (
+          <div style={{ marginTop:'0.2rem' }}>
+            <span style={{ background:freeCostData.isFree?'#dcfce7':'#fef3c7', color:freeCostData.isFree?'#15803d':'#d97706', borderRadius:'20px', padding:'0.1rem 0.45rem', fontSize:'0.62rem', fontWeight:700 }}>
+              ● {freeCostData.isFree ? (freeCostData.reasons[0] || 'Free') : 'Cost'}
+            </span>
           </div>
         )}
       </div>
@@ -529,7 +540,7 @@ export default function LibraryPage() {
   const [streamingServices, setStreamingServices] = useState([])
   const [dvdTmdbIds,        setDvdTmdbIds]        = useState(new Set())
   const [dvdImdbIds,        setDvdImdbIds]        = useState(new Set())
-  const [ownedMovieIds,     setOwnedMovieIds]     = useState(new Set())
+  const [ownershipRecords,  setOwnershipRecords]  = useState([])
 
   function addToast(message, type='success') {
     const id = Date.now()
@@ -545,7 +556,7 @@ export default function LibraryPage() {
       supabase.from('events').select('movie_id').gte('event_date', today).not('movie_id', 'is', null),
       supabase.from('movies').select('tmdb_id, imdb_id').eq('we_own', true),
       supabase.from('settings').select('value').eq('key', 'our_streaming_services').single(),
-      supabase.from('movie_ownership').select('movie_id'),
+      supabase.from('movie_ownership').select('movie_id, ownership_type, members(name)'),
     ])
     // Show suggestions (we_own=false) + any we_own=true movies that have upcoming events
     const scheduledMovieIds = new Set((eventsData||[]).map(e => e.movie_id))
@@ -557,7 +568,7 @@ export default function LibraryPage() {
     setDvdTmdbIds(new Set(dvds.map(d => d.tmdb_id).filter(Boolean)))
     setDvdImdbIds(new Set(dvds.map(d => d.imdb_id).filter(Boolean)))
     try { setStreamingServices(JSON.parse(settingsRes.data?.value || '[]')) } catch { setStreamingServices([]) }
-    setOwnedMovieIds(new Set((ownData||[]).map(o => o.movie_id)))
+    setOwnershipRecords((ownData||[]).map(o => ({ movie_id: o.movie_id, ownership_type: o.ownership_type, member_name: o.members?.name || null })))
     setLoading(false)
   }, [])
 
@@ -674,7 +685,7 @@ export default function LibraryPage() {
         ) : (
           <div style={{ display:'flex', flexDirection:'column', gap:'0.65rem' }}>
             {sorted.map(m=>(
-              <MovieCard key={m.id} movie={m} myVote={myVotes[m.id]} avgData={avgVotes[m.id]} onClick={()=>setSelectedId(m.id)} />
+              <MovieCard key={m.id} movie={m} myVote={myVotes[m.id]} avgData={avgVotes[m.id]} isAdmin={member?.is_admin} freeCostData={member?.is_admin ? computeFreeCost(m, { streamingServices, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecords.filter(o => o.movie_id === m.id) }) : null} onClick={()=>setSelectedId(m.id)} />
             ))}
           </div>
         )}
@@ -697,7 +708,7 @@ export default function LibraryPage() {
               streamingServices,
               dvdTmdbIds,
               dvdImdbIds,
-              ownershipRecords: ownedMovieIds.has(selectedMovie.id) ? [{ movie_id: selectedMovie.id, ownership_type: 'digital' }] : [],
+              ownershipRecords: ownershipRecords.filter(o => o.movie_id === selectedMovie.id),
             })}
           />
         </Overlay>
