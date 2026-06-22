@@ -162,21 +162,22 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, active
               <div style={{ position:'relative', height:180, overflow:'hidden' }}>
                 <img src={movie.poster_url} alt={movie.title} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', filter:'blur(2px) brightness(0.6)', transform:'scale(1.05)' }} />
                 <img src={movie.poster_url} alt={movie.title} style={{ position:'absolute', left:'1.25rem', bottom:'-40px', width:80, height:120, objectFit:'cover', borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,0.4)' }} />
-                {/* Loan status tile — top right of banner */}
-                {activeLoan && (
-                  <div style={{ position:'absolute', top:'0.75rem', right:'0.75rem', background:iMineToReturn?'var(--teal)':'rgba(0,0,0,0.62)', backdropFilter:'blur(6px)', borderRadius:'10px', padding:'0.45rem 0.7rem', textAlign:'center', minWidth:80 }}>
-                    <div style={{ fontSize:'0.68rem', fontWeight:800, color:'#fff', textTransform:'uppercase', letterSpacing:'0.05em', lineHeight:1.2 }}>
-                      {iMineToReturn ? '📀 On Loan' : '📤 On Loan'}
-                    </div>
-                    <div style={{ fontSize:'0.65rem', color:'rgba(255,255,255,0.88)', marginTop:'0.2rem', lineHeight:1.3 }}>
-                      {iMineToReturn ? `You · ${fmtDate(activeLoan.borrowed_at)}` : `${activeLoan.members?.name || 'Resident'} · ${fmtDate(activeLoan.borrowed_at)}`}
-                    </div>
-                  </div>
-                )}
+
               </div>
             )}
 
-            <div style={{ padding:movie.poster_url?'3rem 1.25rem 2.5rem':'1.25rem 1.25rem 2.5rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
+            <div style={{ position:'relative', padding:movie.poster_url?'3rem 1.25rem 2.5rem':'1.25rem 1.25rem 2.5rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
+              {/* ON LOAN pill — top right of details, in the negative space beside the poster */}
+              {activeLoan && (
+                <div style={{ position:'absolute', top:'0.75rem', right:'1.25rem', background:iMineToReturn?'var(--teal)':'var(--surface2)', border:'1px solid ' + (iMineToReturn?'var(--teal)':'var(--border)'), borderRadius:'10px', padding:'0.4rem 0.65rem', textAlign:'center' }}>
+                  <div style={{ fontSize:'0.65rem', fontWeight:800, color:iMineToReturn?'#fff':'var(--text)', textTransform:'uppercase', letterSpacing:'0.05em', lineHeight:1.2 }}>
+                    📀 On Loan
+                  </div>
+                  <div style={{ fontSize:'0.6rem', color:iMineToReturn?'rgba(255,255,255,0.85)':'var(--text-dim)', marginTop:'0.2rem', lineHeight:1.3, whiteSpace:'nowrap' }}>
+                    {iMineToReturn ? `You · ${fmtDate(activeLoan.borrowed_at)}` : `${activeLoan.members?.name || 'Resident'} · ${fmtDate(activeLoan.borrowed_at)}`}
+                  </div>
+                </div>
+              )}
               {/* No-poster loan tile */}
               {!movie.poster_url && activeLoan && (
                 <div style={{ display:'inline-flex', alignItems:'center', gap:'0.5rem', background:iMineToReturn?'var(--teal)':'var(--surface2)', borderRadius:'10px', padding:'0.5rem 0.85rem', alignSelf:'flex-start', border:'1px solid ' + (iMineToReturn?'var(--teal)':'var(--border)') }}>
