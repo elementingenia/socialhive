@@ -315,19 +315,30 @@ function DvdCard({ movie, activeLoan, myLoan, onClick }) {
 
 // ── Add DVD Sheet (admin only) ────────────────────────────────────────────────
 function AddDvdSheet({ session, onAdded, onClose, addToast }) {
-  const [search,    setSearch]    = useState('')
-  const [results,   setResults]   = useState([])
-  const [searching, setSearching] = useState(false)
-  const [selected,  setSelected]  = useState(null)
-  const [adding,    setAdding]    = useState(false)
+  const [search,      setSearch]      = useState('')
+  const [results,     setResults]     = useState([])
+  const [searching,   setSearching]   = useState(false)
+  const [selected,    setSelected]    = useState(null)
+  const [adding,      setAdding]      = useState(false)
+  const [isDuplicate, setIsDuplicate] = useState(false)
 
   async function doSearch(q) {
-    setSearch(q); setSelected(null)
+    setSearch(q); setSelected(null); setIsDuplicate(false)
     if (!q.trim()) { setResults([]); return }
     setSearching(true)
     const res = await fetch('/api/tmdb/search?q=' + encodeURIComponent(q))
     setResults(await res.json())
     setSearching(false)
+  }
+
+  async function handleSelect(r) {
+    setSelected(r)
+    setSearch(r.title + (r.year ? ` (${r.year})` : ''))
+    setResults([])
+    setIsDuplicate(false)
+    // Check if already in DVD Library
+    const { data } = await supabase.from('movies').select('id').eq('we_own', true).eq('tmdb_id', r.tmdb_id).maybeSingle()
+    setIsDuplicate(!!data)
   }
 
   async function handleAdd() {
@@ -367,7 +378,7 @@ function AddDvdSheet({ session, onAdded, onClose, addToast }) {
             {results.length > 0 && !selected && (
               <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', zIndex:50, overflow:'hidden', boxShadow:'0 4px 16px rgba(0,0,0,0.2)', marginTop:'0.25rem' }}>
                 {results.map(r => (
-                  <div key={r.tmdb_id} onClick={() => { setSelected(r); setSearch(r.title + (r.year ? ` (${r.year})` : '')); setResults([]) }}
+                  <div key={r.tmdb_id} onClick={() => handleSelect(r)}
                     style={{ display:'flex', alignItems:'center', gap:'0.65rem', padding:'0.65rem 0.85rem', cursor:'pointer', borderBottom:'1px solid var(--border)' }}>
                     {r.poster_url ? <img src={r.poster_url} alt={r.title} style={{ width:32, height:46, objectFit:'cover', borderRadius:4 }} /> : <div style={{ width:32, height:46, background:'var(--surface2)', borderRadius:4 }} />}
                     <div>
@@ -380,16 +391,24 @@ function AddDvdSheet({ session, onAdded, onClose, addToast }) {
             )}
           </div>
           {selected && (
-            <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'var(--surface2)', borderRadius:'12px', padding:'0.75rem', border:'1px solid var(--teal)' }}>
-              {selected.poster_url ? <img src={selected.poster_url} alt={selected.title} style={{ width:46, height:68, objectFit:'cover', borderRadius:6 }} /> : <div style={{ width:46, height:68, background:'var(--surface)', borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem' }}>💿</div>}
-              <div>
-                <div style={{ fontWeight:700, fontSize:'0.95rem' }}>{selected.title}</div>
-                {selected.year && <div style={{ fontSize:'0.8rem', color:'var(--text-dim)' }}>{selected.year}</div>}
+            <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'var(--surface2)', borderRadius:'12px', padding:'0.75rem', border:`1px solid ${isDuplicate ? 'var(--danger)' : 'var(--teal)'}` }}>
+                {selected.poster_url ? <img src={selected.poster_url} alt={selected.title} style={{ width:46, height:68, objectFit:'cover', borderRadius:6 }} /> : <div style={{ width:46, height:68, background:'var(--surface)', borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem' }}>💿</div>}
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:'0.95rem' }}>{selected.title}</div>
+                  {selected.year && <div style={{ fontSize:'0.8rem', color:'var(--text-dim)' }}>{selected.year}</div>}
+                </div>
+                {isDuplicate && <span style={{ fontSize:'1.25rem' }}>⚠️</span>}
               </div>
+              {isDuplicate && (
+                <div style={{ background:'#fef3c7', border:'1px solid #d97706', borderRadius:'10px', padding:'0.6rem 0.85rem', fontSize:'0.83rem', fontWeight:600, color:'#92400e' }}>
+                  Already in the DVD Library — no need to add it again.
+                </div>
+              )}
             </div>
           )}
-          <button onClick={handleAdd} disabled={!selected || adding}
-            style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'12px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:(!selected||adding)?'not-allowed':'pointer', opacity:(!selected||adding)?0.5:1 }}>
+          <button onClick={handleAdd} disabled={!selected || adding || isDuplicate}
+            style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'12px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:(!selected||adding||isDuplicate)?'not-allowed':'pointer', opacity:(!selected||adding||isDuplicate)?0.5:1 }}>
             {adding ? 'Adding to Library…' : '💿 Add to DVD Library'}
           </button>
         </div>
