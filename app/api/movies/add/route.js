@@ -36,15 +36,13 @@ export async function POST(req) {
 
   if (!title) return NextResponse.json({ error: 'Title required' }, { status: 400 })
 
-  // Check duplicate by tmdb_id first, then title
-  const dupQuery = tmdb_id
-    ? supabaseAdmin.from('movies').select('id, title, we_own').eq('tmdb_id', tmdb_id.toString()).maybeSingle()
-    : supabaseAdmin.from('movies').select('id, title, we_own').ilike('title', title).maybeSingle()
-  const { data: existing } = await dupQuery
-  if (existing) {
-    const where = existing.we_own ? 'the DVD library' : 'the suggestions list'
-    return NextResponse.json({ error: `"${title}" is already in ${where}` }, { status: 409 })
-  }
+  // Block only if already suggested (we_own=false) — DVDs can also be suggested independently
+  let existingQuery = supabaseAdmin.from('movies').select('id').eq('we_own', false)
+  existingQuery = tmdb_id
+    ? existingQuery.eq('tmdb_id', tmdb_id.toString())
+    : existingQuery.ilike('title', title)
+  const { data: existing } = await existingQuery.maybeSingle()
+  if (existing) return NextResponse.json({ error: `"${title}" has already been suggested` }, { status: 409 })
 
   const rating_rt = await getRtRating(imdb_id)
 

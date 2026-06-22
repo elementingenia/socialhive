@@ -319,7 +319,7 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
   )
 }
 
-function SuggestSheet({ session, onClose, onAdded, addToast, existingTmdbIds = new Set() }) {
+function SuggestSheet({ session, onClose, onAdded, addToast }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -411,24 +411,17 @@ function SuggestSheet({ session, onClose, onAdded, addToast, existingTmdbIds = n
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
               {results.map(r => (
-                {(() => {
-                  const alreadyIn = existingTmdbIds.has(r.tmdb_id)
-                  return (
-                    <div key={r.tmdb_id} onClick={() => !alreadyIn && pickMovie(r.tmdb_id)}
-                      style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '0.6rem 0.75rem', background: 'var(--surface2)', borderRadius: '12px', cursor: alreadyIn ? 'default' : 'pointer', border: '1px solid var(--border)', opacity: alreadyIn ? 0.6 : 1 }}>
-                      {r.poster_url
-                        ? <img src={r.poster_url} alt="" style={{ width: 42, height: 63, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />
-                        : <div style={{ width: 42, height: 63, background: 'var(--border)', borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🎬</div>}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.2 }}>{r.title}</div>
-                        {r.year && <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginTop: '0.15rem' }}>{r.year}</div>}
-                      </div>
-                      {alreadyIn
-                        ? <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-dim)', background: 'var(--border)', borderRadius: '6px', padding: '0.2rem 0.4rem', flexShrink: 0, whiteSpace: 'nowrap' }}>In library</span>
-                        : <span style={{ color: 'var(--teal)', fontSize: '1rem', flexShrink: 0 }}>›</span>}
-                    </div>
-                  )
-                })()}
+                <div key={r.tmdb_id} onClick={() => pickMovie(r.tmdb_id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '0.6rem 0.75rem', background: 'var(--surface2)', borderRadius: '12px', cursor: 'pointer', border: '1px solid var(--border)' }}>
+                  {r.poster_url
+                    ? <img src={r.poster_url} alt="" style={{ width: 42, height: 63, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />
+                    : <div style={{ width: 42, height: 63, background: 'var(--border)', borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🎬</div>}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.2 }}>{r.title}</div>
+                    {r.year && <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginTop: '0.15rem' }}>{r.year}</div>}
+                  </div>
+                  <span style={{ color: 'var(--teal)', fontSize: '1rem', flexShrink: 0 }}>›</span>
+                </div>
               ))}
             </div>
 
@@ -700,7 +693,7 @@ export default function LibraryPage() {
       )}
       {showSuggest && (
         <SuggestOverlay onClose={()=>setShowSuggest(false)}>
-          <SuggestSheet session={session} onClose={()=>setShowSuggest(false)} onAdded={loadData} addToast={addToast} existingTmdbIds={new Set(movies.map(m=>m.tmdb_id).filter(Boolean))} />
+          <SuggestSheet session={session} onClose={()=>setShowSuggest(false)} onAdded={loadData} addToast={addToast} />
         </SuggestOverlay>
       )}
     </div>
