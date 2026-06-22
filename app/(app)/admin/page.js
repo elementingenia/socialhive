@@ -62,6 +62,7 @@ const btnDanger  = { background:'var(--danger)', color:'#fff', border:'none', bo
 function EventForm({ event, onSave, onDelete, onClose }) {
   const isEdit = !!event?.id
   const [movies, setMovies] = useState([])
+  const [books,  setBooks]  = useState([])
   const [form, setForm] = useState({
     title:       event?.title       || '',
     hub_type:    event?.hub_type    || 'movie',
@@ -72,6 +73,7 @@ function EventForm({ event, onSave, onDelete, onClose }) {
     cost:        event?.cost        != null ? String(event.cost)      : '0',
     is_public:   event?.is_public   ?? true,
     movie_id:    event?.movie_id    || '',
+    book_id:     event?.book_id     || '',
   })
   const [saving,   setSaving]   = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -80,6 +82,7 @@ function EventForm({ event, onSave, onDelete, onClose }) {
 
   useEffect(() => {
     supabase.from('movies').select('id, title').eq('we_own', false).order('title').then(({ data }) => setMovies(data || []))
+    supabase.from('books').select('id, title, author').order('title').then(({ data }) => setBooks(data || []))
   }, [])
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
@@ -97,7 +100,8 @@ function EventForm({ event, onSave, onDelete, onClose }) {
       max_seats:   parseInt(form.max_seats) || 30,
       cost:        parseFloat(form.cost)    || 0,
       is_public:   form.is_public,
-      movie_id:    form.hub_type === 'movie' && form.movie_id ? form.movie_id : null,
+      movie_id:    form.hub_type === 'movie'    && form.movie_id ? form.movie_id : null,
+      book_id:     form.hub_type === 'bookclub' && form.book_id  ? form.book_id  : null,
     }
     const { error } = isEdit
       ? await supabase.from('events').update(payload).eq('id', event.id)
@@ -142,6 +146,14 @@ function EventForm({ event, onSave, onDelete, onClose }) {
           <select style={inputStyle} value={form.movie_id} onChange={e=>set('movie_id',e.target.value)}>
             <option value="">— No film linked —</option>
             {movies.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
+          </select>
+        </Field>
+      )}
+      {form.hub_type === 'bookclub' && (
+        <Field label="Linked Book">
+          <select style={inputStyle} value={form.book_id} onChange={e=>set('book_id',e.target.value)}>
+            <option value="">— No book linked —</option>
+            {books.map(b => <option key={b.id} value={b.id}>{b.title}{b.author ? ' — ' + b.author : ''}</option>)}
           </select>
         </Field>
       )}
