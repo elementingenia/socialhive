@@ -13,7 +13,15 @@ const HUB_TYPES = [
   { value: 'bookclub', label: 'Book Club', icon: '📚' },
 ]
 const HUB_COLOUR = { movie:'var(--teal)', social:'var(--terracotta)', outings:'var(--green)', bookclub:'var(--purple)' }
-const TABS = ['Events', 'Notices', 'Members', 'Movies', 'Bar', 'Books', 'Tools']
+const SECTIONS = [
+  { key: 'Events',  label: 'Events',  icon: '🎟️' },
+  { key: 'Notices', label: 'Notices', icon: '📋' },
+  { key: 'Members', label: 'Members', icon: '👥' },
+  { key: 'Movies',  label: 'Movies',  icon: '🎬' },
+  { key: 'Bar',     label: 'Bar',     icon: '🍺' },
+  { key: 'Books',   label: 'Books',   icon: '📚' },
+  { key: 'Tools',   label: 'Tools',   icon: '🔧' },
+]
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 function fmtDate(str) {
@@ -1436,7 +1444,7 @@ function MoviesTab() {
 export default function AdminPage() {
   const { member, loading } = useUser()
   const router = useRouter()
-  const [tab, setTab] = useState('Events')
+  const [tab, setTab] = useState(null)
 
   useEffect(()=>{
     if (!loading && member && !member.is_admin) router.replace('/home')
@@ -1445,25 +1453,40 @@ export default function AdminPage() {
   if (loading || !member) return null
   if (!member.is_admin) return null
 
+  // Section view — show selected section with back nav
+  if (tab) {
+    const section = SECTIONS.find(s => s.key === tab)
+    return (
+      <div style={{ padding:'0 1rem 6rem' }}>
+        <button onClick={() => setTab(null)}
+          style={{ display:'flex', alignItems:'center', gap:'0.4rem', background:'none', border:'none', color:'var(--teal)', fontWeight:600, fontSize:'0.88rem', cursor:'pointer', padding:'1rem 0', fontFamily:'inherit' }}>
+          ← {section?.icon} {section?.label}
+        </button>
+        {tab === 'Events'  && <EventsTab />}
+        {tab === 'Notices' && <NoticesTab />}
+        {tab === 'Members' && <MembersTab />}
+        {tab === 'Movies'  && <MoviesTab />}
+        {tab === 'Bar'     && <BarTab />}
+        {tab === 'Books'   && <BooksTab />}
+        {tab === 'Tools'   && <ToolsTab />}
+      </div>
+    )
+  }
+
+  // Default: card grid — nothing selected
   return (
     <div style={{ padding:'1rem 1rem 6rem' }}>
-      {/* Tab bar */}
-      <div style={{ display:'flex', gap:'0.4rem', marginBottom:'1.25rem', overflowX:'auto', paddingBottom:'0.25rem' }}>
-        {TABS.map(t => (
-          <button key={t} onClick={()=>setTab(t)}
-            style={{ padding:'0.5rem 1rem', borderRadius:'20px', border:'1px solid', borderColor:tab===t?'var(--teal)':'var(--border)', background:tab===t?'var(--teal)':'var(--surface)', color:tab===t?'#fff':'var(--text)', fontWeight:600, fontSize:'0.82rem', cursor:'pointer', whiteSpace:'nowrap' }}>
-            {t}
+      <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--teal)', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:'0.75rem' }}>Admin</div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.65rem' }}>
+        {SECTIONS.map(s => (
+          <button key={s.key} onClick={() => setTab(s.key)}
+            style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'14px', padding:'1.25rem 0.75rem', display:'flex', flexDirection:'column', alignItems:'center', gap:'0.4rem', cursor:'pointer', fontFamily:'inherit',
+              ...(s.key === 'Tools' ? { gridColumn:'1/-1' } : {}) }}>
+            <span style={{ fontSize:'1.75rem' }}>{s.icon}</span>
+            <span style={{ fontWeight:700, fontSize:'0.88rem', color:'var(--text)' }}>{s.label}</span>
           </button>
         ))}
       </div>
-
-      {tab === 'Events'  && <EventsTab />}
-      {tab === 'Notices' && <NoticesTab />}
-      {tab === 'Members' && <MembersTab />}
-      {tab === 'Movies'  && <MoviesTab />}
-      {tab === 'Bar'     && <BarTab />}
-      {tab === 'Books'   && <BooksTab />}
-      {tab === 'Tools'   && <ToolsTab />}
     </div>
   )
 }
