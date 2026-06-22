@@ -327,82 +327,153 @@ function SuggestSheet({ session, onClose, onAdded, addToast }) {
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // Live search — fires 400ms after user stops typing, min 3 chars
   React.useEffect(() => {
     if (query.trim().length < 3) { setResults([]); return }
     setSearching(true)
     const timer = setTimeout(async () => {
-      const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query.trim())}`)
-      setResults(await res.json() || [])
+      try {
+        const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query.trim())}`)
+        setResults(await res.json() || [])
+      } catch { setResults([]) }
       setSearching(false)
     }, 400)
     return () => clearTimeout(timer)
   }, [query])
+
   async function pickMovie(tmdbId) {
-    setLoadingPreview(true); setResults([])
-    const res = await fetch(`/api/tmdb/details?id=${tmdbId}`)
-    setPreview(await res.json()); setLoadingPreview(false)
+    setLoadingPreview(true)
+    try {
+      const res = await fetch(`/api/tmdb/details?id=${tmdbId}`)
+      const data = await res.json()
+      if (data.error) { addToast('Could not load movie details', 'error'); setLoadingPreview(false); return }
+      setPreview(data)
+    } catch { addToast('Could not load movie details', 'error') }
+    setLoadingPreview(false)
   }
+
   async function handleAdd() {
     if (!preview) return
     setSaving(true)
-    const res = await fetch('/api/movies/add', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}` }, body:JSON.stringify(preview) })
-    const data = await res.json(); setSaving(false)
-    if (!res.ok) { addToast(data.error||'Failed to add','error'); return }
-    addToast(`${preview.title} added!`); onAdded(); onClose()
+    const res = await fetch('/api/movies/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      body: JSON.stringify(preview),
+    })
+    const data = await res.json()
+    setSaving(false)
+    if (!res.ok) { addToast(data.error || 'Failed to add', 'error'); return }
+    addToast(`${preview.title} added to suggestions!`)
+    onAdded(); onClose()
   }
 
+  const leadActor = preview?.actors?.split(',')[0]?.trim()
+
   return (
-    <div style={{ background:'var(--surface)', borderRadius:'20px 20px 0 0', padding:'1.5rem', maxHeight:'90vh', minHeight:'55vh', overflowY:'auto' }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.25rem' }}>
-        <h2 style={{ fontSize:'1.1rem', fontWeight:700 }}>Suggest a Movie</h2>
-        <button onClick={onClose} style={{ background:'none', border:'none', fontSize:'1.5rem', cursor:'pointer', color:'var(--text-dim)' }}>×</button>
+    <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.25rem 0.75rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        {preview ? (
+          <button onClick={() => setPreview(null)} style={{ background: 'none', border: 'none', color: 'var(--teal)', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', padding: 0 }}>← Back</button>
+        ) : (
+          <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Suggest a Movie</h2>
+        )}
+        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-dim)', lineHeight: 1 }}>×</button>
       </div>
-      {!preview && (
-        <>
-          <div style={{ position:'relative', marginBottom:'0.75rem' }}>
-            <input placeholder="Type 3+ characters to search…" value={query} onChange={e=>setQuery(e.target.value)} autoFocus
-              style={{ width:'100%', padding:'0.65rem 2.2rem 0.65rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'10px', fontSize:'0.9rem', background:'var(--surface2)', fontFamily:'inherit', boxSizing:'border-box' }} />
-            {searching && (
-              <div style={{ position:'absolute', right:'0.75rem', top:'50%', transform:'translateY(-50%)', width:16, height:16, border:'2px solid var(--teal)', borderTopColor:'transparent', borderRadius:'50%', animation:'spin 0.7s linear infinite' }} />
-            )}
-          </div>
-          {query.length > 0 && query.length < 3 && (
-            <div style={{ fontSize:'0.82rem', color:'var(--text-dim)', textAlign:'center', padding:'0.5rem 0' }}>Keep typing…</div>
-          )}
-          <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
-            {results.map(r=>(
-              <div key={r.tmdb_id} onClick={()=>pickMovie(r.tmdb_id)}
-                style={{ display:'flex', alignItems:'center', gap:'0.75rem', padding:'0.65rem', background:'var(--surface2)', borderRadius:'10px', cursor:'pointer', border:'1px solid var(--border)' }}>
-                {r.poster_url && <img src={r.poster_url} alt="" style={{ width:36, height:54, objectFit:'cover', borderRadius:4 }} />}
-                <div><div style={{ fontWeight:600, fontSize:'0.9rem' }}>{r.title}</div>{r.year&&<div style={{ color:'var(--text-dim)', fontSize:'0.8rem' }}>{r.year}</div>}</div>
-              </div>
-            ))}
-          </div>
-          {loadingPreview && <div style={{ display:'flex', justifyContent:'center', padding:'2rem' }}><div className="spinner" /></div>}
-        </>
-      )}
-      {preview && (
-        <div>
-          <div style={{ display:'flex', gap:'0.85rem', marginBottom:'1rem' }}>
-            {preview.poster_url && <img src={preview.poster_url} alt="" style={{ width:70, height:105, objectFit:'cover', borderRadius:8, flexShrink:0 }} />}
-            <div style={{ flex:1 }}>
-              <div style={{ fontWeight:700, fontSize:'1rem' }}>{preview.title}</div>
-              {preview.year&&<div style={{ color:'var(--text-dim)', fontSize:'0.82rem' }}>{preview.year} · {preview.runtime}</div>}
-              {preview.genre&&<div style={{ color:'var(--text-dim)', fontSize:'0.82rem', marginTop:'0.2rem' }}>{preview.genre}</div>}
-              {preview.director&&<div style={{ color:'var(--text-dim)', fontSize:'0.82rem' }}>Dir: {preview.director}</div>}
+
+      <div style={{ overflowY: 'auto', flex: 1, padding: '1rem 1.25rem 1.5rem' }}>
+        {/* Search state */}
+        {!preview && (
+          <>
+            <div style={{ position: 'relative', marginBottom: '0.75rem' }}>
+              <input
+                placeholder="Search by title…"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                autoFocus
+                style={{ width: '100%', padding: '0.7rem 2.4rem 0.7rem 0.9rem', border: '1.5px solid var(--border)', borderRadius: '12px', fontSize: '0.95rem', background: 'var(--surface2)', fontFamily: 'inherit', boxSizing: 'border-box' }}
+              />
+              {searching ? (
+                <div style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, border: '2px solid var(--teal)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+              ) : (
+                <span style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', fontSize: '1rem' }}>🔍</span>
+              )}
             </div>
-          </div>
-          {preview.plot&&<div style={{ fontSize:'0.85rem', color:'var(--text-dim)', lineHeight:1.5, marginBottom:'1rem' }}>{preview.plot}</div>}
-          {preview.rating_imdb&&<div style={{ fontSize:'0.85rem', marginBottom:'1.25rem' }}>★ IMDB {preview.rating_imdb}</div>}
-          <div style={{ display:'flex', gap:'0.65rem' }}>
-            <button onClick={()=>setPreview(null)} style={{ flex:1, padding:'0.8rem', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'10px', fontSize:'0.9rem', cursor:'pointer', fontWeight:600 }}>← Back</button>
-            <button onClick={handleAdd} disabled={saving} style={{ flex:2, padding:'0.8rem', background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', fontSize:'0.9rem', fontWeight:600, cursor:saving?'not-allowed':'pointer', opacity:saving?0.6:1 }}>
-              {saving?'Adding…':'Add to Suggestions'}
+
+            {query.length > 0 && query.length < 3 && (
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', textAlign: 'center', padding: '1rem 0' }}>Keep typing…</div>
+            )}
+
+            {loadingPreview && (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
+                <div className="spinner" />
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              {results.map(r => (
+                <div key={r.tmdb_id} onClick={() => pickMovie(r.tmdb_id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '0.6rem 0.75rem', background: 'var(--surface2)', borderRadius: '12px', cursor: 'pointer', border: '1px solid var(--border)', transition: 'background 0.15s' }}>
+                  {r.poster_url
+                    ? <img src={r.poster_url} alt="" style={{ width: 42, height: 63, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />
+                    : <div style={{ width: 42, height: 63, background: 'var(--border)', borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🎬</div>}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.2 }}>{r.title}</div>
+                    {r.year && <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginTop: '0.15rem' }}>{r.year}</div>}
+                  </div>
+                  <span style={{ color: 'var(--teal)', fontSize: '1rem', flexShrink: 0 }}>›</span>
+                </div>
+              ))}
+            </div>
+
+            {results.length === 0 && query.length >= 3 && !searching && (
+              <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2rem 0', fontSize: '0.88rem' }}>No results for "{query}"</div>
+            )}
+          </>
+        )}
+
+        {/* Preview / confirm state */}
+        {preview && (
+          <div>
+            <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+              {preview.poster_url
+                ? <img src={preview.poster_url} alt="" style={{ width: 90, height: 135, objectFit: 'cover', borderRadius: 10, flexShrink: 0, boxShadow: '0 2px 12px rgba(0,0,0,0.15)' }} />
+                : <div style={{ width: 90, height: 135, background: 'var(--surface2)', borderRadius: 10, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem' }}>🎬</div>}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 800, fontSize: '1.05rem', lineHeight: 1.2, marginBottom: '0.3rem' }}>{preview.title}</div>
+                {leadActor && (
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginBottom: '0.2rem' }}>
+                    {leadActor}{preview.rating ? ` (${preview.rating})` : ''}
+                  </div>
+                )}
+                {preview.year && <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>{preview.year}{preview.runtime ? ` · ${preview.runtime}` : ''}</div>}
+                {preview.genre && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.4rem' }}>
+                    {preview.genre.split(',').map(g => g.trim()).filter(Boolean).map(g => (
+                      <span key={g} style={{ background: 'var(--surface2)', borderRadius: '20px', padding: '0.12rem 0.45rem', fontSize: '0.68rem', color: 'var(--text-dim)', border: '1px solid var(--border)' }}>{g}</span>
+                    ))}
+                  </div>
+                )}
+                {preview.rating_imdb && (
+                  <div style={{ marginTop: '0.4rem' }}>
+                    <span style={{ background: 'rgba(180,150,0,0.15)', color: 'var(--amber-dark)', fontWeight: 700, fontSize: '0.72rem', padding: '0.2rem 0.55rem', borderRadius: '20px', border: '1px solid rgba(180,150,0,0.3)' }}>IMDb {preview.rating_imdb}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {preview.plot && (
+              <div style={{ fontSize: '0.83rem', color: 'var(--text-dim)', lineHeight: 1.55, marginBottom: '1.25rem', padding: '0.75rem', background: 'var(--surface2)', borderRadius: '10px' }}>
+                {preview.plot}
+              </div>
+            )}
+
+            <button onClick={handleAdd} disabled={saving}
+              style={{ width: '100%', padding: '0.9rem', background: 'var(--teal)', color: '#fff', border: 'none', borderRadius: '12px', fontSize: '1rem', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1 }}>
+              {saving ? 'Adding…' : `+ Add "${preview.title}" to Suggestions`}
             </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
