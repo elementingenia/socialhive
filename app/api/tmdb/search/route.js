@@ -9,7 +9,13 @@ export async function GET(request) {
       { cache: 'no-store' }
     )
     const data = await res.json()
-    return NextResponse.json(data.results?.slice(0, 8) || [])
+    const results = (data.results || []).slice(0, 8).map(m => ({
+      tmdb_id: String(m.id),
+      title:   m.title,
+      year:    m.release_date?.split('-')[0] || null,
+      poster_url: m.poster_path ? `https://image.tmdb.org/t/p/w185${m.poster_path}` : null,
+    }))
+    return NextResponse.json(results)
   } catch {
     return NextResponse.json([])
   }
