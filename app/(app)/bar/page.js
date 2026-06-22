@@ -46,6 +46,7 @@ export default function BarPage() {
   const [catFilter,    setCat]          = useState("all")
   const [view,         setView]         = useState("order")
   const [toast,        setToast]        = useState(null)
+  const [expandedPeriod, setExpandedPeriod] = useState(null)
 
   function showToast(msg) {
     setToast(msg)
@@ -75,7 +76,7 @@ export default function BarPage() {
     // Reconciled tabs — to find outstanding unpaid periods
     const { data: reconTabs } = await supabase
       .from("bar_tabs")
-      .select("quantity, reconciliation_id, bar_products(price), bar_reconciliations(id, period_start, period_end)")
+      .select("quantity, reconciliation_id, bar_products(id, name, icon, price), bar_reconciliations(id, period_start, period_end)")
       .eq("member_id", member.id)
       .not("reconciliation_id", "is", null)
 
@@ -91,14 +92,25 @@ export default function BarPage() {
           period_start: row.bar_reconciliations?.period_start,
           period_end:   row.bar_reconciliations?.period_end,
           total: 0,
+          items: {},
         }
       }
-      reconMap[rid].total = parseFloat(
-        (reconMap[rid].total + parseFloat(row.bar_products?.price || 0) * (row.quantity || 1)).toFixed(2)
-      )
+      const p = row.bar_products
+      const pid = p?.id
+      const lineTotal = parseFloat(p?.price || 0) * (row.quantity || 1)
+      if (pid) {
+        if (!reconMap[rid].items[pid]) {
+          reconMap[rid].items[pid] = { name: p.name, icon: p.icon, unit_price: parseFloat(p.price || 0), quantity: 0, line_total: 0 }
+        }
+        reconMap[rid].items[pid].quantity  += (row.quantity || 1)
+        reconMap[rid].items[pid].line_total = parseFloat((reconMap[rid].items[pid].line_total + lineTotal).toFixed(2))
+      }
+      reconMap[rid].total = parseFloat((reconMap[rid].total + lineTotal).toFixed(2))
     }
     setOutstanding(
-      Object.values(reconMap).sort((a, b) => new Date(a.period_end) - new Date(b.period_end))
+      Object.values(reconMap)
+        .sort((a, b) => new Date(a.period_end) - new Date(b.period_end))
+        .map(r => ({ ...r, items: Object.values(r.items) }))
     )
   }, [member?.id])
 
@@ -167,7 +179,7 @@ export default function BarPage() {
           <div>
             <div style={{ color:"#fff", fontWeight:700, fontSize:"0.9rem" }}>⚠ Balance Due</div>
             <div style={{ color:"rgba(255,255,255,0.85)", fontSize:"0.78rem" }}>
-              {outstanding.length} unpaid period{outstanding.length !== 1 ? "s" : ""} — see admin to settle
+              {outstanding.length} unpaid period{outstanding.length !== 1 ? "s" : ""} — tap My Tab to view
             </div>
           </div>
           <div style={{ color:"#fff", fontWeight:800, fontSize:"1.4rem" }}>{fmtPrice(outstandingTotal)}</div>
@@ -260,27 +272,60 @@ export default function BarPage() {
                 </div>
               )}
 
-              {/* Outstanding unpaid periods */}
+              {/* Outstanding unpaid periods — tap to expand itemised breakdown */}
               {outstanding.length > 0 && (
                 <div style={{ marginBottom:"1.25rem" }}>
                   <div style={{ fontWeight:700, fontSize:"0.8rem", color:"var(--amber-dark)", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:"0.5rem" }}>⚠ Balance Due</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:"0.4rem" }}>
-                    {outstanding.map(o => (
-                      <div key={o.reconciliation_id} style={{ background:"var(--amber)12", borderRadius:"12px", border:"1px solid var(--amber)", padding:"0.75rem 1rem", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                        <div>
-                          <div style={{ fontWeight:700, fontSize:"0.88rem", color:"var(--amber-dark)" }}>Unpaid Balance</div>
-                          <div style={{ fontSize:"0.75rem", color:"var(--text-dim)" }}>
-                            {o.period_start && o.period_end
-                              ? `${fmtDate(o.period_start)} – ${fmtDate(o.period_end)}`
-                              : "Past period"}
+                  <div style={{ display:"flex", flexDirection:"column", gap:"0.5rem" }}>
+                    {outstanding.map(o => {
+                      const open = expandedPeriod === o.reconciliation_id
+                      return (
+                        <div key={o.reconciliation_id} style={{ borderRadius:"12px", border:"1px solid var(--amber)", overflow:"hidden" }}>
+                          {/* Invoice header — always visible, tappable */}
+                          <div
+                            onClick={() => setExpandedPeriod(open ? null : o.reconciliation_id)}
+                            style={{ background:"rgba(217,119,6,0.07)", padding:"0.75rem 1rem", display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer" }}>
+                            <div>
+                              <div style={{ fontWeight:700, fontSize:"0.88rem", color:"var(--amber-dark)" }}>Unpaid Balance</div>
+                              <div style={{ fontSize:"0.75rem", color:"var(--text-dim)" }}>
+                                {o.period_start && o.period_end
+                                  ? `${fmtDate(o.period_start)} – ${fmtDate(o.period_end)}`
+                                  : "Past period"}
+                                {" · "}{o.items.length} line{o.items.length !== 1 ? "s" : ""}
+                              </div>
+                            </div>
+                            <div style={{ display:"flex", alignItems:"center", gap:"0.6rem" }}>
+                              <div style={{ fontWeight:800, fontSize:"1.05rem", color:"var(--amber-dark)" }}>{fmtPrice(o.total)}</div>
+                              <span style={{ color:"var(--amber)", fontSize:"0.85rem", transition:"transform 0.2s", display:"inline-block", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>›</span>
+                            </div>
                           </div>
+                          {/* Itemised breakdown */}
+                          {open && (
+                            <div style={{ background:"var(--surface)", padding:"0 1rem" }}>
+                              {o.items.map((item, i) => (
+                                <div key={item.name} style={{ display:"flex", alignItems:"center", gap:"0.6rem", padding:"0.65rem 0", borderBottom: i < o.items.length - 1 ? "1px solid var(--border)" : "none" }}>
+                                  <span style={{ fontSize:"1.1rem" }}>{item.icon || "🍺"}</span>
+                                  <div style={{ flex:1, minWidth:0 }}>
+                                    <div style={{ fontWeight:600, fontSize:"0.88rem" }}>{item.name}</div>
+                                    <div style={{ fontSize:"0.72rem", color:"var(--text-dim)" }}>
+                                      {fmtPrice(item.unit_price)} × {item.quantity}
+                                    </div>
+                                  </div>
+                                  <div style={{ fontWeight:700, color:"var(--amber-dark)", flexShrink:0 }}>{fmtPrice(item.line_total)}</div>
+                                </div>
+                              ))}
+                              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"0.65rem 0", borderTop:"1px solid var(--border)", marginTop:"0" }}>
+                                <span style={{ fontWeight:700, fontSize:"0.85rem" }}>Total</span>
+                                <span style={{ fontWeight:800, fontSize:"1rem", color:"var(--amber-dark)" }}>{fmtPrice(o.total)}</span>
+                              </div>
+                              <div style={{ fontSize:"0.78rem", color:"var(--text-dim)", textAlign:"center", paddingBottom:"0.65rem" }}>
+                                Please see admin to settle this account.
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <div style={{ fontWeight:800, fontSize:"1.05rem", color:"var(--amber-dark)" }}>{fmtPrice(o.total)}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ fontSize:"0.8rem", color:"var(--text-dim)", marginTop:"0.5rem", textAlign:"center" }}>
-                    Please see admin to settle your outstanding balance.
+                      )
+                    })}
                   </div>
                 </div>
               )}
