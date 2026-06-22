@@ -206,7 +206,7 @@ function VoteGrid({ current, onVote, onRemove, loading }) {
 
 function Overlay({ children, onClose }) {
   return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:150, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
       <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640 }}>{children}</div>
     </div>
   )
@@ -221,7 +221,7 @@ function SuggestOverlay({ children, onClose }) {
     return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update) }
   }, [])
   return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:150, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
       <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, marginBottom:bottomOffset, transition:'margin-bottom 0.18s ease' }}>{children}</div>
     </div>
   )
