@@ -226,7 +226,7 @@ function AddScreeningSheet({ session, onClose, onAdded, addToast }) {
   const [err, setErr]         = useState(null)
 
   useEffect(() => {
-    supabase.from('movies').select('id, title, poster_url, year').order('title')
+    supabase.from('movies').select('id, title, poster_url, year').eq('we_own', false).order('title')
       .then(({ data }) => setMovies(data || []))
   }, [])
 
