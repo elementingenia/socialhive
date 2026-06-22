@@ -95,20 +95,23 @@ function NextScreeningCard({ event, myBooking }) {
 function MyMovieBookingsSheet({ bookings, session, onClose, onRefresh }) {
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const [cancelling, setCancelling] = useState(null)
-  const [confirmId, setConfirmId] = useState(null)
+  const [confirmCancel, setConfirmCancel] = useState(null) // { eventId, type:'confirmed'|'waitlist', title }
   const [toast, setToast] = useState(null)
 
-  function showToast(msg) {
-    setToast(msg)
-    setTimeout(() => setToast(null), 3500)
-  }
+  function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 3500) }
 
-  const upcoming = bookings
-    .filter(b => b.status !== 'cancelled' && b.events?.hub_type === 'movie' && localDate(b.events?.event_date) >= today)
-    .sort((a, b) => localDate(a.events?.event_date) - localDate(b.events?.event_date))
+  // Group by event_id — one card per screening
+  const upcoming = bookings.filter(b => b.status !== 'cancelled' && b.events?.hub_type === 'movie' && localDate(b.events?.event_date) >= today)
+  const grouped = {}
+  for (const b of upcoming) {
+    if (!grouped[b.event_id]) grouped[b.event_id] = { ev: b.events, confirmed: [], waitlist: [] }
+    if (b.status === 'waitlist') grouped[b.event_id].waitlist.push(b)
+    else grouped[b.event_id].confirmed.push(b)
+  }
+  const groups = Object.values(grouped).sort((a, b) => localDate(a.ev?.event_date) - localDate(b.ev?.event_date))
 
   async function doCancel(eventId, title) {
-    setConfirmId(null)
+    setConfirmCancel(null)
     setCancelling(eventId)
     const res = await fetch('/api/bookings', {
       method: 'DELETE',
@@ -130,23 +133,24 @@ function MyMovieBookingsSheet({ bookings, session, onClose, onRefresh }) {
       )}
       <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:200 }} />
       <div style={{ position:'fixed', inset:0, background:'var(--bg)', zIndex:201, overflowY:'auto', display:'flex', flexDirection:'column' }}>
-        {/* Header */}
         <div style={{ position:'sticky', top:0, background:'var(--bg)', borderBottom:'1px solid var(--border)', padding:'1rem 1.25rem', display:'flex', alignItems:'center', gap:'0.75rem', zIndex:10 }}>
           <button onClick={onClose} style={{ background:'none', border:'none', fontSize:'1.1rem', cursor:'pointer', color:'var(--teal)', fontWeight:700, padding:'0.25rem 0.5rem 0.25rem 0', lineHeight:1 }}>‹ Movies</button>
           <div style={{ fontWeight:700, fontSize:'1rem' }}>My Movie Bookings</div>
         </div>
         <div style={{ padding:'1rem 1.25rem 5rem', flex:1 }}>
-          {upcoming.length === 0 ? (
+          {groups.length === 0 ? (
             <div style={{ textAlign:'center', color:'var(--text-dim)', padding:'3rem 0', fontSize:'0.9rem' }}>No upcoming movie bookings.</div>
           ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:'0.85rem' }}>
-              {upcoming.map(b => {
-                const ev = b.events
+              {groups.map(({ ev, confirmed, waitlist }) => {
                 const movie = ev?.movies
-                const seats = b.seats || 1
-                const isWaitlist = b.status === 'waitlist'
+                const confirmedSeats = confirmed.reduce((s, b) => s + (b.seats || 1), 0)
+                const waitlistSeats  = waitlist.reduce((s, b) => s + (b.seats || 1), 0)
+                const isCancelling = cancelling === ev?.id
+                const isConfirming = confirmCancel?.eventId === ev?.id
+                const borderCol = confirmed.length ? 'var(--teal)' : 'var(--amber)'
                 return (
-                  <div key={b.id} style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', borderLeft:'3px solid ' + (isWaitlist ? 'var(--amber)' : 'var(--teal)'), overflow:'hidden', boxShadow:'var(--shadow)' }}>
+                  <div key={ev?.id} style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', borderLeft:'3px solid ' + borderCol, overflow:'hidden', boxShadow:'var(--shadow)' }}>
                     <div style={{ display:'flex' }}>
                       {movie?.poster_url ? (
                         <img src={movie.poster_url} alt="" style={{ width:80, minHeight:110, objectFit:'cover', flexShrink:0 }} />
@@ -158,27 +162,42 @@ function MyMovieBookingsSheet({ bookings, session, onClose, onRefresh }) {
                         <div style={{ fontSize:'0.8rem', color:'var(--teal)', fontWeight:600, marginBottom:'0.15rem' }}>{fmtDate(ev?.event_date)}</div>
                         {ev?.event_time && <div style={{ fontSize:'0.78rem', color:'var(--text-dim)', marginBottom:'0.4rem' }}>{fmtTime(ev.event_time)}</div>}
                         <div style={{ display:'flex', gap:'0.4rem', alignItems:'center', flexWrap:'wrap' }}>
-                          <span style={{ background: isWaitlist ? '#fef3c7' : '#dcfce7', color: isWaitlist ? '#d97706' : '#15803d', fontSize:'0.72rem', fontWeight:700, padding:'0.2rem 0.55rem', borderRadius:'20px' }}>
-                            {isWaitlist ? '⏳ Waitlist' : '✓ Confirmed'} · {seats} seat{seats !== 1 ? 's' : ''}
-                          </span>
+                          {confirmedSeats > 0 && (
+                            <span style={{ background:'#dcfce7', color:'#15803d', fontSize:'0.72rem', fontWeight:700, padding:'0.2rem 0.55rem', borderRadius:'20px' }}>
+                              ✓ Confirmed · {confirmedSeats} seat{confirmedSeats !== 1 ? 's' : ''}
+                            </span>
+                          )}
+                          {waitlistSeats > 0 && (
+                            <span style={{ background:'#fef3c7', color:'#d97706', fontSize:'0.72rem', fontWeight:700, padding:'0.2rem 0.55rem', borderRadius:'20px' }}>
+                              ⏳ Waitlist · {waitlistSeats} seat{waitlistSeats !== 1 ? 's' : ''}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
-                    {confirmId === b.id ? (
+                    {isConfirming ? (
                       <div style={{ padding:'0.75rem 1rem', borderTop:'1px solid var(--border)', background:'var(--surface2)', display:'flex', gap:'0.5rem', alignItems:'center' }}>
-                        <span style={{ fontSize:'0.82rem', color:'var(--text-dim)', flex:1 }}>Cancel this booking?</span>
-                        <button onClick={() => setConfirmId(null)} style={{ background:'none', border:'1px solid var(--border)', borderRadius:'8px', padding:'0.35rem 0.65rem', fontSize:'0.78rem', cursor:'pointer', color:'var(--text-dim)' }}>Keep</button>
-                        <button onClick={() => doCancel(b.event_id, movie?.title || ev?.title)} disabled={cancelling === b.event_id}
-                          style={{ background:'var(--danger)', color:'#fff', border:'none', borderRadius:'8px', padding:'0.35rem 0.65rem', fontSize:'0.78rem', fontWeight:600, cursor:'pointer', opacity:cancelling===b.event_id?0.6:1 }}>
-                          {cancelling === b.event_id ? '…' : 'Yes, cancel'}
+                        <span style={{ fontSize:'0.82rem', color:'var(--text-dim)', flex:1 }}>Cancel all bookings for this screening?</span>
+                        <button onClick={() => setConfirmCancel(null)} style={{ background:'none', border:'1px solid var(--border)', borderRadius:'8px', padding:'0.35rem 0.65rem', fontSize:'0.78rem', cursor:'pointer', color:'var(--text-dim)' }}>Keep</button>
+                        <button onClick={() => doCancel(ev?.id, movie?.title || ev?.title)} disabled={isCancelling}
+                          style={{ background:'var(--danger)', color:'#fff', border:'none', borderRadius:'8px', padding:'0.35rem 0.65rem', fontSize:'0.78rem', fontWeight:600, cursor:'pointer', opacity:isCancelling?0.6:1 }}>
+                          {isCancelling ? '…' : 'Yes, cancel'}
                         </button>
                       </div>
                     ) : (
-                      <div style={{ padding:'0.5rem 1rem', borderTop:'1px solid var(--border)', display:'flex', gap:'0.5rem' }}>
-                        <button onClick={() => setConfirmId(b.id)} disabled={!!cancelling}
-                          style={{ background:'none', border:'1px solid var(--border)', borderRadius:'8px', padding:'0.35rem 0.75rem', fontSize:'0.78rem', cursor:'pointer', color:'var(--text-dim)' }}>
-                          Cancel booking
-                        </button>
+                      <div style={{ padding:'0.5rem 1rem', borderTop:'1px solid var(--border)', display:'flex', gap:'0.5rem', flexWrap:'wrap' }}>
+                        {confirmedSeats > 0 && (
+                          <button onClick={() => setConfirmCancel({ eventId: ev?.id })} disabled={isCancelling}
+                            style={{ background:'none', border:'1.5px solid var(--danger)', borderRadius:'8px', padding:'0.35rem 0.75rem', fontSize:'0.78rem', cursor:'pointer', color:'var(--danger)', fontWeight:600 }}>
+                            Cancel booking
+                          </button>
+                        )}
+                        {waitlistSeats > 0 && confirmedSeats === 0 && (
+                          <button onClick={() => setConfirmCancel({ eventId: ev?.id })} disabled={isCancelling}
+                            style={{ background:'none', border:'1.5px solid var(--danger)', borderRadius:'8px', padding:'0.35rem 0.75rem', fontSize:'0.78rem', cursor:'pointer', color:'var(--danger)', fontWeight:600 }}>
+                            Leave waitlist
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -195,11 +214,18 @@ function MyMovieBookingsSheet({ bookings, session, onClose, onRefresh }) {
 // ── My Bookings Card (→ /bookings) ────────────────────────────────────────────
 function MyBookingsCard({ bookings, onViewAll }) {
   const today = new Date(); today.setHours(0, 0, 0, 0)
-  const upcoming = bookings
-    .filter(b => b.status !== 'cancelled' && b.events?.hub_type === 'movie' && localDate(b.events?.event_date) >= today)
-    .sort((a, b) => localDate(a.events?.event_date) - localDate(b.events?.event_date))
+  const upcoming = bookings.filter(b => b.status !== 'cancelled' && b.events?.hub_type === 'movie' && localDate(b.events?.event_date) >= today)
 
-  if (!upcoming.length) return null
+  // Group by event_id
+  const grouped = {}
+  for (const b of upcoming) {
+    if (!grouped[b.event_id]) grouped[b.event_id] = { ev: b.events, confirmed: 0, waitlist: 0 }
+    if (b.status === 'waitlist') grouped[b.event_id].waitlist += (b.seats || 1)
+    else grouped[b.event_id].confirmed += (b.seats || 1)
+  }
+  const groups = Object.values(grouped).sort((a, b) => localDate(a.ev?.event_date) - localDate(b.ev?.event_date))
+
+  if (!groups.length) return null
 
   return (
     <div
@@ -211,12 +237,10 @@ function MyBookingsCard({ bookings, onViewAll }) {
         <span style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.78rem', fontWeight: 600 }}>View all ›</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {upcoming.slice(0, 3).map((b, i) => {
-          const ev = b.events
+        {groups.slice(0, 3).map(({ ev, confirmed, waitlist }, i) => {
           const movie = ev?.movies
-          const seats = b.seats || 1
           return (
-            <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+            <div key={ev?.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
               {movie?.poster_url ? (
                 <img src={movie.poster_url} alt="" style={{ width: 40, height: 60, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
               ) : (
@@ -230,10 +254,8 @@ function MyBookingsCard({ bookings, onViewAll }) {
                 {ev?.event_time && <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{fmtTime(ev.event_time)}</div>}
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: b.status === 'waitlist' ? 'var(--amber-dark)' : 'var(--teal)' }}>
-                  {b.status === 'waitlist' ? 'Waitlist' : 'Confirmed'}
-                </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>{seats} seat{seats !== 1 ? 's' : ''}</div>
+                {confirmed > 0 && <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--teal)' }}>✓ {confirmed} seat{confirmed !== 1 ? 's' : ''}</div>}
+                {waitlist > 0 && <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--amber-dark)' }}>⏳ +{waitlist} waitlist</div>}
               </div>
             </div>
           )

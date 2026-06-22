@@ -67,7 +67,6 @@ function EventForm({ event, onSave, onDelete, onClose }) {
     hub_type:    event?.hub_type    || 'movie',
     event_date:  event?.event_date  || '',
     event_time:  event?.event_time  || '',
-    location:    event?.location    || '',
     description: event?.description || '',
     max_seats:   event?.max_seats   != null ? String(event.max_seats) : '30',
     cost:        event?.cost        != null ? String(event.cost)      : '0',
@@ -94,7 +93,6 @@ function EventForm({ event, onSave, onDelete, onClose }) {
       hub_type:    form.hub_type,
       event_date:  form.event_date,
       event_time:  form.event_time || null,
-      location:    form.location   || null,
       description: form.description || null,
       max_seats:   parseInt(form.max_seats) || 30,
       cost:        parseFloat(form.cost)    || 0,
@@ -181,7 +179,7 @@ function EventsTab() {
 
   const load = useCallback(async () => {
     const today = new Date().toISOString().split('T')[0]
-    let q = supabase.from('events').select('id, title, event_date, event_time, hub_type, max_seats, cost, is_public, location').eq('archived', false).order('event_date', { ascending: true })
+    let q = supabase.from('events').select('id, title, event_date, event_time, hub_type, max_seats, cost, is_public').eq('archived', false).order('event_date', { ascending: true })
     if (!showPast) q = q.gte('event_date', today)
     const { data } = await q
     setEvents(data || [])
@@ -225,7 +223,7 @@ function EventsTab() {
                 style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.8rem 1rem', cursor:'pointer', borderLeft:'4px solid '+col, opacity:isPast?0.65:1, display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'0.5rem' }}>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontWeight:700, fontSize:'0.9rem', marginBottom:'0.2rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{e.title}</div>
-                  <div style={{ fontSize:'0.78rem', color:'var(--text-dim)' }}>{fmtDate(e.event_date)}{e.event_time?' · '+fmtTime(e.event_time):''}{e.location?' · '+e.location:''}</div>
+                  <div style={{ fontSize:'0.78rem', color:'var(--text-dim)' }}>{fmtDate(e.event_date)}{e.event_time?' · '+fmtTime(e.event_time):''}</div>
                 </div>
                 <div style={{ display:'flex', gap:'0.3rem', flexShrink:0, flexWrap:'wrap', justifyContent:'flex-end' }}>
                   <Badge label={hub?.icon+' '+hub?.label} colour={col} />
