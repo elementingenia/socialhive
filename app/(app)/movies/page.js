@@ -70,6 +70,7 @@ function NextScreeningCard({ event, myBooking }) {
               {movie.plot}
             </div>
           )}
+          {event.notes && <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontStyle: 'italic', lineHeight: 1.4 }}>{event.notes}</div>}
           <div style={{ marginTop: '0.1rem' }}>
             {isBooked ? (
               <div style={{ display: 'inline-flex', alignItems: 'center', background: '#dcfce7', color: '#15803d', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
