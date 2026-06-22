@@ -1129,10 +1129,13 @@ function PrivateOwnershipTab({ addToast }) {
   const [results,   setResults]   = useState([])
   const [searching, setSearching] = useState(false)
   const [selected,  setSelected]  = useState(null)   // { tmdb_id, title, year, poster_url }
-  const [ownerId,   setOwnerId]   = useState('')
-  const [ownType,   setOwnType]   = useState('dvd')
-  const [adding,    setAdding]    = useState(false)
-  const [removing,  setRemoving]  = useState(null)
+  const [ownerId,       setOwnerId]       = useState('')
+  const [ownerSearch,   setOwnerSearch]   = useState('')
+  const [ownerResults,  setOwnerResults]  = useState([])
+  const [ownerSelected, setOwnerSelected] = useState(null) // { id, name }
+  const [ownType,       setOwnType]       = useState('dvd')
+  const [adding,        setAdding]        = useState(false)
+  const [removing,      setRemoving]      = useState(null)
   const searchRef = useRef(null)
 
   async function load() {
@@ -1154,6 +1157,18 @@ function PrivateOwnershipTab({ addToast }) {
     const res = await fetch('/api/tmdb/search?q=' + encodeURIComponent(q))
     setResults(await res.json())
     setSearching(false)
+  }
+
+  function doOwnerSearch(q) {
+    setOwnerSearch(q); setOwnerSelected(null); setOwnerId('')
+    if (q.length < 2) { setOwnerResults([]); return }
+    const norm = q.toLowerCase()
+    setOwnerResults(members.filter(m => m.name.toLowerCase().includes(norm)))
+  }
+
+  function selectOwner(m) {
+    setOwnerSelected(m); setOwnerId(m.id)
+    setOwnerSearch(m.name); setOwnerResults([])
   }
 
   async function handleAdd() {
@@ -1183,7 +1198,9 @@ function PrivateOwnershipTab({ addToast }) {
     setAdding(false)
     if (error) { addToast(error.code === '23505' ? 'That ownership record already exists' : error.message, 'error'); return }
     addToast('Ownership record added')
-    setSearch(''); setResults([]); setSelected(null); setOwnerId(''); setOwnType('dvd')
+    setSearch(''); setResults([]); setSelected(null)
+    setOwnerId(''); setOwnerSearch(''); setOwnerSelected(null); setOwnerResults([])
+    setOwnType('dvd')
     load()
   }
 
@@ -1219,27 +1236,46 @@ function PrivateOwnershipTab({ addToast }) {
             </div>
           )}
         </div>
-        {/* Owner + type */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.6rem', marginBottom:'0.75rem' }}>
-          <div>
-            <div style={{ fontSize:'0.75rem', fontWeight:600, color:'var(--text-dim)', marginBottom:'0.3rem' }}>Owner (resident)</div>
-            <div style={{ position:'relative' }}>
-              <select style={{ ...inputStyle, appearance:'none', WebkitAppearance:'none', paddingRight:'2rem' }} value={ownerId} onChange={e => setOwnerId(e.target.value)}>
-                <option value="">— Select resident —</option>
-                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-              <span style={{ position:'absolute', right:'0.75rem', top:'50%', transform:'translateY(-50%)', pointerEvents:'none', color:'var(--text-dim)', fontSize:'0.7rem' }}>▼</span>
-            </div>
+        {/* Owner live search */}
+        <div style={{ marginBottom:'0.6rem' }}>
+          <div style={{ fontSize:'0.75rem', fontWeight:600, color:'var(--text-dim)', marginBottom:'0.3rem' }}>Owner (resident)</div>
+          <div style={{ position:'relative' }}>
+            <input
+              value={ownerSearch}
+              onChange={e => doOwnerSearch(e.target.value)}
+              placeholder="Type a name (min 2 chars)…"
+              style={{ ...inputStyle, borderColor: ownerSelected ? 'var(--teal)' : undefined }}
+            />
+            {ownerSelected && (
+              <span style={{ position:'absolute', right:'0.75rem', top:'50%', transform:'translateY(-50%)', color:'var(--teal)', fontSize:'1rem', pointerEvents:'none' }}>✓</span>
+            )}
+            {ownerResults.length > 0 && !ownerSelected && (
+              <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', zIndex:50, overflow:'hidden', boxShadow:'0 4px 16px rgba(0,0,0,0.2)', marginTop:'0.25rem' }}>
+                {ownerResults.map(m => (
+                  <div key={m.id} onClick={() => selectOwner(m)}
+                    style={{ padding:'0.65rem 0.85rem', cursor:'pointer', borderBottom:'1px solid var(--border)', fontSize:'0.88rem', fontWeight:500 }}>
+                    {m.name}
+                  </div>
+                ))}
+              </div>
+            )}
+            {ownerSearch.length >= 2 && ownerResults.length === 0 && !ownerSelected && (
+              <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', zIndex:50, padding:'0.65rem 0.85rem', fontSize:'0.85rem', color:'var(--text-dim)', marginTop:'0.25rem' }}>
+                No residents match
+              </div>
+            )}
           </div>
-          <div>
-            <div style={{ fontSize:'0.75rem', fontWeight:600, color:'var(--text-dim)', marginBottom:'0.3rem' }}>Ownership type</div>
-            <div style={{ position:'relative' }}>
-              <select style={{ ...inputStyle, appearance:'none', WebkitAppearance:'none', paddingRight:'2rem' }} value={ownType} onChange={e => setOwnType(e.target.value)}>
-                <option value="dvd">📀 DVD</option>
-                <option value="digital">💾 Digital</option>
-              </select>
-              <span style={{ position:'absolute', right:'0.75rem', top:'50%', transform:'translateY(-50%)', pointerEvents:'none', color:'var(--text-dim)', fontSize:'0.7rem' }}>▼</span>
-            </div>
+        </div>
+        {/* Type toggle */}
+        <div style={{ marginBottom:'0.75rem' }}>
+          <div style={{ fontSize:'0.75rem', fontWeight:600, color:'var(--text-dim)', marginBottom:'0.3rem' }}>Ownership type</div>
+          <div style={{ display:'flex', gap:'0.5rem' }}>
+            {[['dvd','📀 DVD'],['digital','💾 Digital']].map(([val, label]) => (
+              <button key={val} onClick={() => setOwnType(val)}
+                style={{ flex:1, padding:'0.65rem', borderRadius:'10px', border:`1.5px solid ${ownType===val ? 'var(--teal)' : 'var(--border)'}`, background: ownType===val ? 'var(--teal)' : 'var(--surface)', color: ownType===val ? '#fff' : 'var(--text)', fontWeight: ownType===val ? 700 : 500, fontSize:'0.88rem', cursor:'pointer', fontFamily:'inherit' }}>
+                {label}
+              </button>
+            ))}
           </div>
         </div>
         <button onClick={handleAdd} disabled={!canAdd || adding}
