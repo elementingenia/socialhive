@@ -167,15 +167,25 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, active
             )}
 
             <div style={{ position:'relative', padding:movie.poster_url?'3rem 1.25rem 2.5rem':'1.25rem 1.25rem 2.5rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
-              {/* ON LOAN pill — top right of details, in the negative space beside the poster */}
-              {activeLoan && (
-                <div style={{ position:'absolute', top:'0.75rem', right:'1.25rem', background:iMineToReturn?'var(--teal)':'var(--surface2)', border:'1px solid ' + (iMineToReturn?'var(--teal)':'var(--border)'), borderRadius:'10px', padding:'0.4rem 0.65rem', textAlign:'center' }}>
-                  <div style={{ fontSize:'0.65rem', fontWeight:800, color:iMineToReturn?'#fff':'var(--text)', textTransform:'uppercase', letterSpacing:'0.05em', lineHeight:1.2 }}>
-                    📀 On Loan
-                  </div>
-                  <div style={{ fontSize:'0.6rem', color:iMineToReturn?'rgba(255,255,255,0.85)':'var(--text-dim)', marginTop:'0.2rem', lineHeight:1.3, whiteSpace:'nowrap' }}>
-                    {iMineToReturn ? `You · ${fmtDate(activeLoan.borrowed_at)}` : `${activeLoan.members?.name || 'Resident'} · ${fmtDate(activeLoan.borrowed_at)}`}
-                  </div>
+              {/* Top-right column — ON LOAN pill + admin delete */}
+              {(activeLoan || isAdmin) && (
+                <div style={{ position:'absolute', top:'0.75rem', right:'1.25rem', display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'0.4rem' }}>
+                  {activeLoan && (
+                    <div style={{ background:iMineToReturn?'var(--teal)':'var(--surface2)', border:'1px solid ' + (iMineToReturn?'var(--teal)':'var(--border)'), borderRadius:'10px', padding:'0.4rem 0.65rem', textAlign:'center' }}>
+                      <div style={{ fontSize:'0.65rem', fontWeight:800, color:iMineToReturn?'#fff':'var(--text)', textTransform:'uppercase', letterSpacing:'0.05em', lineHeight:1.2 }}>
+                        📀 On Loan
+                      </div>
+                      <div style={{ fontSize:'0.6rem', color:iMineToReturn?'rgba(255,255,255,0.85)':'var(--text-dim)', marginTop:'0.2rem', lineHeight:1.3, whiteSpace:'nowrap' }}>
+                        {iMineToReturn ? `You · ${fmtDate(activeLoan.borrowed_at)}` : `${activeLoan.members?.name || 'Resident'} · ${fmtDate(activeLoan.borrowed_at)}`}
+                      </div>
+                    </div>
+                  )}
+                  {isAdmin && (
+                    <button onClick={() => setConfirmDelete(true)} disabled={deleting}
+                      style={{ display:'flex', alignItems:'center', gap:'0.3rem', background:'none', border:'1px solid var(--danger)', borderRadius:'8px', padding:'0.3rem 0.6rem', fontSize:'0.68rem', fontWeight:700, color:'var(--danger)', cursor:deleting?'not-allowed':'pointer', opacity:deleting?0.5:1, whiteSpace:'nowrap' }}>
+                      🗑 {deleting ? 'Removing…' : 'Remove'}
+                    </button>
+                  )}
                 </div>
               )}
               {/* No-poster loan tile */}
@@ -230,12 +240,7 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, active
                 </div>
               ) : null}
 
-              {isAdmin && (
-                <button onClick={() => setConfirmDelete(true)} disabled={deleting}
-                  style={{ background:'none', border:'1px solid var(--danger)', borderRadius:'10px', color:'var(--danger)', fontSize:'0.82rem', fontWeight:600, padding:'0.65rem', cursor:deleting?'not-allowed':'pointer', width:'100%', opacity:deleting?0.5:1, marginTop:'0.5rem' }}>
-                  {deleting ? 'Removing…' : '🗑 Remove from DVD library'}
-                </button>
-              )}
+
             </div>
           </div>
         </div>
