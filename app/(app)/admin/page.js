@@ -1223,17 +1223,23 @@ function PrivateOwnershipTab({ addToast }) {
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.6rem', marginBottom:'0.75rem' }}>
           <div>
             <div style={{ fontSize:'0.75rem', fontWeight:600, color:'var(--text-dim)', marginBottom:'0.3rem' }}>Owner (resident)</div>
-            <select style={inputStyle} value={ownerId} onChange={e => setOwnerId(e.target.value)}>
-              <option value="">— Select resident —</option>
-              {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
+            <div style={{ position:'relative' }}>
+              <select style={{ ...inputStyle, appearance:'none', WebkitAppearance:'none', paddingRight:'2rem' }} value={ownerId} onChange={e => setOwnerId(e.target.value)}>
+                <option value="">— Select resident —</option>
+                {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
+              <span style={{ position:'absolute', right:'0.75rem', top:'50%', transform:'translateY(-50%)', pointerEvents:'none', color:'var(--text-dim)', fontSize:'0.7rem' }}>▼</span>
+            </div>
           </div>
           <div>
             <div style={{ fontSize:'0.75rem', fontWeight:600, color:'var(--text-dim)', marginBottom:'0.3rem' }}>Ownership type</div>
-            <select style={inputStyle} value={ownType} onChange={e => setOwnType(e.target.value)}>
-              <option value="dvd">DVD</option>
-              <option value="digital">Digital</option>
-            </select>
+            <div style={{ position:'relative' }}>
+              <select style={{ ...inputStyle, appearance:'none', WebkitAppearance:'none', paddingRight:'2rem' }} value={ownType} onChange={e => setOwnType(e.target.value)}>
+                <option value="dvd">📀 DVD</option>
+                <option value="digital">💾 Digital</option>
+              </select>
+              <span style={{ position:'absolute', right:'0.75rem', top:'50%', transform:'translateY(-50%)', pointerEvents:'none', color:'var(--text-dim)', fontSize:'0.7rem' }}>▼</span>
+            </div>
           </div>
         </div>
         <button onClick={handleAdd} disabled={!canAdd || adding}
