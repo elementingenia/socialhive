@@ -482,17 +482,17 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
 
             <div style={{ fontWeight: 800, fontSize: '1.1rem', lineHeight: 1.2 }}>{movie?.title || ev.title}</div>
 
-            {(() => { const genres = parseGenres(movie?.genre); return genres.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
-                {genres.map(g => <span key={g} style={{ background: 'var(--surface2)', borderRadius: '20px', padding: '0.15rem 0.5rem', fontSize: '0.7rem', color: 'var(--text-dim)' }}>{g}</span>)}
-              </div>
-            )})()}
-
             {(movie?.actors || movie?.rating) && (
               <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
                 {movie.actors?.split(',')[0]?.trim()}{movie.actors && movie.rating ? ' ' : ''}{movie.rating ? `(${movie.rating})` : ''}
               </div>
             )}
+
+            {(() => { const genres = parseGenres(movie?.genre); return genres.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
+                {genres.map(g => <span key={g} style={{ background: 'var(--surface2)', borderRadius: '20px', padding: '0.15rem 0.5rem', fontSize: '0.7rem', color: 'var(--text-dim)' }}>{g}</span>)}
+              </div>
+            )})()}
 
             {movie?.plot && (
               <div style={{ color: 'var(--text-dim)', fontSize: '0.8rem', lineHeight: 1.5 }}>
