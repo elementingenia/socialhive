@@ -325,6 +325,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
   const [changingSplit,    setChangingSplit]     = useState(false)
   const [confirmCancel,    setConfirmCancel]    = useState(false)
   const [showAttendees,    setShowAttendees]    = useState(false)
+  const [confirmLeaveWaitlist, setConfirmLeaveWaitlist] = useState(false)
   const [splitOffer,       setSplitOffer]       = useState(null)
   const [changeSplitOffer, setChangeSplitOffer] = useState(null)
 
@@ -480,6 +481,12 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
               <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>{movie.genre}</div>
             )}
 
+            {(movie?.actors || movie?.rating) && (
+              <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
+                {movie.actors?.split(',')[0]?.trim()}{movie.actors && movie.rating ? ' ' : ''}{movie.rating ? `(${movie.rating})` : ''}
+              </div>
+            )}
+
             {movie?.plot && (
               <div style={{ color: 'var(--text-dim)', fontSize: '0.8rem', lineHeight: 1.5 }}>
                 {movie.plot}
@@ -507,9 +514,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
               </div>
             )}
 
-            {(ev.cost === 0 || ev.cost === null) && (
-              <span style={{ display: 'inline-block', background: '#dcfce7', color: '#15803d', fontWeight: 700, fontSize: '0.72rem', padding: '0.2rem 0.55rem', borderRadius: '20px' }}>● Free</span>
-            )}
+
             <div style={{ marginTop: '0.2rem' }}>
               <CapacityBar
                 confirmedSeats={ev.confirmed_seats}
@@ -530,19 +535,23 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                   <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
                     <span style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.75rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: '20px' }}>
-                      ✓ {myConfirmedSeats} seat{myConfirmedSeats > 1 ? 's' : ''} confirmed
+                      {myConfirmedSeats} Seat{myConfirmedSeats > 1 ? 's' : ''} Booked
                     </span>
                     <span style={{ background: '#fef3c7', color: '#d97706', fontSize: '0.75rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: '20px' }}>
-                      ⏳ {myWaitlistPos ? `#${myWaitlistPos} waitlist` : 'Waitlist'} — {myWaitlistSeats} seat{myWaitlistSeats > 1 ? 's' : ''}
+                      {myWaitlistPos ? `#${myWaitlistPos} Waitlist` : 'Waitlist'} {myWaitlistSeats} Seat{myWaitlistSeats > 1 ? 's' : ''}
                     </span>
                   </div>
                   <div style={{ display: 'flex', gap: '0.4rem' }}>
                     <button onClick={() => setChangingSplit(true)} disabled={acting}
                       style={{ background: 'none', border: '1px solid var(--teal)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--teal)', fontWeight: 600 }}>
-                      Change
+                      Change seats
+                    </button>
+                    <button onClick={() => setConfirmLeaveWaitlist(true)} disabled={acting}
+                      style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--text-dim)' }}>
+                      Leave waitlist
                     </button>
                     <button onClick={() => setConfirmCancel(true)} disabled={acting}
-                      style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--text-dim)' }}>
+                      style={{ background: 'none', border: '1px solid var(--danger)', borderRadius: '8px', padding: '0.3rem 0.65rem', fontSize: '0.78rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--danger)' }}>
                       Cancel all
                     </button>
                   </div>
@@ -565,7 +574,7 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
               {hasConfirmed && !hasWaitlist && !changingSeats && (
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   <button disabled style={{ background: '#15803d', color: '#fff', border: 'none', borderRadius: '8px', padding: '0.45rem 0.85rem', fontSize: '0.8rem', fontWeight: 700, cursor: 'default' }}>
-                    ✓ Booked × {myConfirmedSeats}
+                    {myConfirmedSeats} Seat{myConfirmedSeats > 1 ? 's' : ''} Booked
                   </button>
                   <button onClick={() => setChangingSeats(true)} disabled={acting}
                     style={{ background: 'none', border: '1.5px solid var(--border)', borderRadius: '8px', padding: '0.4rem 0.75rem', fontSize: '0.8rem', cursor: 'pointer', color: 'var(--text)', fontWeight: 600 }}>
@@ -594,11 +603,11 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
               {!hasConfirmed && hasWaitlist && (
                 <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
                   <button disabled style={{ background: '#d97706', color: '#fff', border: 'none', borderRadius: '8px', padding: '0.45rem 0.85rem', fontSize: '0.8rem', fontWeight: 700, cursor: 'default' }}>
-                    ⏳ {myWaitlistPos ? `#${myWaitlistPos} waitlist` : 'Waitlist'} — {myWaitlistSeats} seat{myWaitlistSeats > 1 ? 's' : ''}
+                    {myWaitlistPos ? `#${myWaitlistPos} Waitlist` : 'Waitlist'} {myWaitlistSeats} Seat{myWaitlistSeats > 1 ? 's' : ''}
                   </button>
-                  <button onClick={() => setConfirmCancel(true)} disabled={acting}
+                  <button onClick={() => setConfirmLeaveWaitlist(true)} disabled={acting}
                     style={{ background: 'none', border: '1.5px solid var(--danger)', borderRadius: '8px', padding: '0.4rem 0.75rem', fontSize: '0.8rem', cursor: acting ? 'not-allowed' : 'pointer', color: 'var(--danger)', fontWeight: 600 }}>
-                    Leave waitlist
+                    Leave Waitlist
                   </button>
                 </div>
               )}
@@ -677,12 +686,18 @@ function ScreeningCard({ ev, session, isAdmin, onRefresh, addToast }) {
           message={
             hasConfirmed && hasWaitlist
               ? 'Cancel all your bookings for ' + ev.title + '? Both your confirmed seats and waitlist place will be released.'
-              : !hasConfirmed && hasWaitlist
-              ? 'Leave the waitlist for ' + ev.title + '? Your place in the queue will be lost.'
               : 'Cancel your ' + (myConfirmedSeats > 1 ? myConfirmedSeats + ' seats' : 'seat') + ' for ' + ev.title + '?' + (myConfirmedSeats > 1 ? ' All seats will be released.' : '')
           }
           onConfirm={doCancel}
           onCancel={() => setConfirmCancel(false)}
+        />
+      )}
+
+      {confirmLeaveWaitlist && (
+        <ConfirmDialog
+          message={'Leave the waitlist for ' + ev.title + '? Your place in the queue will be lost.'}
+          onConfirm={doCancel}
+          onCancel={() => setConfirmLeaveWaitlist(false)}
         />
       )}
 

@@ -75,10 +75,6 @@ function NextScreeningCard({ event, myBooking }) {
               <div style={{ display: 'inline-flex', alignItems: 'center', background: '#dcfce7', color: '#15803d', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
                 ✓ Booked · {myBooking.confirmed_seats} seat{myBooking.confirmed_seats !== 1 ? 's' : ''}
               </div>
-            ) : isWaitlist ? (
-              <div style={{ display: 'inline-flex', alignItems: 'center', background: '#fef3c7', color: '#d97706', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
-                ⏳ Waitlisted
-              </div>
             ) : (
               <div style={{ display: 'inline-flex', alignItems: 'center', background: 'rgba(0,128,128,0.1)', color: 'var(--teal)', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
                 Tap to book →

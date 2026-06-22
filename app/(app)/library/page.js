@@ -408,35 +408,40 @@ function SuggestSheet({ session, onClose, onAdded, addToast }) {
 }
 
 function MovieCard({ movie, myVote, avgData, onClick }) {
-  const pill = streamingPill(movie.streaming_au, movie.we_own)
   const genres = parseGenres(movie.genre)
+  const leadActor = movie.actors?.split(',')[0]?.trim()
   return (
-    <div onClick={onClick} style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', borderLeft:'3px solid var(--teal)', display:'flex', overflow:'hidden', boxShadow:'var(--shadow)', cursor:'pointer', minHeight:100 }}>
+    <div onClick={onClick} style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', borderLeft:'3px solid var(--teal)', display:'flex', overflow:'hidden', boxShadow:'var(--shadow)', cursor:'pointer' }}>
       {movie.poster_url
-        ? <img src={movie.poster_url} alt={movie.title} style={{ width:70, objectFit:'cover', flexShrink:0 }} />
-        : <div style={{ width:70, background:'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem', flexShrink:0 }}>🎬</div>}
-      <div style={{ flex:1, padding:'0.7rem 0.75rem', overflow:'hidden' }}>
-        <div style={{ fontWeight:700, fontSize:'0.9rem', lineHeight:1.2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{movie.title}</div>
-        {movie.actors && <div style={{ color:'var(--text-dim)', fontSize:'0.75rem', marginTop:'0.15rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{movie.actors.split(',')[0]?.trim()}</div>}
-        {genres.length>0 && (
-          <div style={{ display:'flex', flexWrap:'wrap', gap:'0.25rem', marginTop:'0.3rem' }}>
-            {genres.slice(0,2).map(g=><span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.12rem 0.45rem', fontSize:'0.68rem', color:'var(--text-dim)' }}>{g}</span>)}
+        ? <img src={movie.poster_url} alt={movie.title} style={{ width:65, objectFit:'cover', flexShrink:0 }} />
+        : <div style={{ width:65, background:'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem', flexShrink:0 }}>🎬</div>}
+      <div style={{ flex:1, padding:'0.55rem 0.65rem', overflow:'hidden' }}>
+        <div style={{ fontWeight:700, fontSize:'0.88rem', lineHeight:1.2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{movie.title}</div>
+        {(leadActor || movie.rating) && (
+          <div style={{ color:'var(--text-dim)', fontSize:'0.72rem', marginTop:'0.1rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+            {leadActor}{leadActor && movie.rating ? ' ' : ''}{movie.rating ? `(${movie.rating})` : ''}
           </div>
         )}
-        {pill && <div style={{ marginTop:'0.3rem' }}><span style={{ background:pill.bg, color:pill.color, borderRadius:'20px', padding:'0.12rem 0.45rem', fontSize:'0.68rem', fontWeight:700 }}>● {pill.label}</span></div>}
-      </div>
-      <div style={{ padding:'0.7rem 0.85rem', display:'flex', flexDirection:'column', alignItems:'flex-end', justifyContent:'center', gap:'0.25rem', flexShrink:0, minWidth:72 }}>
-        {avgData?.count>0 ? (
-          <div style={{ position:'relative', textAlign:'right' }}>
-            <span style={{ position:'absolute', top:0, left:0, fontSize:'0.58rem', fontWeight:700, color:'var(--teal)', lineHeight:1 }}>({avgData.count})</span>
-            <div style={{ fontSize:'1.3rem', fontWeight:800, color:'var(--teal)', lineHeight:1, paddingTop:'0.6rem' }}>{avgData.avg.toFixed(1)}</div>
+        {genres.length>0 && (
+          <div style={{ display:'flex', flexWrap:'wrap', gap:'0.2rem', marginTop:'0.25rem' }}>
+            {genres.slice(0,2).map(g=><span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.1rem 0.4rem', fontSize:'0.65rem', color:'var(--text-dim)' }}>{g}</span>)}
           </div>
-        ) : <div style={{ fontSize:'0.7rem', color:'var(--text-dim)', textAlign:'right' }}>Not yet<br/>rated</div>}
-        {myVote && <div style={{ fontSize:'0.7rem', color:'var(--teal)', fontWeight:700 }}>you: {myVote}</div>}
-        {movie.rating_imdb && (movie.imdb_id
-          ? <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ fontSize:'0.7rem', color:'var(--amber-dark)', fontWeight:600, textDecoration:'none', display:'block' }}>★ {movie.rating_imdb}</a>
-          : <div style={{ fontSize:'0.7rem', color:'var(--amber-dark)', fontWeight:600 }}>★ {movie.rating_imdb}</div>)}
-        {movie.rating_rt && <a href={`https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title)}`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ fontSize:'0.7rem', color:'#fa320a', fontWeight:600, textDecoration:'none', display:'block' }}>🍅 {movie.rating_rt}</a>}
+        )}
+      </div>
+      <div style={{ padding:'0.55rem 0.75rem', display:'flex', flexDirection:'column', alignItems:'flex-end', justifyContent:'center', gap:'0.2rem', flexShrink:0, minWidth:68 }}>
+        {avgData?.count>0 ? (
+          <div style={{ textAlign:'right' }}>
+            <div style={{ fontSize:'0.58rem', fontWeight:700, color:'var(--teal)', lineHeight:1 }}>({avgData.count})</div>
+            <div style={{ fontSize:'1.25rem', fontWeight:800, color:'var(--teal)', lineHeight:1 }}>{avgData.avg.toFixed(1)}</div>
+          </div>
+        ) : <div style={{ fontSize:'0.65rem', color:'var(--text-dim)', textAlign:'right' }}>Not yet<br/>rated</div>}
+        {myVote && <div style={{ fontSize:'0.68rem', color:'var(--teal)', fontWeight:700 }}>you: {myVote}</div>}
+        <div style={{ display:'flex', gap:'0.3rem', alignItems:'center' }}>
+          {movie.rating_imdb && (movie.imdb_id
+            ? <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ fontSize:'0.65rem', color:'var(--amber-dark)', fontWeight:600, textDecoration:'none' }}>★ {movie.rating_imdb}</a>
+            : <span style={{ fontSize:'0.65rem', color:'var(--amber-dark)', fontWeight:600 }}>★ {movie.rating_imdb}</span>)}
+          {movie.rating_rt && <a href={`https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title)}`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ fontSize:'0.65rem', color:'#fa320a', fontWeight:600, textDecoration:'none' }}>🍅 {movie.rating_rt}</a>}
+        </div>
       </div>
     </div>
   )
@@ -457,6 +462,7 @@ export default function LibraryPage() {
   const [swiperDone, setSwiperDone] = useState(false)
   const [showSwiper, setShowSwiper] = useState(false)
   const [toasts, setToasts] = useState([])
+  const [introExpanded, setIntroExpanded] = useState(false)
 
   function addToast(message, type='success') {
     const id = Date.now()
@@ -465,11 +471,16 @@ export default function LibraryPage() {
   }
 
   const loadData = useCallback(async () => {
-    const [{ data: moviesData }, { data: votesData }] = await Promise.all([
-      supabase.from('movies').select('*').eq('we_own', false).order('title'),
+    const today = new Date().toISOString().split('T')[0]
+    const [{ data: moviesData }, { data: votesData }, { data: eventsData }] = await Promise.all([
+      supabase.from('movies').select('*').order('title'),
       supabase.from('votes').select('movie_id, member_id, score'),
+      supabase.from('events').select('movie_id').gte('event_date', today).not('movie_id', 'is', null),
     ])
-    setMovies(moviesData||[])
+    // Show suggestions (we_own=false) + any we_own=true movies that have upcoming events
+    const scheduledMovieIds = new Set((eventsData||[]).map(e => e.movie_id))
+    const filtered = (moviesData||[]).filter(m => !m.we_own || scheduledMovieIds.has(m.id))
+    setMovies(filtered)
     setVotes(votesData||[])
     setLoading(false)
   }, [])
@@ -510,12 +521,21 @@ export default function LibraryPage() {
     <div style={{ background:'var(--bg)', minHeight:'100vh' }}>
       <Toast toasts={toasts} />
       <div style={{ padding:'1rem 1rem 6rem' }}>
-        <div style={{ background:'var(--surface)', borderRadius:'14px', padding:'1rem', marginBottom:'1rem', border:'1px solid var(--border)', borderLeft:'4px solid var(--teal)', fontSize:'0.88rem', lineHeight:1.6 }}>
-          <div style={{ display:'flex', alignItems:'flex-start', gap:'0.6rem' }}>
-            <span style={{ fontSize:'1.4rem', flexShrink:0 }}>🗳️</span>
-            <div>
-              <div style={{ fontWeight:700, color:'var(--teal)', fontSize:'0.8rem', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'0.2rem' }}>Viewing Suggestions</div>
-              Films suggested by residents for future screenings. <strong>Score each movie to have your say</strong> — the higher the community vote, the more likely it is to make the big screen!
+        <div style={{ background:'var(--surface)', borderRadius:'14px', padding:'0.75rem 1rem', marginBottom:'1rem', border:'1px solid var(--border)', borderLeft:'4px solid var(--teal)', fontSize:'0.88rem', lineHeight:1.5 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'0.6rem' }}>
+            <span style={{ fontSize:'1.2rem', flexShrink:0 }}>🗳️</span>
+            <div style={{ flex:1 }}>
+              <div style={{ fontWeight:700, color:'var(--teal)', fontSize:'0.78rem', textTransform:'uppercase', letterSpacing:'0.06em' }}>VIEWING SUGGESTIONS</div>
+              {introExpanded ? (
+                <>
+                  <div style={{ fontSize:'0.83rem', color:'var(--text-dim)', marginTop:'0.25rem' }}>
+                    Films suggested by residents for future screenings. <strong>Score each movie to have your say</strong> — the higher the community vote, the more likely it is to make the big screen!
+                  </div>
+                  <button onClick={()=>setIntroExpanded(false)} style={{ background:'none', border:'none', color:'var(--teal)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer', padding:'0.2rem 0', marginTop:'0.1rem' }}>Show less ↑</button>
+                </>
+              ) : (
+                <button onClick={()=>setIntroExpanded(true)} style={{ background:'none', border:'none', color:'var(--teal)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer', padding:'0.2rem 0' }}>Read more ↓</button>
+              )}
             </div>
           </div>
         </div>
