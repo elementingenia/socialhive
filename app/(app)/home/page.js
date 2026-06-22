@@ -57,24 +57,56 @@ function HubTiles() {
 
 function BarTabCard({ memberId }) {
   const router = useRouter()
-  const [total, setTotal] = useState(null)
+  const [openTotal,    setOpenTotal]    = useState(null)
+  const [outstanding,  setOutstanding]  = useState(0)
 
   useEffect(() => {
     if (!memberId) return
-    supabase
-      .from("bar_tabs")
-      .select("bar_products(price)")
-      .eq("member_id", memberId)
-      .is("reconciliation_id", null)
-      .then(({ data }) => {
-        const sum = (data || []).reduce((acc, row) => acc + (row.bar_products?.price || 0), 0)
-        setTotal(sum)
-      })
+    async function load() {
+      // Open (unreconciled) tab total
+      const { data: openData } = await supabase
+        .from("bar_tabs")
+        .select("bar_products(price)")
+        .eq("member_id", memberId)
+        .is("reconciliation_id", null)
+      const open = (openData || []).reduce((acc, row) => acc + parseFloat(row.bar_products?.price || 0), 0)
+      setOpenTotal(open)
+
+      // Outstanding: reconciled but unpaid
+      const { data: reconTabs } = await supabase
+        .from("bar_tabs")
+        .select("quantity, reconciliation_id, bar_products(price)")
+        .eq("member_id", memberId)
+        .not("reconciliation_id", "is", null)
+      const { data: paidPayments } = await supabase
+        .from("bar_member_payments")
+        .select("reconciliation_id")
+        .eq("member_id", memberId)
+      const paidIds = new Set((paidPayments || []).map(p => p.reconciliation_id))
+      const out = (reconTabs || [])
+        .filter(t => !paidIds.has(t.reconciliation_id))
+        .reduce((acc, row) => acc + parseFloat(row.bar_products?.price || 0) * (row.quantity || 1), 0)
+      setOutstanding(out)
+    }
+    load()
   }, [memberId])
+
+  const hasOutstanding = outstanding > 0
+  const grandTotal     = (openTotal || 0) + outstanding
+  const loading        = openTotal === null
+
+  function label() {
+    if (loading) return "Loading..."
+    if (hasOutstanding) return "$" + outstanding.toFixed(2) + " balance due — tap to view"
+    if (grandTotal === 0) return "No open items"
+    return "$" + grandTotal.toFixed(2) + " on your tab"
+  }
 
   return (
     <div onClick={() => router.push("/bar")} style={{
-      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px",
+      background: hasOutstanding ? "rgba(217,119,6,0.06)" : "var(--surface)",
+      border: "1px solid " + (hasOutstanding ? "var(--amber)" : "var(--border)"),
+      borderRadius: "14px",
       padding: "1rem 1.25rem", cursor: "pointer", display: "flex",
       alignItems: "center", justifyContent: "space-between", marginTop: "0.5rem",
     }}>
@@ -82,12 +114,12 @@ function BarTabCard({ memberId }) {
         <span style={{ fontSize: "1.4rem" }}>🍺</span>
         <div>
           <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>My Bar Tab</div>
-          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
-            {total === null ? "Loading..." : total === 0 ? "No open items" : "$" + total.toFixed(2) + " outstanding"}
+          <div style={{ fontSize: "0.75rem", color: hasOutstanding ? "var(--amber-dark)" : "var(--text-dim)" }}>
+            {label()}
           </div>
         </div>
       </div>
-      <span style={{ color: "var(--text-dim)", fontSize: "1.1rem" }}>›</span>
+      <span style={{ color: hasOutstanding ? "var(--amber)" : "var(--text-dim)", fontSize: "1.1rem" }}>›</span>
     </div>
   )
 }

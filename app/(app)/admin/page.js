@@ -702,10 +702,17 @@ function ReconcileTab() {
   const [recon,          setRecon]          = useState(null)
   const [running,        setRunning]        = useState(false)
 
-  const [settleId,     setSettleId]     = useState('')
-  const [settlePrev,   setSettlePrev]   = useState(null)
-  const [settling,     setSettling]     = useState(false)
-  const [settledOk,    setSettledOk]    = useState(false)
+  // Settle single account — live search
+  const [memberSearch,   setMemberSearch]   = useState('')
+  const [memberResults,  setMemberResults]  = useState([])
+  const [settleId,       setSettleId]       = useState('')
+  const [settlePrev,     setSettlePrev]     = useState(null)
+  const [settling,       setSettling]       = useState(false)
+  const [settledOk,      setSettledOk]      = useState(false)
+
+  // Past outstanding (reconciled but unpaid)
+  const [outstanding,    setOutstanding]    = useState([])
+  const [loadingOut,     setLoadingOut]     = useState(true)
 
   async function authHeader() {
     const { data: { session } } = await supabase.auth.getSession()
@@ -719,13 +726,36 @@ function ReconcileTab() {
     setLoadingPreview(false)
   }
 
-  useEffect(() => { loadPreview() }, [])
+  async function loadOutstanding() {
+    const h = await authHeader()
+    const data = await fetch('/api/admin/bar-reconcile?type=outstanding', { headers: h }).then(r => r.json())
+    setOutstanding(Array.isArray(data) ? data : [])
+    setLoadingOut(false)
+  }
 
-  function selectSettle(mid) {
-    setSettleId(mid)
+  useEffect(() => { loadPreview(); loadOutstanding() }, [])
+
+  function doMemberSearch(q) {
+    setMemberSearch(q)
     setSettledOk(false)
-    if (!mid || !preview?.members) { setSettlePrev(null); return }
-    setSettlePrev(preview.members.find(m => m.member_id === mid) || null)
+    if (q.length < 2) { setMemberResults([]); return }
+    const norm = q.toLowerCase()
+    setMemberResults((preview?.members || []).filter(m => m.name.toLowerCase().includes(norm)))
+  }
+
+  function pickMember(m) {
+    setMemberSearch(m.name)
+    setMemberResults([])
+    setSettleId(m.member_id)
+    setSettledOk(false)
+    setSettlePrev(preview?.members?.find(x => x.member_id === m.member_id) || null)
+  }
+
+  function clearMemberPicker() {
+    setMemberSearch('')
+    setMemberResults([])
+    setSettleId('')
+    setSettlePrev(null)
   }
 
   async function settleAccount() {
@@ -737,7 +767,7 @@ function ReconcileTab() {
       body: JSON.stringify({ member_id: settleId }),
     }).then(r => r.json())
     if (data.error) { alert(data.error); setSettling(false); return }
-    setSettledOk(true); setSettlePrev(null); setSettleId('')
+    setSettledOk(true); clearMemberPicker()
     setLoadingPreview(true); loadPreview()
     setSettling(false)
     setTimeout(() => setSettledOk(false), 3000)
@@ -754,6 +784,7 @@ function ReconcileTab() {
     if (data.error) { alert(data.error); setRunning(false); return }
     setRecon(data)
     setPreview({ members: [], total_amount: 0, item_count: 0 })
+    setLoadingOut(true); loadOutstanding()
     setRunning(false)
   }
 
@@ -765,26 +796,80 @@ function ReconcileTab() {
       body: JSON.stringify({ reconciliation_id: reconId, member_id: member.member_id, total_amount: member.total }),
     }).then(r => r.json())
     if (data.error) { alert(data.error); return }
-    setRecon(r => ({
-      ...r,
-      members: r.members.map(m => m.member_id === member.member_id ? { ...m, paid: true, paid_at: data.paid_at } : m)
+    setRecon(prev => ({
+      ...prev,
+      members: prev.members.map(m => m.member_id === member.member_id ? { ...m, paid: true, paid_at: data.paid_at } : m)
     }))
   }
 
-  const card = { background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', padding:'1rem', marginBottom:'1rem' }
+  async function markOutstandingPaid(reconId, member) {
+    const h = await authHeader()
+    const data = await fetch('/api/admin/bar-reconcile', {
+      method: 'PATCH',
+      headers: { ...h, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reconciliation_id: reconId, member_id: member.member_id, total_amount: member.total }),
+    }).then(r => r.json())
+    if (data.error) { alert(data.error); return }
+    setOutstanding(prev =>
+      prev.map(p => p.reconciliation_id === reconId
+        ? { ...p, members: p.members.filter(m => m.member_id !== member.member_id) }
+        : p
+      ).filter(p => p.members.length > 0)
+    )
+  }
+
+  const card    = { background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', padding:'1rem', marginBottom:'1rem' }
   const heading = { fontWeight:700, fontSize:'0.95rem', marginBottom:'0.75rem' }
 
   return (
     <div>
+      {/* ── PAST OUTSTANDING ── */}
+      {!loadingOut && outstanding.length > 0 && (
+        <div style={{ ...card, borderColor:'var(--amber)' }}>
+          <div style={{ ...heading, color:'var(--amber-dark)' }}>⚠ Outstanding Balances</div>
+          {outstanding.map(period => (
+            <div key={period.reconciliation_id} style={{ marginBottom:'0.75rem' }}>
+              <div style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.35rem' }}>
+                {fmtDate(period.period_start)} – {fmtDate(period.period_end)}
+              </div>
+              {period.members.map(m => (
+                <div key={m.member_id} style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.6rem 0.75rem', background:'var(--surface2)', borderRadius:'10px', marginBottom:'0.3rem' }}>
+                  <div style={{ flex:1, fontWeight:600, fontSize:'0.88rem' }}>{m.name}</div>
+                  <div style={{ fontWeight:800, color:'var(--amber-dark)', fontSize:'0.88rem' }}>${m.total.toFixed(2)}</div>
+                  <button onClick={() => markOutstandingPaid(period.reconciliation_id, m)}
+                    style={{ background:'var(--amber)', color:'#fff', border:'none', borderRadius:'8px', padding:'0.35rem 0.7rem', fontSize:'0.78rem', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                    Mark Paid
+                  </button>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* ── SETTLE SINGLE ACCOUNT ── */}
       <div style={card}>
         <div style={heading}>Settle an Account</div>
-        <select value={settleId}
-          onChange={e => selectSettle(e.target.value)}
-          style={{ ...inputStyle, marginBottom:'0.75rem' }}>
-          <option value="">Select a member…</option>
-          {(preview?.members || []).map(m => <option key={m.member_id} value={m.member_id}>{m.name}</option>)}
-        </select>
+        <div style={{ position:'relative', marginBottom:'0.75rem' }}>
+          <input
+            type="text"
+            placeholder="Search member (2+ chars)…"
+            value={memberSearch}
+            onChange={e => doMemberSearch(e.target.value)}
+            style={{ ...inputStyle, fontFamily:'inherit' }}
+          />
+          {memberResults.length > 0 && (
+            <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', boxShadow:'0 4px 16px rgba(0,0,0,0.12)', zIndex:50, maxHeight:'200px', overflowY:'auto', marginTop:'2px' }}>
+              {memberResults.map(m => (
+                <div key={m.member_id} onClick={() => pickMember(m)}
+                  style={{ padding:'0.7rem 1rem', cursor:'pointer', borderBottom:'1px solid var(--border)', fontSize:'0.9rem', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <span style={{ fontWeight:600 }}>{m.name}</span>
+                  <span style={{ fontSize:'0.78rem', color:'var(--text-dim)' }}>${m.total.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         {settleId && !settlePrev && (
           <div style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>No outstanding tab for this member.</div>

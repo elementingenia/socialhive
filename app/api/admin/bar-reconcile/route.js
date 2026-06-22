@@ -51,13 +51,71 @@ function groupByMember(rows) {
 }
 
 // GET — preview unreconciled tabs (all members, or ?member_id= for one)
+//       ?type=outstanding — returns past reconciled-but-unpaid balances per reconciliation
 export async function GET(req) {
   const admin = await getAdmin(req)
   if (!admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
   const { searchParams } = new URL(req.url)
   const memberId = searchParams.get('member_id')
+  const type     = searchParams.get('type')
 
+  // ── Outstanding: past reconciliations not yet paid ──────────────────────────
+  if (type === 'outstanding') {
+    const { data: reconTabs, error: rtErr } = await supabaseAdmin
+      .from('bar_tabs')
+      .select('quantity, reconciliation_id, member_id, members!inner(id, name), bar_products!inner(id, name, icon, price), bar_reconciliations!inner(id, period_start, period_end)')
+      .not('reconciliation_id', 'is', null)
+    if (rtErr) return NextResponse.json({ error: rtErr.message }, { status: 500 })
+
+    const { data: payments } = await supabaseAdmin
+      .from('bar_member_payments')
+      .select('reconciliation_id, member_id')
+
+    const paidSet = new Set((payments || []).map(p => `${p.reconciliation_id}:${p.member_id}`))
+    const unpaid  = (reconTabs || []).filter(r => !paidSet.has(`${r.reconciliation_id}:${r.member_id}`))
+
+    const reconMap = {}
+    for (const row of unpaid) {
+      const rid = row.reconciliation_id
+      if (!reconMap[rid]) {
+        reconMap[rid] = {
+          reconciliation_id: rid,
+          period_start: row.bar_reconciliations.period_start,
+          period_end:   row.bar_reconciliations.period_end,
+          members: {},
+        }
+      }
+      const mid = row.members.id
+      if (!reconMap[rid].members[mid]) {
+        reconMap[rid].members[mid] = { member_id: mid, name: row.members.name, total: 0, items: [] }
+      }
+      const lineTotal = parseFloat(row.bar_products.price) * row.quantity
+      const existing  = reconMap[rid].members[mid].items.find(i => i.product_id === row.bar_products.id)
+      if (existing) {
+        existing.quantity  += row.quantity
+        existing.line_total = parseFloat((existing.line_total + lineTotal).toFixed(2))
+      } else {
+        reconMap[rid].members[mid].items.push({
+          product_id:   row.bar_products.id,
+          product_name: row.bar_products.name,
+          icon:         row.bar_products.icon,
+          unit_price:   parseFloat(row.bar_products.price),
+          quantity:     row.quantity,
+          line_total:   parseFloat(lineTotal.toFixed(2)),
+        })
+      }
+      reconMap[rid].members[mid].total = parseFloat((reconMap[rid].members[mid].total + lineTotal).toFixed(2))
+    }
+
+    const result = Object.values(reconMap)
+      .sort((a, b) => new Date(a.period_end) - new Date(b.period_end))
+      .map(r => ({ ...r, members: Object.values(r.members).sort((a, b) => a.name.localeCompare(b.name)) }))
+
+    return NextResponse.json(result)
+  }
+
+  // ── Default: unreconciled preview ────────────────────────────────────────────
   let query = supabaseAdmin
     .from('bar_tabs')
     .select('id, quantity, consumed_at, member_id, members!inner(id, name), bar_products!inner(id, name, icon, price)')
