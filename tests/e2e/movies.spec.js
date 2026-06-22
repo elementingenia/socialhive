@@ -120,13 +120,18 @@ test.describe('Admin panel', () => {
   })
 
   test('Cinema events visible (Shawshank + Casablanca)', async ({ page }) => {
-    await page.getByRole('button', { name: /Cinema/i }).click()
+    // Admin section cards have no aria-label; select by text content, first() skips bottom nav
+    await page.locator('button').filter({ hasText: /^🎟️\s*Events$/ }).click()
+    await page.waitForLoadState('networkidle')
+    await page.locator('button').filter({ hasText: /^🎬\s*Cinema$/ }).click()
     await expect(page.getByText('The Shawshank Redemption').first()).toBeVisible()
     await expect(page.getByText('Casablanca').first()).toBeVisible()
   })
 
   test('Social filter shows no events', async ({ page }) => {
-    await page.getByRole('button', { name: /Social/i }).click()
+    await page.locator('button').filter({ hasText: /^🎟️\s*Events$/ }).click()
+    await page.waitForLoadState('networkidle')
+    await page.locator('button').filter({ hasText: /^🎉\s*Social$/ }).click()
     await expect(page.getByText('No events')).toBeVisible()
   })
 })
