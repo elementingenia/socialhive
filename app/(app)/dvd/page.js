@@ -359,7 +359,8 @@ export default function DvdPage() {
 
   const filtered = movies.filter(m => {
     const q = search.toLowerCase()
-    const matchesSearch = !search || m.title.toLowerCase().includes(q) || (m.actors && m.actors.toLowerCase().includes(q))
+    const leadActor = m.actors ? m.actors.split(",")[0].trim().toLowerCase() : ""
+    const matchesSearch = !search || m.title.toLowerCase().includes(q) || leadActor.includes(q)
     const matchesGenre  = !genreFilter || parseGenres(m.genre).includes(genreFilter)
     return matchesSearch && matchesGenre
   })
@@ -403,7 +404,7 @@ export default function DvdPage() {
 
         {/* Search */}
         <div style={{ marginBottom:'0.75rem' }}>
-          <input placeholder="Search by title or actor..." value={search} onChange={e=>setSearch(e.target.value)}
+          <input placeholder="Search by title or lead actor..." value={search} onChange={e=>setSearch(e.target.value)}
             style={{ width:'100%', padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
         </div>
 
