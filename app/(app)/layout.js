@@ -15,8 +15,9 @@ const POST_REG_KEY    = "shive_profile_nudge_dismissed"
 // Inner layout — has access to UserContext and UIContext
 function InnerLayout({ children }) {
   const { member, refreshUser } = useUser()
-  const { profileOpen, openProfile, closeProfile } = useUI()
+  const { profileOpen, profileSection, openProfile, openProfileAtPin, closeProfile } = useUI()
   const [showNudge, setShowNudge] = useState(false)
+  const [savedToast, setSavedToast] = useState(false)
 
   // Post-registration profile nudge: show once if email is unset and not dismissed
   useEffect(() => {
@@ -48,11 +49,23 @@ function InnerLayout({ children }) {
       <ProfileSlideOver
         open={profileOpen}
         onClose={closeProfile}
-        onSaved={(data) => {
-          refreshUser()
-          closeProfile()
+        sectionOnOpen={profileSection}
+        onSaved={() => {
+          setSavedToast(true)
+          setTimeout(() => setSavedToast(false), 3000)
         }}
       />
+
+      {savedToast && (
+        <div style={{
+          position: "fixed", bottom: 90, left: "50%", transform: "translateX(-50%)",
+          background: "var(--teal)", color: "#fff", borderRadius: "10px",
+          padding: "0.65rem 1.4rem", fontSize: "0.88rem", fontWeight: 600,
+          zIndex: 400, boxShadow: "0 4px 16px rgba(0,0,0,0.2)", whiteSpace: "nowrap",
+        }}>
+          ✓ Profile saved
+        </div>
+      )}
 
       {/* Post-registration profile nudge */}
       {showNudge && (

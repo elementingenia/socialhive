@@ -64,7 +64,7 @@ function AvatarRow({ label, avatars, selected, onSelect }) {
   )
 }
 
-export default function ProfileSlideOver({ open, onClose }) {
+export default function ProfileSlideOver({ open, onClose, onSaved, sectionOnOpen }) {
   const { member, refreshUser } = useUser()
 
   // Pre-populate immediately from UserContext data (name, avatar, bar_opt_in known already)
@@ -117,6 +117,15 @@ export default function ProfileSlideOver({ open, onClose }) {
     })
   }, [open])
 
+  // Auto-expand PIN section if opened via "Change PIN" menu item
+  useEffect(() => {
+    if (open && sectionOnOpen === "pin") {
+      setPinOpen(true)
+    } else if (!open) {
+      setPinOpen(false)
+    }
+  }, [open, sectionOnOpen])
+
   const showToast = useCallback((msg, ok = true) => {
     setToast({ msg, ok })
     setTimeout(() => setToast(null), 3500)
@@ -133,8 +142,9 @@ export default function ProfileSlideOver({ open, onClose }) {
     })
     setSaving(false)
     if (res.ok) {
-      showToast("Profile saved")
       refreshUser?.()
+      onClose?.()
+      onSaved?.()
     } else {
       const err = await res.json().catch(() => ({}))
       showToast(err.error || "Save failed — try again", false)
