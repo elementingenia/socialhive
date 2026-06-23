@@ -19,7 +19,7 @@ function MainNoticeCard({ notice, memberName }) {
     }}>
       {memberName && (
         <div style={{ fontSize: "0.88rem", fontWeight: 700, opacity: 0.9, marginBottom: "0.4rem" }}>
-          Welcome, {memberName}
+          Welcome {memberName},
         </div>
       )}
       <div style={{ fontSize: "0.95rem", lineHeight: 1.5 }}>{notice.content}</div>
