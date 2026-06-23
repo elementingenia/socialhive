@@ -11,15 +11,17 @@ const HUBS = [
   { key: "bookclub", label: "Book Club", icon: "📚", path: "/bookclub", colour: "var(--purple)" },
 ]
 
-function MainNoticeCard({ notice }) {
+function MainNoticeCard({ notice, memberName }) {
   return (
     <div style={{
       background: "var(--teal)", color: "#fff", borderRadius: "14px",
       padding: "1.1rem 1.25rem", marginBottom: "0.75rem",
     }}>
-      <div style={{ fontSize: "0.68rem", fontWeight: 700, opacity: 0.8, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: "0.35rem" }}>
-        Notice
-      </div>
+      {memberName && (
+        <div style={{ fontSize: "0.88rem", fontWeight: 700, opacity: 0.9, marginBottom: "0.4rem" }}>
+          Welcome, {memberName}
+        </div>
+      )}
       <div style={{ fontSize: "0.95rem", lineHeight: 1.5 }}>{notice.content}</div>
     </div>
   )
@@ -125,7 +127,7 @@ function BarTabCard({ memberId }) {
 }
 
 export default function HomePage() {
-  const { member, barOptIn, memberId } = useUser()
+  const { member, memberName, barOptIn, memberId } = useUser()
   const [notices, setNotices] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -161,7 +163,7 @@ export default function HomePage() {
         <>
           {/* Primary notice */}
           {mainNotices.length > 0
-            ? mainNotices.map(n => <MainNoticeCard key={n.id} notice={n} />)
+            ? mainNotices.map(n => <MainNoticeCard key={n.id} notice={n} memberName={memberName} />)
             : (
               <div style={{
                 background: "var(--surface)", borderRadius: "14px", padding: "0.9rem 1.1rem",

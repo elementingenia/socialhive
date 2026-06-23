@@ -7,6 +7,7 @@ import { UIProvider, useUI } from "@/lib/UIContext"
 import BottomNav from "@/components/BottomNav"
 import Header from "@/components/Header"
 import ProfileSlideOver from "@/components/ProfileSlideOver"
+import PinModal from "@/components/PinModal"
 
 const INACTIVITY_DAYS = 14
 const INACTIVITY_MS   = INACTIVITY_DAYS * 24 * 60 * 60 * 1000
@@ -15,7 +16,7 @@ const POST_REG_KEY    = "shive_profile_nudge_dismissed"
 // Inner layout — has access to UserContext and UIContext
 function InnerLayout({ children }) {
   const { member, refreshUser } = useUser()
-  const { profileOpen, profileSection, openProfile, openProfileAtPin, closeProfile } = useUI()
+  const { profileOpen, openProfile, closeProfile, pinModalOpen, closePinModal } = useUI()
   const [showNudge, setShowNudge] = useState(false)
   const [savedToast, setSavedToast] = useState(false)
 
@@ -49,12 +50,13 @@ function InnerLayout({ children }) {
       <ProfileSlideOver
         open={profileOpen}
         onClose={closeProfile}
-        sectionOnOpen={profileSection}
         onSaved={() => {
           setSavedToast(true)
           setTimeout(() => setSavedToast(false), 3000)
         }}
       />
+
+      <PinModal open={pinModalOpen} onClose={closePinModal} />
 
       {savedToast && (
         <div style={{
