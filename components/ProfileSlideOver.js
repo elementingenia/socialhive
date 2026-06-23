@@ -130,7 +130,8 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
         position: "fixed",
         top: TOP_OFFSET,
         right: 0,
-        height: `calc(100dvh - ${TOP_OFFSET}px)`,
+        height: "auto",
+        maxHeight: `calc(100dvh - ${TOP_OFFSET}px)`,
         width: "min(400px, 100vw)",
         background: "var(--surface)",
         zIndex: 201,
@@ -148,7 +149,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
         </div>
 
         {/* Scrollable body */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "0.9rem 1rem" }}>
+        <div style={{ overflowY: "auto", padding: "0.9rem 1rem" }}>
           {loading ? (
             <div style={{ textAlign: "center", padding: "2rem 0", color: "var(--text-dim)" }}>Loading…</div>
           ) : (
@@ -187,19 +188,21 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
                 <div style={{ borderTop: "1px solid var(--border)" }} />
                 <Toggle value={barOptIn} onChange={setBarOptIn} label="Bar access" description="Enable the Community Bar tab for your account" />
               </div>
+
+              {/* Save button sits immediately below content — no empty space */}
+              <div style={{ paddingTop: "0.85rem" }}>
+                {toast && (
+                  <div style={{ marginBottom: "0.6rem", padding: "0.5rem 0.85rem", borderRadius: 8, background: toast.ok ? "var(--teal)" : "#e53e3e", color: "#fff", fontSize: "0.82rem" }}>{toast.msg}</div>
+                )}
+                <button onClick={handleSave} disabled={saving} style={{ width: "100%", padding: "0.8rem", borderRadius: 10, background: "var(--teal)", color: "#fff", border: "none", cursor: saving ? "not-allowed" : "pointer", fontWeight: 700, fontSize: "0.95rem", fontFamily: "inherit", opacity: saving ? 0.7 : 1 }}>
+                  {saving ? "Saving…" : "Save Profile"}
+                </button>
+              </div>
             </>
           )}
         </div>
 
-        {/* Footer */}
-        <div style={{ padding: "0.75rem 1rem", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
-          {toast && (
-            <div style={{ marginBottom: "0.6rem", padding: "0.5rem 0.85rem", borderRadius: 8, background: toast.ok ? "var(--teal)" : "#e53e3e", color: "#fff", fontSize: "0.82rem" }}>{toast.msg}</div>
-          )}
-          <button onClick={handleSave} disabled={saving} style={{ width: "100%", padding: "0.8rem", borderRadius: 10, background: "var(--teal)", color: "#fff", border: "none", cursor: saving ? "not-allowed" : "pointer", fontWeight: 700, fontSize: "0.95rem", fontFamily: "inherit", opacity: saving ? 0.7 : 1 }}>
-            {saving ? "Saving…" : "Save Profile"}
-          </button>
-        </div>
+
       </div>
     </>
   )
