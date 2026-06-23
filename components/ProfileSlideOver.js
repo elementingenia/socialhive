@@ -3,6 +3,9 @@ import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 
+// Clearance below the sticky header so the avatar pill stays visible
+const TOP_OFFSET = 72 // px — covers both home (~68px) and sub-page (~43px) headers
+
 const ALL_AVATARS = Array.from({ length: 12 }, (_, i) => `/avatars/avatar_${String(i + 1).padStart(2, "0")}.svg`)
 
 const inputStyle = {
@@ -28,6 +31,22 @@ function Toggle({ value, onChange, label, description }) {
 export default function ProfileSlideOver({ open, onClose, onSaved }) {
   const { member, refreshUser } = useUser()
 
+  // Animation state — keep mounted briefly after close so transition plays out
+  const [mounted, setMounted] = useState(false)
+  const [animIn,  setAnimIn]  = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true)
+      // Next frame so the initial translateX(100%) is painted before we transition to 0
+      requestAnimationFrame(() => requestAnimationFrame(() => setAnimIn(true)))
+    } else {
+      setAnimIn(false)
+      const t = setTimeout(() => setMounted(false), 280)
+      return () => clearTimeout(t)
+    }
+  }, [open])
+
   const [name,     setName]     = useState("")
   const [email,    setEmail]    = useState("")
   const [house,    setHouse]    = useState("")
@@ -38,6 +57,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
   const [saving,   setSaving]   = useState(false)
   const [toast,    setToast]    = useState(null)
 
+  // Seed instantly from UserContext (no flicker on open)
   useEffect(() => {
     if (member) {
       setName(member.name || "")
@@ -46,6 +66,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
     }
   }, [member])
 
+  // Full fetch when panel opens (email, house_number, hide_name)
   useEffect(() => {
     if (!open) return
     setLoading(true)
@@ -90,20 +111,36 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
     }
   }
 
-  if (!open) return null
+  if (!mounted) return null
 
   return (
     <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(2px)", zIndex: 200 }} />
+      {/* Backdrop — starts below header so avatar pill stays visible */}
+      <div
+        onClick={onClose}
+        style={{
+          position: "fixed", top: TOP_OFFSET, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.45)", backdropFilter: "blur(2px)", zIndex: 200,
+          opacity: animIn ? 1 : 0, transition: "opacity 0.25s ease",
+        }}
+      />
+
+      {/* Panel — slides in from right, starts below header */}
       <div style={{
-        position: "fixed", top: 0, right: 0,
+        position: "fixed",
+        top: TOP_OFFSET,
+        right: 0,
+        height: `calc(100dvh - ${TOP_OFFSET}px)`,
         width: "min(400px, 100vw)",
-        maxHeight: "100dvh",
         background: "var(--surface)",
         zIndex: 201,
-        display: "flex", flexDirection: "column",
-        boxShadow: "-4px 0 24px rgba(0,0,0,0.25)",
+        display: "flex",
+        flexDirection: "column",
+        boxShadow: "-4px 0 24px rgba(0,0,0,0.2)",
+        transform: animIn ? "translateX(0)" : "translateX(100%)",
+        transition: "transform 0.25s ease",
       }}>
+
         {/* Header */}
         <div style={{ padding: "0.85rem 1rem 0.75rem", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
           <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--text)" }}>My Profile</div>
@@ -111,17 +148,17 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
         </div>
 
         {/* Scrollable body */}
-        <div style={{ overflowY: "auto", flex: 1, padding: "0.9rem 1rem" }}>
+        <div style={{ flex: 1, overflowY: "auto", padding: "0.9rem 1rem" }}>
           {loading ? (
             <div style={{ textAlign: "center", padding: "2rem 0", color: "var(--text-dim)" }}>Loading…</div>
           ) : (
             <>
-              {/* Avatar grid — 2 rows × 6, no labels, selected is highlighted in-grid */}
+              {/* Avatar grid */}
               <div style={{ marginBottom: "0.9rem" }}>
                 <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.5rem" }}>Choose your avatar</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "0.35rem" }}>
                   {ALL_AVATARS.map(src => (
-                    <button key={src} onClick={() => setAvatar(src)} style={{ padding: 2, borderRadius: 8, border: avatar === src ? "2.5px solid var(--teal)" : "2.5px solid transparent", background: avatar === src ? "rgba(0,128,128,0.08)" : "transparent", cursor: "pointer", lineHeight: 0 }} aria-label={src} aria-pressed={avatar === src}>
+                    <button key={src} onClick={() => setAvatar(src)} style={{ padding: 2, borderRadius: 8, border: avatar === src ? "2.5px solid var(--teal)" : "2.5px solid transparent", background: avatar === src ? "rgba(0,128,128,0.08)" : "transparent", cursor: "pointer", lineHeight: 0 }} aria-pressed={avatar === src}>
                       <img src={src} alt="" style={{ width: "100%", borderRadius: 6, display: "block" }} />
                     </button>
                   ))}
