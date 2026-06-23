@@ -122,7 +122,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: "1.4rem", color: "var(--text-dim)", lineHeight: 1 }} aria-label="Close">✕</button>
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto", padding: "1.25rem" }}>
+        <div style={{ overflowY: "auto", padding: "1.25rem" }}>
           {loading ? (
             <div style={{ textAlign: "center", padding: "3rem 0", color: "var(--text-dim)" }}>Loading…</div>
           ) : (
