@@ -1,15 +1,17 @@
 "use client"
 import { usePathname, useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
+import { useUI }   from "@/lib/UIContext"
 import { getModuleColour, getPageTitle, BACK_ROUTES } from "@/lib/navUtils"
 
 export default function Header() {
-  const { memberName } = useUser()
-  const pathname       = usePathname()
-  const router         = useRouter()
-  const moduleColour   = getModuleColour(pathname)
-  const pageTitle      = getPageTitle(pathname)
-  const backRoute      = BACK_ROUTES[pathname] || null
+  const { memberName, member } = useUser()
+  const { openProfile }        = useUI()
+  const pathname               = usePathname()
+  const router                 = useRouter()
+  const moduleColour           = getModuleColour(pathname)
+  const pageTitle              = getPageTitle(pathname)
+  const backRoute              = BACK_ROUTES[pathname] || null
 
   async function signOut() {
     const { supabase } = await import("@/lib/supabase")
@@ -27,7 +29,7 @@ export default function Header() {
       boxShadow: "0 1px 8px rgba(0,0,0,0.07)",
     }}>
 
-      {/* Left: back button OR logo */}
+      {/* Left: back button OR logo+profile trigger */}
       {backRoute ? (
         <button
           onClick={() => router.push(backRoute.to)}
@@ -43,18 +45,27 @@ export default function Header() {
         </button>
       ) : (
         <button
-          onClick={() => router.push("/profile")}
+          onClick={openProfile}
           style={{
             display: "flex", alignItems: "center", gap: "0.5rem",
             minWidth: 0, background: "none", border: "none",
             cursor: "pointer", padding: 0, textAlign: "left",
           }}
+          aria-label="Open profile"
         >
-          <img
-            src="/logo_hex_bee.png"
-            alt="The Social Hive"
-            style={{ width: 36, height: 36, flexShrink: 0 }}
-          />
+          {member?.avatar_url ? (
+            <img
+              src={member.avatar_url}
+              alt=""
+              style={{ width: 36, height: 36, borderRadius: "50%", flexShrink: 0, border: "2px solid var(--border)" }}
+            />
+          ) : (
+            <img
+              src="/logo_hex_bee.png"
+              alt="The Social Hive"
+              style={{ width: 36, height: 36, flexShrink: 0 }}
+            />
+          )}
           <div style={{ minWidth: 0 }}>
             <div style={{
               fontSize: "0.58rem", fontWeight: 700, letterSpacing: "0.1em",
@@ -74,9 +85,7 @@ export default function Header() {
       {/* Centre: page title */}
       <div style={{
         fontSize: "0.95rem", fontWeight: 700,
-        color: moduleColour,
-        letterSpacing: "0.01em",
-        flexShrink: 0,
+        color: moduleColour, letterSpacing: "0.01em", flexShrink: 0,
       }}>{pageTitle}</div>
 
       {/* Right: help + sign out */}

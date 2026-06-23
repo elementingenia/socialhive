@@ -7,14 +7,14 @@ const supabase = createClient(
 )
 
 async function getMember(req) {
-  const auth = req.headers.get("authorization") || ""
+  const auth  = req.headers.get("authorization") || ""
   const token = auth.replace("Bearer ", "")
   if (!token) return null
   const { data: { user } } = await supabase.auth.getUser(token)
   if (!user) return null
   const { data } = await supabase
     .from("members")
-    .select("id, name, username, house_number, avatar_url, bar_opt_in, is_admin")
+    .select("id, name, username, house_number, email, avatar_url, bar_opt_in, hide_name, is_admin")
     .eq("auth_id", user.id)
     .single()
   return data
@@ -30,8 +30,8 @@ export async function PATCH(req) {
   const member = await getMember(req)
   if (!member) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const body = await req.json()
-  const allowed = ["name", "house_number", "bar_opt_in"]
+  const body    = await req.json()
+  const allowed = ["name", "house_number", "email", "bar_opt_in", "hide_name", "avatar_url"]
   const updates = Object.fromEntries(
     Object.entries(body).filter(([k]) => allowed.includes(k))
   )
@@ -42,7 +42,7 @@ export async function PATCH(req) {
     .from("members")
     .update(updates)
     .eq("id", member.id)
-    .select("id, name, username, house_number, avatar_url, bar_opt_in")
+    .select("id, name, username, house_number, email, avatar_url, bar_opt_in, hide_name")
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

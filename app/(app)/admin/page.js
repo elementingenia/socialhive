@@ -343,7 +343,7 @@ function MembersTab() {
   const { member: me } = useUser()
 
   useEffect(()=>{
-    supabase.from('members').select('id, name, username, status, is_admin, bar_opt_in, joined_date').order('name').then(({data})=>{ setMembers(data||[]); setLoading(false) })
+    supabase.from('members').select('id, name, username, status, is_admin, joined_date').order('name').then(({data})=>{ setMembers(data||[]); setLoading(false) })
   }, [])
 
   async function toggle(id, field, val) {
@@ -376,11 +376,7 @@ function MembersTab() {
                     style={{ padding:'0.3rem 0.6rem', borderRadius:'8px', border:'1px solid', borderColor:m.is_admin?'var(--amber)':'var(--border)', background:m.is_admin?'var(--amber)20':'var(--surface)', fontSize:'0.72rem', fontWeight:700, cursor:m.id===me?.id?'default':'pointer', color:m.is_admin?'var(--amber-dark)':'var(--text-dim)', opacity:m.id===me?.id?0.5:1 }}>
                     {m.is_admin ? '⚙️ Admin' : 'Admin'}
                   </button>
-                  <button
-                    onClick={()=>toggle(m.id,'bar_opt_in',!m.bar_opt_in)}
-                    style={{ padding:'0.3rem 0.6rem', borderRadius:'8px', border:'1px solid', borderColor:m.bar_opt_in?'var(--green)':'var(--border)', background:m.bar_opt_in?'var(--green)20':'var(--surface)', fontSize:'0.72rem', fontWeight:700, cursor:'pointer', color:m.bar_opt_in?'var(--green)':'var(--text-dim)' }}>
-                    {m.bar_opt_in ? '🍺 Bar' : 'Bar'}
-                  </button>
+
                 </div>
               </div>
             </div>
