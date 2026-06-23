@@ -175,11 +175,11 @@ export default function BarPage() {
 
       {/* Outstanding balance warning banner */}
       {outstanding.length > 0 && (
-        <div style={{ background:"var(--amber)", borderRadius:"14px", padding:"0.85rem 1rem", marginBottom:"0.75rem", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div onClick={() => setView("tab")} style={{ background:"var(--amber)", borderRadius:"14px", padding:"0.85rem 1rem", marginBottom:"0.75rem", display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer" }}>
           <div>
             <div style={{ color:"#fff", fontWeight:700, fontSize:"0.9rem" }}>⚠ Balance Due</div>
             <div style={{ color:"rgba(255,255,255,0.85)", fontSize:"0.78rem" }}>
-              {outstanding.length} unpaid period{outstanding.length !== 1 ? "s" : ""} — tap My Tab to view
+              {outstanding.length} unpaid period{outstanding.length !== 1 ? "s" : ""} — tap to view
             </div>
           </div>
           <div style={{ color:"#fff", fontWeight:800, fontSize:"1.4rem" }}>{fmtPrice(outstandingTotal)}</div>
