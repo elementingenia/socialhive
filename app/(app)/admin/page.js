@@ -68,21 +68,99 @@ const btnPrimary = (colour='var(--teal)') => ({ background:colour, color:'#fff',
 const btnDanger  = { background:'var(--danger)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.8rem 1.5rem', fontSize:'0.95rem', fontWeight:700, cursor:'pointer', width:'100%', marginTop:'0.5rem' }
 
 // ── EVENT FORM ────────────────────────────────────────────────────────────────
+// ── EC Picker (live search, up to 3) ─────────────────────────────────────────
+function ECPicker({ selectedIds, onChange, colour }) {
+  const [search, setSearch] = useState('')
+  const [results, setResults] = useState([])
+  const [members, setMembers] = useState([])
+  const timerRef = useRef(null)
+
+  useEffect(() => {
+    supabase.from('members').select('id, name, username').order('name')
+      .then(({ data }) => setMembers(data || []))
+  }, [])
+
+  function handleSearch(val) {
+    setSearch(val)
+    clearTimeout(timerRef.current)
+    if (val.length < 2) { setResults([]); return }
+    timerRef.current = setTimeout(() => {
+      const lower = val.toLowerCase()
+      setResults(
+        members.filter(m =>
+          !selectedIds.includes(m.id) &&
+          (m.name?.toLowerCase().includes(lower) || m.username?.toLowerCase().includes(lower))
+        ).slice(0, 6)
+      )
+    }, 180)
+  }
+
+  function add(m) {
+    if (selectedIds.length >= 3) return
+    onChange([...selectedIds, m.id])
+    setSearch(''); setResults([])
+  }
+
+  function remove(id) { onChange(selectedIds.filter(x => x !== id)) }
+
+  const selected = members.filter(m => selectedIds.includes(m.id))
+
+  return (
+    <div>
+      <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', marginBottom: selected.length ? '0.5rem' : 0 }}>
+        {selected.map(m => (
+          <div key={m.id} style={{ display:'inline-flex', alignItems:'center', gap:'0.35rem', background:(colour||'var(--teal)')+'20', color:colour||'var(--teal)', borderRadius:'20px', padding:'0.25rem 0.65rem', fontSize:'0.8rem', fontWeight:600 }}>
+            {m.name || m.username}
+            <button onClick={()=>remove(m.id)} style={{ background:'none', border:'none', cursor:'pointer', color:'inherit', fontSize:'1rem', lineHeight:1, padding:0 }}>×</button>
+          </div>
+        ))}
+      </div>
+      {selectedIds.length < 3 && (
+        <div style={{ position:'relative' }}>
+          <input
+            style={inputStyle}
+            value={search}
+            onChange={e=>handleSearch(e.target.value)}
+            placeholder={selected.length ? 'Add another coordinator…' : 'Search member name…'}
+          />
+          {results.length > 0 && (
+            <div style={{ position:'absolute', left:0, right:0, top:'100%', zIndex:50, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', boxShadow:'0 4px 16px rgba(0,0,0,0.12)', marginTop:'0.25rem', overflow:'hidden' }}>
+              {results.map(m => (
+                <div key={m.id} onClick={()=>add(m)} style={{ padding:'0.65rem 1rem', cursor:'pointer', fontSize:'0.88rem', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between' }}>
+                  <span style={{ fontWeight:600 }}>{m.name}</span>
+                  <span style={{ color:'var(--text-dim)', fontSize:'0.78rem' }}>@{m.username}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {selectedIds.length >= 3 && <div style={{ fontSize:'0.78rem', color:'var(--text-dim)', marginTop:'0.25rem' }}>Maximum 3 coordinators</div>}
+    </div>
+  )
+}
+
 function EventForm({ event, onSave, onDelete, onClose }) {
   const isEdit = !!event?.id
   const [movies, setMovies] = useState([])
   const [books,  setBooks]  = useState([])
+  const [ecIds,  setEcIds]  = useState([])
   const [form, setForm] = useState({
-    title:       event?.title       || '',
-    hub_type:    event?.hub_type    || 'movie',
-    event_date:  event?.event_date  || '',
-    event_time:  event?.event_time  || '',
-    description: event?.description || '',
-    max_seats:   event?.max_seats   != null ? String(event.max_seats) : '30',
-    cost:        event?.cost        != null ? String(event.cost)      : '0',
-    is_public:   event?.is_public   ?? true,
-    movie_id:    event?.movie_id    || '',
-    book_id:     event?.book_id     || '',
+    title:               event?.title               || '',
+    hub_type:            event?.hub_type            || 'movie',
+    event_date:          event?.event_date          || '',
+    event_time:          event?.event_time          || '',
+    location:            event?.location            || '',
+    description:         event?.description         || '',
+    welcome_message:     event?.welcome_message     || '',
+    max_seats:           event?.max_seats           != null ? String(event.max_seats) : '30',
+    max_seats_per_booking: event?.max_seats_per_booking != null ? String(event.max_seats_per_booking) : '4',
+    cost:                event?.cost               != null ? String(event.cost) : '0',
+    is_public:           event?.is_public           ?? true,
+    payment_required:    event?.payment_required    ?? false,
+    show_attendee_names: event?.show_attendee_names ?? true,
+    movie_id:            event?.movie_id            || '',
+    book_id:             event?.book_id             || '',
   })
   const [saving,   setSaving]   = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -92,30 +170,59 @@ function EventForm({ event, onSave, onDelete, onClose }) {
   useEffect(() => {
     supabase.from('movies').select('id, title').eq('we_own', false).order('title').then(({ data }) => setMovies(data || []))
     supabase.from('books').select('id, title, author').order('title').then(({ data }) => setBooks(data || []))
-  }, [])
+    // Load existing coordinators when editing
+    if (isEdit && event.id) {
+      supabase.from('event_coordinators')
+        .select('member_id')
+        .eq('event_id', event.id)
+        .is('replaced_at', null)
+        .order('assigned_at')
+        .then(({ data }) => setEcIds((data || []).map(r => r.member_id)))
+    }
+  }, [isEdit, event?.id])
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+
+  async function saveCoordinators(eventId) {
+    const { data: { session } } = await supabase.auth.getSession()
+    await fetch('/api/admin/coordinators', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ event_id: eventId, member_ids: ecIds }),
+    })
+  }
 
   async function save() {
     if (!form.title.trim())      return setErr('Title is required')
     if (!form.event_date.trim()) return setErr('Date is required')
     setSaving(true); setErr('')
     const payload = {
-      title:       form.title.trim(),
-      hub_type:    form.hub_type,
-      event_date:  form.event_date,
-      event_time:  form.event_time || null,
-      description: form.description || null,
-      max_seats:   parseInt(form.max_seats) || 30,
-      cost:        parseFloat(form.cost)    || 0,
-      is_public:   form.is_public,
-      movie_id:    form.hub_type === 'movie'    && form.movie_id ? form.movie_id : null,
-      book_id:     form.hub_type === 'bookclub' && form.book_id  ? form.book_id  : null,
+      title:               form.title.trim(),
+      hub_type:            form.hub_type,
+      event_date:          form.event_date,
+      event_time:          form.event_time          || null,
+      location:            form.location            || null,
+      description:         form.description         || null,
+      welcome_message:     form.welcome_message     || null,
+      max_seats:           parseInt(form.max_seats) || 30,
+      max_seats_per_booking: parseInt(form.max_seats_per_booking) || 4,
+      cost:                parseFloat(form.cost)    || 0,
+      is_public:           form.is_public,
+      payment_required:    form.payment_required,
+      show_attendee_names: form.show_attendee_names,
+      movie_id:            form.hub_type === 'movie'    && form.movie_id ? form.movie_id : null,
+      book_id:             form.hub_type === 'bookclub' && form.book_id  ? form.book_id  : null,
     }
-    const { error } = isEdit
-      ? await supabase.from('events').update(payload).eq('id', event.id)
-      : await supabase.from('events').insert(payload)
-    if (error) { setErr(error.message); setSaving(false); return }
+    let eventId = event?.id
+    if (isEdit) {
+      const { error } = await supabase.from('events').update(payload).eq('id', event.id)
+      if (error) { setErr(error.message); setSaving(false); return }
+    } else {
+      const { data, error } = await supabase.from('events').insert(payload).select('id').single()
+      if (error) { setErr(error.message); setSaving(false); return }
+      eventId = data.id
+    }
+    await saveCoordinators(eventId)
     onSave()
   }
 
@@ -126,6 +233,7 @@ function EventForm({ event, onSave, onDelete, onClose }) {
   }
 
   const colour = HUB_COLOUR[form.hub_type] || 'var(--teal)'
+  const isBookclub = form.hub_type === 'bookclub'
 
   return (
     <div>
@@ -145,33 +253,46 @@ function EventForm({ event, onSave, onDelete, onClose }) {
         <Field label="Time"><input type="time" style={inputStyle} value={form.event_time} onChange={e=>set('event_time',e.target.value)} /></Field>
       </div>
       <Field label="Location"><input style={inputStyle} value={form.location} onChange={e=>set('location',e.target.value)} placeholder="Optional" /></Field>
+      <Field label="Event Co-ordinators (max 3)">
+        <ECPicker selectedIds={ecIds} onChange={setEcIds} colour={colour} />
+      </Field>
+      <Field label="Welcome Message"><textarea style={{ ...inputStyle, minHeight:60, resize:'vertical' }} value={form.welcome_message} onChange={e=>set('welcome_message',e.target.value)} placeholder="Shown to attendees in the booking view (optional)" /></Field>
       <Field label="Description"><textarea style={{ ...inputStyle, minHeight:80, resize:'vertical' }} value={form.description} onChange={e=>set('description',e.target.value)} placeholder="Optional" /></Field>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.75rem' }}>
-        <Field label="Max Seats"><input type="number" style={inputStyle} value={form.max_seats} onChange={e=>set('max_seats',e.target.value)} min="1" /></Field>
+        {!isBookclub && <Field label="Max Seats"><input type="number" style={inputStyle} value={form.max_seats} onChange={e=>set('max_seats',e.target.value)} min="1" /></Field>}
+        {!isBookclub && <Field label="Max per Booking"><input type="number" style={inputStyle} value={form.max_seats_per_booking} onChange={e=>set('max_seats_per_booking',e.target.value)} min="1" max="20" /></Field>}
         <Field label="Cost ($)"><input type="number" style={inputStyle} value={form.cost} onChange={e=>set('cost',e.target.value)} min="0" step="0.50" /></Field>
       </div>
       {form.hub_type === 'movie' && (
         <Field label="Linked Film">
-          <select style={inputStyle} value={form.movie_id} onChange={e=>set('movie_id',e.target.value)}>
+          <select style={{ ...inputStyle, appearance:'none', WebkitAppearance:'none' }} value={form.movie_id} onChange={e=>set('movie_id',e.target.value)}>
             <option value="">— No film linked —</option>
             {movies.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
           </select>
         </Field>
       )}
-      {form.hub_type === 'bookclub' && (
+      {isBookclub && (
         <Field label="Linked Book">
-          <select style={inputStyle} value={form.book_id} onChange={e=>set('book_id',e.target.value)}>
+          <select style={{ ...inputStyle, appearance:'none', WebkitAppearance:'none' }} value={form.book_id} onChange={e=>set('book_id',e.target.value)}>
             <option value="">— No book linked —</option>
             {books.map(b => <option key={b.id} value={b.id}>{b.title}{b.author ? ' — ' + b.author : ''}</option>)}
           </select>
         </Field>
       )}
-      <Field label="">
+      <div style={{ display:'flex', flexDirection:'column', gap:'0.6rem', marginBottom:'1rem' }}>
         <label style={{ display:'flex', alignItems:'center', gap:'0.6rem', fontSize:'0.9rem', cursor:'pointer' }}>
           <input type="checkbox" checked={form.is_public} onChange={e=>set('is_public',e.target.checked)} style={{ width:18, height:18 }} />
           Visible on public calendar
         </label>
-      </Field>
+        <label style={{ display:'flex', alignItems:'center', gap:'0.6rem', fontSize:'0.9rem', cursor:'pointer' }}>
+          <input type="checkbox" checked={form.payment_required} onChange={e=>set('payment_required',e.target.checked)} style={{ width:18, height:18 }} />
+          Payment required to confirm booking
+        </label>
+        <label style={{ display:'flex', alignItems:'center', gap:'0.6rem', fontSize:'0.9rem', cursor:'pointer' }}>
+          <input type="checkbox" checked={form.show_attendee_names} onChange={e=>set('show_attendee_names',e.target.checked)} style={{ width:18, height:18 }} />
+          Show attendee names in booking view
+        </label>
+      </div>
       {err && <div style={{ color:'var(--danger)', fontSize:'0.85rem', marginBottom:'0.75rem' }}>{err}</div>}
       <button onClick={save} disabled={saving} style={btnPrimary(colour)}>{saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Event'}</button>
       {isEdit && !confirm && (
@@ -530,28 +651,67 @@ function BarProductsTab() {
 function BookForm({ book, onSave, onClose }) {
   const isEdit = !!book?.id
   const [form, setForm] = useState({
-    title:     book?.title     || '',
-    author:    book?.author    || '',
-    cover_url: book?.cover_url || '',
-    summary:   book?.summary   || '',
-    rating:    book?.rating    || '',
+    title:       book?.title       || '',
+    author:      book?.author      || '',
+    cover_url:   book?.cover_url   || '',
+    summary:     book?.summary     || '',
+    rating:      book?.rating      || '',
+    rating_link: book?.rating_link || '',
+    genres:      book?.genres      || '',
+    google_books_id: book?.google_books_id || '',
   })
-  const [saving,   setSaving]   = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [confirm,  setConfirm]  = useState(false)
-  const [err,      setErr]      = useState('')
+  const [saving,     setSaving]     = useState(false)
+  const [deleting,   setDeleting]   = useState(false)
+  const [confirm,    setConfirm]    = useState(false)
+  const [err,        setErr]        = useState('')
+  const [gbSearch,   setGbSearch]   = useState('')
+  const [gbResults,  setGbResults]  = useState([])
+  const [gbSearching, setGbSearching] = useState(false)
+  const gbTimer = useRef(null)
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+
+  function handleGbSearch(val) {
+    setGbSearch(val)
+    clearTimeout(gbTimer.current)
+    if (val.length < 3) { setGbResults([]); return }
+    gbTimer.current = setTimeout(async () => {
+      setGbSearching(true)
+      const res = await fetch('/api/books/search?q=' + encodeURIComponent(val))
+      const data = await res.json()
+      setGbResults(data.results || [])
+      setGbSearching(false)
+    }, 400)
+  }
+
+  function applyGbResult(r) {
+    setForm(f => ({
+      ...f,
+      title:           r.title,
+      author:          r.author || f.author,
+      cover_url:       r.cover_url || f.cover_url,
+      summary:         r.summary || f.summary,
+      rating:          r.rating || f.rating,
+      rating_link:     r.rating_link || f.rating_link,
+      genres:          r.genres || f.genres,
+      google_books_id: r.google_books_id,
+    }))
+    setGbSearch('')
+    setGbResults([])
+  }
 
   async function save() {
     if (!form.title.trim()) return setErr('Title is required')
     setSaving(true); setErr('')
     const payload = {
-      title:     form.title.trim(),
-      author:    form.author    || null,
-      cover_url: form.cover_url || null,
-      summary:   form.summary   || null,
-      rating:    form.rating    || null,
+      title:           form.title.trim(),
+      author:          form.author          || null,
+      cover_url:       form.cover_url       || null,
+      summary:         form.summary         || null,
+      rating:          form.rating          || null,
+      rating_link:     form.rating_link     || null,
+      genres:          form.genres          || null,
+      google_books_id: form.google_books_id || null,
     }
     const { error } = isEdit
       ? await supabase.from('books').update(payload).eq('id', book.id)
@@ -568,10 +728,40 @@ function BookForm({ book, onSave, onClose }) {
 
   return (
     <div>
+      {/* Google Books search */}
+      <Field label="Search Google Books">
+        <div style={{ position:'relative' }}>
+          <input
+            style={inputStyle}
+            value={gbSearch}
+            onChange={e=>handleGbSearch(e.target.value)}
+            placeholder="Search by title or author to auto-fill…"
+          />
+          {gbSearching && <div style={{ fontSize:'0.78rem', color:'var(--text-dim)', marginTop:'0.25rem' }}>Searching…</div>}
+          {gbResults.length > 0 && (
+            <div style={{ position:'absolute', left:0, right:0, top:'100%', zIndex:50, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', boxShadow:'0 4px 16px rgba(0,0,0,0.12)', marginTop:'0.25rem', maxHeight:'300px', overflowY:'auto' }}>
+              {gbResults.map(r => (
+                <div key={r.google_books_id} onClick={()=>applyGbResult(r)}
+                  style={{ padding:'0.65rem 1rem', cursor:'pointer', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:'0.65rem' }}>
+                  {r.cover_url && <img src={r.cover_url} alt="" style={{ width:32, height:46, objectFit:'cover', borderRadius:'4px', flexShrink:0 }} />}
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:700, fontSize:'0.85rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{r.title}</div>
+                    {r.author && <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{r.author}</div>}
+                    {r.genres && <div style={{ fontSize:'0.7rem', color:'var(--purple)', marginTop:'0.1rem' }}>{r.genres}</div>}
+                  </div>
+                  {r.rating && <div style={{ fontSize:'0.8rem', color:'var(--purple)', fontWeight:700, flexShrink:0 }}>★ {r.rating}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Field>
+      <div style={{ borderBottom:'1px solid var(--border)', marginBottom:'1rem', marginTop:'-0.25rem' }} />
       <Field label="Title"><input style={inputStyle} value={form.title} onChange={e=>set('title',e.target.value)} placeholder="Book title" /></Field>
       <Field label="Author"><input style={inputStyle} value={form.author} onChange={e=>set('author',e.target.value)} placeholder="Author name" /></Field>
-      <Field label="Cover Image URL"><input style={inputStyle} value={form.cover_url} onChange={e=>set('cover_url',e.target.value)} placeholder="https://…" /></Field>
+      <Field label="Genres"><input style={inputStyle} value={form.genres} onChange={e=>set('genres',e.target.value)} placeholder="e.g. Fiction, Historical" /></Field>
       <Field label="Rating"><input style={inputStyle} value={form.rating} onChange={e=>set('rating',e.target.value)} placeholder="e.g. 4.2" /></Field>
+      <Field label="Cover Image URL"><input style={inputStyle} value={form.cover_url} onChange={e=>set('cover_url',e.target.value)} placeholder="https://…" /></Field>
       <Field label="Summary / Description">
         <textarea style={{ ...inputStyle, minHeight:100, resize:'vertical' }} value={form.summary} onChange={e=>set('summary',e.target.value)} placeholder="Brief description…" />
       </Field>
