@@ -217,23 +217,36 @@ function AddBookForm({ onAdded, onClose }) {
 
   async function suggest(r) {
     setSaving(true)
+
+    // Enrich with summary + rating from Open Library
+    let enriched = { ...r }
+    try {
+      const det = await fetch(`/api/books/details?key=${encodeURIComponent(r.google_books_id)}`)
+      if (det.ok) {
+        const d = await det.json()
+        if (d.summary)     enriched.summary     = d.summary
+        if (d.rating)      enriched.rating      = d.rating
+        if (d.rating_link) enriched.rating_link = d.rating_link
+      }
+    } catch {}
+
     // Check for existing
     const { data: existing } = await supabase
       .from("books")
       .select("id")
-      .eq("google_books_id", r.google_books_id)
+      .eq("google_books_id", enriched.google_books_id)
       .maybeSingle()
 
     if (!existing) {
       await supabase.from("books").insert({
-        title:           r.title,
-        author:          r.author,
-        cover_url:       r.cover_url,
-        summary:         r.summary,
-        rating:          r.rating,
-        rating_link:     r.rating_link,
-        google_books_id: r.google_books_id,
-        genres:          r.genres,
+        title:           enriched.title,
+        author:          enriched.author,
+        cover_url:       enriched.cover_url,
+        summary:         enriched.summary,
+        rating:          enriched.rating,
+        rating_link:     enriched.rating_link,
+        google_books_id: enriched.google_books_id,
+        genres:          enriched.genres,
       })
     }
     setSaving(false)
