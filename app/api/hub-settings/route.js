@@ -6,23 +6,28 @@ const supa = createClient(
 )
 
 export async function GET() {
-  // Try with sub_messages (migration 016). Fall back gracefully if column missing.
-  let rows = []
+  // Try with sub_messages (migration 016). Fall back to welcome_text only (015).
+  // Return empty object if table doesn't exist yet.
   const { data, error } = await supa
     .from("hub_settings")
     .select("hub_type, welcome_text, sub_messages")
 
   if (error) {
-    // sub_messages column likely missing — migration 016 not run yet
+    // Column or table missing — try without sub_messages
     const fallback = await supa.from("hub_settings").select("hub_type, welcome_text")
-    if (fallback.error) return Response.json({ error: fallback.error.message }, { status: 500 })
-    rows = fallback.data || []
-  } else {
-    rows = data || []
+    if (fallback.error) {
+      // Table doesn't exist yet — return empty, don't 500
+      return Response.json({})
+    }
+    const out = {}
+    for (const row of fallback.data || []) {
+      out[row.hub_type] = { text: row.welcome_text || "", subs: [] }
+    }
+    return Response.json(out)
   }
 
   const out = {}
-  for (const row of rows) {
+  for (const row of data || []) {
     out[row.hub_type] = {
       text: row.welcome_text || "",
       subs: Array.isArray(row.sub_messages) ? row.sub_messages : [],
