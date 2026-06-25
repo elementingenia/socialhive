@@ -77,11 +77,11 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2 }}>{book.title}</div>
             {book.author && <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: 4 }}>by {book.author}</div>}
-            {book.rating && book.rating_link && (
-              <a href={book.rating_link} target="_blank" rel="noopener noreferrer"
-                style={{ fontSize: "0.78rem", color: "#4285f4", fontWeight: 700, textDecoration: "none" }}>
-                ⭐ {book.rating} on Google Books
-              </a>
+            {book.rating && (
+              <span style={{ display: "inline-block", background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)",
+                fontWeight: 700, fontSize: "0.68rem", padding: "0.15rem 0.5rem", borderRadius: 20, marginBottom: 4 }}>
+                ⭐ {book.rating}
+              </span>
             )}
             <GenrePills genres={book.genres} />
           </div>
@@ -639,7 +639,9 @@ export default function BookClubHome() {
       {welcomeText && (
         <div style={{ background: "var(--purple)12", border: "1px solid var(--purple)30", borderRadius: 14,
           padding: "1rem", marginBottom: 16, fontSize: "0.9rem", color: "var(--text)", lineHeight: 1.6 }}>
-          {welcomeText}
+          {/<[a-z][\s\S]*>/i.test(welcomeText)
+            ? <span dangerouslySetInnerHTML={{ __html: welcomeText }} />
+            : welcomeText}
         </div>
       )}
 
