@@ -5,7 +5,7 @@ export async function GET(req) {
   const q = searchParams.get("q")?.trim()
   if (!q || q.length < 2) return NextResponse.json({ results: [] })
 
-  const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(q)}&limit=12&fields=key,title,author_name,cover_i,subject,first_publish_year`
+  const url = `https://openlibrary.org/search.json?title=${encodeURIComponent(q)}&limit=12&fields=key,title,author_name,cover_i,subject,first_publish_year`
   const res = await fetch(url, { next: { revalidate: 0 } })
   if (!res.ok) return NextResponse.json({ results: [] })
 

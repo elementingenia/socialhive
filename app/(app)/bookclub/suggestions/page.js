@@ -105,26 +105,13 @@ function RatingSwiper({ books, memberId, onDone }) {
 }
 
 // ── Book Card ─────────────────────────────────────────────────────────────────
-function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
+function BookCard({ book, myVote, isAdmin, onDelete }) {
   const [expanded, setExpanded] = useState(false)
-  const [score,    setScore]    = useState(myVote?.score || 0)
-  const [saving,   setSaving]   = useState(false)
 
-  async function vote(s) {
-    setSaving(true)
-    await supabase.from("book_votes").upsert(
-      { member_id: memberId, book_id: book.id, score: s },
-      { onConflict: "member_id,book_id" }
-    )
-    setScore(s)
-    setSaving(false)
-    onVote()
-  }
-
+  const myScoreEmoji = { 5: "❤️", 4: "👍", 3: "🤔", 2: "👎", 0: null }
+  const myScore        = myVote?.score || 0
   const communityScore = book.avg_score ? parseFloat(book.avg_score).toFixed(1) : null
   const voteCount      = book.vote_count || 0
-
-  const scoreEmoji = { 5: "❤️", 4: "👍", 3: "🤔", 2: "👎", 1: "✗", 0: null }
 
   return (
     <div style={{ background: "var(--surface)", borderRadius: 14, border: "1px solid var(--border)",
@@ -138,56 +125,39 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
           <div style={{ fontWeight: 700, fontSize: "0.9rem", lineHeight: 1.2 }}>{book.title}</div>
           {book.author && <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: 2 }}>by {book.author}</div>}
           <GenrePills genres={book.genres} />
-          <div style={{ display: "flex", gap: 10, marginTop: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
             {communityScore && (
-              <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--purple)" }}>
-                ⭐ {communityScore} community ({voteCount})
+              <span style={{ background: "var(--purple)15", color: "var(--purple)", fontWeight: 700,
+                fontSize: "0.68rem", padding: "0.15rem 0.5rem", borderRadius: 20 }}>
+                👥 {communityScore} ({voteCount})
               </span>
             )}
             {book.rating && (
-              <a href={book.rating_link || "#"} target="_blank" rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                style={{ fontSize: "0.75rem", color: "#4285f4", fontWeight: 600, textDecoration: "none" }}>
-                {book.rating} Google Books ↗
-              </a>
+              <span style={{ background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)", fontWeight: 700,
+                fontSize: "0.68rem", padding: "0.15rem 0.5rem", borderRadius: 20 }}>
+                ⭐ {book.rating}
+              </span>
             )}
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-          {score > 0 && <span style={{ fontSize: "1.1rem" }}>{scoreEmoji[score]}</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          {isAdmin && (
+            <button onClick={e => { e.stopPropagation(); onDelete(book.id) }}
+              style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "1rem",
+                cursor: "pointer", padding: "0 2px", lineHeight: 1 }}>
+              🗑
+            </button>
+          )}
+          {myScore > 0 && <span style={{ fontSize: "1rem" }}>{myScoreEmoji[myScore]}</span>}
           <span style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>{expanded ? "▲" : "▼"}</span>
         </div>
       </div>
 
-      {expanded && (
+      {expanded && book.summary && (
         <div style={{ borderTop: "1px solid var(--border)", padding: "0.9rem 1rem" }}>
-          {book.summary && (
-            <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.6, marginBottom: 12 }}>
-              {book.summary}
-            </div>
-          )}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {[{ s: 5, e: "❤️", l: "Love it" }, { s: 4, e: "👍", l: "Good" }, { s: 3, e: "🤔", l: "Maybe" }, { s: 2, e: "👎", l: "Not for me" }].map(({ s, e, l }) => (
-              <button key={s} onClick={() => vote(s)} disabled={saving}
-                style={{ display: "flex", alignItems: "center", gap: 5, background: score === s ? "var(--purple)15" : "var(--surface2)",
-                  border: score === s ? "1.5px solid var(--purple)" : "1px solid var(--border)",
-                  borderRadius: 10, padding: "6px 12px", cursor: saving ? "not-allowed" : "pointer",
-                  fontSize: "0.78rem", fontWeight: 700, color: score === s ? "var(--purple)" : "var(--text)",
-                  fontFamily: "inherit" }}>
-                <span>{e}</span>{l}
-              </button>
-            ))}
+          <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.6 }}>
+            {book.summary}
           </div>
-          {isAdmin && (
-            <div style={{ marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-              <button onClick={() => onDelete(book.id)}
-                style={{ background: "none", border: "1px solid var(--danger)", color: "var(--danger)",
-                  borderRadius: 8, padding: "5px 12px", fontSize: "0.78rem", fontWeight: 700,
-                  cursor: "pointer", fontFamily: "inherit" }}>
-                🗑 Delete suggestion
-              </button>
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -430,8 +400,6 @@ export default function BookSuggestionsPage() {
             key={b.id}
             book={b}
             myVote={myVotes[b.id]}
-            memberId={member?.id}
-            onVote={load}
             isAdmin={isAdmin}
             onDelete={deleteBook}
           />
