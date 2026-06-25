@@ -1,61 +1,66 @@
 "use client"
 import { usePathname, useRouter } from "next/navigation"
-import { useState, useEffect } from "react"
 import { useUser } from "@/lib/UserContext"
 import { getActiveHub, HUB_COLOURS } from "@/lib/navUtils"
 
+// Hub icon images live in /public/icons/ — drop PNG files in to activate
+// Falls back to emoji if file isn't present yet
+const HUB_ICONS = {
+  moviesHome:      "/icons/movies-home.png",
+  moviesScheduled: "/icons/movies-scheduled.png",
+  bookclubHome:    "/icons/bookclub-home.png",
+  socialHome:      "/icons/social-home.png",
+}
+
+function NavIcon({ imgKey, icon, active, colour }) {
+  if (imgKey && HUB_ICONS[imgKey]) {
+    return (
+      <img
+        src={HUB_ICONS[imgKey]}
+        alt=""
+        aria-hidden="true"
+        style={{ width: 26, height: 26, objectFit: "contain",
+          opacity: active ? 1 : 0.5,
+          filter: active ? "none" : "grayscale(40%)" }}
+        onError={e => { e.currentTarget.style.display = "none"; e.currentTarget.nextSibling.style.display = "inline" }}
+      />
+    )
+  }
+  return <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>{icon}</span>
+}
+
 const HUB_CONFIG = {
   movies: {
-    label: "Movie Hub",
     colour: "var(--teal)",
-    icon: "🎬",
     items: [
-      { path: "/movies",     label: "Movies Home", icon: "🏠" },
-      { path: "/screenings", label: "Scheduled",   icon: "📅" },
-      { path: "/library",    label: "Suggestions", icon: "🗳️" },
-      { path: "/dvd",         label: "DVDs",        icon: "💿" },
+      { path: "/movies",    label: "Movies Home", imgKey: "moviesHome",      icon: "🎬" },
+      { path: "/screenings",label: "Scheduled",   imgKey: "moviesScheduled", icon: "📅" },
+      { path: "/library",   label: "Suggestions", icon: "🗳️" },
+      { path: "/dvd",       label: "DVDs",        icon: "💿" },
     ],
   },
   bookclub: {
-    label: "Book Club",
     colour: "var(--purple)",
-    icon: "📖",
     items: [
-      { path: "/bookclub",       label: "Book Club Home", icon: "🏠" },
-      { path: "/bookclub/events", label: "Meetings",       icon: "📅" },
-      { path: "/bookclub/books",  label: "Books",          icon: "📚" },
+      { path: "/bookclub",             label: "Book Club Home", imgKey: "bookclubHome", icon: "📖" },
+      { path: "/bookclub/suggestions", label: "Suggestions",   icon: "📬" },
     ],
   },
   social: {
-    label: "Social Hub",
     colour: "var(--terracotta)",
-    icon: "🥂",
     items: [
-      { path: "/social",        label: "Social Hub Home", icon: "🏠" },
-      { path: "/social/events", label: "Scheduled",       icon: "📅" },
-    ],
-  },
-  outings: {
-    label: "Outings Hub",
-    colour: "var(--green)",
-    icon: "🌿",
-    items: [
-      { path: "/outings",        label: "Outings Home", icon: "🏠" },
-      { path: "/outings/events", label: "Scheduled",    icon: "📅" },
+      { path: "/social", label: "Social Events", imgKey: "socialHome", icon: "🥂" },
     ],
   },
 }
 
 export default function BottomNav() {
-  const pathname  = usePathname()
-  const router    = useRouter()
-  const { isAdmin, barOptIn } = useUser()
-  const [subMenuOpen, setSubMenuOpen] = useState(false)
+  const pathname               = usePathname()
+  const router                 = useRouter()
+  const { isAdmin, barOptIn }  = useUser()
 
   const activeHub = getActiveHub(pathname)
-  const hub = activeHub ? HUB_CONFIG[activeHub] : null
-
-  useEffect(() => { setSubMenuOpen(false) }, [pathname])
+  const hub       = activeHub ? HUB_CONFIG[activeHub] : null
 
   const navBase = {
     position: "fixed", bottom: 0, left: 0, right: 0,
@@ -81,23 +86,19 @@ export default function BottomNav() {
   if (activeHub && hub) {
     const hubNavItems = [
       { path: "/home", label: "Home", icon: "🏠", exact: true },
-      ...hub.items.map(item => ({ ...item, exact: item.path === hub.items[0].path })),
-      ...(isAdmin ? [{ path: "/admin", label: "Admin", icon: "⚙️", exact: true }] : []),
+      ...hub.items.map((item, i) => ({ ...item, exact: i === 0 })),
     ]
     return (
       <nav style={navBase}>
-        {hubNavItems.map(({ path, label, icon, exact }) => {
+        {hubNavItems.map(({ path, label, icon, imgKey, exact }) => {
           const active = exact
             ? pathname === path
             : pathname === path || pathname.startsWith(path + "/")
+          const colour = path === "/home" ? "var(--amber)" : hub.colour
           return (
-            <button
-              key={path}
-              onClick={() => router.push(path)}
-              style={btn(active, path === "/home" || path === "/admin" ? "var(--amber)" : hub.colour)}
-              aria-current={active ? "page" : undefined}
-            >
-              <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>{icon}</span>
+            <button key={path} onClick={() => router.push(path)}
+              style={btn(active, colour)} aria-current={active ? "page" : undefined}>
+              <NavIcon imgKey={imgKey} icon={icon} active={active} colour={colour} />
               {label}
             </button>
           )
@@ -110,96 +111,23 @@ export default function BottomNav() {
   const defaultItems = [
     { path: "/home",     label: "Home",     icon: "🏠" },
     { path: "/calendar", label: "Calendar", icon: "📅" },
-    { id: "events",      label: "Events",   icon: "✦"  },
     { path: "/bookings", label: "Bookings", icon: "🎟️" },
     ...(barOptIn && !isAdmin ? [{ path: "/bar", label: "Bar", icon: "🍺" }] : []),
-    ...(isAdmin ? [{ path: "/admin", label: "Admin", icon: "⚙️" }] : []),
+    ...(isAdmin             ? [{ path: "/admin", label: "Admin", icon: "⚙️" }] : []),
   ]
 
   return (
-    <>
-      {subMenuOpen && (
-        <>
-          <div
-            onClick={() => setSubMenuOpen(false)}
-            style={{
-              position: "fixed", inset: 0, zIndex: 98,
-              background: "rgba(0,0,0,0.25)",
-            }}
-          />
-          <div style={{
-            position: "fixed", bottom: 62, left: 0, right: 0,
-            background: "var(--surface)",
-            borderTop: "1px solid var(--border)",
-            boxShadow: "0 -4px 24px rgba(0,0,0,0.14)",
-            display: "grid", gridTemplateColumns: "1fr 1fr",
-            gap: "0.75rem", padding: "1rem",
-            zIndex: 99,
-            animation: "slideUp 0.18s ease",
-          }}>
-            {Object.entries(HUB_CONFIG).map(([key, cfg]) => (
-              <button
-                key={key}
-                onClick={() => {
-                  setSubMenuOpen(false)
-                  router.push(cfg.items[0].path)
-                }}
-                style={{
-                  background: cfg.colour + "18",
-                  border: "2px solid " + cfg.colour,
-                  borderRadius: 14,
-                  padding: "1rem 0.5rem",
-                  display: "flex", flexDirection: "column",
-                  alignItems: "center", gap: "0.4rem",
-                  cursor: "pointer", fontFamily: "inherit",
-                  minHeight: 80,
-                }}
-              >
-                <span style={{ fontSize: "1.75rem", lineHeight: 1 }}>{cfg.icon}</span>
-                <span style={{
-                  fontSize: "0.82rem", fontWeight: 700,
-                  color: cfg.colour, textAlign: "center",
-                }}>{cfg.label}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-
-      <nav style={navBase}>
-        {defaultItems.map((item) => {
-          if (item.id === "events") {
-            return (
-              <button
-                key="events"
-                onClick={() => setSubMenuOpen((v) => !v)}
-                style={btn(subMenuOpen, "var(--amber)")}
-                aria-expanded={subMenuOpen}
-              >
-                <span style={{
-                  fontSize: "1.3rem", lineHeight: 1,
-                  transform: subMenuOpen ? "rotate(45deg)" : "none",
-                  transition: "transform 0.18s",
-                  display: "inline-block",
-                }}>✦</span>
-                Events
-              </button>
-            )
-          }
-          const active = pathname === item.path
-          return (
-            <button
-              key={item.path}
-              onClick={() => router.push(item.path)}
-              style={btn(active)}
-              aria-current={active ? "page" : undefined}
-            >
-              <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>{item.icon}</span>
-              {item.label}
-            </button>
-          )
-        })}
-      </nav>
-    </>
+    <nav style={navBase}>
+      {defaultItems.map(({ path, label, icon }) => {
+        const active = pathname === path
+        return (
+          <button key={path} onClick={() => router.push(path)}
+            style={btn(active)} aria-current={active ? "page" : undefined}>
+            <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>{icon}</span>
+            {label}
+          </button>
+        )
+      })}
+    </nav>
   )
 }

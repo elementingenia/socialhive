@@ -418,7 +418,8 @@ function BookingSection({ event, onRefresh }) {
   const myWaitlist  = event.my_bookings?.find(b => b.status === "waitlist")
   const booked = event.bookings_count || 0
   const max = event.max_seats || 0
-  const maxPerBooking = event.max_seats_per_booking || 4
+  const maxPerBooking   = event.max_seats_per_booking || 4
+  const isMovieEvent    = event.hub_type === "movie"
   const availableSeats = Math.max(0, max - booked)
 
   const [modifySeats, setModifySeats] = useState(
@@ -511,7 +512,12 @@ function BookingSection({ event, onRefresh }) {
       {!myConfirmed && !myWaitlist && (
         <div>
           {!isBookclubEvent && availableSeats > 0 && (
-            <SeatSelector value={seats} min={1} max={Math.min(maxPerBooking, availableSeats)} onChange={setSeats} />
+            <>
+              <SeatSelector value={seats} min={1} max={Math.min(maxPerBooking, availableSeats)} onChange={setSeats} />
+              {isMovieEvent && maxPerBooking > 1 && (
+                <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Max {maxPerBooking} seats per booking</div>
+              )}
+            </>
           )}
           <button onClick={() => handleBook()} disabled={loading}
             style={{ width: "100%", padding: "14px 0", background: "var(--amber)", color: "#fff", border: "none",

@@ -14,13 +14,12 @@ const HUB_TYPES = [
 ]
 const HUB_COLOUR = { movie:'var(--teal)', social:'var(--terracotta)', outings:'var(--green)', bookclub:'var(--purple)' }
 const SECTIONS = [
-  { key: 'Events',  label: 'Events',  icon: '🎟️' },
-  { key: 'Notices', label: 'Notices', icon: '📋' },
-  { key: 'Members', label: 'Members', icon: '👥' },
-  { key: 'Movies',  label: 'Movies',  icon: '🎬' },
-  { key: 'Bar',     label: 'Bar',     icon: '🍺' },
-  { key: 'Books',   label: 'Books',   icon: '📚' },
-  { key: 'Tools',   label: 'Tools',   icon: '🔧' },
+  { key: 'PageTexts', label: 'Page Texts', icon: '📝' },
+  { key: 'Notices',   label: 'Notices',    icon: '📋' },
+  { key: 'Members',   label: 'Members',    icon: '👥' },
+  { key: 'Movies',    label: 'Movies',     icon: '🎬' },
+  { key: 'Bar',       label: 'Bar',        icon: '🍺' },
+  { key: 'Tools',     label: 'Tools',      icon: '🔧' },
 ]
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -66,326 +65,6 @@ function Field({ label, children }) {
 const inputStyle = { width:'100%', padding:'0.75rem 1rem', borderRadius:'10px', border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:'0.95rem', boxSizing:'border-box' }
 const btnPrimary = (colour='var(--teal)') => ({ background:colour, color:'#fff', border:'none', borderRadius:'10px', padding:'0.8rem 1.5rem', fontSize:'0.95rem', fontWeight:700, cursor:'pointer', width:'100%', marginTop:'0.5rem' })
 const btnDanger  = { background:'var(--danger)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.8rem 1.5rem', fontSize:'0.95rem', fontWeight:700, cursor:'pointer', width:'100%', marginTop:'0.5rem' }
-
-// ── EVENT FORM ────────────────────────────────────────────────────────────────
-// ── EC Picker (live search, up to 3) ─────────────────────────────────────────
-function ECPicker({ selectedIds, onChange, colour }) {
-  const [search, setSearch] = useState('')
-  const [results, setResults] = useState([])
-  const [members, setMembers] = useState([])
-  const timerRef = useRef(null)
-
-  useEffect(() => {
-    supabase.from('members').select('id, name, username').order('name')
-      .then(({ data }) => setMembers(data || []))
-  }, [])
-
-  function handleSearch(val) {
-    setSearch(val)
-    clearTimeout(timerRef.current)
-    if (val.length < 2) { setResults([]); return }
-    timerRef.current = setTimeout(() => {
-      const lower = val.toLowerCase()
-      setResults(
-        members.filter(m =>
-          !selectedIds.includes(m.id) &&
-          (m.name?.toLowerCase().includes(lower) || m.username?.toLowerCase().includes(lower))
-        ).slice(0, 6)
-      )
-    }, 180)
-  }
-
-  function add(m) {
-    if (selectedIds.length >= 3) return
-    onChange([...selectedIds, m.id])
-    setSearch(''); setResults([])
-  }
-
-  function remove(id) { onChange(selectedIds.filter(x => x !== id)) }
-
-  const selected = members.filter(m => selectedIds.includes(m.id))
-
-  return (
-    <div>
-      <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', marginBottom: selected.length ? '0.5rem' : 0 }}>
-        {selected.map(m => (
-          <div key={m.id} style={{ display:'inline-flex', alignItems:'center', gap:'0.35rem', background:(colour||'var(--teal)')+'20', color:colour||'var(--teal)', borderRadius:'20px', padding:'0.25rem 0.65rem', fontSize:'0.8rem', fontWeight:600 }}>
-            {m.name || m.username}
-            <button onClick={()=>remove(m.id)} style={{ background:'none', border:'none', cursor:'pointer', color:'inherit', fontSize:'1rem', lineHeight:1, padding:0 }}>×</button>
-          </div>
-        ))}
-      </div>
-      {selectedIds.length < 3 && (
-        <div style={{ position:'relative' }}>
-          <input
-            style={inputStyle}
-            value={search}
-            onChange={e=>handleSearch(e.target.value)}
-            placeholder={selected.length ? 'Add another coordinator…' : 'Search member name…'}
-          />
-          {results.length > 0 && (
-            <div style={{ position:'absolute', left:0, right:0, top:'100%', zIndex:50, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', boxShadow:'0 4px 16px rgba(0,0,0,0.12)', marginTop:'0.25rem', overflow:'hidden' }}>
-              {results.map(m => (
-                <div key={m.id} onClick={()=>add(m)} style={{ padding:'0.65rem 1rem', cursor:'pointer', fontSize:'0.88rem', borderBottom:'1px solid var(--border)', display:'flex', justifyContent:'space-between' }}>
-                  <span style={{ fontWeight:600 }}>{m.name}</span>
-                  <span style={{ color:'var(--text-dim)', fontSize:'0.78rem' }}>@{m.username}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-      {selectedIds.length >= 3 && <div style={{ fontSize:'0.78rem', color:'var(--text-dim)', marginTop:'0.25rem' }}>Maximum 3 coordinators</div>}
-    </div>
-  )
-}
-
-function EventForm({ event, onSave, onDelete, onClose }) {
-  const isEdit = !!event?.id
-  const [movies, setMovies] = useState([])
-  const [books,  setBooks]  = useState([])
-  const [ecIds,  setEcIds]  = useState([])
-  const [form, setForm] = useState({
-    title:               event?.title               || '',
-    hub_type:            event?.hub_type            || 'movie',
-    event_date:          event?.event_date          || '',
-    event_time:          event?.event_time          || '',
-    location:            event?.location            || '',
-    description:         event?.description         || '',
-    welcome_message:     event?.welcome_message     || '',
-    max_seats:           event?.max_seats           != null ? String(event.max_seats) : '30',
-    max_seats_per_booking: event?.max_seats_per_booking != null ? String(event.max_seats_per_booking) : '4',
-    cost:                event?.cost               != null ? String(event.cost) : '0',
-    is_public:           event?.is_public           ?? true,
-    payment_required:    event?.payment_required    ?? false,
-    show_attendee_names: event?.show_attendee_names ?? true,
-    movie_id:            event?.movie_id            || '',
-    book_id:             event?.book_id             || '',
-  })
-  const [saving,   setSaving]   = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [confirm,  setConfirm]  = useState(false)
-  const [err,      setErr]      = useState('')
-
-  useEffect(() => {
-    supabase.from('movies').select('id, title').eq('we_own', false).order('title').then(({ data }) => setMovies(data || []))
-    supabase.from('books').select('id, title, author').order('title').then(({ data }) => setBooks(data || []))
-    // Load existing coordinators when editing
-    if (isEdit && event.id) {
-      supabase.from('event_coordinators')
-        .select('member_id')
-        .eq('event_id', event.id)
-        .is('replaced_at', null)
-        .order('assigned_at')
-        .then(({ data }) => setEcIds((data || []).map(r => r.member_id)))
-    }
-  }, [isEdit, event?.id])
-
-  function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
-
-  async function saveCoordinators(eventId) {
-    const { data: { session } } = await supabase.auth.getSession()
-    await fetch('/api/admin/coordinators', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ event_id: eventId, member_ids: ecIds }),
-    })
-  }
-
-  async function save() {
-    if (!form.title.trim())      return setErr('Title is required')
-    if (!form.event_date.trim()) return setErr('Date is required')
-    setSaving(true); setErr('')
-    const payload = {
-      title:               form.title.trim(),
-      hub_type:            form.hub_type,
-      event_date:          form.event_date,
-      event_time:          form.event_time          || null,
-      location:            form.location            || null,
-      description:         form.description         || null,
-      welcome_message:     form.welcome_message     || null,
-      max_seats:           parseInt(form.max_seats) || 30,
-      max_seats_per_booking: parseInt(form.max_seats_per_booking) || 4,
-      cost:                parseFloat(form.cost)    || 0,
-      is_public:           form.is_public,
-      payment_required:    form.payment_required,
-      show_attendee_names: form.show_attendee_names,
-      movie_id:            form.hub_type === 'movie'    && form.movie_id ? form.movie_id : null,
-      book_id:             form.hub_type === 'bookclub' && form.book_id  ? form.book_id  : null,
-    }
-    let eventId = event?.id
-    if (isEdit) {
-      const { error } = await supabase.from('events').update(payload).eq('id', event.id)
-      if (error) { setErr(error.message); setSaving(false); return }
-    } else {
-      const { data, error } = await supabase.from('events').insert(payload).select('id').single()
-      if (error) { setErr(error.message); setSaving(false); return }
-      eventId = data.id
-    }
-    await saveCoordinators(eventId)
-    onSave()
-  }
-
-  async function del() {
-    setDeleting(true)
-    await supabase.from('events').update({ archived: true }).eq('id', event.id)
-    onDelete()
-  }
-
-  const colour = HUB_COLOUR[form.hub_type] || 'var(--teal)'
-  const isBookclub = form.hub_type === 'bookclub'
-
-  return (
-    <div>
-      <Field label="Hub">
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'0.4rem' }}>
-          {HUB_TYPES.map(h => (
-            <button key={h.value} onClick={() => set('hub_type', h.value)}
-              style={{ padding:'0.6rem 0.25rem', borderRadius:'10px', border:'2px solid', borderColor:form.hub_type===h.value ? HUB_COLOUR[h.value] : 'var(--border)', background:form.hub_type===h.value ? HUB_COLOUR[h.value]+'20' : 'var(--surface)', cursor:'pointer', fontSize:'0.75rem', fontWeight:600, color:form.hub_type===h.value ? HUB_COLOUR[h.value] : 'var(--text-dim)' }}>
-              {h.icon}<br/>{h.label}
-            </button>
-          ))}
-        </div>
-      </Field>
-      <Field label="Title"><input style={inputStyle} value={form.title} onChange={e=>set('title',e.target.value)} placeholder="Event name" /></Field>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.75rem' }}>
-        <Field label="Date"><input type="date" style={inputStyle} value={form.event_date} onChange={e=>set('event_date',e.target.value)} /></Field>
-        <Field label="Time"><input type="time" style={inputStyle} value={form.event_time} onChange={e=>set('event_time',e.target.value)} /></Field>
-      </div>
-      <Field label="Location"><input style={inputStyle} value={form.location} onChange={e=>set('location',e.target.value)} placeholder="Optional" /></Field>
-      <Field label="Event Co-ordinators (max 3)">
-        <ECPicker selectedIds={ecIds} onChange={setEcIds} colour={colour} />
-      </Field>
-      <Field label="Welcome Message"><textarea style={{ ...inputStyle, minHeight:60, resize:'vertical' }} value={form.welcome_message} onChange={e=>set('welcome_message',e.target.value)} placeholder="Shown to attendees in the booking view (optional)" /></Field>
-      <Field label="Description"><textarea style={{ ...inputStyle, minHeight:80, resize:'vertical' }} value={form.description} onChange={e=>set('description',e.target.value)} placeholder="Optional" /></Field>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.75rem' }}>
-        {!isBookclub && <Field label="Max Seats"><input type="number" style={inputStyle} value={form.max_seats} onChange={e=>set('max_seats',e.target.value)} min="1" /></Field>}
-        {!isBookclub && <Field label="Max per Booking"><input type="number" style={inputStyle} value={form.max_seats_per_booking} onChange={e=>set('max_seats_per_booking',e.target.value)} min="1" max="20" /></Field>}
-        <Field label="Cost ($)"><input type="number" style={inputStyle} value={form.cost} onChange={e=>set('cost',e.target.value)} min="0" step="0.50" /></Field>
-      </div>
-      {form.hub_type === 'movie' && (
-        <Field label="Linked Film">
-          <select style={{ ...inputStyle, appearance:'none', WebkitAppearance:'none' }} value={form.movie_id} onChange={e=>set('movie_id',e.target.value)}>
-            <option value="">— No film linked —</option>
-            {movies.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}
-          </select>
-        </Field>
-      )}
-      {isBookclub && (
-        <Field label="Linked Book">
-          <select style={{ ...inputStyle, appearance:'none', WebkitAppearance:'none' }} value={form.book_id} onChange={e=>set('book_id',e.target.value)}>
-            <option value="">— No book linked —</option>
-            {books.map(b => <option key={b.id} value={b.id}>{b.title}{b.author ? ' — ' + b.author : ''}</option>)}
-          </select>
-        </Field>
-      )}
-      <div style={{ display:'flex', flexDirection:'column', gap:'0.6rem', marginBottom:'1rem' }}>
-        <label style={{ display:'flex', alignItems:'center', gap:'0.6rem', fontSize:'0.9rem', cursor:'pointer' }}>
-          <input type="checkbox" checked={form.is_public} onChange={e=>set('is_public',e.target.checked)} style={{ width:18, height:18 }} />
-          Visible on public calendar
-        </label>
-        <label style={{ display:'flex', alignItems:'center', gap:'0.6rem', fontSize:'0.9rem', cursor:'pointer' }}>
-          <input type="checkbox" checked={form.payment_required} onChange={e=>set('payment_required',e.target.checked)} style={{ width:18, height:18 }} />
-          Payment required to confirm booking
-        </label>
-        <label style={{ display:'flex', alignItems:'center', gap:'0.6rem', fontSize:'0.9rem', cursor:'pointer' }}>
-          <input type="checkbox" checked={form.show_attendee_names} onChange={e=>set('show_attendee_names',e.target.checked)} style={{ width:18, height:18 }} />
-          Show attendee names in booking view
-        </label>
-      </div>
-      {err && <div style={{ color:'var(--danger)', fontSize:'0.85rem', marginBottom:'0.75rem' }}>{err}</div>}
-      <button onClick={save} disabled={saving} style={btnPrimary(colour)}>{saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Event'}</button>
-      {isEdit && !confirm && (
-        <button onClick={()=>setConfirm(true)} style={{ ...btnDanger, background:'none', color:'var(--danger)', border:'1px solid var(--danger)', marginTop:'0.5rem' }}>Archive Event</button>
-      )}
-      {confirm && (
-        <div style={{ marginTop:'0.5rem', background:'var(--danger)10', borderRadius:'10px', padding:'0.75rem', border:'1px solid var(--danger)' }}>
-          <div style={{ fontSize:'0.85rem', marginBottom:'0.5rem' }}>Archive this event? Existing bookings are preserved.</div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.5rem' }}>
-            <button onClick={()=>setConfirm(false)} style={{ padding:'0.65rem', borderRadius:'10px', border:'1px solid var(--border)', background:'var(--surface)', cursor:'pointer', fontWeight:600 }}>Cancel</button>
-            <button onClick={del} disabled={deleting} style={{ padding:'0.65rem', borderRadius:'10px', background:'var(--danger)', color:'#fff', border:'none', cursor:'pointer', fontWeight:700 }}>{deleting?'Archiving…':'Archive'}</button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── EVENTS TAB ────────────────────────────────────────────────────────────────
-function EventsTab() {
-  const [events,  setEvents]  = useState([])
-  const [loading, setLoading] = useState(true)
-  const [hubFilter, setHub]   = useState('all')
-  const [selected,  setSelected] = useState(null)  // null=closed, {}=new, event=edit
-  const [showPast, setShowPast] = useState(false)
-
-  const load = useCallback(async () => {
-    const today = new Date().toISOString().split('T')[0]
-    let q = supabase.from('events').select('id, title, event_date, event_time, hub_type, max_seats, cost, is_public').eq('archived', false).order('event_date', { ascending: true })
-    if (!showPast) q = q.gte('event_date', today)
-    const { data } = await q
-    setEvents(data || [])
-    setLoading(false)
-  }, [showPast])
-
-  useEffect(() => { load() }, [load])
-
-  const filtered = hubFilter === 'all' ? events : events.filter(e => e.hub_type === hubFilter)
-  const today = new Date(); today.setHours(0,0,0,0)
-
-  return (
-    <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' }}>
-        <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap' }}>
-          {['all',...HUB_TYPES.map(h=>h.value)].map(v => (
-            <button key={v} onClick={()=>setHub(v)}
-              style={{ padding:'0.35rem 0.75rem', borderRadius:'20px', border:'1px solid', borderColor:hubFilter===v?'var(--teal)':'var(--border)', background:hubFilter===v?'var(--teal)':'var(--surface)', color:hubFilter===v?'#fff':'var(--text)', fontSize:'0.75rem', fontWeight:600, cursor:'pointer' }}>
-              {v==='all'?'All':HUB_TYPES.find(h=>h.value===v)?.icon + ' ' + HUB_TYPES.find(h=>h.value===v)?.label}
-            </button>
-          ))}
-        </div>
-        <button onClick={()=>setSelected({})} style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.5rem 0.9rem', fontSize:'0.82rem', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>+ New</button>
-      </div>
-
-      <label style={{ display:'flex', alignItems:'center', gap:'0.5rem', fontSize:'0.82rem', color:'var(--text-dim)', marginBottom:'0.85rem', cursor:'pointer' }}>
-        <input type="checkbox" checked={showPast} onChange={e=>setShowPast(e.target.checked)} />
-        Include past events
-      </label>
-
-      {loading ? <div style={{ color:'var(--text-dim)', textAlign:'center', padding:'2rem' }}>Loading…</div>
-       : filtered.length === 0 ? <div style={{ color:'var(--text-dim)', textAlign:'center', padding:'2rem', fontSize:'0.9rem' }}>No events</div>
-       : (
-        <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
-          {filtered.map(e => {
-            const col = HUB_COLOUR[e.hub_type] || 'var(--teal)'
-            const hub = HUB_TYPES.find(h=>h.value===e.hub_type)
-            const isPast = new Date(e.event_date+'T00:00:00') < today
-            return (
-              <div key={e.id} onClick={()=>setSelected(e)}
-                style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.8rem 1rem', cursor:'pointer', borderLeft:'4px solid '+col, opacity:isPast?0.65:1, display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:'0.5rem' }}>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontWeight:700, fontSize:'0.9rem', marginBottom:'0.2rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{e.title}</div>
-                  <div style={{ fontSize:'0.78rem', color:'var(--text-dim)' }}>{fmtDate(e.event_date)}{e.event_time?' · '+fmtTime(e.event_time):''}</div>
-                </div>
-                <div style={{ display:'flex', gap:'0.3rem', flexShrink:0, flexWrap:'wrap', justifyContent:'flex-end' }}>
-                  <Badge label={hub?.icon+' '+hub?.label} colour={col} />
-                  {e.cost > 0 && <Badge label={'$'+parseFloat(e.cost).toFixed(2)} colour="var(--amber-dark)" />}
-                  {!e.is_public && <Badge label="Private" colour="var(--text-dim)" />}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {selected !== null && (
-        <SlideOver title={selected.id ? 'Edit Event' : 'New Event'} onClose={()=>setSelected(null)}>
-          <EventForm event={selected.id ? selected : null} onSave={()=>{setSelected(null);load()}} onDelete={()=>{setSelected(null);load()}} onClose={()=>setSelected(null)} />
-        </SlideOver>
-      )}
-    </div>
-  )
-}
 
 // ── NOTICES TAB ───────────────────────────────────────────────────────────────
 function NoticesTab() {
@@ -645,198 +324,6 @@ function BarProductsTab() {
     </div>
   )
 }
-
-
-// ── BOOKS TAB ─────────────────────────────────────────────────────────────────
-function BookForm({ book, onSave, onClose }) {
-  const isEdit = !!book?.id
-  const [form, setForm] = useState({
-    title:       book?.title       || '',
-    author:      book?.author      || '',
-    cover_url:   book?.cover_url   || '',
-    summary:     book?.summary     || '',
-    rating:      book?.rating      || '',
-    rating_link: book?.rating_link || '',
-    genres:      book?.genres      || '',
-    google_books_id: book?.google_books_id || '',
-  })
-  const [saving,     setSaving]     = useState(false)
-  const [deleting,   setDeleting]   = useState(false)
-  const [confirm,    setConfirm]    = useState(false)
-  const [err,        setErr]        = useState('')
-  const [gbSearch,   setGbSearch]   = useState('')
-  const [gbResults,  setGbResults]  = useState([])
-  const [gbSearching, setGbSearching] = useState(false)
-  const gbTimer = useRef(null)
-
-  function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
-
-  function handleGbSearch(val) {
-    setGbSearch(val)
-    clearTimeout(gbTimer.current)
-    if (val.length < 3) { setGbResults([]); return }
-    gbTimer.current = setTimeout(async () => {
-      setGbSearching(true)
-      const res = await fetch('/api/books/search?q=' + encodeURIComponent(val))
-      const data = await res.json()
-      setGbResults(data.results || [])
-      setGbSearching(false)
-    }, 400)
-  }
-
-  function applyGbResult(r) {
-    setForm(f => ({
-      ...f,
-      title:           r.title,
-      author:          r.author || f.author,
-      cover_url:       r.cover_url || f.cover_url,
-      summary:         r.summary || f.summary,
-      rating:          r.rating || f.rating,
-      rating_link:     r.rating_link || f.rating_link,
-      genres:          r.genres || f.genres,
-      google_books_id: r.google_books_id,
-    }))
-    setGbSearch('')
-    setGbResults([])
-  }
-
-  async function save() {
-    if (!form.title.trim()) return setErr('Title is required')
-    setSaving(true); setErr('')
-    const payload = {
-      title:           form.title.trim(),
-      author:          form.author          || null,
-      cover_url:       form.cover_url       || null,
-      summary:         form.summary         || null,
-      rating:          form.rating          || null,
-      rating_link:     form.rating_link     || null,
-      genres:          form.genres          || null,
-      google_books_id: form.google_books_id || null,
-    }
-    const { error } = isEdit
-      ? await supabase.from('books').update(payload).eq('id', book.id)
-      : await supabase.from('books').insert(payload)
-    if (error) { setErr(error.message); setSaving(false); return }
-    onSave()
-  }
-
-  async function del() {
-    setDeleting(true)
-    await supabase.from('books').delete().eq('id', book.id)
-    onSave()
-  }
-
-  return (
-    <div>
-      {/* Google Books search */}
-      <Field label="Search Google Books">
-        <div style={{ position:'relative' }}>
-          <input
-            style={inputStyle}
-            value={gbSearch}
-            onChange={e=>handleGbSearch(e.target.value)}
-            placeholder="Search by title or author to auto-fill…"
-          />
-          {gbSearching && <div style={{ fontSize:'0.78rem', color:'var(--text-dim)', marginTop:'0.25rem' }}>Searching…</div>}
-          {gbResults.length > 0 && (
-            <div style={{ position:'absolute', left:0, right:0, top:'100%', zIndex:50, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', boxShadow:'0 4px 16px rgba(0,0,0,0.12)', marginTop:'0.25rem', maxHeight:'300px', overflowY:'auto' }}>
-              {gbResults.map(r => (
-                <div key={r.google_books_id} onClick={()=>applyGbResult(r)}
-                  style={{ padding:'0.65rem 1rem', cursor:'pointer', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', gap:'0.65rem' }}>
-                  {r.cover_url && <img src={r.cover_url} alt="" style={{ width:32, height:46, objectFit:'cover', borderRadius:'4px', flexShrink:0 }} />}
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontWeight:700, fontSize:'0.85rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{r.title}</div>
-                    {r.author && <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{r.author}</div>}
-                    {r.genres && <div style={{ fontSize:'0.7rem', color:'var(--purple)', marginTop:'0.1rem' }}>{r.genres}</div>}
-                  </div>
-                  {r.rating && <div style={{ fontSize:'0.8rem', color:'var(--purple)', fontWeight:700, flexShrink:0 }}>★ {r.rating}</div>}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </Field>
-      <div style={{ borderBottom:'1px solid var(--border)', marginBottom:'1rem', marginTop:'-0.25rem' }} />
-      <Field label="Title"><input style={inputStyle} value={form.title} onChange={e=>set('title',e.target.value)} placeholder="Book title" /></Field>
-      <Field label="Author"><input style={inputStyle} value={form.author} onChange={e=>set('author',e.target.value)} placeholder="Author name" /></Field>
-      <Field label="Genres"><input style={inputStyle} value={form.genres} onChange={e=>set('genres',e.target.value)} placeholder="e.g. Fiction, Historical" /></Field>
-      <Field label="Rating"><input style={inputStyle} value={form.rating} onChange={e=>set('rating',e.target.value)} placeholder="e.g. 4.2" /></Field>
-      <Field label="Cover Image URL"><input style={inputStyle} value={form.cover_url} onChange={e=>set('cover_url',e.target.value)} placeholder="https://…" /></Field>
-      <Field label="Summary / Description">
-        <textarea style={{ ...inputStyle, minHeight:100, resize:'vertical' }} value={form.summary} onChange={e=>set('summary',e.target.value)} placeholder="Brief description…" />
-      </Field>
-      {err && <div style={{ color:'var(--danger)', fontSize:'0.85rem', marginBottom:'0.75rem' }}>{err}</div>}
-      <button onClick={save} disabled={saving} style={btnPrimary('var(--purple)')}>
-        {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Book'}
-      </button>
-      {isEdit && !confirm && (
-        <button onClick={()=>setConfirm(true)} style={{ ...btnDanger, background:'none', color:'var(--danger)', border:'1px solid var(--danger)', marginTop:'0.5rem' }}>Remove Book</button>
-      )}
-      {confirm && (
-        <div style={{ marginTop:'0.5rem', background:'var(--danger)10', borderRadius:'10px', padding:'0.75rem', border:'1px solid var(--danger)' }}>
-          <div style={{ fontSize:'0.85rem', marginBottom:'0.5rem' }}>Remove this book from the reading list?</div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.5rem' }}>
-            <button onClick={()=>setConfirm(false)} style={{ padding:'0.65rem', borderRadius:'10px', border:'1px solid var(--border)', background:'var(--surface)', cursor:'pointer', fontWeight:600 }}>Cancel</button>
-            <button onClick={del} disabled={deleting} style={{ padding:'0.65rem', borderRadius:'10px', background:'var(--danger)', color:'#fff', border:'none', cursor:'pointer', fontWeight:700 }}>{deleting?'Removing…':'Remove'}</button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function BooksTab() {
-  const [books,    setBooks]    = useState([])
-  const [loading,  setLoading]  = useState(true)
-  const [selected, setSelected] = useState(null)
-  const [search,   setSearch]   = useState('')
-
-  const load = useCallback(async () => {
-    const { data } = await supabase.from('books').select('*').order('added_at', { ascending: false })
-    setBooks(data || [])
-    setLoading(false)
-  }, [])
-  useEffect(() => { load() }, [load])
-
-  const filtered = books.filter(b =>
-    !search || b.title?.toLowerCase().includes(search.toLowerCase()) || b.author?.toLowerCase().includes(search.toLowerCase())
-  )
-
-  return (
-    <div>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem', gap:'0.5rem' }}>
-        <input style={{ ...inputStyle, flex:1 }} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search books…" />
-        <button onClick={()=>setSelected({})} style={{ background:'var(--purple)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.5rem 0.9rem', fontSize:'0.82rem', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>+ Add</button>
-      </div>
-      {loading ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)' }}>Loading…</div>
-       : filtered.length === 0 ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)', fontSize:'0.9rem' }}>No books yet</div>
-       : (
-        <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
-          {filtered.map(b => (
-            <div key={b.id} onClick={()=>setSelected(b)}
-              style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.8rem 1rem', cursor:'pointer', display:'flex', alignItems:'center', gap:'0.85rem' }}>
-              {b.cover_url
-                ? <img src={b.cover_url} alt={b.title} style={{ width:40, height:56, objectFit:'cover', borderRadius:'5px', flexShrink:0 }} />
-                : <div style={{ width:40, height:56, borderRadius:'5px', background:'var(--purple)20', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.2rem', flexShrink:0 }}>📖</div>
-              }
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontWeight:700, fontSize:'0.9rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{b.title}</div>
-                {b.author && <div style={{ fontSize:'0.78rem', color:'var(--text-dim)' }}>by {b.author}</div>}
-              </div>
-              {b.rating && <div style={{ fontSize:'0.82rem', color:'var(--purple)', fontWeight:700, flexShrink:0 }}>★ {b.rating}</div>}
-            </div>
-          ))}
-        </div>
-      )}
-      {selected !== null && (
-        <SlideOver title={selected.id ? 'Edit Book' : 'Add Book'} onClose={()=>setSelected(null)}>
-          <BookForm book={selected.id ? selected : null} onSave={()=>{setSelected(null);load()}} onClose={()=>setSelected(null)} />
-        </SlideOver>
-      )}
-    </div>
-  )
-}
-
 
 
 // ── BAR TAB (sub-tabs wrapper) ────────────────────────────────────────────────
@@ -1711,6 +1198,83 @@ function MoviesTab() {
   )
 }
 
+
+// ── PAGE TEXTS TAB ────────────────────────────────────────────────────────────
+function PageTextsTab() {
+  const { member } = useUser()
+  const [texts, setTexts]   = useState({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving]   = useState(null)
+  const [saved,  setSaved]    = useState(null)
+  const [draft,  setDraft]    = useState({})
+
+  const HUBS = [
+    { key: 'home',     label: 'Hive Home',      colour: 'var(--amber)' },
+    { key: 'movies',   label: 'Movies Home',    colour: 'var(--teal)' },
+    { key: 'bookclub', label: 'Book Club Home', colour: 'var(--purple)' },
+    { key: 'social',   label: 'Social Events',  colour: 'var(--terracotta)' },
+  ]
+
+  useEffect(() => {
+    fetch('/api/hub-settings')
+      .then(r => r.json())
+      .then(d => { setTexts(d); setDraft(d); setLoading(false) })
+  }, [])
+
+  async function save(hubType) {
+    setSaving(hubType)
+    await fetch('/api/hub-settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hub_type: hubType, welcome_text: draft[hubType] || '', user_id: member?.id }),
+    })
+    setTexts(t => ({ ...t, [hubType]: draft[hubType] || '' }))
+    setSaved(hubType)
+    setSaving(null)
+    setTimeout(() => setSaved(null), 2000)
+  }
+
+  if (loading) return <div style={{ color:'var(--text-dim)', textAlign:'center', padding:'2rem' }}>Loading…</div>
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
+      <div style={{ fontSize:'0.82rem', color:'var(--text-dim)', lineHeight:1.5 }}>
+        Set the welcome message shown on each hub's home page. Supports plain text.
+      </div>
+      {HUBS.map(hub => (
+        <div key={hub.key} style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', overflow:'hidden' }}>
+          <div style={{ background: hub.colour + '18', borderBottom:'1px solid var(--border)', padding:'0.65rem 1rem',
+            fontWeight:700, fontSize:'0.85rem', color: hub.colour }}>
+            {hub.label}
+          </div>
+          <div style={{ padding:'0.9rem 1rem' }}>
+            <textarea
+              rows={4}
+              style={{ ...inputStyle, resize:'vertical', minHeight:80 }}
+              value={draft[hub.key] || ''}
+              onChange={e => setDraft(d => ({ ...d, [hub.key]: e.target.value }))}
+              placeholder={'Welcome message for ' + hub.label + '…'}
+            />
+            <div style={{ display:'flex', justifyContent:'flex-end', marginTop:'0.5rem' }}>
+              {saved === hub.key && (
+                <span style={{ color:'var(--green)', fontSize:'0.82rem', fontWeight:700, marginRight:'0.75rem', alignSelf:'center' }}>✓ Saved</span>
+              )}
+              <button
+                onClick={() => save(hub.key)}
+                disabled={saving === hub.key || draft[hub.key] === texts[hub.key]}
+                style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px',
+                  padding:'0.55rem 1.25rem', fontWeight:700, fontSize:'0.85rem', cursor:'pointer',
+                  opacity: (saving === hub.key || draft[hub.key] === texts[hub.key]) ? 0.5 : 1 }}>
+                {saving === hub.key ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── ROOT ──────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const { member, loading } = useUser()
@@ -1733,13 +1297,12 @@ export default function AdminPage() {
           style={{ display:'flex', alignItems:'center', gap:'0.4rem', background:'none', border:'none', color:'var(--teal)', fontWeight:600, fontSize:'0.88rem', cursor:'pointer', padding:'1rem 0', fontFamily:'inherit' }}>
           ← Admin
         </button>
-        {tab === 'Events'  && <EventsTab />}
-        {tab === 'Notices' && <NoticesTab />}
-        {tab === 'Members' && <MembersTab />}
-        {tab === 'Movies'  && <MoviesTab />}
-        {tab === 'Bar'     && <BarTab />}
-        {tab === 'Books'   && <BooksTab />}
-        {tab === 'Tools'   && <ToolsTab />}
+        {tab === 'PageTexts' && <PageTextsTab />}
+        {tab === 'Notices'   && <NoticesTab />}
+        {tab === 'Members'   && <MembersTab />}
+        {tab === 'Movies'    && <MoviesTab />}
+        {tab === 'Bar'       && <BarTab />}
+        {tab === 'Tools'     && <ToolsTab />}
       </div>
     )
   }
@@ -1752,7 +1315,7 @@ export default function AdminPage() {
         {SECTIONS.map(s => (
           <button key={s.key} onClick={() => setTab(s.key)}
             style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'14px', padding:'1.25rem 0.75rem', display:'flex', flexDirection:'column', alignItems:'center', gap:'0.4rem', cursor:'pointer', fontFamily:'inherit',
-              ...(s.key === 'Tools' ? { gridColumn:'1/-1' } : {}) }}>
+              ...(s.key === 'Tools' || s.key === 'PageTexts' ? { gridColumn:'1/-1' } : {}) }}>
             <span style={{ fontSize:'1.75rem' }}>{s.icon}</span>
             <span style={{ fontWeight:700, fontSize:'0.88rem', color:'var(--text)' }}>{s.label}</span>
           </button>
