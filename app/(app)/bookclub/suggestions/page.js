@@ -105,13 +105,32 @@ function RatingSwiper({ books, memberId, onDone }) {
 }
 
 // ── Book Card ─────────────────────────────────────────────────────────────────
-function BookCard({ book, myVote, isAdmin, onDelete }) {
-  const [expanded, setExpanded] = useState(false)
+function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
+  const [expanded,    setExpanded]    = useState(false)
+  const [score,       setScore]       = useState(myVote?.score || 0)
+  const [saving,      setSaving]      = useState(false)
+  const [confirmDel,  setConfirmDel]  = useState(false)
 
-  const myScoreEmoji = { 5: "❤️", 4: "👍", 3: "🤔", 2: "👎", 0: null }
-  const myScore        = myVote?.score || 0
+  const scoreOptions = [
+    { s: 5, e: "❤️", l: "Love it" },
+    { s: 4, e: "👍", l: "Good" },
+    { s: 3, e: "🤔", l: "Maybe" },
+    { s: 2, e: "👎", l: "Not for me" },
+  ]
+  const myScoreEmoji   = { 5: "❤️", 4: "👍", 3: "🤔", 2: "👎", 0: null }
   const communityScore = book.avg_score ? parseFloat(book.avg_score).toFixed(1) : null
   const voteCount      = book.vote_count || 0
+
+  async function vote(s) {
+    setSaving(true)
+    await supabase.from("book_votes").upsert(
+      { member_id: memberId, book_id: book.id, score: s },
+      { onConflict: "member_id,book_id" }
+    )
+    setScore(s)
+    setSaving(false)
+    onVote()
+  }
 
   return (
     <div style={{ background: "var(--surface)", borderRadius: 14, border: "1px solid var(--border)",
@@ -141,23 +160,71 @@ function BookCard({ book, myVote, isAdmin, onDelete }) {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-          {isAdmin && (
-            <button onClick={e => { e.stopPropagation(); onDelete(book.id) }}
+          {isAdmin && !confirmDel && (
+            <button onClick={e => { e.stopPropagation(); setConfirmDel(true) }}
               style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "1rem",
                 cursor: "pointer", padding: "0 2px", lineHeight: 1 }}>
               🗑
             </button>
           )}
-          {myScore > 0 && <span style={{ fontSize: "1rem" }}>{myScoreEmoji[myScore]}</span>}
+          {score > 0 && <span style={{ fontSize: "1rem" }}>{myScoreEmoji[score]}</span>}
           <span style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>{expanded ? "▲" : "▼"}</span>
         </div>
       </div>
 
-      {expanded && book.summary && (
+      {expanded && (
         <div style={{ borderTop: "1px solid var(--border)", padding: "0.9rem 1rem" }}>
-          <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.6 }}>
-            {book.summary}
+          {book.summary && (
+            <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.6, marginBottom: 12 }}>
+              {book.summary}
+            </div>
+          )}
+
+          {/* Voting */}
+          <div style={{ marginBottom: confirmDel ? 12 : 0 }}>
+            <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-dim)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              {score > 0 ? "Your rating" : "Rate this book"}
+            </div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {scoreOptions.map(({ s, e, l }) => (
+                <button key={s} onClick={() => vote(s)} disabled={saving}
+                  style={{ display: "flex", alignItems: "center", gap: 5,
+                    background: score === s ? "var(--purple)15" : "var(--surface2)",
+                    border: score === s ? "1.5px solid var(--purple)" : "1px solid var(--border)",
+                    borderRadius: 10, padding: "6px 12px",
+                    cursor: saving ? "not-allowed" : "pointer",
+                    fontSize: "0.78rem", fontWeight: 700,
+                    color: score === s ? "var(--purple)" : "var(--text)",
+                    fontFamily: "inherit" }}>
+                  <span>{e}</span>{l}
+                </button>
+              ))}
+            </div>
           </div>
+
+          {/* Delete confirmation */}
+          {isAdmin && confirmDel && (
+            <div style={{ marginTop: 12, padding: "0.75rem", background: "#fee2e2", borderRadius: 10,
+              border: "1px solid #fca5a5" }}>
+              <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--danger)", marginBottom: 8 }}>
+                Delete this suggestion?
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => onDelete(book.id)}
+                  style={{ background: "var(--danger)", border: "none", color: "#fff",
+                    borderRadius: 8, padding: "5px 14px", fontSize: "0.78rem", fontWeight: 700,
+                    cursor: "pointer", fontFamily: "inherit" }}>
+                  Yes, delete
+                </button>
+                <button onClick={e => { e.stopPropagation(); setConfirmDel(false) }}
+                  style={{ background: "none", border: "1px solid var(--border)", color: "var(--text)",
+                    borderRadius: 8, padding: "5px 14px", fontSize: "0.78rem", fontWeight: 700,
+                    cursor: "pointer", fontFamily: "inherit" }}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -400,6 +467,8 @@ export default function BookSuggestionsPage() {
             key={b.id}
             book={b}
             myVote={myVotes[b.id]}
+            memberId={member?.id}
+            onVote={load}
             isAdmin={isAdmin}
             onDelete={deleteBook}
           />

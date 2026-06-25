@@ -43,9 +43,12 @@ function Toast({ msg }) {
 
 // ── Book Club Event Card ───────────────────────────────────────────────────────
 function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--purple)" }) {
-  const [loading, setLoading] = useState(false)
-  const book     = event.books
-  const isJoined = booking?.status === "confirmed"
+  const [loading,      setLoading]      = useState(false)
+  const [summaryOpen,  setSummaryOpen]  = useState(false)
+  const book        = event.books
+  const isJoined    = booking?.status === "confirmed"
+  const activeEC    = (event.event_coordinators || []).find(ec => !ec.replaced_at)
+  const coordinator = activeEC?.members?.name || activeEC?.members?.username || null
 
   async function handleSignUp() {
     setLoading(true)
@@ -84,44 +87,73 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
               </span>
             )}
             <GenrePills genres={book.genres} />
+            {coordinator && (
+              <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: 6 }}>
+                📋 Coordinated by <strong>{coordinator}</strong>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Event details */}
       <div style={{ padding: "0.9rem 1rem" }}>
+        {/* Participation — above description */}
+        <div style={{ marginBottom: 14 }}>
+          {isJoined ? (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#dcfce7",
+                color: "#15803d", borderRadius: 20, padding: "5px 14px", fontSize: "0.82rem", fontWeight: 700 }}>
+                ✓ Participating
+              </div>
+              <button onClick={handleLeave} disabled={loading}
+                style={{ background: "transparent", border: "1px solid var(--danger)", color: "var(--danger)",
+                  borderRadius: 20, padding: "5px 14px", fontSize: "0.82rem", fontWeight: 700,
+                  cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1, fontFamily: "inherit" }}>
+                {loading ? "…" : "Leave"}
+              </button>
+            </div>
+          ) : (
+            <button onClick={handleSignUp} disabled={loading}
+              style={{ background: "var(--purple)", color: "#fff", border: "none", borderRadius: 20,
+                padding: "8px 20px", fontSize: "0.88rem", fontWeight: 700,
+                cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1, fontFamily: "inherit" }}>
+              {loading ? "…" : "I want to Participate"}
+            </button>
+          )}
+        </div>
+
+        {/* Event notes */}
         {event.description && (
-          <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 12 }}>
+          <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 10 }}>
             {event.description}
           </div>
         )}
-        {book?.summary && (
-          <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.6, marginBottom: 12 }}>
-            {book.summary}
-          </div>
-        )}
 
-        {/* Participation */}
-        {isJoined ? (
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#dcfce7",
-              color: "#15803d", borderRadius: 20, padding: "5px 14px", fontSize: "0.82rem", fontWeight: 700 }}>
-              ✓ Participating
+        {/* Book summary — 3-line fade with Show More */}
+        {book?.summary && (
+          <div style={{ marginTop: event.description ? 0 : 0 }}>
+            <div style={{ position: "relative" }}>
+              <div style={{
+                fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.6,
+                maxHeight: summaryOpen ? "none" : "4.8em",
+                overflow: "hidden",
+              }}>
+                {book.summary}
+              </div>
+              {!summaryOpen && (
+                <div style={{
+                  position: "absolute", bottom: 0, left: 0, right: 0, height: "2.4em",
+                  background: "linear-gradient(to bottom, transparent, var(--surface))",
+                  pointerEvents: "none",
+                }} />
+              )}
             </div>
-            <button onClick={handleLeave} disabled={loading}
-              style={{ background: "transparent", border: "1px solid var(--danger)", color: "var(--danger)",
-                borderRadius: 20, padding: "5px 14px", fontSize: "0.82rem", fontWeight: 700,
-                cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}>
-              {loading ? "…" : "Leave"}
+            <button onClick={() => setSummaryOpen(o => !o)}
+              style={{ background: "none", border: "none", color: "var(--purple)", fontSize: "0.78rem",
+                fontWeight: 700, cursor: "pointer", padding: "4px 0", fontFamily: "inherit" }}>
+              {summaryOpen ? "Show less ▲" : "Show more ▼"}
             </button>
           </div>
-        ) : (
-          <button onClick={handleSignUp} disabled={loading}
-            style={{ background: "var(--purple)", color: "#fff", border: "none", borderRadius: 20,
-              padding: "8px 20px", fontSize: "0.88rem", fontWeight: 700,
-              cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1 }}>
-            {loading ? "…" : "I want to Participate"}
-          </button>
         )}
       </div>
     </div>
@@ -489,12 +521,6 @@ function AdminEventForm({ event, members, onSave, onClose }) {
           style={{ ...inputStyle, resize: "vertical", minHeight: 72 }} />
       </div>
 
-      <div style={{ marginBottom: 16 }}>
-        <label style={labelStyle}>Welcome Message</label>
-        <textarea rows={2} value={form.welcome_message} onChange={e => set("welcome_message", e.target.value)}
-          placeholder="Message shown to participants on sign-up…"
-          style={{ ...inputStyle, resize: "vertical", minHeight: 56 }} />
-      </div>
 
       <div style={{ display: "flex", gap: 10 }}>
         <button onClick={onClose}
@@ -541,7 +567,7 @@ export default function BookClubHome() {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, description, welcome_message, books(id, title, author, cover_url, genres, rating, rating_link, summary)")
+      .select("id, title, event_date, description, welcome_message, books(id, title, author, cover_url, genres, rating, rating_link, summary), event_coordinators(id, member_id, replaced_at, members(name, username))")
       .eq("hub_type", "bookclub")
       .eq("archived", false)
       .order("event_date", { ascending: true })

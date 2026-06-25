@@ -55,7 +55,7 @@ function SubNoticeCard({ text }) {
 function HubTiles() {
   const router = useRouter()
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.5rem", marginBottom: "0.75rem" }}>
+    <div style={{ display: "grid", gridTemplateColumns: `repeat(${HUBS.length}, 1fr)`, gap: "0.5rem", marginBottom: "0.75rem" }}>
       {HUBS.map(h => (
         <button key={h.key} onClick={() => router.push(h.path)} style={{
           background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "12px",
