@@ -105,7 +105,7 @@ function RatingSwiper({ books, memberId, onDone }) {
 }
 
 // ── Book Card ─────────────────────────────────────────────────────────────────
-function BookCard({ book, myVote, memberId, onVote }) {
+function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
   const [expanded, setExpanded] = useState(false)
   const [score,    setScore]    = useState(myVote?.score || 0)
   const [saving,   setSaving]   = useState(false)
@@ -178,6 +178,16 @@ function BookCard({ book, myVote, memberId, onVote }) {
               </button>
             ))}
           </div>
+          {isAdmin && (
+            <div style={{ marginTop: 10, borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+              <button onClick={() => onDelete(book.id)}
+                style={{ background: "none", border: "1px solid var(--danger)", color: "var(--danger)",
+                  borderRadius: 8, padding: "5px 12px", fontSize: "0.78rem", fontWeight: 700,
+                  cursor: "pointer", fontFamily: "inherit" }}>
+                🗑 Delete suggestion
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -276,7 +286,7 @@ function AddBookForm({ onAdded, onClose }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function BookSuggestionsPage() {
-  const { member } = useUser()
+  const { member, isAdmin } = useUser()
   const [books,     setBooks]     = useState([])
   const [myVotes,   setMyVotes]   = useState({})
   const [unrated,   setUnrated]   = useState([])
@@ -327,6 +337,22 @@ export default function BookSuggestionsPage() {
   }, [member?.id])
 
   useEffect(() => { if (member?.id) load() }, [member?.id, load])
+
+  async function deleteBook(bookId) {
+    // Check if book is used in any event
+    const { data: evts } = await supabase
+      .from("events")
+      .select("id")
+      .eq("book_id", bookId)
+      .limit(1)
+    if (evts?.length) {
+      alert("Cannot delete — this book has been used in a Book Club event.")
+      return
+    }
+    await supabase.from("book_votes").delete().eq("book_id", bookId)
+    await supabase.from("books").delete().eq("id", bookId)
+    await load()
+  }
 
   if (loading) return (
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
@@ -393,6 +419,8 @@ export default function BookSuggestionsPage() {
             myVote={myVotes[b.id]}
             memberId={member?.id}
             onVote={load}
+            isAdmin={isAdmin}
+            onDelete={deleteBook}
           />
         ))
       )}

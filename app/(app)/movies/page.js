@@ -447,7 +447,10 @@ function WelcomeBanner({ text, colour = "var(--teal)" }) {
       borderRadius: 14, padding: "0.9rem 1rem", marginBottom: "1rem",
       position: "relative" }}>
       <div style={{ fontSize: "0.88rem", lineHeight: 1.55, color: "var(--text)" }}>
-        <FormattedText text={text} c1Colour={colour} c2Colour="var(--text-dim)" />
+        {/<[a-z][\s\S]*>/i.test(text)
+          ? <span dangerouslySetInnerHTML={{ __html: text }} />
+          : <FormattedText text={text} c1Colour={colour} c2Colour="var(--text-dim)" />
+        }
       </div>
       <button
         onClick={() => {

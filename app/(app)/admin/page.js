@@ -1204,6 +1204,118 @@ function MoviesTab() {
 
 
 // ── PAGE TEXTS TAB ────────────────────────────────────────────────────────────
+// ── BBCode → HTML (for loading legacy content into editor) ─────────────────
+function bbToHtml(text, hubColour) {
+  if (!text) return ''
+  if (/<[a-z][\s\S]*>/i.test(text)) return text  // already HTML
+  return text
+    .replace(/\[b\]([\s\S]*?)\[\/b\]/g, '<strong>$1</strong>')
+    .replace(/\[i\]([\s\S]*?)\[\/i\]/g, '<em>$1</em>')
+    .replace(/\[u\]([\s\S]*?)\[\/u\]/g, '<u>$1</u>')
+    .replace(/\[c1\]([\s\S]*?)\[\/c1\]/g, `<span style="color:${hubColour||'#0d9488'}">$1</span>`)
+    .replace(/\[c2\]([\s\S]*?)\[\/c2\]/g, '<span style="color:#888">$1</span>')
+    .replace(/\n/g, '<br>')
+}
+
+const HUB_HEX = {
+  home:               '#f59e0b',
+  movies:             '#0d9488',
+  movies_suggestions: '#0d9488',
+  movies_dvd:         '#0d9488',
+  bookclub:           '#7c3aed',
+  social:             '#c2410c',
+}
+
+// ── Rich text editor (contentEditable) ───────────────────────────────────────
+function RichEditor({ initialValue, hubColour = '#0d9488', subOnly = false, onChange }) {
+  const ref = useRef(null)
+  const initDone = useRef(false)
+
+  useEffect(() => {
+    if (ref.current && !initDone.current) {
+      initDone.current = true
+      ref.current.innerHTML = bbToHtml(initialValue, hubColour)
+    }
+  }, []) // mount only — do not re-sync; browser owns the content after mount
+
+  function exec(cmd, val) {
+    ref.current?.focus()
+    document.execCommand(cmd, false, val || null)
+    onChange(ref.current?.innerHTML || '')
+  }
+
+  const btnBase = {
+    padding: '3px 9px', borderRadius: 6, border: '1px solid var(--border)',
+    background: 'var(--surface2)', cursor: 'pointer', fontSize: '0.8rem',
+    color: 'var(--text)', fontFamily: 'inherit', lineHeight: 1.4,
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button type="button" onMouseDown={e => { e.preventDefault(); exec('bold') }}
+          style={{ ...btnBase, fontWeight: 800 }}>B</button>
+        <button type="button" onMouseDown={e => { e.preventDefault(); exec('italic') }}
+          style={{ ...btnBase, fontStyle: 'italic' }}>I</button>
+        <button type="button" onMouseDown={e => { e.preventDefault(); exec('underline') }}
+          style={{ ...btnBase, textDecoration: 'underline' }}>U</button>
+        {!subOnly && (
+          <>
+            <button type="button" onMouseDown={e => { e.preventDefault(); exec('foreColor', hubColour) }}
+              style={{ ...btnBase, background: hubColour + '22', color: hubColour, border: '1px solid ' + hubColour, fontWeight: 700 }}>
+              Colour
+            </button>
+            <button type="button" onMouseDown={e => { e.preventDefault(); exec('foreColor', '#000000') }}
+              style={{ ...btnBase, color: '#000', fontWeight: 700 }}>Black</button>
+            <button type="button" onMouseDown={e => { e.preventDefault(); exec('foreColor', '#ffffff') }}
+              style={{ ...btnBase, background: '#444', color: '#fff', fontWeight: 700 }}>White</button>
+          </>
+        )}
+        <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginLeft: 4 }}>
+          Select text then tap format
+        </span>
+      </div>
+      <div
+        ref={ref}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={e => onChange(e.currentTarget.innerHTML)}
+        style={{
+          minHeight: subOnly ? 56 : 80,
+          border: '1px solid var(--border)', borderRadius: 10,
+          padding: '0.75rem 1rem', background: 'var(--surface)',
+          color: 'var(--text)', fontSize: '0.95rem', lineHeight: 1.55,
+          outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+          wordBreak: 'break-word',
+        }}
+      />
+    </div>
+  )
+}
+
+// ── Sub notice editor row ────────────────────────────────────────────────────
+function SubRow({ item, hubColour, onChange, onDelete }) {
+  return (
+    <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'flex-start' }}>
+      <div style={{ flex: 1 }}>
+        <RichEditor
+          key={item.id}
+          initialValue={item.text}
+          hubColour={hubColour}
+          subOnly
+          onChange={html => onChange(item.id, html)}
+        />
+      </div>
+      <button onClick={() => onDelete(item.id)}
+        style={{ marginTop: 4, background: 'none', border: '1px solid var(--border)',
+          borderRadius: 8, padding: '6px 10px', cursor: 'pointer',
+          color: 'var(--danger)', fontWeight: 700, fontSize: '0.8rem', flexShrink: 0 }}>
+        ×
+      </button>
+    </div>
+  )
+}
+
 function PageTextsTab() {
   const { member } = useUser()
   const [data,    setData]    = useState({})
@@ -1211,32 +1323,34 @@ function PageTextsTab() {
   const [saving,  setSaving]  = useState(null)
   const [saved,   setSaved]   = useState(null)
   const [loading, setLoading] = useState(true)
-  const textareaRefs          = {}
+  // Sub-message id counter for stable keys
+  const subCounter = useRef(0)
+  function newSubId() { subCounter.current += 1; return 'sub_' + subCounter.current }
 
   const HUB_SECTIONS = [
     {
-      key: 'home', label: 'Hive Home', colour: 'var(--amber)',
+      key: 'home', label: 'Hive Home', colour: 'var(--amber)', hex: '#f59e0b',
       hasSubs: true, subsLabel: 'Sub Notices',
       hint: 'Main announcement and sub-notices shown on the home screen.',
     },
     {
-      key: 'movies', label: 'Movies Home', colour: 'var(--teal)',
+      key: 'movies', label: 'Movies Home', colour: 'var(--teal)', hex: '#0d9488',
       hasSubs: false, hint: 'Welcome message on the Movies landing page.',
     },
     {
-      key: 'movies_suggestions', label: 'Movies — Suggestions', colour: 'var(--teal)',
+      key: 'movies_suggestions', label: 'Movies — Suggestions', colour: 'var(--teal)', hex: '#0d9488',
       hasSubs: false, hint: 'Text shown at the top of the Suggestions page.',
     },
     {
-      key: 'movies_dvd', label: 'Movies — DVD Library', colour: 'var(--teal)',
+      key: 'movies_dvd', label: 'Movies — DVD Library', colour: 'var(--teal)', hex: '#0d9488',
       hasSubs: false, hint: 'Text shown at the top of the DVD Library.',
     },
     {
-      key: 'bookclub', label: 'Book Club Home', colour: 'var(--purple)',
+      key: 'bookclub', label: 'Book Club Home', colour: 'var(--purple)', hex: '#7c3aed',
       hasSubs: false, hint: 'Welcome message on the Book Club home page.',
     },
     {
-      key: 'social', label: 'Social Events', colour: 'var(--terracotta)',
+      key: 'social', label: 'Social Events', colour: 'var(--terracotta)', hex: '#c2410c',
       hasSubs: false, hint: 'Welcome message on the Social Events page.',
     },
   ]
@@ -1246,11 +1360,11 @@ function PageTextsTab() {
       .then(r => r.json())
       .then(d => {
         setData(d)
-        // Initialise draft from fetched data
         const init = {}
         for (const s of HUB_SECTIONS) {
           init[s.key + '__text'] = d[s.key]?.text || ''
-          init[s.key + '__subs'] = d[s.key]?.subs ? [...d[s.key].subs] : []
+          // Subs stored as {id, text} for stable React keys
+          init[s.key + '__subs'] = (d[s.key]?.subs || []).map(text => ({ id: newSubId(), text }))
         }
         setDraft(init)
         setLoading(false)
@@ -1258,17 +1372,6 @@ function PageTextsTab() {
   }, [])
 
   function setDraftField(key, val) { setDraft(d => ({ ...d, [key]: val })) }
-
-  // Wrap selected text in a format tag
-  function applyTag(hubKey, tag) {
-    const el = textareaRefs[hubKey]
-    if (!el) return
-    const { selectionStart: s, selectionEnd: e, value } = el
-    const newVal = value.slice(0, s) + '[' + tag + ']' + value.slice(s, e) + '[/' + tag + ']' + value.slice(e)
-    setDraftField(hubKey + '__text', newVal)
-    // Restore focus + move cursor after closing tag
-    setTimeout(() => { el.focus(); el.setSelectionRange(e + tag.length * 2 + 5, e + tag.length * 2 + 5) }, 0)
-  }
 
   async function save(hubKey) {
     setSaving(hubKey)
@@ -1278,7 +1381,9 @@ function PageTextsTab() {
       user_id: member?.id,
     }
     const sec = HUB_SECTIONS.find(s => s.key === hubKey)
-    if (sec?.hasSubs) body.sub_messages = (draft[hubKey + '__subs'] || []).filter(Boolean)
+    if (sec?.hasSubs) {
+      body.sub_messages = (draft[hubKey + '__subs'] || []).map(s => s.text).filter(t => t && t !== '<br>' && t !== '<div><br></div>')
+    }
 
     await fetch('/api/hub-settings', {
       method: 'PATCH',
@@ -1301,44 +1406,8 @@ function PageTextsTab() {
     const textChanged = (draft[hubKey + '__text'] || '') !== (data[hubKey]?.text || '')
     if (!sec?.hasSubs) return textChanged
     const origSubs = JSON.stringify(data[hubKey]?.subs || [])
-    const newSubs  = JSON.stringify((draft[hubKey + '__subs'] || []).filter(Boolean))
+    const newSubs  = JSON.stringify((draft[hubKey + '__subs'] || []).map(s => s.text).filter(Boolean))
     return textChanged || origSubs !== newSubs
-  }
-
-  // Formatting toolbar
-  function Toolbar({ hubKey, colour }) {
-    const btns = [
-      { tag: 'b',  label: 'B', style: { fontWeight: 800 } },
-      { tag: 'i',  label: 'I', style: { fontStyle: 'italic' } },
-      { tag: 'u',  label: 'U', style: { textDecoration: 'underline' } },
-    ]
-    return (
-      <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
-        {btns.map(({ tag, label, style }) => (
-          <button key={tag} type="button" onMouseDown={e => { e.preventDefault(); applyTag(hubKey, tag) }}
-            style={{ padding: '2px 8px', borderRadius: 6, border: '1px solid var(--border)',
-              background: 'var(--surface2)', cursor: 'pointer', fontSize: '0.8rem',
-              color: 'var(--text)', fontFamily: 'inherit', ...style }}>
-            {label}
-          </button>
-        ))}
-        <button type="button" onMouseDown={e => { e.preventDefault(); applyTag(hubKey, 'c1') }}
-          style={{ padding: '2px 8px', borderRadius: 6, border: '1px solid ' + colour,
-            background: colour + '18', cursor: 'pointer', fontSize: '0.75rem',
-            color: colour, fontWeight: 700, fontFamily: 'inherit' }}>
-          Colour
-        </button>
-        <button type="button" onMouseDown={e => { e.preventDefault(); applyTag(hubKey, 'c2') }}
-          style={{ padding: '2px 8px', borderRadius: 6, border: '1px solid var(--border)',
-            background: 'var(--surface2)', cursor: 'pointer', fontSize: '0.75rem',
-            color: 'var(--text-dim)', fontWeight: 700, fontFamily: 'inherit' }}>
-          Grey
-        </button>
-        <span style={{ marginLeft: 6, fontSize: '0.7rem', color: 'var(--text-dim)', alignSelf: 'center', lineHeight: 1.3 }}>
-          Select text then tap format button
-        </span>
-      </div>
-    )
   }
 
   if (loading) return <div style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '2rem' }}>Loading…</div>
@@ -1365,18 +1434,18 @@ function PageTextsTab() {
 
               {/* Main message */}
               <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)',
-                textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+                textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
                 {sec.hasSubs ? 'Main Message' : 'Message'}
               </div>
-              <Toolbar hubKey={sec.key} colour={sec.colour} />
-              <textarea
-                ref={el => { if (el) textareaRefs[sec.key] = el }}
-                rows={4}
-                style={{ ...inputStyle, resize: 'vertical', minHeight: 72, marginBottom: sec.hasSubs ? 16 : 0 }}
-                value={draft[sec.key + '__text'] || ''}
-                onChange={e => setDraftField(sec.key + '__text', e.target.value)}
-                placeholder={'Main message for ' + sec.label + '…'}
-              />
+              <div style={{ marginBottom: sec.hasSubs ? 16 : 0 }}>
+                <RichEditor
+                  key={sec.key}
+                  initialValue={draft[sec.key + '__text'] || ''}
+                  hubColour={sec.hex}
+                  subOnly={false}
+                  onChange={html => setDraftField(sec.key + '__text', html)}
+                />
+              </div>
 
               {/* Sub messages (Hive Home only) */}
               {sec.hasSubs && (
@@ -1385,33 +1454,23 @@ function PageTextsTab() {
                     textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
                     Sub Notices
                   </div>
-                  {subs.map((sub, idx) => (
-                    <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-                      <textarea
-                        rows={2}
-                        style={{ ...inputStyle, resize: 'vertical', minHeight: 52, flex: 1 }}
-                        value={sub}
-                        onChange={e => {
-                          const next = [...subs]
-                          next[idx] = e.target.value
-                          setDraftField(sec.key + '__subs', next)
-                        }}
-                        placeholder={'Sub notice ' + (idx + 1) + '…'}
-                      />
-                      <button
-                        onClick={() => {
-                          const next = subs.filter((_, i) => i !== idx)
-                          setDraftField(sec.key + '__subs', next)
-                        }}
-                        style={{ alignSelf: 'flex-start', marginTop: 4, background: 'none',
-                          border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px',
-                          cursor: 'pointer', color: 'var(--danger)', fontWeight: 700, fontSize: '0.8rem' }}>
-                        ×
-                      </button>
-                    </div>
+                  {subs.map(item => (
+                    <SubRow
+                      key={item.id}
+                      item={item}
+                      hubColour={sec.hex}
+                      onChange={(id, html) => {
+                        const next = subs.map(s => s.id === id ? { ...s, text: html } : s)
+                        setDraftField(sec.key + '__subs', next)
+                      }}
+                      onDelete={id => {
+                        const next = subs.filter(s => s.id !== id)
+                        setDraftField(sec.key + '__subs', next)
+                      }}
+                    />
                   ))}
                   <button
-                    onClick={() => setDraftField(sec.key + '__subs', [...subs, ''])}
+                    onClick={() => setDraftField(sec.key + '__subs', [...subs, { id: newSubId(), text: '' }])}
                     style={{ background: 'none', border: '1.5px dashed var(--border)',
                       borderRadius: 10, padding: '0.5rem', width: '100%', cursor: 'pointer',
                       color: 'var(--text-dim)', fontSize: '0.82rem', fontWeight: 600,
@@ -1429,11 +1488,11 @@ function PageTextsTab() {
                 )}
                 <button
                   onClick={() => save(sec.key)}
-                  disabled={saving === sec.key || !dirty}
+                  disabled={saving === sec.key}
                   style={{ background: sec.colour, color: '#fff', border: 'none', borderRadius: 10,
                     padding: '0.55rem 1.25rem', fontWeight: 700, fontSize: '0.85rem',
-                    cursor: (!dirty || saving === sec.key) ? 'not-allowed' : 'pointer',
-                    opacity: (!dirty || saving === sec.key) ? 0.5 : 1 }}>
+                    cursor: saving === sec.key ? 'not-allowed' : 'pointer',
+                    opacity: saving === sec.key ? 0.5 : 1 }}>
                   {saving === sec.key ? 'Saving…' : 'Save'}
                 </button>
               </div>
@@ -1444,7 +1503,6 @@ function PageTextsTab() {
     </div>
   )
 }
-
 
 // ── ROOT ──────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
@@ -1489,14 +1547,18 @@ export default function AdminPage() {
     <div style={{ padding:'1rem 1rem 6rem' }}>
       <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--teal)', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:'0.75rem' }}>Admin</div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.65rem' }}>
-        {SECTIONS.map(s => (
-          <button key={s.key} onClick={() => setTab(s.key)}
-            style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'14px', padding:'1.25rem 0.75rem', display:'flex', flexDirection:'column', alignItems:'center', gap:'0.4rem', cursor:'pointer', fontFamily:'inherit',
-              ...(s.key === 'Tools' || s.key === 'PageTexts' ? { gridColumn:'1/-1' } : {}) }}>
-            <span style={{ fontSize:'1.75rem' }}>{s.icon}</span>
-            <span style={{ fontWeight:700, fontSize:'0.88rem', color:'var(--text)' }}>{s.label}</span>
-          </button>
-        ))}
+        {SECTIONS.map((s, i) => {
+          const isLast = i === SECTIONS.length - 1
+          const spanFull = isLast && SECTIONS.length % 2 === 1
+          return (
+            <button key={s.key} onClick={() => setTab(s.key)}
+              style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'14px', padding:'1rem 0.75rem', display:'flex', flexDirection:'column', alignItems:'center', gap:'0.35rem', cursor:'pointer', fontFamily:'inherit',
+                ...(spanFull ? { gridColumn:'1/-1' } : {}) }}>
+              <span style={{ fontSize:'1.6rem' }}>{s.icon}</span>
+              <span style={{ fontWeight:700, fontSize:'0.85rem', color:'var(--text)' }}>{s.label}</span>
+            </button>
+          )
+        })}
       </div>
     </div>
   )

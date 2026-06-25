@@ -11,7 +11,8 @@ import PinModal from "@/components/PinModal"
 
 const INACTIVITY_DAYS = 14
 const INACTIVITY_MS   = INACTIVITY_DAYS * 24 * 60 * 60 * 1000
-const POST_REG_KEY    = "shive_profile_nudge_dismissed"
+const POST_REG_KEY    = "shive_profile_nudge_dismissed"  // sessionStorage key
+const POST_REG_PERM   = "shive_profile_nudge_permanent"   // localStorage  key
 
 // Inner layout — has access to UserContext and UIContext
 function InnerLayout({ children }) {
@@ -20,11 +21,12 @@ function InnerLayout({ children }) {
   const [showNudge, setShowNudge] = useState(false)
   const [savedToast, setSavedToast] = useState(false)
 
-  // Post-registration profile nudge: show once if email is unset and not dismissed
+  // Post-registration profile nudge: show once if email is unset and not permanently dismissed
   useEffect(() => {
     if (!member) return
-    const dismissed = sessionStorage.getItem(POST_REG_KEY)
-    if (!dismissed && !member.email) {
+    const permanent  = localStorage.getItem(POST_REG_PERM)
+    const sessionDis = sessionStorage.getItem(POST_REG_KEY)
+    if (!permanent && !sessionDis && !member.email) {
       // Small delay so page settles first
       const t = setTimeout(() => setShowNudge(true), 1200)
       return () => clearTimeout(t)
@@ -33,6 +35,11 @@ function InnerLayout({ children }) {
 
   function dismissNudge() {
     sessionStorage.setItem(POST_REG_KEY, "1")
+    setShowNudge(false)
+  }
+
+  function dismissNudgePermanent() {
+    try { localStorage.setItem(POST_REG_PERM, "1") } catch {}
     setShowNudge(false)
   }
 
@@ -104,13 +111,23 @@ function InnerLayout({ children }) {
                 cursor: "pointer", marginBottom: "0.6rem",
               }}
             >Set up my profile</button>
-            <button
-              onClick={dismissNudge}
-              style={{
-                background: "none", border: "none", cursor: "pointer",
-                fontSize: "0.82rem", color: "var(--text-dim)", fontFamily: "inherit",
-              }}
-            >Maybe later</button>
+            <div style={{ display: "flex", gap: "0.75rem", justifyContent: "center" }}>
+              <button
+                onClick={dismissNudge}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  fontSize: "0.82rem", color: "var(--text-dim)", fontFamily: "inherit",
+                }}
+              >Maybe later</button>
+              <span style={{ color: "var(--border)", fontSize: "0.82rem" }}>·</span>
+              <button
+                onClick={dismissNudgePermanent}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  fontSize: "0.82rem", color: "var(--text-dim)", fontFamily: "inherit",
+                }}
+              >Don't show again</button>
+            </div>
           </div>
         </>
       )}

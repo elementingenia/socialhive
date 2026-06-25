@@ -11,6 +11,15 @@ const HUBS = [
   { key: "bookclub", label: "Book Club", icon: "📚", path: "/bookclub", colour: "var(--purple)" },
 ]
 
+// Render HTML (WYSIWYG) or legacy BBCode content
+function HubContent({ text, c1Colour, c2Colour }) {
+  if (!text) return null
+  if (/<[a-z][\s\S]*>/i.test(text)) {
+    return <span dangerouslySetInnerHTML={{ __html: text }} />
+  }
+  return <FormattedText text={text} c1Colour={c1Colour} c2Colour={c2Colour} />
+}
+
 function MainNoticeCard({ text, memberName }) {
   if (!text) return null
   return (
@@ -24,7 +33,7 @@ function MainNoticeCard({ text, memberName }) {
         </div>
       )}
       <div style={{ fontSize: "0.95rem", lineHeight: 1.5 }}>
-        <FormattedText text={text} c1Colour="rgba(255,255,255,0.85)" c2Colour="rgba(255,255,255,0.65)" />
+        <HubContent text={text} c1Colour="rgba(255,255,255,0.85)" c2Colour="rgba(255,255,255,0.65)" />
       </div>
     </div>
   )
@@ -38,7 +47,7 @@ function SubNoticeCard({ text }) {
       padding: "0.85rem 1.1rem", marginBottom: "0.6rem",
       border: "1px solid var(--border)", fontSize: "0.88rem", lineHeight: 1.5,
     }}>
-      <FormattedText text={text} c1Colour="var(--amber)" c2Colour="var(--text-dim)" />
+      <HubContent text={text} c1Colour="var(--amber)" c2Colour="var(--text-dim)" />
     </div>
   )
 }

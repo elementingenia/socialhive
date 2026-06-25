@@ -536,7 +536,7 @@ export default function BookClubHome() {
     // Hub welcome text
     const wRes = await fetch("/api/hub-settings")
     const wData = await wRes.json()
-    setWelcomeText(wData.bookclub || "")
+    setWelcomeText(wData.bookclub?.text || "")
 
     // All non-archived BC events
     const { data: evs } = await supabase
