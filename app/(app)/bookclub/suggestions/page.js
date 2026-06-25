@@ -239,31 +239,32 @@ function AddBookForm({ onAdded, onClose }) {
       <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--purple)", marginBottom: 10 }}>
         Suggest a Book
       </div>
-      <div style={{ position: "relative" }}>
-        <input type="text" placeholder="Search Google Books (3+ chars)…" value={query}
-          onChange={e => handleInput(e.target.value)}
-          style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: 10,
-            border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)",
-            fontSize: "0.9rem", boxSizing: "border-box", fontFamily: "inherit" }} />
-        {loading && <div style={{ fontSize: 12, color: "var(--text-dim)", padding: "4px 2px" }}>Searching…</div>}
-        {results.length > 0 && (
-          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--surface)",
-            border: "1px solid var(--border)", borderRadius: 12,
-            boxShadow: "0 4px 20px rgba(0,0,0,0.12)", zIndex: 50, maxHeight: 280, overflowY: "auto", marginTop: 2 }}>
-            {results.map(r => (
-              <div key={r.google_books_id} onClick={() => suggest(r)}
-                style={{ display: "flex", gap: 10, padding: "0.7rem 1rem", cursor: saving ? "not-allowed" : "pointer",
-                  borderBottom: "1px solid var(--border)", alignItems: "center", opacity: saving ? 0.6 : 1 }}>
-                {r.cover_url && <img src={r.cover_url} alt="" style={{ width: 32, height: 44, objectFit: "cover", borderRadius: 3 }} />}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: "0.85rem" }}>{r.title}</div>
-                  {r.author && <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{r.author}</div>}
-                </div>
+      <input type="text" placeholder="Search Google Books (3+ chars)…" value={query}
+        onChange={e => handleInput(e.target.value)}
+        style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: 10,
+          border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)",
+          fontSize: "0.9rem", boxSizing: "border-box", fontFamily: "inherit" }} />
+      {loading && (
+        <div style={{ fontSize: 12, color: "var(--text-dim)", padding: "6px 2px" }}>Searching…</div>
+      )}
+      {results.length > 0 && (
+        <div style={{ marginTop: 6, border: "1px solid var(--border)", borderRadius: 12,
+          background: "var(--surface)", overflow: "hidden" }}>
+          {results.map(r => (
+            <div key={r.google_books_id} onClick={() => suggest(r)}
+              style={{ display: "flex", gap: 10, padding: "0.7rem 1rem",
+                cursor: saving ? "not-allowed" : "pointer",
+                borderBottom: "1px solid var(--border)", alignItems: "center",
+                opacity: saving ? 0.6 : 1 }}>
+              {r.cover_url && <img src={r.cover_url} alt="" style={{ width: 32, height: 44, objectFit: "cover", borderRadius: 3 }} />}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: "0.85rem" }}>{r.title}</div>
+                {r.author && <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{r.author}</div>}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
       <button onClick={onClose}
         style={{ marginTop: 10, background: "none", border: "none", color: "var(--text-dim)",
           fontSize: "0.82rem", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
