@@ -14,7 +14,7 @@ export async function GET(req) {
     .filter(d => d.title && d.author_name?.length)
     .slice(0, 10)
     .map(d => ({
-      google_books_id: d.key,   // reuse field as unique ID — Open Library work key e.g. /works/OL82586W
+      google_books_id: d.key.replace(/^\/works\//, ""),  // store clean ID e.g. OL82586W
       title:     d.title,
       author:    (d.author_name || []).slice(0, 2).join(", "),
       cover_url: d.cover_i
@@ -22,7 +22,7 @@ export async function GET(req) {
         : null,
       summary:   null,
       rating:    null,
-      rating_link: `https://openlibrary.org${d.key}`,
+      rating_link: `https://openlibrary.org${d.key}`,  // full path still fine for link
       genres:    (d.subject || []).slice(0, 4).join(", ") || null,
     }))
 

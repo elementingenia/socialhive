@@ -2,10 +2,12 @@ import { NextResponse } from "next/server"
 
 export async function GET(req) {
   const { searchParams } = new URL(req.url)
-  const key = searchParams.get("key")  // e.g. /works/OL82586W
+  const key = searchParams.get("key")  // e.g. OL82586W (clean ID, no slashes)
   if (!key) return NextResponse.json({})
 
-  const base = `https://openlibrary.org${key}`
+  // Reconstruct full Open Library path
+  const workPath = key.startsWith("/works/") ? key : `/works/${key}`
+  const base = `https://openlibrary.org${workPath}`
 
   const [workRes, ratingsRes] = await Promise.allSettled([
     fetch(`${base}.json`,         { next: { revalidate: 86400 } }),
@@ -14,7 +16,7 @@ export async function GET(req) {
 
   let summary = null
   let rating  = null
-  let rating_link = `https://openlibrary.org${key}`
+  let rating_link = `https://openlibrary.org${key.startsWith('/works/') ? key : '/works/' + key}`
 
   if (workRes.status === "fulfilled" && workRes.value.ok) {
     const work = await workRes.value.json()
