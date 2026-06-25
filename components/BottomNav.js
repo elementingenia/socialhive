@@ -116,12 +116,21 @@ export default function BottomNav() {
     ...(isAdmin             ? [{ path: "/admin", label: "Admin", icon: "⚙️" }] : []),
   ]
 
+  function handleDefaultNav(path) {
+    if (path === "/admin" && pathname === "/admin") {
+      // Already on admin — dispatch reset to clear any open sub-tab
+      window.dispatchEvent(new CustomEvent("admin-reset"))
+    } else {
+      router.push(path)
+    }
+  }
+
   return (
     <nav style={navBase}>
       {defaultItems.map(({ path, label, icon }) => {
         const active = pathname === path
         return (
-          <button key={path} onClick={() => router.push(path)}
+          <button key={path} onClick={() => handleDefaultNav(path)}
             style={btn(active)} aria-current={active ? "page" : undefined}>
             <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>{icon}</span>
             {label}

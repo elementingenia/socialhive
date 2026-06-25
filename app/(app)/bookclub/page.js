@@ -176,36 +176,30 @@ function ClosedEventsAccordion({ events, myBookedIds }) {
 }
 
 // ── Book Search (Google Books) ────────────────────────────────────────────────
-function BookSearch({ onSelect, initialBook }) {
-  const [query,   setQuery]   = useState(initialBook?.title || "")
-  const [results, setResults] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [chosen,  setChosen]  = useState(initialBook || null)
-  const [editing, setEditing] = useState(!initialBook)
-  const timer = useRef(null)
+// BookPicker — selects from books already in the community suggestions table
+function BookPicker({ onSelect, initialBook }) {
+  const [allBooks, setAllBooks] = useState([])
+  const [query,    setQuery]    = useState("")
+  const [chosen,   setChosen]   = useState(initialBook || null)
+  const [open,     setOpen]     = useState(!initialBook)
 
-  function handleInput(val) {
-    setQuery(val)
-    clearTimeout(timer.current)
-    if (val.length < 3) { setResults([]); return }
-    timer.current = setTimeout(async () => {
-      setLoading(true)
-      const res = await fetch(`/api/books/search?q=${encodeURIComponent(val)}`)
-      const d   = await res.json()
-      setResults(d.results || [])
-      setLoading(false)
-    }, 350)
+  useEffect(() => {
+    supabase.from("books").select("id, title, author, cover_url, genres").order("title")
+      .then(({ data }) => setAllBooks(data || []))
+  }, [])
+
+  const filtered = allBooks.filter(b =>
+    !query || b.title?.toLowerCase().includes(query.toLowerCase()) ||
+    b.author?.toLowerCase().includes(query.toLowerCase())
+  ).slice(0, query.length >= 2 ? 10 : 5)
+
+  function pick(b) {
+    setChosen(b)
+    setOpen(false)
+    onSelect(b)
   }
 
-  function pick(r) {
-    setChosen(r)
-    setQuery(r.title)
-    setResults([])
-    setEditing(false)
-    onSelect(r)
-  }
-
-  if (!editing && chosen) {
+  if (!open && chosen) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surface2)",
         borderRadius: 10, padding: "0.65rem 0.9rem", marginBottom: 12 }}>
@@ -214,7 +208,7 @@ function BookSearch({ onSelect, initialBook }) {
           <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{chosen.title}</div>
           {chosen.author && <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>by {chosen.author}</div>}
         </div>
-        <button onClick={() => { setChosen(null); setQuery(""); setEditing(true); onSelect(null) }}
+        <button onClick={() => { setChosen(null); setQuery(""); setOpen(true); onSelect(null) }}
           style={{ background: "var(--purple)", color: "#fff", border: "none", borderRadius: 8,
             padding: "4px 10px", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
           Change
@@ -227,29 +221,142 @@ function BookSearch({ onSelect, initialBook }) {
     <div style={{ position: "relative", marginBottom: 12 }}>
       <input
         type="text"
-        placeholder="Search Google Books (3+ characters)…"
+        placeholder="Search community suggestions…"
         value={query}
-        onChange={e => handleInput(e.target.value)}
-        style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: 10, border: "1px solid var(--border)",
+        autoFocus
+        onChange={e => setQuery(e.target.value)}
+        style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: 10, border: "1px solid var(--purple)",
           background: "var(--surface)", color: "var(--text)", fontSize: "0.95rem",
           boxSizing: "border-box", fontFamily: "inherit" }}
       />
-      {loading && <div style={{ fontSize: 12, color: "var(--text-dim)", padding: "4px 2px" }}>Searching…</div>}
-      {results.length > 0 && (
-        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--surface)",
-          border: "1px solid var(--border)", borderRadius: 12, boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
-          zIndex: 50, maxHeight: 280, overflowY: "auto", marginTop: 2 }}>
-          {results.map(r => (
-            <div key={r.google_books_id} onClick={() => pick(r)}
+      {allBooks.length === 0 && (
+        <div style={{ fontSize: 12, color: "var(--text-dim)", padding: "4px 2px" }}>Loading books…</div>
+      )}
+      {allBooks.length > 0 && (
+        <div style={{ border: "1px solid var(--border)", borderRadius: 12,
+          boxShadow: "0 4px 20px rgba(0,0,0,0.12)", zIndex: 50, marginTop: 4,
+          background: "var(--surface)", overflow: "hidden" }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: "0.9rem 1rem", fontSize: "0.85rem", color: "var(--text-dim)" }}>
+              No matching books in suggestions
+            </div>
+          ) : filtered.map(b => (
+            <div key={b.id} onClick={() => pick(b)}
               style={{ display: "flex", gap: 10, padding: "0.7rem 1rem", cursor: "pointer",
                 borderBottom: "1px solid var(--border)", alignItems: "center" }}>
-              {r.cover_url && <img src={r.cover_url} alt="" style={{ width: 32, height: 44, objectFit: "cover", borderRadius: 3 }} />}
+              {b.cover_url && <img src={b.cover_url} alt="" style={{ width: 32, height: 44, objectFit: "cover", borderRadius: 3 }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: "0.85rem", lineHeight: 1.2 }}>{r.title}</div>
-                {r.author && <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{r.author}</div>}
+                <div style={{ fontWeight: 700, fontSize: "0.85rem", lineHeight: 1.2 }}>{b.title}</div>
+                {b.author && <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{b.author}</div>}
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {allBooks.length > 0 && filtered.length === 0 && query.length === 0 && (
+        <div style={{ border: "1px solid var(--border)", borderRadius: 12,
+          background: "var(--surface)", overflow: "hidden", marginTop: 4 }}>
+          {allBooks.slice(0, 5).map(b => (
+            <div key={b.id} onClick={() => pick(b)}
+              style={{ display: "flex", gap: 10, padding: "0.7rem 1rem", cursor: "pointer",
+                borderBottom: "1px solid var(--border)", alignItems: "center" }}>
+              {b.cover_url && <img src={b.cover_url} alt="" style={{ width: 32, height: 44, objectFit: "cover", borderRadius: 3 }} />}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: "0.85rem" }}>{b.title}</div>
+                {b.author && <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{b.author}</div>}
+              </div>
+            </div>
+          ))}
+          {allBooks.length > 5 && (
+            <div style={{ padding: "0.5rem 1rem", fontSize: "0.75rem", color: "var(--text-dim)" }}>
+              Type to search {allBooks.length} books…
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Coordinator Typeahead Picker ─────────────────────────────────────────────
+function CoordPicker({ members, value, onChange }) {
+  const chosen = members.find(m => m.id === value) || null
+  const [query,  setQuery]  = useState("")
+  const [open,   setOpen]   = useState(false)
+  const containerRef        = useRef(null)
+
+  const filtered = members.filter(m =>
+    !query || (m.name || m.username || "").toLowerCase().includes(query.toLowerCase())
+  ).slice(0, query.length >= 2 ? 10 : 5)
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [])
+
+  return (
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <div
+        onClick={() => { setOpen(o => !o); setQuery("") }}
+        style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: 10,
+          border: "1px solid var(--border)", background: "var(--surface)",
+          color: chosen ? "var(--text)" : "var(--text-dim)", fontSize: "0.95rem",
+          boxSizing: "border-box", fontFamily: "inherit", cursor: "pointer",
+          display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span>{chosen ? (chosen.name || chosen.username) : "— Select coordinator —"}</span>
+        <span style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>▾</span>
+      </div>
+
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
+          boxShadow: "0 4px 20px rgba(0,0,0,0.12)", zIndex: 60, overflow: "hidden" }}>
+          <div style={{ padding: "0.5rem 0.75rem", borderBottom: "1px solid var(--border)" }}>
+            <input
+              autoFocus
+              type="text"
+              placeholder="Search name…"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              style={{ width: "100%", border: "none", background: "transparent",
+                color: "var(--text)", fontSize: "0.9rem", outline: "none", fontFamily: "inherit" }}
+            />
+          </div>
+          <div style={{ maxHeight: 220, overflowY: "auto" }}>
+            {value && (
+              <div
+                onClick={() => { onChange(""); setOpen(false) }}
+                style={{ padding: "0.65rem 1rem", cursor: "pointer", fontSize: "0.85rem",
+                  color: "var(--text-dim)", borderBottom: "1px solid var(--border)" }}>
+                — Clear selection —
+              </div>
+            )}
+            {filtered.map(m => (
+              <div key={m.id}
+                onClick={() => { onChange(m.id); setOpen(false) }}
+                style={{ padding: "0.65rem 1rem", cursor: "pointer",
+                  background: m.id === value ? "var(--purple)12" : "transparent",
+                  borderBottom: "1px solid var(--border)",
+                  fontWeight: m.id === value ? 700 : 400, fontSize: "0.88rem",
+                  color: m.id === value ? "var(--purple)" : "var(--text)" }}>
+                {m.name || m.username}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div style={{ padding: "0.9rem 1rem", fontSize: "0.85rem", color: "var(--text-dim)" }}>
+                No match
+              </div>
+            )}
+            {members.length > 5 && !query && (
+              <div style={{ padding: "0.5rem 1rem", fontSize: "0.72rem", color: "var(--text-dim)",
+                borderTop: "1px solid var(--border)" }}>
+                Type to search all {members.length} members
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -363,18 +470,16 @@ function AdminEventForm({ event, members, onSave, onClose }) {
 
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Book *</label>
-        <BookSearch onSelect={setSelectedBook} initialBook={event?.books || null} />
+        <BookPicker onSelect={setSelectedBook} initialBook={event?.books || null} />
       </div>
 
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Event Coordinator</label>
-        <select value={form.coordinator_id} onChange={e => set("coordinator_id", e.target.value)}
-          style={{ ...inputStyle, appearance: "none", WebkitAppearance: "none" }}>
-          <option value="">— Select coordinator —</option>
-          {members.map(m => (
-            <option key={m.id} value={m.id}>{m.name || m.username}</option>
-          ))}
-        </select>
+        <CoordPicker
+          members={members}
+          value={form.coordinator_id}
+          onChange={id => set("coordinator_id", id)}
+        />
       </div>
 
       <div style={{ marginBottom: 12 }}>

@@ -15,7 +15,6 @@ const HUB_TYPES = [
 const HUB_COLOUR = { movie:'var(--teal)', social:'var(--terracotta)', outings:'var(--green)', bookclub:'var(--purple)' }
 const SECTIONS = [
   { key: 'PageTexts', label: 'Page Texts', icon: '📝' },
-  { key: 'Notices',   label: 'Notices',    icon: '📋' },
   { key: 'Members',   label: 'Members',    icon: '👥' },
   { key: 'Movies',    label: 'Movies',     icon: '🎬' },
   { key: 'Bar',       label: 'Bar',        icon: '🍺' },
@@ -143,7 +142,7 @@ function MembersTab() {
   const { member: me } = useUser()
 
   useEffect(()=>{
-    supabase.from('members').select('id, name, username, status, is_admin, joined_date').order('name').then(({data})=>{ setMembers(data||[]); setLoading(false) })
+    supabase.from('members').select('id, name, username, status, is_admin, hide_name, joined_date').order('name').then(({data})=>{ setMembers(data||[]); setLoading(false) })
   }, [])
 
   async function toggle(id, field, val) {
@@ -170,13 +169,18 @@ function MembersTab() {
                   <div style={{ fontWeight:700, fontSize:'0.9rem' }}>{m.name} {m.id===me?.id && <span style={{ fontSize:'0.7rem', color:'var(--text-dim)' }}>(you)</span>}</div>
                   <div style={{ fontSize:'0.78rem', color:'var(--text-dim)' }}>@{m.username}</div>
                 </div>
-                <div style={{ display:'flex', gap:'0.4rem', alignItems:'center' }}>
+                <div style={{ display:'flex', gap:'0.4rem', alignItems:'center', flexWrap:'wrap', justifyContent:'flex-end' }}>
                   <button
                     onClick={()=> m.id!==me?.id && toggle(m.id,'is_admin',!m.is_admin)}
                     style={{ padding:'0.3rem 0.6rem', borderRadius:'8px', border:'1px solid', borderColor:m.is_admin?'var(--amber)':'var(--border)', background:m.is_admin?'var(--amber)20':'var(--surface)', fontSize:'0.72rem', fontWeight:700, cursor:m.id===me?.id?'default':'pointer', color:m.is_admin?'var(--amber-dark)':'var(--text-dim)', opacity:m.id===me?.id?0.5:1 }}>
                     {m.is_admin ? '⚙️ Admin' : 'Admin'}
                   </button>
-
+                  <button
+                    onClick={()=> toggle(m.id,'hide_name',!m.hide_name)}
+                    title="Hidden members are not shown in attendee lists"
+                    style={{ padding:'0.3rem 0.6rem', borderRadius:'8px', border:'1px solid', borderColor:m.hide_name?'var(--purple)':'var(--border)', background:m.hide_name?'var(--purple)20':'var(--surface)', fontSize:'0.72rem', fontWeight:700, cursor:'pointer', color:m.hide_name?'var(--purple)':'var(--text-dim)' }}>
+                    {m.hide_name ? '🔒 Private' : 'Private'}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1202,84 +1206,258 @@ function MoviesTab() {
 // ── PAGE TEXTS TAB ────────────────────────────────────────────────────────────
 function PageTextsTab() {
   const { member } = useUser()
-  const [texts, setTexts]   = useState({})
+  const [data,    setData]    = useState({})
+  const [draft,   setDraft]   = useState({})
+  const [saving,  setSaving]  = useState(null)
+  const [saved,   setSaved]   = useState(null)
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving]   = useState(null)
-  const [saved,  setSaved]    = useState(null)
-  const [draft,  setDraft]    = useState({})
+  const textareaRefs          = {}
 
-  const HUBS = [
-    { key: 'home',     label: 'Hive Home',      colour: 'var(--amber)' },
-    { key: 'movies',   label: 'Movies Home',    colour: 'var(--teal)' },
-    { key: 'bookclub', label: 'Book Club Home', colour: 'var(--purple)' },
-    { key: 'social',   label: 'Social Events',  colour: 'var(--terracotta)' },
+  const HUB_SECTIONS = [
+    {
+      key: 'home', label: 'Hive Home', colour: 'var(--amber)',
+      hasSubs: true, subsLabel: 'Sub Notices',
+      hint: 'Main announcement and sub-notices shown on the home screen.',
+    },
+    {
+      key: 'movies', label: 'Movies Home', colour: 'var(--teal)',
+      hasSubs: false, hint: 'Welcome message on the Movies landing page.',
+    },
+    {
+      key: 'movies_suggestions', label: 'Movies — Suggestions', colour: 'var(--teal)',
+      hasSubs: false, hint: 'Text shown at the top of the Suggestions page.',
+    },
+    {
+      key: 'movies_dvd', label: 'Movies — DVD Library', colour: 'var(--teal)',
+      hasSubs: false, hint: 'Text shown at the top of the DVD Library.',
+    },
+    {
+      key: 'bookclub', label: 'Book Club Home', colour: 'var(--purple)',
+      hasSubs: false, hint: 'Welcome message on the Book Club home page.',
+    },
+    {
+      key: 'social', label: 'Social Events', colour: 'var(--terracotta)',
+      hasSubs: false, hint: 'Welcome message on the Social Events page.',
+    },
   ]
 
   useEffect(() => {
     fetch('/api/hub-settings')
       .then(r => r.json())
-      .then(d => { setTexts(d); setDraft(d); setLoading(false) })
+      .then(d => {
+        setData(d)
+        // Initialise draft from fetched data
+        const init = {}
+        for (const s of HUB_SECTIONS) {
+          init[s.key + '__text'] = d[s.key]?.text || ''
+          init[s.key + '__subs'] = d[s.key]?.subs ? [...d[s.key].subs] : []
+        }
+        setDraft(init)
+        setLoading(false)
+      })
   }, [])
 
-  async function save(hubType) {
-    setSaving(hubType)
+  function setDraftField(key, val) { setDraft(d => ({ ...d, [key]: val })) }
+
+  // Wrap selected text in a format tag
+  function applyTag(hubKey, tag) {
+    const el = textareaRefs[hubKey]
+    if (!el) return
+    const { selectionStart: s, selectionEnd: e, value } = el
+    const newVal = value.slice(0, s) + '[' + tag + ']' + value.slice(s, e) + '[/' + tag + ']' + value.slice(e)
+    setDraftField(hubKey + '__text', newVal)
+    // Restore focus + move cursor after closing tag
+    setTimeout(() => { el.focus(); el.setSelectionRange(e + tag.length * 2 + 5, e + tag.length * 2 + 5) }, 0)
+  }
+
+  async function save(hubKey) {
+    setSaving(hubKey)
+    const body = {
+      hub_type: hubKey,
+      welcome_text: draft[hubKey + '__text'] || '',
+      user_id: member?.id,
+    }
+    const sec = HUB_SECTIONS.find(s => s.key === hubKey)
+    if (sec?.hasSubs) body.sub_messages = (draft[hubKey + '__subs'] || []).filter(Boolean)
+
     await fetch('/api/hub-settings', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hub_type: hubType, welcome_text: draft[hubType] || '', user_id: member?.id }),
+      body: JSON.stringify(body),
     })
-    setTexts(t => ({ ...t, [hubType]: draft[hubType] || '' }))
-    setSaved(hubType)
-    setSaving(null)
-    setTimeout(() => setSaved(null), 2000)
+    setData(d => ({
+      ...d,
+      [hubKey]: {
+        text: body.welcome_text,
+        subs: body.sub_messages || d[hubKey]?.subs || [],
+      },
+    }))
+    setSaved(hubKey); setSaving(null)
+    setTimeout(() => setSaved(null), 2500)
   }
 
-  if (loading) return <div style={{ color:'var(--text-dim)', textAlign:'center', padding:'2rem' }}>Loading…</div>
+  function isDirty(hubKey) {
+    const sec = HUB_SECTIONS.find(s => s.key === hubKey)
+    const textChanged = (draft[hubKey + '__text'] || '') !== (data[hubKey]?.text || '')
+    if (!sec?.hasSubs) return textChanged
+    const origSubs = JSON.stringify(data[hubKey]?.subs || [])
+    const newSubs  = JSON.stringify((draft[hubKey + '__subs'] || []).filter(Boolean))
+    return textChanged || origSubs !== newSubs
+  }
+
+  // Formatting toolbar
+  function Toolbar({ hubKey, colour }) {
+    const btns = [
+      { tag: 'b',  label: 'B', style: { fontWeight: 800 } },
+      { tag: 'i',  label: 'I', style: { fontStyle: 'italic' } },
+      { tag: 'u',  label: 'U', style: { textDecoration: 'underline' } },
+    ]
+    return (
+      <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
+        {btns.map(({ tag, label, style }) => (
+          <button key={tag} type="button" onMouseDown={e => { e.preventDefault(); applyTag(hubKey, tag) }}
+            style={{ padding: '2px 8px', borderRadius: 6, border: '1px solid var(--border)',
+              background: 'var(--surface2)', cursor: 'pointer', fontSize: '0.8rem',
+              color: 'var(--text)', fontFamily: 'inherit', ...style }}>
+            {label}
+          </button>
+        ))}
+        <button type="button" onMouseDown={e => { e.preventDefault(); applyTag(hubKey, 'c1') }}
+          style={{ padding: '2px 8px', borderRadius: 6, border: '1px solid ' + colour,
+            background: colour + '18', cursor: 'pointer', fontSize: '0.75rem',
+            color: colour, fontWeight: 700, fontFamily: 'inherit' }}>
+          Colour
+        </button>
+        <button type="button" onMouseDown={e => { e.preventDefault(); applyTag(hubKey, 'c2') }}
+          style={{ padding: '2px 8px', borderRadius: 6, border: '1px solid var(--border)',
+            background: 'var(--surface2)', cursor: 'pointer', fontSize: '0.75rem',
+            color: 'var(--text-dim)', fontWeight: 700, fontFamily: 'inherit' }}>
+          Grey
+        </button>
+        <span style={{ marginLeft: 6, fontSize: '0.7rem', color: 'var(--text-dim)', alignSelf: 'center', lineHeight: 1.3 }}>
+          Select text then tap format button
+        </span>
+      </div>
+    )
+  }
+
+  if (loading) return <div style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '2rem' }}>Loading…</div>
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
-      <div style={{ fontSize:'0.82rem', color:'var(--text-dim)', lineHeight:1.5 }}>
-        Set the welcome message shown on each hub's home page. Supports plain text.
-      </div>
-      {HUBS.map(hub => (
-        <div key={hub.key} style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', overflow:'hidden' }}>
-          <div style={{ background: hub.colour + '18', borderBottom:'1px solid var(--border)', padding:'0.65rem 1rem',
-            fontWeight:700, fontSize:'0.85rem', color: hub.colour }}>
-            {hub.label}
-          </div>
-          <div style={{ padding:'0.9rem 1rem' }}>
-            <textarea
-              rows={4}
-              style={{ ...inputStyle, resize:'vertical', minHeight:80 }}
-              value={draft[hub.key] || ''}
-              onChange={e => setDraft(d => ({ ...d, [hub.key]: e.target.value }))}
-              placeholder={'Welcome message for ' + hub.label + '…'}
-            />
-            <div style={{ display:'flex', justifyContent:'flex-end', marginTop:'0.5rem' }}>
-              {saved === hub.key && (
-                <span style={{ color:'var(--green)', fontSize:'0.82rem', fontWeight:700, marginRight:'0.75rem', alignSelf:'center' }}>✓ Saved</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      {HUB_SECTIONS.map(sec => {
+        const dirty = isDirty(sec.key)
+        const subs  = draft[sec.key + '__subs'] || []
+        return (
+          <div key={sec.key} style={{ background: 'var(--surface)', borderRadius: 14,
+            border: '1px solid var(--border)', overflow: 'hidden' }}>
+            {/* Section header */}
+            <div style={{ background: sec.colour + '18', borderBottom: '1px solid var(--border)',
+              padding: '0.65rem 1rem', fontWeight: 700, fontSize: '0.85rem', color: sec.colour }}>
+              {sec.label}
+            </div>
+            <div style={{ padding: '0.9rem 1rem' }}>
+              {sec.hint && (
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: 8, lineHeight: 1.4 }}>
+                  {sec.hint}
+                </div>
               )}
-              <button
-                onClick={() => save(hub.key)}
-                disabled={saving === hub.key || draft[hub.key] === texts[hub.key]}
-                style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px',
-                  padding:'0.55rem 1.25rem', fontWeight:700, fontSize:'0.85rem', cursor:'pointer',
-                  opacity: (saving === hub.key || draft[hub.key] === texts[hub.key]) ? 0.5 : 1 }}>
-                {saving === hub.key ? 'Saving…' : 'Save'}
-              </button>
+
+              {/* Main message */}
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)',
+                textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
+                {sec.hasSubs ? 'Main Message' : 'Message'}
+              </div>
+              <Toolbar hubKey={sec.key} colour={sec.colour} />
+              <textarea
+                ref={el => { if (el) textareaRefs[sec.key] = el }}
+                rows={4}
+                style={{ ...inputStyle, resize: 'vertical', minHeight: 72, marginBottom: sec.hasSubs ? 16 : 0 }}
+                value={draft[sec.key + '__text'] || ''}
+                onChange={e => setDraftField(sec.key + '__text', e.target.value)}
+                placeholder={'Main message for ' + sec.label + '…'}
+              />
+
+              {/* Sub messages (Hive Home only) */}
+              {sec.hasSubs && (
+                <>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)',
+                    textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                    Sub Notices
+                  </div>
+                  {subs.map((sub, idx) => (
+                    <div key={idx} style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                      <textarea
+                        rows={2}
+                        style={{ ...inputStyle, resize: 'vertical', minHeight: 52, flex: 1 }}
+                        value={sub}
+                        onChange={e => {
+                          const next = [...subs]
+                          next[idx] = e.target.value
+                          setDraftField(sec.key + '__subs', next)
+                        }}
+                        placeholder={'Sub notice ' + (idx + 1) + '…'}
+                      />
+                      <button
+                        onClick={() => {
+                          const next = subs.filter((_, i) => i !== idx)
+                          setDraftField(sec.key + '__subs', next)
+                        }}
+                        style={{ alignSelf: 'flex-start', marginTop: 4, background: 'none',
+                          border: '1px solid var(--border)', borderRadius: 8, padding: '6px 10px',
+                          cursor: 'pointer', color: 'var(--danger)', fontWeight: 700, fontSize: '0.8rem' }}>
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setDraftField(sec.key + '__subs', [...subs, ''])}
+                    style={{ background: 'none', border: '1.5px dashed var(--border)',
+                      borderRadius: 10, padding: '0.5rem', width: '100%', cursor: 'pointer',
+                      color: 'var(--text-dim)', fontSize: '0.82rem', fontWeight: 600,
+                      fontFamily: 'inherit', marginBottom: 8 }}>
+                    + Add Sub Notice
+                  </button>
+                </>
+              )}
+
+              {/* Save */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
+                gap: 10, marginTop: sec.hasSubs ? 0 : 8 }}>
+                {saved === sec.key && (
+                  <span style={{ color: 'var(--green)', fontSize: '0.82rem', fontWeight: 700 }}>✓ Saved</span>
+                )}
+                <button
+                  onClick={() => save(sec.key)}
+                  disabled={saving === sec.key || !dirty}
+                  style={{ background: sec.colour, color: '#fff', border: 'none', borderRadius: 10,
+                    padding: '0.55rem 1.25rem', fontWeight: 700, fontSize: '0.85rem',
+                    cursor: (!dirty || saving === sec.key) ? 'not-allowed' : 'pointer',
+                    opacity: (!dirty || saving === sec.key) ? 0.5 : 1 }}>
+                  {saving === sec.key ? 'Saving…' : 'Save'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
+
 
 // ── ROOT ──────────────────────────────────────────────────────────────────────
 export default function AdminPage() {
   const { member, loading } = useUser()
   const router = useRouter()
   const [tab, setTab] = useState(null)
+
+  // Reset to main admin page when footer Admin button re-tapped
+  useEffect(() => {
+    function onReset() { setTab(null) }
+    window.addEventListener("admin-reset", onReset)
+    return () => window.removeEventListener("admin-reset", onReset)
+  }, [])
 
   useEffect(()=>{
     if (!loading && member && !member.is_admin) router.replace('/home')
@@ -1298,7 +1476,6 @@ export default function AdminPage() {
           ← Admin
         </button>
         {tab === 'PageTexts' && <PageTextsTab />}
-        {tab === 'Notices'   && <NoticesTab />}
         {tab === 'Members'   && <MembersTab />}
         {tab === 'Movies'    && <MoviesTab />}
         {tab === 'Bar'       && <BarTab />}

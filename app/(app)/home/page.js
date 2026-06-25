@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
+import { FormattedText } from "@/lib/textFormatter"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
@@ -7,11 +8,11 @@ import { useUser } from "@/lib/UserContext"
 const HUBS = [
   { key: "movies",   label: "Cinema",    icon: "🎬", path: "/movies",   colour: "var(--teal)" },
   { key: "social",   label: "Social",    icon: "🎉", path: "/social",   colour: "var(--terracotta)" },
-  { key: "outings",  label: "Outings",   icon: "🚌", path: "/outings",  colour: "var(--green)" },
   { key: "bookclub", label: "Book Club", icon: "📚", path: "/bookclub", colour: "var(--purple)" },
 ]
 
-function MainNoticeCard({ notice, memberName }) {
+function MainNoticeCard({ text, memberName }) {
+  if (!text) return null
   return (
     <div style={{
       background: "var(--teal)", color: "#fff", borderRadius: "14px",
@@ -22,19 +23,22 @@ function MainNoticeCard({ notice, memberName }) {
           Welcome {memberName},
         </div>
       )}
-      <div style={{ fontSize: "0.95rem", lineHeight: 1.5 }}>{notice.content}</div>
+      <div style={{ fontSize: "0.95rem", lineHeight: 1.5 }}>
+        <FormattedText text={text} c1Colour="rgba(255,255,255,0.85)" c2Colour="rgba(255,255,255,0.65)" />
+      </div>
     </div>
   )
 }
 
-function SubNoticeCard({ notice }) {
+function SubNoticeCard({ text }) {
+  if (!text) return null
   return (
     <div style={{
       background: "var(--surface)", color: "var(--text)", borderRadius: "12px",
       padding: "0.85rem 1.1rem", marginBottom: "0.6rem",
       border: "1px solid var(--border)", fontSize: "0.88rem", lineHeight: 1.5,
     }}>
-      {notice.content}
+      <FormattedText text={text} c1Colour="var(--amber)" c2Colour="var(--text-dim)" />
     </div>
   )
 }
@@ -128,28 +132,22 @@ function BarTabCard({ memberId }) {
 
 export default function HomePage() {
   const { member, memberName, barOptIn, memberId } = useUser()
-  const [notices, setNotices] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [mainText, setMainText] = useState("")
+  const [subTexts, setSubTexts] = useState([])
+  const [loading,  setLoading]  = useState(true)
 
   useEffect(() => {
-    async function load() {
-      const now = new Date().toISOString()
-      const { data } = await supabase
-        .from("notices")
-        .select("*")
-        .eq("archived", false)
-        .or("expires_at.is.null,expires_at.gt." + now)
-        .order("type", { ascending: true })   // 'main' sorts before 'sub'
-        .order("created_at", { ascending: false })
-      setNotices(data || [])
-      setLoading(false)
-    }
-    load()
+    fetch("/api/hub-settings")
+      .then(r => r.json())
+      .then(d => {
+        setMainText(d.home?.text || "")
+        setSubTexts(Array.isArray(d.home?.subs) ? d.home.subs.filter(Boolean) : [])
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
   }, [])
 
   const firstName = member?.name?.split(" ")[0] || "there"
-  const mainNotices = notices.filter(n => n.type === "main")
-  const subNotices  = notices.filter(n => n.type === "sub")
 
   return (
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
@@ -162,8 +160,8 @@ export default function HomePage() {
       ) : (
         <>
           {/* Primary notice */}
-          {mainNotices.length > 0
-            ? mainNotices.map(n => <MainNoticeCard key={n.id} notice={n} memberName={memberName} />)
+          {mainText
+            ? <MainNoticeCard text={mainText} memberName={memberName} />
             : (
               <div style={{
                 background: "var(--surface)", borderRadius: "14px", padding: "0.9rem 1.1rem",
@@ -179,7 +177,7 @@ export default function HomePage() {
           <HubTiles />
 
           {/* Sub notices */}
-          {subNotices.map(n => <SubNoticeCard key={n.id} notice={n} />)}
+          {subTexts.map((t, i) => <SubNoticeCard key={i} text={t} />)}
 
           {/* Bar tab — only for opted-in members */}
           {barOptIn && memberId && <BarTabCard memberId={memberId} />}

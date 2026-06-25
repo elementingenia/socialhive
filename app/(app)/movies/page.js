@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import { FormattedText } from '@/lib/textFormatter'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
@@ -421,9 +422,51 @@ function RatingSwiper({ movies, memberId, onDone }) {
   )
 }
 
+
+// ── Hub Welcome Banner (collapsible, persists dismiss in localStorage) ────────
+function WelcomeBanner({ text, colour = "var(--teal)" }) {
+  const STORAGE_KEY = "movies_welcome_dismissed"
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem(STORAGE_KEY) === "1" } catch { return false }
+  })
+  const [expanded,  setExpanded]  = useState(false)
+
+  if (!text) return null
+  if (dismissed) {
+    return (
+      <button onClick={() => { setDismissed(false); setExpanded(true) }}
+        style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none",
+          color: colour, fontSize: "0.78rem", fontWeight: 600, cursor: "pointer",
+          padding: "0 0 0.75rem", fontFamily: "inherit" }}>
+        <span style={{ fontSize: "1rem" }}>ℹ</span> Show welcome message
+      </button>
+    )
+  }
+  return (
+    <div style={{ background: colour + "14", border: "1px solid " + colour + "40",
+      borderRadius: 14, padding: "0.9rem 1rem", marginBottom: "1rem",
+      position: "relative" }}>
+      <div style={{ fontSize: "0.88rem", lineHeight: 1.55, color: "var(--text)" }}>
+        <FormattedText text={text} c1Colour={colour} c2Colour="var(--text-dim)" />
+      </div>
+      <button
+        onClick={() => {
+          setDismissed(true)
+          try { localStorage.setItem(STORAGE_KEY, "1") } catch {}
+        }}
+        style={{ position: "absolute", top: 8, right: 10, background: "none", border: "none",
+          color: "var(--text-dim)", fontSize: "1rem", cursor: "pointer", lineHeight: 1, padding: 4 }}
+        aria-label="Dismiss">
+        ×
+      </button>
+    </div>
+  )
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function MoviesHomePage() {
   const [loading, setLoading]     = useState(true)
+  const [welcomeText, setWelcomeText] = useState('')
   const [nextEvent, setNextEvent] = useState(null)
   const [myBookings, setMyBookings] = useState([])
   const [nextBooking, setNextBooking] = useState(null)
@@ -434,6 +477,7 @@ export default function MoviesHomePage() {
   const [session, setSession] = useState(null)
 
   const load = useCallback(async () => {
+    fetch('/api/hub-settings').then(r => r.json()).then(d => setWelcomeText(d.movies?.text || '')).catch(() => {})
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setLoading(false); return }
     setSession(session)
@@ -503,6 +547,8 @@ export default function MoviesHomePage() {
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh', padding: '1rem 1rem 6rem' }}>
+
+      <WelcomeBanner text={welcomeText} colour="var(--teal)" />
 
       {nextEvent ? (
         <NextScreeningCard event={nextEvent} myBooking={nextBookingSummary} />
