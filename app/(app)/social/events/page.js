@@ -226,6 +226,70 @@ function Toggle({ value, onChange, label }) {
   )
 }
 
+// ── Fixed-list custom picker ──────────────────────────────────────────────────
+function FixedListPicker({ value, onChange, options, placeholder = "Select…" }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        style={{
+          ...INPUT, display: "flex", alignItems: "center", justifyContent: "space-between",
+          cursor: "pointer", textAlign: "left",
+          borderColor: open ? "var(--terracotta)" : "var(--border)",
+        }}
+      >
+        <span style={{ color: value ? "var(--text)" : "var(--text-dim)" }}>
+          {value || placeholder}
+        </span>
+        <span style={{
+          fontSize: "0.7rem", color: "var(--text-dim)",
+          transform: open ? "rotate(180deg)" : "none",
+          transition: "transform 0.15s", flexShrink: 0, marginLeft: "0.5rem",
+        }}>▼</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 60,
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: "12px", boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+          overflow: "hidden",
+        }}>
+          {options.map((opt, i) => (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => { onChange(opt); setOpen(false) }}
+              style={{
+                width: "100%", padding: "0.75rem 1rem", textAlign: "left",
+                background: value === opt ? "var(--terracotta)12" : "transparent",
+                border: "none", borderTop: i > 0 ? "1px solid var(--border)" : "none",
+                cursor: "pointer", fontFamily: "inherit", fontSize: "0.92rem",
+                color: value === opt ? "var(--terracotta)" : "var(--text)",
+                fontWeight: value === opt ? 700 : 400,
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+              }}
+            >
+              {opt}
+              {value === opt && <span style={{ color: "var(--terracotta)", fontSize: "0.85rem" }}>✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Location field ────────────────────────────────────────────────────────────
 function LocationField({ locationType, location, onTypeChange, onLocationChange }) {
   return (
@@ -234,7 +298,7 @@ function LocationField({ locationType, location, onTypeChange, onLocationChange 
       {/* Onsite / Offsite toggle buttons */}
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.6rem" }}>
         {["onsite", "offsite"].map(t => (
-          <button key={t} onClick={() => { onTypeChange(t); onLocationChange("") }}
+          <button key={t} type="button" onClick={() => { onTypeChange(t); onLocationChange("") }}
             style={{
               flex: 1, padding: "0.55rem", borderRadius: "10px", fontFamily: "inherit",
               fontSize: "0.88rem", fontWeight: 700, cursor: "pointer", border: "2px solid",
@@ -248,20 +312,18 @@ function LocationField({ locationType, location, onTypeChange, onLocationChange 
       </div>
 
       {locationType === "onsite" ? (
-        <div style={{ position: "relative" }}>
-          <select value={location} onChange={e => onLocationChange(e.target.value)}
-            style={{ ...INPUT, appearance: "none", WebkitAppearance: "none", paddingRight: "2.2rem" }}>
-            <option value="">Select location…</option>
-            {ONSITE_LOCATIONS.map(l => <option key={l} value={l}>{l}</option>)}
-          </select>
-          <span style={{ position: "absolute", right: "0.85rem", top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "var(--text-dim)", fontSize: "0.75rem" }}>▼</span>
-        </div>
+        <FixedListPicker
+          value={location}
+          onChange={onLocationChange}
+          options={ONSITE_LOCATIONS}
+          placeholder="Select venue…"
+        />
       ) : (
         <textarea
           value={location}
           onChange={e => onLocationChange(e.target.value)}
           rows={3}
-          placeholder={"Enter venue name and address…"}
+          placeholder="Enter venue name and address…"
           style={{ ...INPUT, resize: "vertical" }}
         />
       )}
