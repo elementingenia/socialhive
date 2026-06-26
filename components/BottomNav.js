@@ -1,4 +1,5 @@
 "use client"
+import React from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
 import { getActiveHub, HUB_COLOURS } from "@/lib/navUtils"
@@ -13,7 +14,8 @@ const HUB_ICONS = {
 }
 
 function NavIcon({ imgKey, icon, active, colour }) {
-  if (imgKey && HUB_ICONS[imgKey]) {
+  const [imgFailed, setImgFailed] = React.useState(false)
+  if (imgKey && HUB_ICONS[imgKey] && !imgFailed) {
     return (
       <img
         src={HUB_ICONS[imgKey]}
@@ -22,7 +24,7 @@ function NavIcon({ imgKey, icon, active, colour }) {
         style={{ width: 26, height: 26, objectFit: "contain",
           opacity: active ? 1 : 0.5,
           filter: active ? "none" : "grayscale(40%)" }}
-        onError={e => { e.currentTarget.style.display = "none"; e.currentTarget.nextSibling.style.display = "inline" }}
+        onError={() => setImgFailed(true)}
       />
     )
   }
