@@ -443,10 +443,10 @@ function WelcomeBanner({ text, colour = "var(--teal)" }) {
     )
   }
   return (
-    <div style={{ background: colour + "14", border: "1px solid " + colour + "40",
+    <div style={{ background: colour,
       borderRadius: 14, padding: "0.9rem 1rem", marginBottom: "1rem",
       position: "relative" }}>
-      <div style={{ fontSize: "0.88rem", lineHeight: 1.55, color: "var(--text)" }}>
+      <div style={{ fontSize: "0.88rem", lineHeight: 1.55, color: "#fff" }}>
         {/<[a-z][\s\S]*>/i.test(text)
           ? <span dangerouslySetInnerHTML={{ __html: text }} />
           : <FormattedText text={text} c1Colour={colour} c2Colour="var(--text-dim)" />
@@ -458,7 +458,7 @@ function WelcomeBanner({ text, colour = "var(--teal)" }) {
           try { localStorage.setItem(STORAGE_KEY, "1") } catch {}
         }}
         style={{ position: "absolute", top: 8, right: 10, background: "none", border: "none",
-          color: "var(--text-dim)", fontSize: "1rem", cursor: "pointer", lineHeight: 1, padding: 4 }}
+          color: "rgba(255,255,255,0.7)", fontSize: "1rem", cursor: "pointer", lineHeight: 1, padding: 4 }}
         aria-label="Dismiss">
         ×
       </button>

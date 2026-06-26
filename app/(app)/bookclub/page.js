@@ -751,8 +751,8 @@ export default function BookClubHome() {
 
       {/* Welcome tile */}
       {welcomeText && (
-        <div style={{ background: "var(--purple)12", border: "1px solid var(--purple)30", borderRadius: 14,
-          padding: "1rem", marginBottom: 16, fontSize: "0.9rem", color: "var(--text)", lineHeight: 1.6 }}>
+        <div style={{ background: "var(--purple)", borderRadius: 14,
+          padding: "1rem", marginBottom: 16, fontSize: "0.9rem", color: "#fff", lineHeight: 1.6 }}>
           {/<[a-z][\s\S]*>/i.test(welcomeText)
             ? <span dangerouslySetInnerHTML={{ __html: welcomeText }} />
             : welcomeText}

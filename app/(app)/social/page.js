@@ -47,11 +47,11 @@ function WelcomeBanner({ text }) {
   }
   return (
     <div style={{
-      background: COLOUR + "14", border: "1px solid " + COLOUR + "40",
-      borderRadius: 14, padding: "0.9rem 1rem", marginBottom: "1rem",
+      background: COLOUR, borderRadius: 14,
+      padding: "0.9rem 1rem", marginBottom: "1rem",
       position: "relative",
     }}>
-      <div style={{ fontSize: "0.88rem", lineHeight: 1.55, color: "var(--text)", paddingRight: "1.5rem" }}>
+      <div style={{ fontSize: "0.88rem", lineHeight: 1.55, color: "#fff", paddingRight: "1.5rem" }}>
         {text}
       </div>
       <button onClick={() => {
@@ -59,7 +59,7 @@ function WelcomeBanner({ text }) {
         try { localStorage.setItem(WELCOME_KEY, "1") } catch {}
       }} style={{
         position: "absolute", top: 8, right: 10, background: "none", border: "none",
-        color: "var(--text-dim)", fontSize: "1rem", cursor: "pointer", lineHeight: 1, padding: 4,
+        color: "rgba(255,255,255,0.7)", fontSize: "1rem", cursor: "pointer", lineHeight: 1, padding: 4,
       }}>×</button>
     </div>
   )
