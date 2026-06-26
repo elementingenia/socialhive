@@ -401,20 +401,24 @@ function AdminEventForm({ event, members, onSave, onClose }) {
     border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)",
     fontSize: "0.95rem", boxSizing: "border-box", fontFamily: "inherit" }
 
+  const activeEC = event ? (event.event_coordinators || []).find(ec => !ec.replaced_at) : null
   const [form,   setForm]   = useState({
     event_date:   event?.event_date || "",
-    description:  event?.event_date ? (event.description || "") : "",
+    description:  event?.description || "",
     welcome_message: event?.welcome_message || "",
-    coordinator_id: event?.coordinator_id || "",
+    coordinator_id: activeEC?.member_id || "",
   })
   const [selectedBook, setSelectedBook] = useState(event?.books || null)
   const [saving, setSaving] = useState(false)
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
 
+  const [saveError, setSaveError] = useState(null)
+
   async function save() {
     if (!form.event_date || !selectedBook) return
     setSaving(true)
+    setSaveError(null)
 
     // Upsert book record
     let bookId = selectedBook.id || null
@@ -428,7 +432,7 @@ function AdminEventForm({ event, members, onSave, onClose }) {
       if (existing) {
         bookId = existing.id
       } else {
-        const { data: newBook } = await supabase
+        const { data: newBook, error: bookErr } = await supabase
           .from("books")
           .insert({
             title:          selectedBook.title,
@@ -442,6 +446,7 @@ function AdminEventForm({ event, members, onSave, onClose }) {
           })
           .select("id")
           .single()
+        if (bookErr) { setSaveError("Could not save book: " + bookErr.message); setSaving(false); return }
         bookId = newBook?.id
       }
     }
@@ -459,9 +464,11 @@ function AdminEventForm({ event, members, onSave, onClose }) {
 
     let eventId = event?.id
     if (eventId) {
-      await supabase.from("events").update(payload).eq("id", eventId)
+      const { error: evErr } = await supabase.from("events").update(payload).eq("id", eventId)
+      if (evErr) { setSaveError("Could not update event: " + evErr.message); setSaving(false); return }
     } else {
-      const { data } = await supabase.from("events").insert(payload).select("id").single()
+      const { data, error: evErr } = await supabase.from("events").insert(payload).select("id").single()
+      if (evErr) { setSaveError("Could not create event: " + evErr.message); setSaving(false); return }
       eventId = data?.id
     }
 
@@ -481,7 +488,7 @@ function AdminEventForm({ event, members, onSave, onClose }) {
     }
 
     setSaving(false)
-    onSave()
+    if (!saveError) onSave()
   }
 
   const labelStyle = { fontSize: "0.78rem", fontWeight: 700, color: "var(--text-dim)",
@@ -522,6 +529,12 @@ function AdminEventForm({ event, members, onSave, onClose }) {
       </div>
 
 
+      {saveError && (
+        <div style={{ marginBottom: 10, padding: "0.6rem 0.9rem", background: "rgba(220,50,50,0.1)",
+          color: "var(--danger)", borderRadius: 10, fontSize: "0.82rem", fontWeight: 600 }}>
+          {saveError}
+        </div>
+      )}
       <div style={{ display: "flex", gap: 10 }}>
         <button onClick={onClose}
           style={{ flex: 1, padding: "0.75rem", background: "var(--surface2)", border: "1px solid var(--border)",
