@@ -182,7 +182,7 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
           <button onClick={toggleAttendees} disabled={attendeesLoading}
             style={{ background: "none", border: "none", color: "var(--purple)", fontSize: "0.78rem",
               fontWeight: 700, cursor: attendeesLoading ? "wait" : "pointer", padding: "2px 0", fontFamily: "inherit" }}>
-            {attendeesLoading ? "Loading…" : attendeesOpen ? "Hide attendees ▲" : "Show attendees ▶"}
+            {attendeesLoading ? "Loading…" : attendeesOpen ? "Hide attendees ▲" : "Show attendees ▼"}
           </button>
         </div>
 
