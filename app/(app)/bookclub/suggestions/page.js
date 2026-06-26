@@ -113,8 +113,8 @@ function RatingSwiper({ books, memberId, onDone }) {
               </button>
             ))}
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: "var(--text-dim)", marginBottom: "0.6rem" }}>
-            <span>Not interested</span><span>Can't wait!</span>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: "var(--text-dim)", marginBottom: "0.35rem" }}>
+            <span>← Not interested (1)</span><span>(10) Can't wait! →</span>
           </div>
           <button onClick={skipOne}
             style={{ width: "100%", padding: "0.5rem", background: "none", border: "1px solid var(--border)", borderRadius: 10, fontSize: "0.8rem", fontWeight: 600, color: "var(--text-dim)", cursor: "pointer", fontFamily: "inherit" }}>
@@ -204,18 +204,18 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
           </div>
           {book.author && <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: 2 }}>by {book.author}</div>}
 
-          {/* Score pills */}
-          <div style={{ display: "flex", gap: "0.3rem", flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
+          {/* Score display */}
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
             {communityScore && (
-              <span style={{ background: "var(--purple)15", color: "var(--purple)", fontWeight: 700,
-                fontSize: "0.68rem", padding: "0.15rem 0.5rem", borderRadius: 20 }}>
-                Community {communityScore}
+              <span style={{ background: "rgba(124,58,237,0.12)", color: "var(--purple)", fontWeight: 700,
+                fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20, whiteSpace: "nowrap" }}>
+                Community {communityScore} ({voteCount})
               </span>
             )}
             {book.rating && (
               <span style={{ background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)", fontWeight: 700,
-                fontSize: "0.68rem", padding: "0.15rem 0.5rem", borderRadius: 20 }}>
-                ⭐ {book.rating}
+                fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20 }}>
+                ⭐ {book.rating} OL
               </span>
             )}
           </div>
@@ -258,7 +258,10 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
             You rated this {score}/10 — tap to change
           </div>
         )}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.35rem", marginBottom: "0.4rem" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: "var(--text-dim)", marginBottom: "0.35rem" }}>
+          <span>← Not interested (1)</span><span>(10) Can't wait! →</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.35rem" }}>
           {[1,2,3,4,5,6,7,8,9,10].map(s => (
             <button key={s} onClick={() => vote(s)} disabled={saving}
               style={{ padding: "0.5rem 0", borderRadius: 10,
@@ -271,9 +274,6 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
               {s}
             </button>
           ))}
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: "var(--text-dim)" }}>
-          <span>Not interested</span><span>Can't wait!</span>
         </div>
       </div>
     </div>
