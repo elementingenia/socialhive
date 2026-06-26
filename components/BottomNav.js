@@ -51,7 +51,8 @@ const HUB_CONFIG = {
   social: {
     colour: "var(--terracotta)",
     items: [
-      { path: "/social", label: "Social Events", imgKey: "socialHome", icon: "🥂" },
+      { path: "/social",        label: "Home",      imgKey: "socialHome", icon: "🥂" },
+      { path: "/social/events", label: "Scheduled", icon: "📅" },
     ],
   },
 }
