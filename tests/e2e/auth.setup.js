@@ -10,15 +10,13 @@ setup('authenticate as testbot', async ({ page }) => {
   await page.getByPlaceholder(/password|pin/i).fill('9999')
   await page.locator('button[type="submit"]').click()
 
-  // Device prompt heading (exact text)
-  await expect(page.getByText('Signed in!', { exact: true })).toBeVisible({ timeout: 10_000 })
-  await page.getByRole('button', { name: /no, keep/i }).click()
-
   await page.waitForURL('**/home', { timeout: 10_000 })
 
   // Permanently dismiss profile nudge so it never blocks clicks in tests
   await page.evaluate(() => {
     localStorage.setItem('shive_profile_nudge_permanent', '1')
+    // Set login timestamp so 14-day guard doesn't fire during tests
+    localStorage.setItem('shive_login_ts', Date.now().toString())
   })
 
   await page.context().storageState({ path: AUTH_FILE })
