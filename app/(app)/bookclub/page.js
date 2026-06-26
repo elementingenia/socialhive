@@ -460,6 +460,11 @@ function AdminEventForm({ event, members, onSave, onClose }) {
       welcome_message: form.welcome_message,
       book_id:         bookId,
       archived:        false,
+      book_snapshot:   selectedBook ? {
+        title:     selectedBook.title,
+        author:    selectedBook.author,
+        cover_url: selectedBook.cover_url,
+      } : null,
     }
 
     let eventId = event?.id
