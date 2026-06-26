@@ -291,7 +291,7 @@ function AddScreeningSheet({ session, onClose, onAdded, addToast }) {
 
       <div style={{ marginBottom: '1rem' }}>
         <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date *</label>
-        <input type="date" value={date} onChange={e => setDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} onClick={e => e.currentTarget.showPicker?.()} min={new Date().toISOString().split('T')[0]}
           style={{ width: '100%', padding: '0.65rem 0.85rem', border: '1.5px solid var(--border)', borderRadius: '10px', fontSize: '0.9rem', background: 'var(--surface2)', boxSizing: 'border-box', fontFamily: 'inherit' }} />
       </div>
 

@@ -508,7 +508,7 @@ function AdminEventForm({ event, members, onSave, onClose }) {
 
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Meeting Date *</label>
-        <input type="date" value={form.event_date} onChange={e => set("event_date", e.target.value)}
+        <input type="date" value={form.event_date} onChange={e => set("event_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
           style={inputStyle} />
       </div>
 
@@ -585,7 +585,7 @@ export default function BookClubHome() {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, description, welcome_message, book_snapshot, books(id, title, author, cover_url, genres, rating, rating_link, summary), event_coordinators(id, member_id, replaced_at, members(name, username))")
+      .select("id, title, event_date, description, welcome_message, book_snapshot, books(id, title, author, cover_url, genres, rating, rating_link, summary), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("hub_type", "bookclub")
       .eq("archived", false)
       .order("event_date", { ascending: true })
