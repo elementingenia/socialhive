@@ -6,8 +6,18 @@ export async function GET(req) {
   if (!q || q.length < 2) return NextResponse.json({ results: [] })
 
   const url = `https://openlibrary.org/search.json?title=${encodeURIComponent(q)}&limit=40&sort=edition_count&fields=key,title,author_name,cover_i,subject,first_publish_year,edition_count`
-  const res = await fetch(url, { next: { revalidate: 0 } })
-  if (!res.ok) return NextResponse.json({ results: [] })
+
+  let res
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
+    res = await fetch(url, { signal: controller.signal, cache: "no-store" })
+    clearTimeout(timeout)
+  } catch (err) {
+    console.error("Open Library fetch failed:", err?.message)
+    return NextResponse.json({ results: [], error: "search_unavailable" }, { status: 503 })
+  }
+  if (!res.ok) return NextResponse.json({ results: [], error: "search_unavailable" }, { status: 503 })
 
   const data = await res.json()
   const qNorm = q.toLowerCase().trim()
