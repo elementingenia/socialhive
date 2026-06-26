@@ -46,12 +46,13 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
     setAttendeesLoading(true)
     const { data } = await supabase
       .from("bookings")
-      .select("members(name, username, hide_name)")
+      .select("seats, members(name, username, hide_name)")
       .eq("event_id", event.id)
       .eq("status", "confirmed")
-    setAttendees((data || []).map(b =>
-      b.members?.hide_name ? "Resident" : (b.members?.name || b.members?.username || "Resident")
-    ))
+    setAttendees((data || []).map(b => ({
+      name:  b.members?.hide_name ? "Resident" : (b.members?.name || b.members?.username || "Resident"),
+      seats: b.seats || 1,
+    })))
     setAttendeesLoading(false)
     setAttendeesOpen(true)
   }
@@ -192,10 +193,11 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
         {attendeesOpen && (
           <div style={{ marginTop: 6, background: "var(--surface2)", borderRadius: 10, padding: "0.4rem 0.8rem 0.5rem" }}>
             {attendees && attendees.length > 0 ? (
-              attendees.map((name, i) => (
-                <div key={i} style={{ fontSize: "0.8rem", padding: "0.2rem 0",
+              attendees.map((a, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0",
                   borderBottom: i < attendees.length - 1 ? "1px solid var(--border)" : "none" }}>
-                  {name}
+                  <span>{a.name}</span>
+                  <span style={{ color: "var(--text-dim)" }}>{a.seats} seat{a.seats > 1 ? "s" : ""}</span>
                 </div>
               ))
             ) : (
