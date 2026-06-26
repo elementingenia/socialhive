@@ -35,8 +35,10 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
   const [attendeesOpen,   setAttendeesOpen]   = useState(false)
   const [attendees,       setAttendees]       = useState(null)
   const [attendeesLoading,setAttendeesLoading]= useState(false)
-  const book        = event.books || event.book_snapshot
-  const bookLink    = book?.rating_link || null
+  const book          = event.books || event.book_snapshot
+  const bookLink      = book?.rating_link || null
+  const communityScore = book?.avg_score ? parseFloat(book.avg_score).toFixed(1) : null
+  const voteCount      = book?.vote_count || 0
 
   async function toggleAttendees() {
     if (attendeesOpen) { setAttendeesOpen(false); return }
@@ -96,10 +98,16 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
               : <div style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2 }}>{book.title}</div>
             }
             <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: 4 }}>{book.author && `by ${book.author}`}{book.published_year ? ` (${book.published_year})` : ""}</div>
-            <span style={{ display: "inline-block", background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)",
-              fontWeight: 700, fontSize: "0.68rem", padding: "0.15rem 0.5rem", borderRadius: 20, marginBottom: 4 }}>
-              ⭐ {book.rating ?? "—"}
-            </span>
+            <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: 4, alignItems: "center" }}>
+              <span style={{ background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)", fontWeight: 700,
+                fontSize: "0.68rem", padding: "0.15rem 0.5rem", borderRadius: 20, whiteSpace: "nowrap" }}>
+                ⭐ {book.rating ?? "—"}
+              </span>
+              <span style={{ background: "rgba(124,58,237,0.12)", color: "var(--purple)", fontWeight: 700,
+                fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20, whiteSpace: "nowrap" }}>
+                {communityScore ?? "—"} ({voteCount})
+              </span>
+            </div>
             {coordinator && (
               <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: 6 }}>
                 📋 Coordinated by <strong>{coordinator}</strong>
@@ -624,7 +632,26 @@ export default function BookClubHome() {
       .eq("archived", false)
       .order("event_date", { ascending: true })
 
-    setEvents(evs || [])
+    // Attach community vote scores to event.books
+    const bookIds = (evs || []).map(e => e.books?.id).filter(Boolean)
+    let enrichedEvs = evs || []
+    if (bookIds.length) {
+      const { data: bvotes } = await supabase.from("book_votes").select("book_id, score").in("book_id", bookIds)
+      const scoreSums = {}, scoreCounts = {}
+      for (const v of bvotes || []) {
+        scoreSums[v.book_id]   = (scoreSums[v.book_id]   || 0) + v.score
+        scoreCounts[v.book_id] = (scoreCounts[v.book_id] || 0) + 1
+      }
+      enrichedEvs = enrichedEvs.map(e => !e.books ? e : {
+        ...e,
+        books: {
+          ...e.books,
+          avg_score:  scoreCounts[e.books.id] ? (scoreSums[e.books.id] / scoreCounts[e.books.id]).toFixed(1) : null,
+          vote_count: scoreCounts[e.books.id] || 0,
+        }
+      })
+    }
+    setEvents(enrichedEvs)
 
     // My bookings for all BC events
     if (member?.id && evs?.length) {

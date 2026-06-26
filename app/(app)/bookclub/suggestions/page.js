@@ -195,15 +195,15 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
             {book.author && `by ${book.author}`}{book.published_year ? ` (${book.published_year})` : ""}
           </div>
 
-          {/* Scores — always shown */}
+          {/* Scores — always shown: Google rating first, community second */}
           <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
-            <span style={{ background: "rgba(124,58,237,0.12)", color: "var(--purple)", fontWeight: 700,
-              fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20, whiteSpace: "nowrap" }}>
-              Community {communityScore ?? "—"} ({voteCount})
-            </span>
             <span style={{ background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)", fontWeight: 700,
               fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20, whiteSpace: "nowrap" }}>
               ⭐ {book.rating ?? "—"}
+            </span>
+            <span style={{ background: "rgba(124,58,237,0.12)", color: "var(--purple)", fontWeight: 700,
+              fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20, whiteSpace: "nowrap" }}>
+              {communityScore ?? "—"} ({voteCount})
             </span>
           </div>
         </div>
