@@ -71,17 +71,27 @@ function CapacityBar({ booked, max, waitlist }) {
   )
 }
 
-// ── Member live-search picker (single) ────────────────────────────────────────
-function MemberPicker({ value, onChange, placeholder = "Search members…", excludeIds = [] }) {
-  const [query,   setQuery]   = useState(value?.name || "")
+// ── Member live-search picker (single) ───────────────────────────────────────
+// Pattern: styled trigger → panel with embedded search + results (matches CoordPicker)
+function MemberPicker({ value, onChange, placeholder = "Select member…", excludeIds = [] }) {
+  const [open,    setOpen]    = useState(false)
+  const [query,   setQuery]   = useState("")
   const [results, setResults] = useState([])
-  const debounce = useRef(null)
+  const containerRef          = useRef(null)
+  const debounce              = useRef(null)
 
-  useEffect(() => { setQuery(value?.name || "") }, [value?.id])
+  useEffect(() => {
+    function handler(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
 
-  function handleChange(q) {
+  function handleOpen() { setOpen(o => !o); setQuery(""); setResults([]) }
+
+  function search(q) {
     setQuery(q)
-    onChange(null)
     clearTimeout(debounce.current)
     if (q.length < 2) { setResults([]); return }
     debounce.current = setTimeout(async () => {
@@ -93,28 +103,66 @@ function MemberPicker({ value, onChange, placeholder = "Search members…", excl
     }, 250)
   }
 
-  function pick(m) { onChange(m); setQuery(m.name || m.username); setResults([]) }
+  function pick(m) { onChange(m); setOpen(false); setQuery(""); setResults([]) }
 
   return (
-    <div style={{ position: "relative" }}>
-      <input value={query} onChange={e => handleChange(e.target.value)}
-        placeholder={placeholder} style={INPUT} autoComplete="off" />
-      {results.length > 0 && (
+    <div ref={containerRef} style={{ position: "relative" }}>
+      {/* Trigger */}
+      <div onClick={handleOpen} style={{
+        ...INPUT, display: "flex", alignItems: "center", justifyContent: "space-between",
+        cursor: "pointer", borderColor: open ? "var(--terracotta)" : "var(--border)",
+      }}>
+        <span style={{ color: value ? "var(--text)" : "var(--text-dim)" }}>
+          {value ? (value.name || value.username) : placeholder}
+        </span>
+        <span style={{ color: "var(--text-dim)", fontSize: "0.75rem",
+          transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }}>▾</span>
+      </div>
+
+      {/* Panel */}
+      {open && (
         <div style={{
-          position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
-          background: "var(--surface)", border: "1px solid var(--border)",
-          borderTop: "none", borderRadius: "0 0 10px 10px",
-          maxHeight: 200, overflowY: "auto", boxShadow: "var(--shadow)",
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 60,
+          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.12)", overflow: "hidden",
         }}>
-          {results.map(m => (
-            <div key={m.id} onClick={() => pick(m)}
-              style={{ padding: "0.6rem 1rem", cursor: "pointer", fontSize: "0.9rem", borderBottom: "1px solid var(--border)" }}>
-              {m.name || m.username}
-              {m.name && m.username !== m.name && (
-                <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", marginLeft: "0.4rem" }}>@{m.username}</span>
-              )}
-            </div>
-          ))}
+          <div style={{ padding: "0.5rem 0.75rem", borderBottom: "1px solid var(--border)" }}>
+            <input
+              autoFocus
+              value={query} onChange={e => search(e.target.value)}
+              placeholder="Type name to search…"
+              style={{ width: "100%", border: "none", background: "transparent",
+                color: "var(--text)", fontSize: "0.9rem", outline: "none", fontFamily: "inherit" }}
+            />
+          </div>
+          <div style={{ maxHeight: 220, overflowY: "auto" }}>
+            {value && (
+              <div onClick={() => { onChange(null); setOpen(false) }}
+                style={{ padding: "0.65rem 1rem", cursor: "pointer", fontSize: "0.85rem",
+                  color: "var(--text-dim)", borderBottom: "1px solid var(--border)" }}>
+                — Clear selection —
+              </div>
+            )}
+            {results.map(m => (
+              <div key={m.id} onClick={() => pick(m)} style={{
+                padding: "0.65rem 1rem", cursor: "pointer", borderBottom: "1px solid var(--border)",
+                background: value?.id === m.id ? "var(--terracotta)12" : "transparent",
+                fontWeight: value?.id === m.id ? 700 : 400, fontSize: "0.88rem",
+                color: value?.id === m.id ? "var(--terracotta)" : "var(--text)",
+              }}>
+                {m.name || m.username}
+                {m.name && m.username !== m.name && (
+                  <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", marginLeft: "0.4rem" }}>@{m.username}</span>
+                )}
+              </div>
+            ))}
+            {query.length >= 2 && results.length === 0 && (
+              <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No members found</div>
+            )}
+            {query.length < 2 && results.length === 0 && (
+              <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.82rem" }}>Type at least 2 characters…</div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -122,10 +170,21 @@ function MemberPicker({ value, onChange, placeholder = "Search members…", excl
 }
 
 // ── EC multi-picker (up to 3, mandatory) ─────────────────────────────────────
+// Same panel pattern as CoordPicker — trigger button opens search panel
 function ECPicker({ value, onChange, error }) {
+  const [open,    setOpen]    = useState(false)
   const [query,   setQuery]   = useState("")
   const [results, setResults] = useState([])
-  const debounce = useRef(null)
+  const containerRef          = useRef(null)
+  const debounce              = useRef(null)
+
+  useEffect(() => {
+    function handler(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [])
 
   function search(q) {
     setQuery(q)
@@ -143,13 +202,14 @@ function ECPicker({ value, onChange, error }) {
 
   function pick(m) {
     if (value.length >= 3) return
-    onChange([...value, m]); setQuery(""); setResults([])
+    onChange([...value, m]); setOpen(false); setQuery(""); setResults([])
   }
 
   function remove(id) { onChange(value.filter(m => m.id !== id)) }
 
   return (
-    <div>
+    <div ref={containerRef}>
+      {/* Chips */}
       {value.length > 0 && (
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginBottom: "0.5rem" }}>
           {value.map(m => (
@@ -167,31 +227,59 @@ function ECPicker({ value, onChange, error }) {
           ))}
         </div>
       )}
+
+      {/* Add trigger + panel */}
       {value.length < 3 && (
         <div style={{ position: "relative" }}>
-          <input
-            value={query} onChange={e => search(e.target.value)}
-            placeholder={value.length === 0 ? "Search for coordinator (required)…" : "Add another coordinator…"}
-            style={{ ...INPUT, borderColor: error ? "var(--danger)" : "var(--border)" }}
-            autoComplete="off"
-          />
+          {/* Trigger button */}
+          <div onClick={() => { setOpen(o => !o); setQuery(""); setResults([]) }} style={{
+            ...INPUT, display: "flex", alignItems: "center", justifyContent: "space-between",
+            cursor: "pointer",
+            borderColor: error ? "var(--danger)" : open ? "var(--terracotta)" : "var(--border)",
+          }}>
+            <span style={{ color: "var(--text-dim)" }}>
+              {value.length === 0 ? "Select coordinator…" : "Add another coordinator…"}
+            </span>
+            <span style={{ color: "var(--text-dim)", fontSize: "0.75rem",
+              transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>▾</span>
+          </div>
           {error && <div style={{ color: "var(--danger)", fontSize: "0.78rem", marginTop: "0.25rem" }}>{error}</div>}
-          {results.length > 0 && (
+
+          {/* Panel */}
+          {open && (
             <div style={{
-              position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50,
-              background: "var(--surface)", border: "1px solid var(--border)",
-              borderTop: "none", borderRadius: "0 0 10px 10px",
-              maxHeight: 200, overflowY: "auto", boxShadow: "var(--shadow)",
+              position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 60,
+              background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.12)", overflow: "hidden",
             }}>
-              {results.map(m => (
-                <div key={m.id} onClick={() => pick(m)}
-                  style={{ padding: "0.6rem 1rem", cursor: "pointer", fontSize: "0.9rem", borderBottom: "1px solid var(--border)" }}>
-                  {m.name || m.username}
-                  {m.name && m.username !== m.name && (
-                    <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", marginLeft: "0.4rem" }}>@{m.username}</span>
-                  )}
-                </div>
-              ))}
+              <div style={{ padding: "0.5rem 0.75rem", borderBottom: "1px solid var(--border)" }}>
+                <input
+                  autoFocus
+                  value={query} onChange={e => search(e.target.value)}
+                  placeholder="Type name to search…"
+                  style={{ width: "100%", border: "none", background: "transparent",
+                    color: "var(--text)", fontSize: "0.9rem", outline: "none", fontFamily: "inherit" }}
+                />
+              </div>
+              <div style={{ maxHeight: 220, overflowY: "auto" }}>
+                {results.map(m => (
+                  <div key={m.id} onClick={() => pick(m)} style={{
+                    padding: "0.65rem 1rem", cursor: "pointer", borderBottom: "1px solid var(--border)",
+                    fontSize: "0.88rem", color: "var(--text)",
+                  }}>
+                    {m.name || m.username}
+                    {m.name && m.username !== m.name && (
+                      <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", marginLeft: "0.4rem" }}>@{m.username}</span>
+                    )}
+                  </div>
+                ))}
+                {query.length >= 2 && results.length === 0 && (
+                  <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No members found</div>
+                )}
+                {query.length < 2 && results.length === 0 && (
+                  <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.82rem" }}>Type at least 2 characters…</div>
+                )}
+              </div>
             </div>
           )}
         </div>
