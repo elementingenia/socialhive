@@ -46,10 +46,12 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
     setAttendeesLoading(true)
     const { data } = await supabase
       .from("bookings")
-      .select("members(name, username)")
+      .select("members(name, username, hide_name)")
       .eq("event_id", event.id)
       .eq("status", "confirmed")
-    setAttendees((data || []).map(b => b.members?.name || b.members?.username || "Member"))
+    setAttendees((data || []).map(b =>
+      b.members?.hide_name ? "Resident" : (b.members?.name || b.members?.username || "Resident")
+    ))
     setAttendeesLoading(false)
     setAttendeesOpen(true)
   }
