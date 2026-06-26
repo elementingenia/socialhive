@@ -18,19 +18,6 @@ function fmtYear(str) {
   return localDate(str).toLocaleDateString("en-AU", { month: "short", year: "numeric" })
 }
 
-function GenrePills({ genres }) {
-  if (!genres) return null
-  const list = genres.split(",").map(g => g.trim()).filter(Boolean)
-  if (!list.length) return null
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-      {list.map(g => (
-        <span key={g} style={{ fontSize: 11, color: "var(--purple)", background: "var(--purple)15",
-          padding: "2px 8px", borderRadius: 10, fontWeight: 600 }}>{g}</span>
-      ))}
-    </div>
-  )
-}
 
 function Toast({ msg }) {
   if (!msg) return null
@@ -79,14 +66,11 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2 }}>{book.title}</div>
-            {book.author && <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: 4 }}>by {book.author}</div>}
-            {book.rating && (
-              <span style={{ display: "inline-block", background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)",
-                fontWeight: 700, fontSize: "0.68rem", padding: "0.15rem 0.5rem", borderRadius: 20, marginBottom: 4 }}>
-                ⭐ {book.rating}
-              </span>
-            )}
-            <GenrePills genres={book.genres} />
+            <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: 4 }}>{book.author && `by ${book.author}`}{book.published_year ? ` (${book.published_year})` : ""}</div>
+            <span style={{ display: "inline-block", background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)",
+              fontWeight: 700, fontSize: "0.68rem", padding: "0.15rem 0.5rem", borderRadius: 20, marginBottom: 4 }}>
+              ⭐ {book.rating ?? "—"}
+            </span>
             {coordinator && (
               <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: 6 }}>
                 📋 Coordinated by <strong>{coordinator}</strong>
@@ -190,7 +174,7 @@ function ClosedEventsAccordion({ events, myBookedIds }) {
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: "0.88rem", lineHeight: 1.2 }}>{book?.title || ev.title}</div>
-                  {book?.author && <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>by {book.author}</div>}
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{book?.author && `by ${book.author}`}{book?.published_year ? ` (${book.published_year})` : ""}</div>
                   <div style={{ fontSize: "0.72rem", color: "var(--purple)", marginTop: 2 }}>{fmtYear(ev.event_date)}</div>
                   {participated && (
                     <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4,
@@ -216,7 +200,7 @@ function BookPicker({ onSelect, initialBook }) {
   const [open,     setOpen]     = useState(!initialBook)
 
   useEffect(() => {
-    supabase.from("books").select("id, title, author, cover_url, genres").order("title")
+    supabase.from("books").select("id, title, author, cover_url, published_year").order("title")
       .then(({ data }) => setAllBooks(data || []))
   }, [])
 
@@ -238,7 +222,7 @@ function BookPicker({ onSelect, initialBook }) {
         {chosen.cover_url && <img src={chosen.cover_url} alt="" style={{ width: 36, height: 50, objectFit: "cover", borderRadius: 4 }} />}
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{chosen.title}</div>
-          {chosen.author && <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>by {chosen.author}</div>}
+          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>{chosen.author && `by ${chosen.author}`}{chosen.published_year ? ` (${chosen.published_year})` : ""}</div>
         </div>
         <button onClick={() => { setChosen(null); setQuery(""); setOpen(true); onSelect(null) }}
           style={{ background: "var(--purple)", color: "#fff", border: "none", borderRadius: 8,
@@ -279,7 +263,7 @@ function BookPicker({ onSelect, initialBook }) {
               {b.cover_url && <img src={b.cover_url} alt="" style={{ width: 32, height: 44, objectFit: "cover", borderRadius: 3 }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: "0.85rem", lineHeight: 1.2 }}>{b.title}</div>
-                {b.author && <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{b.author}</div>}
+                <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{b.author}{b.published_year ? ` (${b.published_year})` : ""}</div>
               </div>
             </div>
           ))}
@@ -295,7 +279,7 @@ function BookPicker({ onSelect, initialBook }) {
               {b.cover_url && <img src={b.cover_url} alt="" style={{ width: 32, height: 44, objectFit: "cover", borderRadius: 3 }} />}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: "0.85rem" }}>{b.title}</div>
-                {b.author && <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{b.author}</div>}
+                <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{b.author}{b.published_year ? ` (${b.published_year})` : ""}</div>
               </div>
             </div>
           ))}
@@ -443,6 +427,7 @@ function AdminEventForm({ event, members, onSave, onClose }) {
             rating_link:    selectedBook.rating_link,
             google_books_id: selectedBook.google_books_id,
             genres:         selectedBook.genres,
+            published_year: selectedBook.published_year || null,
           })
           .select("id")
           .single()
@@ -585,7 +570,7 @@ export default function BookClubHome() {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, description, welcome_message, book_snapshot, books(id, title, author, cover_url, genres, rating, rating_link, summary), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, description, welcome_message, book_snapshot, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("hub_type", "bookclub")
       .eq("archived", false)
       .order("event_date", { ascending: true })

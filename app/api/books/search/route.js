@@ -52,15 +52,19 @@ export async function GET(req) {
   const results = deduped.slice(0, 8).map(item => {
     const info = item.volumeInfo
     const cover = info.imageLinks?.thumbnail?.replace("http://", "https://") || null
+    const publishedYear = info.publishedDate
+      ? parseInt(info.publishedDate.substring(0, 4), 10) || null
+      : null
     return {
       google_books_id: item.id,
-      title:       info.title,
-      author:      (info.authors || []).slice(0, 2).join(", "),
-      cover_url:   cover,
-      summary:     info.description || null,
-      rating:      info.averageRating ? parseFloat(info.averageRating).toFixed(1) : null,
-      rating_link: info.infoLink || `https://books.google.com/books?id=${item.id}`,
-      genres:      (info.categories || []).slice(0, 4).join(", ") || null,
+      title:          info.title,
+      author:         (info.authors || []).slice(0, 2).join(", "),
+      cover_url:      cover,
+      summary:        info.description || null,
+      rating:         info.averageRating ? parseFloat(info.averageRating).toFixed(1) : null,
+      rating_link:    info.infoLink || `https://books.google.com/books?id=${item.id}`,
+      genres:         (info.categories || []).slice(0, 4).join(", ") || null,
+      published_year: publishedYear,
     }
   })
 

@@ -3,21 +3,6 @@ import { useEffect, useState, useRef, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 
-// ── Genre pills ───────────────────────────────────────────────────────────────
-function GenrePills({ genres }) {
-  if (!genres) return null
-  const list = genres.split(",").map(g => g.trim()).filter(Boolean).slice(0, 4)
-  if (!list.length) return null
-  return (
-    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 6 }}>
-      {list.map(g => (
-        <span key={g} style={{ fontSize: 11, color: "var(--purple)", background: "var(--purple)15",
-          padding: "2px 8px", borderRadius: 10, fontWeight: 600 }}>{g}</span>
-      ))}
-    </div>
-  )
-}
-
 // ── Bulk swiper (unrated books) ────────────────────────────────────────────────
 function RatingSwiper({ books, memberId, onDone }) {
   const [idx,       setIdx]   = useState(0)
@@ -36,7 +21,7 @@ function RatingSwiper({ books, memberId, onDone }) {
       { member_id: memberId, book_id: book.id, score },
       { onConflict: "member_id,book_id" }
     )
-    if (vErr) { console.error("Vote error:", vErr); alert("Could not save vote: " + vErr.message); setSubmitting(false); return }
+    if (vErr) { console.error("Vote error:", vErr); alert("Could not save vote: " + vErr.message); setSub(false); return }
     setSub(false)
     setRated(r => r + 1)
     if (isLast) { setDone(true); onDone() }
@@ -59,8 +44,6 @@ function RatingSwiper({ books, memberId, onDone }) {
       </div>
     )
   }
-
-  const genres = (book.genres || "").split(",").map(g => g.trim()).filter(Boolean)
 
   return (
     <div style={{ marginBottom: 16 }}>
@@ -89,14 +72,9 @@ function RatingSwiper({ books, memberId, onDone }) {
           )}
           <div style={{ flex: 1, padding: "0.9rem 1rem" }}>
             <div style={{ fontWeight: 800, fontSize: "0.95rem", lineHeight: 1.2, marginBottom: 2 }}>{book.title}</div>
-            {book.author && <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: 4 }}>by {book.author}</div>}
-            {genres.length > 0 && (
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-                {genres.slice(0, 3).map(g => (
-                  <span key={g} style={{ background: "var(--surface2)", borderRadius: 20, padding: "0.1rem 0.4rem", fontSize: "0.65rem", color: "var(--text-dim)" }}>{g}</span>
-                ))}
-              </div>
-            )}
+            <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: 4 }}>
+              {book.author && `by ${book.author}`}{book.published_year ? ` (${book.published_year})` : ""}
+            </div>
           </div>
         </div>
 
@@ -138,7 +116,7 @@ function RatingSwiper({ books, memberId, onDone }) {
   )
 }
 
-// ── Book Card (matches movie tile design) ─────────────────────────────────────
+// ── Book Card ─────────────────────────────────────────────────────────────────
 function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
   const [descOpen,   setDescOpen]   = useState(false)
   const [score,      setScore]      = useState(myVote?.score || 0)
@@ -169,7 +147,6 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
     <div style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",
       overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 14 }}>
 
-      {/* Delete confirmation banner */}
       {confirmDel && (
         <div style={{ background: "#fee2e2", borderBottom: "1px solid #fca5a5", padding: "0.75rem 1rem",
           display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -178,15 +155,11 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
             <button onClick={() => onDelete(book.id)}
               style={{ background: "var(--danger)", border: "none", color: "#fff",
                 borderRadius: 8, padding: "4px 14px", fontSize: "0.78rem", fontWeight: 700,
-                cursor: "pointer", fontFamily: "inherit" }}>
-              Yes, delete
-            </button>
+                cursor: "pointer", fontFamily: "inherit" }}>Yes, delete</button>
             <button onClick={() => setConfirmDel(false)}
               style={{ background: "none", border: "1px solid var(--border)", color: "var(--text)",
                 borderRadius: 8, padding: "4px 12px", fontSize: "0.78rem", fontWeight: 700,
-                cursor: "pointer", fontFamily: "inherit" }}>
-              Cancel
-            </button>
+                cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
           </div>
         </div>
       )}
@@ -204,41 +177,33 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
             {isAdmin && !confirmDel && (
               <button onClick={() => setConfirmDel(true)}
                 style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "1rem",
-                  cursor: "pointer", padding: "0 2px", lineHeight: 1, flexShrink: 0 }}>
-                🗑
-              </button>
+                  cursor: "pointer", padding: "0 2px", lineHeight: 1, flexShrink: 0 }}>🗑</button>
             )}
           </div>
-          {book.author && <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: 2 }}>by {book.author}</div>}
-
-          {/* Score display */}
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
-            {communityScore && (
-              <span style={{ background: "rgba(124,58,237,0.12)", color: "var(--purple)", fontWeight: 700,
-                fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20, whiteSpace: "nowrap" }}>
-                Community {communityScore} ({voteCount})
-              </span>
-            )}
-            {book.rating && (
-              <span style={{ background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)", fontWeight: 700,
-                fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20 }}>
-                ⭐ {book.rating}
-              </span>
-            )}
+          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: 2 }}>
+            {book.author && `by ${book.author}`}{book.published_year ? ` (${book.published_year})` : ""}
           </div>
 
-          <GenrePills genres={book.genres} />
+          {/* Scores — always shown */}
+          <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: 6, alignItems: "center" }}>
+            <span style={{ background: "rgba(124,58,237,0.12)", color: "var(--purple)", fontWeight: 700,
+              fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20, whiteSpace: "nowrap" }}>
+              Community {communityScore ?? "—"} ({voteCount})
+            </span>
+            <span style={{ background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)", fontWeight: 700,
+              fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20, whiteSpace: "nowrap" }}>
+              ⭐ {book.rating ?? "—"}
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* Description with 3-line fade + More */}
+      {/* Description */}
       {book.summary && (
         <div style={{ padding: "0 1rem 0" }}>
           <div style={{ position: "relative" }}>
-            <div style={{
-              fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.6,
-              maxHeight: descOpen ? "none" : "4.8em", overflow: "hidden",
-            }}>
+            <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.6,
+              maxHeight: descOpen ? "none" : "4.8em", overflow: "hidden" }}>
               {book.summary}
             </div>
             {!descOpen && (
@@ -324,15 +289,15 @@ function AddBookForm({ onAdded, onClose }) {
   async function suggest(r) {
     setSaving(true)
     let enriched = { ...r }
-    // Only fetch details if search didn't already return them (legacy OL records)
     if (!enriched.summary && !enriched.rating) {
       try {
         const det = await fetch(`/api/books/details?key=${encodeURIComponent(r.google_books_id)}`)
         if (det.ok) {
           const d = await det.json()
-          if (d.summary)     enriched.summary     = d.summary
-          if (d.rating)      enriched.rating      = d.rating
-          if (d.rating_link) enriched.rating_link = d.rating_link
+          if (d.summary)        enriched.summary        = d.summary
+          if (d.rating)         enriched.rating         = d.rating
+          if (d.rating_link)    enriched.rating_link    = d.rating_link
+          if (d.published_year) enriched.published_year = d.published_year
         }
       } catch {}
     }
@@ -342,9 +307,15 @@ function AddBookForm({ onAdded, onClose }) {
 
     if (!existing) {
       await supabase.from("books").insert({
-        title: enriched.title, author: enriched.author, cover_url: enriched.cover_url,
-        summary: enriched.summary, rating: enriched.rating, rating_link: enriched.rating_link,
-        google_books_id: enriched.google_books_id, genres: enriched.genres,
+        title:          enriched.title,
+        author:         enriched.author,
+        cover_url:      enriched.cover_url,
+        summary:        enriched.summary,
+        rating:         enriched.rating,
+        rating_link:    enriched.rating_link,
+        google_books_id: enriched.google_books_id,
+        genres:         enriched.genres,
+        published_year: enriched.published_year || null,
       })
     }
     setSaving(false)
@@ -381,7 +352,9 @@ function AddBookForm({ onAdded, onClose }) {
               }
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 700, fontSize: "0.85rem" }}>{r.title}</div>
-                {r.author && <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{r.author}</div>}
+                <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
+                  {r.author}{r.published_year ? ` (${r.published_year})` : ""}
+                </div>
               </div>
             </div>
           ))}
@@ -410,7 +383,7 @@ export default function BookSuggestionsPage() {
     setLoading(true)
     const { data: bks } = await supabase
       .from("books")
-      .select("id, title, author, cover_url, genres, summary, rating, rating_link, google_books_id")
+      .select("id, title, author, cover_url, summary, rating, rating_link, google_books_id, published_year")
       .order("title")
 
     let votes = {}
@@ -459,7 +432,6 @@ export default function BookSuggestionsPage() {
 
   return (
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
-      {/* Rate prompt */}
       {!showSwipe && unrated.length > 0 && (
         <div style={{ background: "var(--purple)12", border: "1px solid var(--purple)30", borderRadius: 14,
           padding: "1rem", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -484,7 +456,6 @@ export default function BookSuggestionsPage() {
         <RatingSwiper books={unrated} memberId={member?.id} onDone={() => { setShowSwipe(false); load() }} />
       )}
 
-      {/* Suggest button */}
       {!showSwipe && (showAdd ? (
         <AddBookForm onAdded={load} onClose={() => setShowAdd(false)} />
       ) : (
@@ -496,7 +467,6 @@ export default function BookSuggestionsPage() {
         </button>
       ))}
 
-      {/* Books list */}
       {books.length === 0 ? (
         <div style={{ textAlign: "center", color: "var(--text-dim)", padding: "2rem 0", fontSize: "0.9rem" }}>
           No books suggested yet — be the first!
