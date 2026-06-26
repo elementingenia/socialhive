@@ -26,6 +26,7 @@ export async function GET(req) {
   const { data: events, error } = await supabaseAdmin
     .from('events')
     .select('*, movies(id, title, poster_url, genre, plot, runtime, rating_imdb, rating_rt, imdb_id, streaming_au, we_own, actors, rating)')
+    .eq('hub_type', 'movie')
     .gte('event_date', today)
     .order('event_date')
     .order('event_time')
@@ -38,7 +39,7 @@ export async function GET(req) {
 
   const { data: bookings } = await supabaseAdmin
     .from('bookings')
-    .select('id, event_id, member_id, status, seats, booked_at, members(name)')
+    .select('id, event_id, member_id, status, seats, booked_at, members(name, hide_name)')
     .in('event_id', eventIds)
     .neq('status', 'cancelled')
 
@@ -88,12 +89,13 @@ export async function GET(req) {
       waitlist_position,
     } : null
 
+    const nameOf = b => b.members?.hide_name ? 'Resident' : (b.members?.name || 'Resident')
     const attendees = member.is_admin
       ? [
-          ...confirmedBookings.map(b => ({ name: b.members?.name || 'Member', seats: b.seats || 1, status: 'confirmed' })),
-          ...waitlistBookings.map(b => ({ name: b.members?.name || 'Member', seats: b.seats || 1, status: 'waitlist' })),
+          ...confirmedBookings.map(b => ({ name: nameOf(b), seats: b.seats || 1, status: 'confirmed' })),
+          ...waitlistBookings.map(b => ({ name: nameOf(b), seats: b.seats || 1, status: 'waitlist' })),
         ]
-      : undefined
+      : confirmedBookings.map(b => ({ name: nameOf(b), seats: b.seats || 1, status: 'confirmed' }))
 
     return {
       ...ev,
@@ -103,7 +105,7 @@ export async function GET(req) {
       seats_remaining: Math.max(0, ev.max_seats - confirmed_seats),
       my_booking,
       community_score: ev.movie_id ? (communityAvg[ev.movie_id] || null) : null,
-      ...(attendees !== undefined ? { attendees } : {}),
+      attendees,
     }
   })
 
