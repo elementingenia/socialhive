@@ -1,4 +1,5 @@
 const { defineConfig, devices } = require('@playwright/test')
+const path = require('path')
 
 module.exports = defineConfig({
   testDir: './tests/e2e',
@@ -23,7 +24,7 @@ module.exports = defineConfig({
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 390, height: 844 },
-        storageState: 'tests/e2e/.auth/testbot.json',
+        storageState: path.join(__dirname, 'tests/e2e/.auth/testbot.json'),
       },
       dependencies: ['setup'],
     },
