@@ -1,36 +1,36 @@
 import { NextResponse } from "next/server"
 
+// Details endpoint — Google Books search already returns summary + rating,
+// so this is only hit for legacy OL IDs or as a fallback.
+// For Google Books IDs (not starting with OL), fetch from GB API.
 export async function GET(req) {
   const { searchParams } = new URL(req.url)
-  const key = searchParams.get("key")  // e.g. OL82586W (clean ID, no slashes)
+  const key = searchParams.get("key")
   if (!key) return NextResponse.json({})
 
-  // Reconstruct full Open Library path
-  const workPath = key.startsWith("/works/") ? key : `/works/${key}`
-  const base = `https://openlibrary.org${workPath}`
-
-  const [workRes, ratingsRes] = await Promise.allSettled([
-    fetch(`${base}.json`,         { next: { revalidate: 86400 } }),
-    fetch(`${base}/ratings.json`, { next: { revalidate: 86400 } }),
-  ])
-
-  let summary = null
-  let rating  = null
-  let rating_link = `https://openlibrary.org${key.startsWith('/works/') ? key : '/works/' + key}`
-
-  if (workRes.status === "fulfilled" && workRes.value.ok) {
-    const work = await workRes.value.json()
-    const desc = work.description
-    if (desc) {
-      summary = typeof desc === "string" ? desc : (desc.value || null)
-    }
+  // Legacy Open Library ID — skip enrichment (OL is unreliable from Vercel)
+  if (key.startsWith("OL")) {
+    return NextResponse.json({})
   }
 
-  if (ratingsRes.status === "fulfilled" && ratingsRes.value.ok) {
-    const r = await ratingsRes.value.json()
-    const avg = r?.summary?.average
-    if (avg) rating = parseFloat(avg).toFixed(1)
+  // Google Books ID
+  const url = `https://www.googleapis.com/books/v1/volumes/${encodeURIComponent(key)}`
+  let res
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 6000)
+    res = await fetch(url, { signal: controller.signal, cache: "no-store" })
+    clearTimeout(timeout)
+  } catch {
+    return NextResponse.json({})
   }
+  if (!res.ok) return NextResponse.json({})
 
-  return NextResponse.json({ summary, rating, rating_link })
+  const item = await res.json()
+  const info = item.volumeInfo || {}
+  return NextResponse.json({
+    summary:     info.description || null,
+    rating:      info.averageRating ? parseFloat(info.averageRating).toFixed(1) : null,
+    rating_link: info.infoLink || `https://books.google.com/books?id=${key}`,
+  })
 }

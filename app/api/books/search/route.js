@@ -5,7 +5,7 @@ export async function GET(req) {
   const q = searchParams.get("q")?.trim()
   if (!q || q.length < 2) return NextResponse.json({ results: [] })
 
-  const url = `https://openlibrary.org/search.json?title=${encodeURIComponent(q)}&limit=40&sort=edition_count&fields=key,title,author_name,cover_i,subject,first_publish_year,edition_count`
+  const url = `https://www.googleapis.com/books/v1/volumes?q=intitle:${encodeURIComponent(q)}&maxResults=20&printType=books&langRestrict=en`
 
   let res
   try {
@@ -14,7 +14,7 @@ export async function GET(req) {
     res = await fetch(url, { signal: controller.signal, cache: "no-store" })
     clearTimeout(timeout)
   } catch (err) {
-    console.error("Open Library fetch failed:", err?.message)
+    console.error("Google Books fetch failed:", err?.message)
     return NextResponse.json({ results: [], error: "search_unavailable" }, { status: 503 })
   }
   if (!res.ok) return NextResponse.json({ results: [], error: "search_unavailable" }, { status: 503 })
@@ -23,38 +23,38 @@ export async function GET(req) {
   const qNorm = q.toLowerCase().trim()
   const seen  = new Set()
 
-  const docs = (data.docs || []).filter(d => d.title && d.author_name?.length)
-
-  // Title relevance: query must appear in main title (before colon/dash)
-  // This kills "Implementation: how great expectations…" etc.
-  const relevant = docs.filter(d => {
-    const mainTitle = d.title.toLowerCase().split(/[:\-–]/)[0].trim()
+  const items = (data.items || []).filter(item => {
+    const info = item.volumeInfo
+    if (!info?.title || !info?.authors?.length) return false
+    // Title relevance: query must appear in the main title (before colon/dash)
+    const mainTitle = info.title.toLowerCase().split(/[:\-–]/)[0].trim()
     return mainTitle.includes(qNorm)
   })
 
-  // Deduplicate by normalised title + first author
-  const deduped = relevant.filter(d => {
-    const key = `${d.title.toLowerCase().trim()}|||${(d.author_name[0] || "").toLowerCase().trim()}`
+  // Deduplicate by title + first author
+  const deduped = items.filter(item => {
+    const info = item.volumeInfo
+    const key = `${info.title.toLowerCase().trim()}|||${(info.authors[0] || "").toLowerCase().trim()}`
     if (seen.has(key)) return false
     seen.add(key)
     return true
   })
 
-  // Prefer results with covers, but don't require them
-  const withCover    = deduped.filter(d => !!d.cover_i)
-  const withoutCover = deduped.filter(d => !d.cover_i)
-  const ordered      = [...withCover, ...withoutCover].slice(0, 8)
-
-  const results = ordered.map(d => ({
-    google_books_id: d.key.replace(/^\/works\//, ""),
-    title:       d.title,
-    author:      (d.author_name || []).slice(0, 2).join(", "),
-    cover_url:   d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg` : null,
-    summary:     null,
-    rating:      null,
-    rating_link: `https://openlibrary.org${d.key}`,
-    genres:      (d.subject || []).slice(0, 4).join(", ") || null,
-  }))
+  const results = deduped.slice(0, 8).map(item => {
+    const info = item.volumeInfo
+    // Google Books serves covers over http — force https
+    const cover = info.imageLinks?.thumbnail?.replace("http://", "https://") || null
+    return {
+      google_books_id: item.id,
+      title:       info.title,
+      author:      (info.authors || []).slice(0, 2).join(", "),
+      cover_url:   cover,
+      summary:     info.description || null,
+      rating:      info.averageRating ? parseFloat(info.averageRating).toFixed(1) : null,
+      rating_link: info.infoLink || `https://books.google.com/books?id=${item.id}`,
+      genres:      (info.categories || []).slice(0, 4).join(", ") || null,
+    }
+  })
 
   return NextResponse.json({ results })
 }

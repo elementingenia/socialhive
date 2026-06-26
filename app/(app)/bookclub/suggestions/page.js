@@ -215,7 +215,7 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
             {book.rating && (
               <span style={{ background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)", fontWeight: 700,
                 fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20 }}>
-                ⭐ {book.rating} OL
+                ⭐ {book.rating}
               </span>
             )}
           </div>
@@ -315,15 +315,18 @@ function AddBookForm({ onAdded, onClose }) {
   async function suggest(r) {
     setSaving(true)
     let enriched = { ...r }
-    try {
-      const det = await fetch(`/api/books/details?key=${encodeURIComponent(r.google_books_id)}`)
-      if (det.ok) {
-        const d = await det.json()
-        if (d.summary)     enriched.summary     = d.summary
-        if (d.rating)      enriched.rating      = d.rating
-        if (d.rating_link) enriched.rating_link = d.rating_link
-      }
-    } catch {}
+    // Only fetch details if search didn't already return them (legacy OL records)
+    if (!enriched.summary && !enriched.rating) {
+      try {
+        const det = await fetch(`/api/books/details?key=${encodeURIComponent(r.google_books_id)}`)
+        if (det.ok) {
+          const d = await det.json()
+          if (d.summary)     enriched.summary     = d.summary
+          if (d.rating)      enriched.rating      = d.rating
+          if (d.rating_link) enriched.rating_link = d.rating_link
+        }
+      } catch {}
+    }
 
     const { data: existing } = await supabase
       .from("books").select("id").eq("google_books_id", enriched.google_books_id).maybeSingle()
