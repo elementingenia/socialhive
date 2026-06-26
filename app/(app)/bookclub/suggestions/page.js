@@ -125,6 +125,7 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
 
   const communityScore = book.avg_score ? parseFloat(book.avg_score).toFixed(1) : null
   const voteCount      = book.vote_count || 0
+  const bookLink       = book.rating_link || null
 
   async function vote(s) {
     setSaving(true)
@@ -167,13 +168,23 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
       {/* Book info row */}
       <div style={{ display: "flex", minHeight: 100 }}>
         {book.cover_url ? (
-          <img src={book.cover_url} alt={book.title} style={{ width: 80, objectFit: "cover", flexShrink: 0 }} />
+          bookLink
+            ? <a href={bookLink} target="_blank" rel="noopener noreferrer">
+                <img src={book.cover_url} alt={book.title} style={{ width: 80, objectFit: "cover", flexShrink: 0, display: "block" }} />
+              </a>
+            : <img src={book.cover_url} alt={book.title} style={{ width: 80, objectFit: "cover", flexShrink: 0 }} />
         ) : (
           <div style={{ width: 80, background: "var(--surface2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2rem", flexShrink: 0 }}>📖</div>
         )}
         <div style={{ flex: 1, padding: "0.9rem 0.9rem 0.9rem 0.85rem", minWidth: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
-            <div style={{ fontWeight: 800, fontSize: "0.95rem", lineHeight: 1.2 }}>{book.title}</div>
+            {bookLink
+              ? <a href={bookLink} target="_blank" rel="noopener noreferrer"
+                  style={{ fontWeight: 800, fontSize: "0.95rem", lineHeight: 1.2, color: "var(--text)", textDecoration: "none" }}>
+                  {book.title}
+                </a>
+              : <div style={{ fontWeight: 800, fontSize: "0.95rem", lineHeight: 1.2 }}>{book.title}</div>
+            }
             {isAdmin && !confirmDel && (
               <button onClick={() => setConfirmDel(true)}
                 style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "1rem",

@@ -30,9 +30,27 @@ function Toast({ msg }) {
 
 // ── Book Club Event Card ───────────────────────────────────────────────────────
 function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--purple)" }) {
-  const [loading,      setLoading]      = useState(false)
-  const [summaryOpen,  setSummaryOpen]  = useState(false)
+  const [loading,         setLoading]         = useState(false)
+  const [summaryOpen,     setSummaryOpen]     = useState(false)
+  const [attendeesOpen,   setAttendeesOpen]   = useState(false)
+  const [attendees,       setAttendees]       = useState(null)
+  const [attendeesLoading,setAttendeesLoading]= useState(false)
   const book        = event.books || event.book_snapshot
+  const bookLink    = book?.rating_link || null
+
+  async function toggleAttendees() {
+    if (attendeesOpen) { setAttendeesOpen(false); return }
+    if (attendees !== null) { setAttendeesOpen(true); return }
+    setAttendeesLoading(true)
+    const { data } = await supabase
+      .from("bookings")
+      .select("members(name, username)")
+      .eq("event_id", event.id)
+      .eq("status", "confirmed")
+    setAttendees((data || []).map(b => b.members?.name || b.members?.username || "Member"))
+    setAttendeesLoading(false)
+    setAttendeesOpen(true)
+  }
   const isJoined    = booking?.status === "confirmed"
   const activeEC    = (event.event_coordinators || []).find(ec => !ec.replaced_at)
   const coordinator = activeEC?.members?.name || activeEC?.members?.username || null
@@ -61,11 +79,22 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
       {book && (
         <div style={{ display: "flex", gap: 12, padding: "0.9rem 1rem", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
           {book.cover_url && (
-            <img src={book.cover_url} alt={book.title}
-              style={{ width: 56, height: 80, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} />
+            bookLink
+              ? <a href={bookLink} target="_blank" rel="noopener noreferrer">
+                  <img src={book.cover_url} alt={book.title}
+                    style={{ width: 56, height: 80, objectFit: "cover", borderRadius: 6, flexShrink: 0, display: "block" }} />
+                </a>
+              : <img src={book.cover_url} alt={book.title}
+                  style={{ width: 56, height: 80, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} />
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2 }}>{book.title}</div>
+            {bookLink
+              ? <a href={bookLink} target="_blank" rel="noopener noreferrer"
+                  style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2, color: "var(--text)", textDecoration: "none", display: "block" }}>
+                  {book.title}
+                </a>
+              : <div style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2 }}>{book.title}</div>
+            }
             <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: 4 }}>{book.author && `by ${book.author}`}{book.published_year ? ` (${book.published_year})` : ""}</div>
             <span style={{ display: "inline-block", background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)",
               fontWeight: 700, fontSize: "0.68rem", padding: "0.15rem 0.5rem", borderRadius: 20, marginBottom: 4 }}>
@@ -113,30 +142,50 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
           </div>
         )}
 
-        {/* Book summary — 3-line fade with Show More */}
+        {/* Book summary */}
         {book?.summary && (
-          <div style={{ marginTop: event.description ? 0 : 0 }}>
-            <div style={{ position: "relative" }}>
-              <div style={{
-                fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.6,
-                maxHeight: summaryOpen ? "none" : "4.8em",
-                overflow: "hidden",
-              }}>
-                {book.summary}
-              </div>
-              {!summaryOpen && (
-                <div style={{
-                  position: "absolute", bottom: 0, left: 0, right: 0, height: "2.4em",
-                  background: "linear-gradient(to bottom, transparent, var(--surface))",
-                  pointerEvents: "none",
-                }} />
-              )}
+          <div style={{ position: "relative" }}>
+            <div style={{
+              fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.6,
+              maxHeight: summaryOpen ? "none" : "4.8em",
+              overflow: "hidden",
+            }}>
+              {book.summary}
             </div>
+            {!summaryOpen && (
+              <div style={{
+                position: "absolute", bottom: 0, left: 0, right: 0, height: "2.4em",
+                background: "linear-gradient(to bottom, transparent, var(--surface))",
+                pointerEvents: "none",
+              }} />
+            )}
+          </div>
+        )}
+
+        {/* Show more / Show attendees row */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 4, paddingBottom: 2 }}>
+          {book?.summary ? (
             <button onClick={() => setSummaryOpen(o => !o)}
               style={{ background: "none", border: "none", color: "var(--purple)", fontSize: "0.78rem",
-                fontWeight: 700, cursor: "pointer", padding: "4px 0", fontFamily: "inherit" }}>
+                fontWeight: 700, cursor: "pointer", padding: "2px 0", fontFamily: "inherit" }}>
               {summaryOpen ? "Show less ▲" : "Show more ▼"}
             </button>
+          ) : <span />}
+          <button onClick={toggleAttendees} disabled={attendeesLoading}
+            style={{ background: "none", border: "none", color: "var(--purple)", fontSize: "0.78rem",
+              fontWeight: 700, cursor: attendeesLoading ? "wait" : "pointer", padding: "2px 0", fontFamily: "inherit" }}>
+            {attendeesLoading ? "Loading…" : attendeesOpen ? "Hide attendees ▲" : "Show attendees ▶"}
+          </button>
+        </div>
+
+        {/* Attendees list */}
+        {attendeesOpen && (
+          <div style={{ marginTop: 6, padding: "0.6rem 0.8rem", background: "var(--surface2)",
+            borderRadius: 10, fontSize: "0.8rem", color: "var(--text)" }}>
+            {attendees && attendees.length > 0
+              ? <span>{attendees.join(" · ")}</span>
+              : <span style={{ color: "var(--text-dim)" }}>No attendees yet</span>
+            }
           </div>
         )}
       </div>
