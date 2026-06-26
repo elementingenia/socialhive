@@ -299,8 +299,10 @@ function AddBookForm({ onAdded, onClose }) {
       try {
         const res = await fetch(`/api/books/search?q=${encodeURIComponent(val)}`)
         const d   = await res.json()
-        if (!res.ok || d.error === "search_unavailable") {
-          setError("Search unavailable — try again")
+        if (!res.ok || d.error) {
+          setError(d.error === "quota_exceeded"
+            ? "Search temporarily unavailable — please try again later"
+            : "Search unavailable — try again")
         } else {
           setResults(d.results || [])
           if ((d.results || []).length === 0) setError("No results — try a different title or spelling")

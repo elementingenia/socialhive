@@ -5,7 +5,9 @@ export async function GET(req) {
   const q = searchParams.get("q")?.trim()
   if (!q || q.length < 2) return NextResponse.json({ results: [] })
 
-  const url = `https://www.googleapis.com/books/v1/volumes?q=intitle:${encodeURIComponent(q)}&maxResults=20&printType=books&langRestrict=en`
+  const apiKey = process.env.GOOGLE_BOOKS_API_KEY
+  const keyParam = apiKey ? `&key=${apiKey}` : ""
+  const url = `https://www.googleapis.com/books/v1/volumes?q=intitle:${encodeURIComponent(q)}&maxResults=20&printType=books&langRestrict=en${keyParam}`
 
   let res
   try {
@@ -17,7 +19,16 @@ export async function GET(req) {
     console.error("Google Books fetch failed:", err?.message)
     return NextResponse.json({ results: [], error: "search_unavailable" }, { status: 503 })
   }
-  if (!res.ok) return NextResponse.json({ results: [], error: "search_unavailable" }, { status: 503 })
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}))
+    const isQuota = errBody?.error?.status === "RESOURCE_EXHAUSTED" || res.status === 429
+    console.error("Google Books error:", res.status, errBody?.error?.message)
+    return NextResponse.json(
+      { results: [], error: isQuota ? "quota_exceeded" : "search_unavailable" },
+      { status: res.status === 429 ? 429 : 503 }
+    )
+  }
 
   const data = await res.json()
   const qNorm = q.toLowerCase().trim()
@@ -26,12 +37,10 @@ export async function GET(req) {
   const items = (data.items || []).filter(item => {
     const info = item.volumeInfo
     if (!info?.title || !info?.authors?.length) return false
-    // Title relevance: query must appear in the main title (before colon/dash)
     const mainTitle = info.title.toLowerCase().split(/[:\-–]/)[0].trim()
     return mainTitle.includes(qNorm)
   })
 
-  // Deduplicate by title + first author
   const deduped = items.filter(item => {
     const info = item.volumeInfo
     const key = `${info.title.toLowerCase().trim()}|||${(info.authors[0] || "").toLowerCase().trim()}`
@@ -42,7 +51,6 @@ export async function GET(req) {
 
   const results = deduped.slice(0, 8).map(item => {
     const info = item.volumeInfo
-    // Google Books serves covers over http — force https
     const cover = info.imageLinks?.thumbnail?.replace("http://", "https://") || null
     return {
       google_books_id: item.id,
