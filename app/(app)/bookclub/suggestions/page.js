@@ -32,10 +32,11 @@ function RatingSwiper({ books, memberId, onDone }) {
   async function submitRating(score) {
     if (!book || submitting) return
     setSub(true)
-    await supabase.from("book_votes").upsert(
+    const { error: vErr } = await supabase.from("book_votes").upsert(
       { member_id: memberId, book_id: book.id, score },
       { onConflict: "member_id,book_id" }
     )
+    if (vErr) { console.error("Vote error:", vErr); alert("Could not save vote: " + vErr.message); setSubmitting(false); return }
     setSub(false)
     setRated(r => r + 1)
     if (isLast) { setDone(true); onDone() }
@@ -149,10 +150,16 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
 
   async function vote(s) {
     setSaving(true)
-    await supabase.from("book_votes").upsert(
+    const { error } = await supabase.from("book_votes").upsert(
       { member_id: memberId, book_id: book.id, score: s },
       { onConflict: "member_id,book_id" }
     )
+    if (error) {
+      console.error("Vote error:", error)
+      alert("Could not save vote: " + error.message)
+      setSaving(false)
+      return
+    }
     setScore(s)
     setSaving(false)
     onVote()
