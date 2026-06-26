@@ -190,12 +190,17 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
 
         {/* Attendees list */}
         {attendeesOpen && (
-          <div style={{ marginTop: 6, padding: "0.6rem 0.8rem", background: "var(--surface2)",
-            borderRadius: 10, fontSize: "0.8rem", color: "var(--text)" }}>
-            {attendees && attendees.length > 0
-              ? <span>{attendees.join(" · ")}</span>
-              : <span style={{ color: "var(--text-dim)" }}>No attendees yet</span>
-            }
+          <div style={{ marginTop: 6, background: "var(--surface2)", borderRadius: 10, padding: "0.4rem 0.8rem 0.5rem" }}>
+            {attendees && attendees.length > 0 ? (
+              attendees.map((name, i) => (
+                <div key={i} style={{ fontSize: "0.8rem", padding: "0.2rem 0",
+                  borderBottom: i < attendees.length - 1 ? "1px solid var(--border)" : "none" }}>
+                  {name}
+                </div>
+              ))
+            ) : (
+              <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", fontStyle: "italic" }}>No attendees yet</div>
+            )}
           </div>
         )}
       </div>

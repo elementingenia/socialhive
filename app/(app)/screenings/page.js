@@ -648,52 +648,49 @@ function ScreeningCard({ ev, session, isAdmin, freeCostData, onRefresh, addToast
           </div>
         </div>
 
-        {/* Admin attendees accordion */}
-        {isAdmin && (
-          <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>
-            <button
-              onClick={() => setShowAttendees(!showAttendees)}
-              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 1rem', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'inherit' }}
-            >
-              <span>
-                <strong style={{ color: 'var(--green)' }}>{ev.confirmed_seats} seats confirmed</strong>
-                {ev.waitlist_seats > 0 && <span style={{ color: 'var(--amber-dark)', marginLeft: '0.5rem' }}>· {ev.waitlist_seats} seat{ev.waitlist_seats !== 1 ? 's' : ''} on waitlist</span>}
-                <span style={{ marginLeft: '0.5rem' }}>of {ev.max_seats}</span>
-              </span>
-              <span style={{ fontSize: '0.65rem', color: 'var(--teal)' }}>{showAttendees ? '▲ Hide' : '▼ Attendees'}</span>
-            </button>
+        {/* Attendees accordion — all members see confirmed; admins also see waitlist */}
+        <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>
+          <button
+            onClick={() => setShowAttendees(!showAttendees)}
+            style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 1rem', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'inherit' }}
+          >
+            <span>
+              <strong style={{ color: 'var(--green)' }}>{ev.confirmed_seats} confirmed</strong>
+              {isAdmin && ev.waitlist_seats > 0 && <span style={{ color: 'var(--amber-dark)', marginLeft: '0.5rem' }}>· {ev.waitlist_seats} waitlist</span>}
+              <span style={{ marginLeft: '0.5rem' }}>of {ev.max_seats}</span>
+            </span>
+            <span style={{ fontSize: '0.65rem', color: 'var(--teal)' }}>{showAttendees ? '▲ Hide' : '▼ Attendees'}</span>
+          </button>
 
-            {showAttendees && (
-              <div style={{ padding: '0 1rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                {confirmedAttendees.length > 0 && (
-                  <>
-                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.15rem' }}>Confirmed</div>
-                    {confirmedAttendees.map((a, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', padding: '0.2rem 0', borderBottom: '1px solid var(--border)' }}>
-                        <span>{a.name}</span>
-                        <span style={{ color: 'var(--text-dim)' }}>{a.seats} seat{a.seats > 1 ? 's' : ''}</span>
-                      </div>
-                    ))}
-                  </>
-                )}
-                {waitlistAttendees.length > 0 && (
-                  <>
-                    <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--amber-dark)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: '0.5rem', marginBottom: '0.15rem' }}>Waitlist</div>
-                    {waitlistAttendees.map((a, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', padding: '0.2rem 0', borderBottom: '1px solid var(--border)' }}>
-                        <span>{a.name}</span>
-                        <span style={{ color: 'var(--text-dim)' }}>{a.seats} seat{a.seats > 1 ? 's' : ''}</span>
-                      </div>
-                    ))}
-                  </>
-                )}
-                {confirmedAttendees.length === 0 && waitlistAttendees.length === 0 && (
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontStyle: 'italic' }}>No bookings yet</div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+          {showAttendees && (
+            <div style={{ padding: '0 1rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+              {confirmedAttendees.length > 0 ? (
+                <>
+                  {isAdmin && <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.15rem' }}>Confirmed</div>}
+                  {confirmedAttendees.map((a, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', padding: '0.2rem 0', borderBottom: '1px solid var(--border)' }}>
+                      <span>{a.name}</span>
+                      {isAdmin && <span style={{ color: 'var(--text-dim)' }}>{a.seats} seat{a.seats > 1 ? 's' : ''}</span>}
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontStyle: 'italic' }}>No bookings yet</div>
+              )}
+              {isAdmin && waitlistAttendees.length > 0 && (
+                <>
+                  <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--amber-dark)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: '0.5rem', marginBottom: '0.15rem' }}>Waitlist</div>
+                  {waitlistAttendees.map((a, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', padding: '0.2rem 0', borderBottom: '1px solid var(--border)' }}>
+                      <span>{a.name}</span>
+                      <span style={{ color: 'var(--text-dim)' }}>{a.seats} seat{a.seats > 1 ? 's' : ''}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {confirmCancel && (
