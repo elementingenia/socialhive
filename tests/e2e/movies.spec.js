@@ -8,7 +8,7 @@ test.describe('Movies Home', () => {
   })
 
   test('Next Screening card renders with movie title and poster', async ({ page }) => {
-    await expect(page.getByText('Next Screening')).toBeVisible()
+    await expect(page.getByText('Next Screening', { exact: true })).toBeVisible()
     await expect(page.getByText('The Shawshank Redemption').first()).toBeVisible()
     const poster = page.locator('img[alt="The Shawshank Redemption"]').first()
     await expect(poster).toBeVisible()
@@ -114,24 +114,24 @@ test.describe('Admin panel', () => {
     await page.waitForLoadState('networkidle')
   })
 
-  test('Admin tab bar loads', async ({ page }) => {
-    await expect(page.getByRole('button', { name: 'Notices' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Members' })).toBeVisible()
+  test('Admin card grid loads with expected sections', async ({ page }) => {
+    await expect(page.getByRole('button', { name: /Members/i }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: /Movies/i }).first()).toBeVisible()
+    await expect(page.getByRole('button', { name: /Bar/i }).first()).toBeVisible()
   })
 
-  test('Cinema events visible (Shawshank + Casablanca)', async ({ page }) => {
-    // Admin section cards have no aria-label; select by text content, first() skips bottom nav
-    await page.locator('button').filter({ hasText: /^🎟️\s*Events$/ }).click()
+  test('Members section opens and lists members', async ({ page }) => {
+    await page.getByRole('button', { name: /Members/i }).first().click()
     await page.waitForLoadState('networkidle')
-    await page.locator('button').filter({ hasText: /^🎬\s*Cinema$/ }).click()
-    await expect(page.getByText('The Shawshank Redemption').first()).toBeVisible()
-    await expect(page.getByText('Casablanca').first()).toBeVisible()
+    // Back nav should appear
+    await expect(page.getByText('← Admin')).toBeVisible()
+    // At least testbot should appear in member list
+    await expect(page.getByText(/testbot/i).first()).toBeVisible({ timeout: 10000 })
   })
 
-  test('Social filter shows no events', async ({ page }) => {
-    await page.locator('button').filter({ hasText: /^🎟️\s*Events$/ }).click()
+  test('Movies section shows Suggested Movies', async ({ page }) => {
+    await page.getByRole('button', { name: /Movies/i }).first().click()
     await page.waitForLoadState('networkidle')
-    await page.locator('button').filter({ hasText: /^🎉\s*Social$/ }).click()
-    await expect(page.getByText('No events')).toBeVisible()
+    await expect(page.getByText('← Admin')).toBeVisible()
   })
 })

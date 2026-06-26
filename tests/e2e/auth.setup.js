@@ -15,5 +15,11 @@ setup('authenticate as testbot', async ({ page }) => {
   await page.getByRole('button', { name: /no, keep/i }).click()
 
   await page.waitForURL('**/home', { timeout: 10_000 })
+
+  // Permanently dismiss profile nudge so it never blocks clicks in tests
+  await page.evaluate(() => {
+    localStorage.setItem('shive_profile_nudge_permanent', '1')
+  })
+
   await page.context().storageState({ path: AUTH_FILE })
 })
