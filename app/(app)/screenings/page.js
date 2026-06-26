@@ -670,7 +670,7 @@ function ScreeningCard({ ev, session, isAdmin, freeCostData, onRefresh, addToast
                   {confirmedAttendees.map((a, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', padding: '0.2rem 0', borderBottom: '1px solid var(--border)' }}>
                       <span>{a.name}</span>
-                      {isAdmin && <span style={{ color: 'var(--text-dim)' }}>{a.seats} seat{a.seats > 1 ? 's' : ''}</span>}
+                      <span style={{ color: 'var(--text-dim)' }}>{a.seats} seat{a.seats > 1 ? 's' : ''}</span>
                     </div>
                   ))}
                 </>
