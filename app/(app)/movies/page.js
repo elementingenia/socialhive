@@ -28,7 +28,7 @@ function fmtTime(str) {
 // ── Next Screening Card (entire card clickable) ───────────────────────────────
 function NextScreeningCard({ event, myBooking }) {
   const router = useRouter()
-  const movie = event.movies
+  const movie = event.movies || event.movie_snapshot
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const evDate = localDate(event.event_date)
   const daysUntil = Math.round((evDate - today) / 86400000)
@@ -141,7 +141,7 @@ function MyMovieBookingsSheet({ bookings, session, onClose, onRefresh }) {
           ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:'0.85rem' }}>
               {groups.map(({ ev, confirmed, waitlist }) => {
-                const movie = ev?.movies
+                const movie = ev?.movies || ev?.movie_snapshot
                 const confirmedSeats = confirmed.reduce((s, b) => s + (b.seats || 1), 0)
                 const waitlistSeats  = waitlist.reduce((s, b) => s + (b.seats || 1), 0)
                 const isCancelling = cancelling === ev?.id
@@ -236,7 +236,7 @@ function MyBookingsCard({ bookings, onViewAll }) {
       </div>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {groups.slice(0, 3).map(({ ev, confirmed, waitlist }, i) => {
-          const movie = ev?.movies
+          const movie = ev?.movies || ev?.movie_snapshot
           return (
             <div key={ev?.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
               {movie?.poster_url ? (

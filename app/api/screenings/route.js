@@ -123,10 +123,14 @@ export async function POST(req) {
   }
 
   let title = 'Movie Night'
+  let movieSnapshot = null
   if (movie_id) {
     const { data: movie } = await supabaseAdmin
-      .from('movies').select('title').eq('id', movie_id).single()
-    if (movie) title = movie.title
+      .from('movies').select('title, director, poster_url, year').eq('id', movie_id).single()
+    if (movie) {
+      title = movie.title
+      movieSnapshot = { title: movie.title, director: movie.director, poster_url: movie.poster_url, year: movie.year }
+    }
   }
 
   const { data: event, error } = await supabaseAdmin
@@ -135,6 +139,7 @@ export async function POST(req) {
       hub_type: 'movie', title, movie_id: movie_id || null,
       event_date, event_time, max_seats: max_seats || 20,
       notes: notes || null, created_by: member.id,
+      movie_snapshot: movieSnapshot,
     })
     .select().single()
 

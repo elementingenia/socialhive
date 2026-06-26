@@ -45,7 +45,7 @@ function Toast({ msg }) {
 function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--purple)" }) {
   const [loading,      setLoading]      = useState(false)
   const [summaryOpen,  setSummaryOpen]  = useState(false)
-  const book        = event.books
+  const book        = event.books || event.book_snapshot
   const isJoined    = booking?.status === "confirmed"
   const activeEC    = (event.event_coordinators || []).find(ec => !ec.replaced_at)
   const coordinator = activeEC?.members?.name || activeEC?.members?.username || null
@@ -460,6 +460,11 @@ function AdminEventForm({ event, members, onSave, onClose }) {
       welcome_message: form.welcome_message,
       book_id:         bookId,
       archived:        false,
+      book_snapshot:   selectedBook ? {
+        title:     selectedBook.title,
+        author:    selectedBook.author,
+        cover_url: selectedBook.cover_url,
+      } : null,
     }
 
     let eventId = event?.id
@@ -580,7 +585,7 @@ export default function BookClubHome() {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, description, welcome_message, books(id, title, author, cover_url, genres, rating, rating_link, summary), event_coordinators(id, member_id, replaced_at, members(name, username))")
+      .select("id, title, event_date, description, welcome_message, book_snapshot, books(id, title, author, cover_url, genres, rating, rating_link, summary), event_coordinators(id, member_id, replaced_at, members(name, username))")
       .eq("hub_type", "bookclub")
       .eq("archived", false)
       .order("event_date", { ascending: true })
