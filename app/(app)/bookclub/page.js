@@ -273,7 +273,7 @@ function BookPicker({ onSelect, initialBook }) {
   const filtered = allBooks.filter(b =>
     !query || b.title?.toLowerCase().includes(query.toLowerCase()) ||
     b.author?.toLowerCase().includes(query.toLowerCase())
-  ).slice(0, query.length >= 2 ? 10 : 5)
+  )
 
   function pick(b) {
     setChosen(b)
@@ -369,7 +369,7 @@ function CoordPicker({ members, value, onChange, valid = false }) {
 
   const filtered = members.filter(m =>
     !query || (m.name || m.username || "").toLowerCase().includes(query.toLowerCase())
-  ).slice(0, query.length >= 2 ? 10 : 5)
+  )
 
   useEffect(() => {
     function handleClick(e) {

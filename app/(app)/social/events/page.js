@@ -88,7 +88,7 @@ function MemberPicker({ members = [], value, onChange, placeholder = "Select mem
   const pool     = members.filter(m => !excludeIds.includes(m.id))
   const filtered = pool.filter(m =>
     !query || (m.name || m.username || "").toLowerCase().includes(query.toLowerCase())
-  ).slice(0, query ? 10 : 5)
+  )
 
   function pick(m) { onChange(m); setOpen(false); setQuery("") }
 
@@ -166,7 +166,7 @@ function ECPicker({ members = [], value, onChange, valid }) {
   const pool     = members.filter(m => !excluded.includes(m.id))
   const filtered = pool.filter(m =>
     !query || (m.name || m.username || "").toLowerCase().includes(query.toLowerCase())
-  ).slice(0, query ? 10 : 5)
+  )
 
   function pick(m) {
     if (value.length >= 3) return
