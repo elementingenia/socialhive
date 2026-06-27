@@ -209,7 +209,7 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
   )
 }
 
-// ── My Social Bookings tile (matches Movies MyBookingsCard pattern) ─────────────
+// ── My Social Bookings tile — amber header (matches Movies pattern) ──────────
 function MyBookingsCard({ bookings, onViewAll }) {
   const today    = new Date(); today.setHours(0, 0, 0, 0)
   const upcoming = bookings.filter(b =>
@@ -217,7 +217,6 @@ function MyBookingsCard({ bookings, onViewAll }) {
     b.events?.hub_type === "social" &&
     localDate(b.events?.event_date) >= today
   )
-  if (!upcoming.length) return null
 
   const sorted = [...upcoming].sort((a, b) =>
     localDate(a.events?.event_date) - localDate(b.events?.event_date)
@@ -230,48 +229,56 @@ function MyBookingsCard({ bookings, onViewAll }) {
       boxShadow: "var(--shadow)", marginBottom: "1.25rem", cursor: "pointer",
     }}>
       <div style={{
-        background: COLOUR, padding: "0.6rem 1rem",
+        background: "var(--amber)", padding: "0.6rem 1rem",
         display: "flex", justifyContent: "space-between", alignItems: "center",
       }}>
         <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.85rem" }}>My Bookings</span>
         <span style={{ color: "rgba(255,255,255,0.9)", fontSize: "0.78rem", fontWeight: 600 }}>View all ›</span>
       </div>
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        {sorted.slice(0, 3).map(({ events: ev, status, seats, payment_status }, i) => {
-          const isPending = status === "confirmed" && ev?.payment_required && payment_status === "pending"
-          const isWait    = status === "waitlist"
-          return (
-            <div key={ev?.id} style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              gap: "0.75rem", padding: "0.75rem 1rem",
-              borderTop: i > 0 ? "1px solid var(--border)" : "none",
-            }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: "0.88rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {ev?.title || "Event"}
-                </div>
-                <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.1rem" }}>
-                  {fmtDate(ev?.event_date)}{ev?.event_time ? ` · ${fmtTime(ev.event_time)}` : ""}
-                </div>
-                {ev?.location && (
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
-                    📍 {ev.location_type === "offsite" ? ev.location.split("\n")[0] : ev.location}
+      {sorted.length === 0 ? (
+        <div style={{ padding: "1.25rem 1rem", textAlign: "center", color: "var(--text-dim)", fontSize: "0.88rem" }}>
+          You have no upcoming bookings.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {sorted.slice(0, 3).map(({ events: ev, status, seats, payment_status }, i) => {
+            const isPending = status === "confirmed" && ev?.payment_required && payment_status === "pending"
+            const isWait    = status === "waitlist"
+            const n         = seats || 1
+            return (
+              <div key={ev?.id} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                gap: "0.75rem", padding: "0.75rem 1rem",
+                borderTop: i > 0 ? "1px solid var(--border)" : "none",
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.88rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {ev?.title || "Event"}
                   </div>
-                )}
-              </div>
-              <div style={{ textAlign: "right", flexShrink: 0 }}>
-                {!isWait ? (
-                  <div style={{ fontSize: "0.78rem", fontWeight: 700, color: isPending ? "var(--amber-dark)" : COLOUR }}>
-                    {isPending ? "⏳ Pending" : `✓ ${seats || 1} seat${(seats || 1) !== 1 ? "s" : ""}`}
+                  <div style={{ fontSize: "0.78rem", color: COLOUR, fontWeight: 600, marginTop: "0.1rem" }}>
+                    {fmtDate(ev?.event_date)}{ev?.event_time ? ` · ${fmtTime(ev.event_time)}` : ""}
                   </div>
-                ) : (
-                  <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "var(--text-dim)" }}>⏳ Waitlisted</div>
-                )}
+                </div>
+                <div style={{ flexShrink: 0 }}>
+                  {isWait ? (
+                    <span style={{ background: "var(--surface2)", color: "var(--text-dim)", borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
+                      ⏳ Waitlisted
+                    </span>
+                  ) : isPending ? (
+                    <span style={{ background: "#fef3c7", color: "#92400e", borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
+                      ⏳ Pending
+                    </span>
+                  ) : (
+                    <span style={{ background: COLOUR, color: "#fff", borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
+                      Booked · {n} {n === 1 ? "place" : "places"}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
