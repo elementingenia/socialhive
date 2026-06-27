@@ -72,17 +72,10 @@ function CapacityBar({ booked, max, waitlist }) {
 }
 
 // ── Member picker — prop-based, in-memory filter (matches Book Club CoordPicker) ──
-function MemberPicker({ value, onChange, placeholder = "Select member…", excludeIds = [] }) {
-  const [open,    setOpen]    = useState(false)
-  const [query,   setQuery]   = useState("")
-  const [members, setMembers] = useState([])
-  const containerRef          = useRef(null)
-
-  useEffect(() => {
-    supabase.from("members").select("id, name, username")
-      .eq("active", true).order("name")
-      .then(({ data }) => setMembers(data || []))
-  }, [])
+function MemberPicker({ members = [], value, onChange, placeholder = "Select member…", excludeIds = [] }) {
+  const [open,  setOpen]  = useState(false)
+  const [query, setQuery] = useState("")
+  const containerRef      = useRef(null)
 
   useEffect(() => {
     function handler(e) {
@@ -145,10 +138,7 @@ function MemberPicker({ value, onChange, placeholder = "Select member…", exclu
                 )}
               </div>
             ))}
-            {members.length === 0 && (
-              <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>Loading members…</div>
-            )}
-            {members.length > 0 && filtered.length === 0 && query && (
+            {filtered.length === 0 && query && (
               <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No match for "{query}"</div>
             )}
           </div>
@@ -159,17 +149,10 @@ function MemberPicker({ value, onChange, placeholder = "Select member…", exclu
 }
 
 // ── EC multi-picker — prop-based, in-memory filter (matches Book Club CoordPicker) ──
-function ECPicker({ value, onChange, valid }) {
-  const [open,    setOpen]    = useState(false)
-  const [query,   setQuery]   = useState("")
-  const [members, setMembers] = useState([])
-  const containerRef          = useRef(null)
-
-  useEffect(() => {
-    supabase.from("members").select("id, name, username")
-      .eq("active", true).order("name")
-      .then(({ data }) => setMembers(data || []))
-  }, [])
+function ECPicker({ members = [], value, onChange, valid }) {
+  const [open,  setOpen]  = useState(false)
+  const [query, setQuery] = useState("")
+  const containerRef      = useRef(null)
 
   useEffect(() => {
     function handler(e) {
@@ -254,14 +237,11 @@ function ECPicker({ value, onChange, valid }) {
                     )}
                   </div>
                 ))}
-                {members.length === 0 && (
-                  <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>Loading members…</div>
-                )}
-                {members.length > 0 && filtered.length === 0 && !query && (
-                  <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>All coordinators already added</div>
-                )}
-                {members.length > 0 && filtered.length === 0 && query && (
+                {filtered.length === 0 && query && (
                   <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No match for "{query}"</div>
+                )}
+                {filtered.length === 0 && !query && pool.length === 0 && members.length > 0 && (
+                  <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>All coordinators already added</div>
                 )}
               </div>
             </div>
@@ -404,7 +384,7 @@ function LocationField({ locationType, location, onTypeChange, onLocationChange 
 }
 
 // ── Social Event Form (slide-over) ────────────────────────────────────────────
-function SocialEventForm({ event, session, onClose, onSaved }) {
+function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
   const editing = !!event
   const [form, setForm] = useState({
     title:                 event?.title               || "",
@@ -553,7 +533,7 @@ function SocialEventForm({ event, session, onClose, onSaved }) {
           {/* EC — mandatory */}
           <div style={FIELD}>
             <label style={LABEL}>Event Coordinator(s) <span style={{ color: "var(--danger)" }}>*</span> — max 3</label>
-            <ECPicker value={coordinators} onChange={v => { setCoordinators(v); setEcError(null) }} valid={coordinators.length > 0} />
+            <ECPicker members={members} value={coordinators} onChange={v => { setCoordinators(v); setEcError(null) }} valid={coordinators.length > 0} />
             {ecError && <div style={{ color: "var(--danger)", fontSize: "0.78rem", marginTop: "0.25rem" }}>{ecError}</div>}
           </div>
 
@@ -564,7 +544,7 @@ function SocialEventForm({ event, session, onClose, onSaved }) {
           {form.has_bus && (
             <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
               <label style={LABEL}>Bus Driver (optional)</label>
-              <MemberPicker value={busDriver} onChange={setBusDriver}
+              <MemberPicker members={members} value={busDriver} onChange={setBusDriver}
                 placeholder="Search for bus driver…"
                 excludeIds={coordinators.map(m => m.id)} />
             </div>
@@ -736,11 +716,17 @@ export default function SocialEvents() {
   const [showForm,        setShowForm]       = useState(false)
   const [editEvent,       setEditEvent]      = useState(null)
   const [session,         setSession]        = useState(null)
+  const [allMembers,      setAllMembers]     = useState([])
 
   const load = useCallback(async () => {
     if (!member?.id) return
     const { data: { session: sess } } = await supabase.auth.getSession()
     setSession(sess)
+
+    const { data: membersData } = await supabase
+      .from("members").select("id, name, username")
+      .eq("active", true).order("name")
+    setAllMembers(membersData || [])
 
     const { data: eventsData } = await supabase
       .from("events")
@@ -870,7 +856,7 @@ export default function SocialEvents() {
       )}
 
       {showForm && session && (
-        <SocialEventForm event={editEvent} session={session}
+        <SocialEventForm event={editEvent} session={session} members={allMembers}
           onClose={() => { setShowForm(false); setEditEvent(null) }}
           onSaved={() => { setShowForm(false); setEditEvent(null); load() }} />
       )}
