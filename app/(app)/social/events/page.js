@@ -88,12 +88,33 @@ function MemberPicker({ value, onChange, placeholder = "Select member…", exclu
     return () => document.removeEventListener("mousedown", handler)
   }, [])
 
-  function handleOpen() { setOpen(o => !o); setQuery(""); setResults([]) }
+  async function handleOpen() {
+    const opening = !open
+    setOpen(opening)
+    setQuery("")
+    if (opening) {
+      const { data } = await supabase
+        .from("members").select("id, name, username")
+        .eq("active", true).order("name").limit(5)
+      setResults((data || []).filter(m => !excludeIds.includes(m.id)))
+    } else {
+      setResults([])
+    }
+  }
 
   function search(q) {
     setQuery(q)
     clearTimeout(debounce.current)
-    if (q.length < 2) { setResults([]); return }
+    if (q.length < 2) {
+      // Reload initial 5
+      debounce.current = setTimeout(async () => {
+        const { data } = await supabase
+          .from("members").select("id, name, username")
+          .eq("active", true).order("name").limit(5)
+        setResults((data || []).filter(m => !excludeIds.includes(m.id)))
+      }, 100)
+      return
+    }
     debounce.current = setTimeout(async () => {
       const { data } = await supabase
         .from("members").select("id, name, username")
@@ -156,11 +177,10 @@ function MemberPicker({ value, onChange, placeholder = "Select member…", exclu
                 )}
               </div>
             ))}
-            {query.length >= 2 && results.length === 0 && (
-              <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No members found</div>
-            )}
-            {query.length < 2 && results.length === 0 && (
-              <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.82rem" }}>Type at least 2 characters…</div>
+            {results.length === 0 && (
+              <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>
+                {query.length >= 2 ? "No members found" : "Loading…"}
+              </div>
             )}
           </div>
         </div>
@@ -186,12 +206,35 @@ function ECPicker({ value, onChange, error }) {
     return () => document.removeEventListener("mousedown", handler)
   }, [])
 
+  async function openPanel() {
+    const opening = !open
+    setOpen(opening)
+    setQuery("")
+    if (opening) {
+      const excludeIds = value.map(m => m.id)
+      const { data } = await supabase
+        .from("members").select("id, name, username")
+        .eq("active", true).order("name").limit(5)
+      setResults((data || []).filter(m => !excludeIds.includes(m.id)))
+    } else {
+      setResults([])
+    }
+  }
+
   function search(q) {
     setQuery(q)
     clearTimeout(debounce.current)
-    if (q.length < 2) { setResults([]); return }
+    const excludeIds = value.map(m => m.id)
+    if (q.length < 2) {
+      debounce.current = setTimeout(async () => {
+        const { data } = await supabase
+          .from("members").select("id, name, username")
+          .eq("active", true).order("name").limit(5)
+        setResults((data || []).filter(m => !excludeIds.includes(m.id)))
+      }, 100)
+      return
+    }
     debounce.current = setTimeout(async () => {
-      const excludeIds = value.map(m => m.id)
       const { data } = await supabase
         .from("members").select("id, name, username")
         .or(`name.ilike.%${q}%,username.ilike.%${q}%`)
@@ -232,7 +275,7 @@ function ECPicker({ value, onChange, error }) {
       {value.length < 3 && (
         <div style={{ position: "relative" }}>
           {/* Trigger button */}
-          <div onClick={() => { setOpen(o => !o); setQuery(""); setResults([]) }} style={{
+          <div onClick={openPanel} style={{
             ...INPUT, display: "flex", alignItems: "center", justifyContent: "space-between",
             cursor: "pointer",
             borderColor: error ? "var(--danger)" : open ? "var(--terracotta)" : "var(--border)",
@@ -516,7 +559,7 @@ function SocialEventForm({ event, session, onClose, onSaved }) {
 
           {/* Title */}
           <div style={FIELD}>
-            <label style={LABEL}>Event Name *</label>
+            <label style={LABEL}>Event Name <span style={{ color: "var(--danger)" }}>*</span></label>
             <input value={form.title} onChange={e => set("title", e.target.value)}
               placeholder="e.g. Wine & Cheese Evening" style={INPUT} />
           </div>
@@ -524,7 +567,7 @@ function SocialEventForm({ event, session, onClose, onSaved }) {
           {/* Date + Time */}
           <div style={{ ...FIELD, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
             <div>
-              <label style={LABEL}>Date *</label>
+              <label style={LABEL}>Date <span style={{ color: "var(--danger)" }}>*</span></label>
               <input type="date" value={form.event_date}
                 onChange={e => set("event_date", e.target.value)}
                 onClick={e => e.currentTarget.showPicker?.()}
@@ -568,7 +611,7 @@ function SocialEventForm({ event, session, onClose, onSaved }) {
 
           {/* EC — mandatory */}
           <div style={FIELD}>
-            <label style={LABEL}>Event Coordinator(s) * — max 3</label>
+            <label style={LABEL}>Event Coordinator(s) <span style={{ color: "var(--danger)" }}>*</span> — max 3</label>
             <ECPicker value={coordinators} onChange={v => { setCoordinators(v); setEcError(null) }} error={ecError} />
           </div>
 
