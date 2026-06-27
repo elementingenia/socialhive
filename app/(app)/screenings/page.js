@@ -214,6 +214,90 @@ function SeatPicker({ seatsRemaining, isFull, currentSeats, onPick, onCancel, al
   )
 }
 
+
+// ── CoordPicker ───────────────────────────────────────────────────────────────
+function CoordPicker({ members, value, onChange, valid = false }) {
+  const chosen = members.find(m => m.id === value) || null
+  const [query,  setQuery]  = useState("")
+  const [open,   setOpen]   = useState(false)
+  const containerRef        = useRef(null)
+
+  const filtered = members.filter(m =>
+    !query || (m.name || m.username || "").toLowerCase().includes(query.toLowerCase())
+  ).slice(0, query.length >= 2 ? 10 : 5)
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [])
+
+  const borderCol = open ? "var(--teal)" : valid ? "var(--green)" : "var(--border)"
+  return (
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <div
+        onClick={() => { setOpen(o => !o); setQuery("") }}
+        style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: 10,
+          border: `1.5px solid ${borderCol}`, background: "var(--surface)",
+          color: chosen ? "var(--text)" : "var(--text-dim)", fontSize: "0.95rem",
+          boxSizing: "border-box", fontFamily: "inherit", cursor: "pointer",
+          display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span>{chosen ? (chosen.name || chosen.username) : "— Select coordinator —"}</span>
+        <span style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>▾</span>
+      </div>
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
+          boxShadow: "0 4px 20px rgba(0,0,0,0.12)", zIndex: 60, overflow: "hidden" }}>
+          <div style={{ padding: "0.5rem 0.75rem", borderBottom: "1px solid var(--border)" }}>
+            <input
+              autoFocus
+              type="text"
+              placeholder="Search name…"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              style={{ width: "100%", border: "none", background: "transparent",
+                color: "var(--text)", fontSize: "0.9rem", outline: "none", fontFamily: "inherit" }}
+            />
+          </div>
+          <div style={{ maxHeight: 220, overflowY: "auto" }}>
+            {value && (
+              <div
+                onClick={() => { onChange(""); setOpen(false) }}
+                style={{ padding: "0.65rem 1rem", cursor: "pointer", fontSize: "0.85rem",
+                  color: "var(--text-dim)", borderBottom: "1px solid var(--border)" }}>
+                — Clear selection —
+              </div>
+            )}
+            {filtered.map(m => (
+              <div key={m.id}
+                onClick={() => { onChange(m.id); setOpen(false) }}
+                style={{ padding: "0.65rem 1rem", cursor: "pointer",
+                  background: m.id === value ? "rgba(0,128,128,0.08)" : "transparent",
+                  borderBottom: "1px solid var(--border)",
+                  fontWeight: m.id === value ? 700 : 400, fontSize: "0.88rem",
+                  color: m.id === value ? "var(--teal)" : "var(--text)" }}>
+                {m.name || m.username}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <div style={{ padding: "0.9rem 1rem", fontSize: "0.85rem", color: "var(--text-dim)" }}>No match</div>
+            )}
+            {members.length > 5 && !query && (
+              <div style={{ padding: "0.5rem 1rem", fontSize: "0.72rem", color: "var(--text-dim)",
+                borderTop: "1px solid var(--border)" }}>
+                Type to search all {members.length} members
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Add/Edit Screening Sheet (admin) ─────────────────────────────────────────
 function ScreeningSheet({ session, event, members, onClose, onSaved, addToast }) {
   const isEdit = !!event
