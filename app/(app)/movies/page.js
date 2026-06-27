@@ -26,7 +26,7 @@ function fmtTime(str) {
 }
 
 // ── Next Screening Card (entire card clickable) ───────────────────────────────
-function NextScreeningCard({ event, myBooking }) {
+function NextScreeningCard({ event, myBooking, coordinator }) {
   const router = useRouter()
   const movie = event.movies || event.movie_snapshot
   const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -64,6 +64,16 @@ function NextScreeningCard({ event, myBooking }) {
               {movie.rating_rt && (
                 <span style={{ background: 'rgba(220,50,30,0.12)', color: '#c0392b', fontWeight: 700, fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '20px' }}>🍅 RT {movie.rating_rt}</span>
               )}
+              {coordinator && (
+                <span style={{ fontSize: '0.68rem', color: 'var(--teal)', fontWeight: 600 }}>
+                  👤 {coordinator.name || coordinator.username}
+                </span>
+              )}
+            </div>
+          )}
+          {!movie?.rating_imdb && !movie?.rating_rt && coordinator && (
+            <div style={{ fontSize: '0.72rem', color: 'var(--teal)', fontWeight: 600 }}>
+              👤 {coordinator.name || coordinator.username}
             </div>
           )}
           {movie?.plot && (
@@ -471,6 +481,7 @@ export default function MoviesHomePage() {
   const [loading, setLoading]     = useState(true)
   const [welcomeText, setWelcomeText] = useState('')
   const [nextEvent, setNextEvent] = useState(null)
+  const [nextEventCoordinator, setNextEventCoordinator] = useState(null)
   const [myBookings, setMyBookings] = useState([])
   const [nextBooking, setNextBooking] = useState(null)
   const [unvoted, setUnvoted]     = useState([])
@@ -524,6 +535,13 @@ export default function MoviesHomePage() {
 
     const nextEv = eventsData?.[0] || null
     setNextEvent(nextEv)
+    if (nextEv?.id) {
+      supabase.from('event_coordinators').select('member_id, members(id, name, username)')
+        .eq('event_id', nextEv.id).is('replaced_at', null).limit(1).maybeSingle()
+        .then(({ data }) => setNextEventCoordinator(data?.members || null))
+    } else {
+      setNextEventCoordinator(null)
+    }
     setMyBookings(bookingsData || [])
 
     if (nextEv && bookingsData) {
@@ -554,7 +572,7 @@ export default function MoviesHomePage() {
       <WelcomeBanner text={welcomeText} colour="var(--teal)" />
 
       {nextEvent ? (
-        <NextScreeningCard event={nextEvent} myBooking={nextBookingSummary} />
+        <NextScreeningCard event={nextEvent} myBooking={nextBookingSummary} coordinator={nextEventCoordinator} />
       ) : (
         <div style={{ background: 'var(--surface)', borderRadius: '16px', border: '1px solid var(--border)', padding: '1.5rem 1.25rem', textAlign: 'center', marginBottom: '1.25rem', boxShadow: 'var(--shadow)' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🎬</div>

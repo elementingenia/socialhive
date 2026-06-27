@@ -214,117 +214,187 @@ function SeatPicker({ seatsRemaining, isFull, currentSeats, onPick, onCancel, al
   )
 }
 
-// ── Add Screening Sheet (admin) ───────────────────────────────────────────────
-function AddScreeningSheet({ session, onClose, onAdded, addToast }) {
+// ── Add/Edit Screening Sheet (admin) ─────────────────────────────────────────
+function ScreeningSheet({ session, event, members, onClose, onSaved, addToast }) {
+  const isEdit = !!event
   const [movies, setMovies] = useState([])
-  const [movieSearch, setMovieSearch] = useState('')
   const [pickedMovie, setPickedMovie] = useState(null)
-  const [date, setDate]       = useState('')
-  const [time, setTime]       = useState('18:00')
-  const [maxSeats, setMaxSeats] = useState(20)
-  const [notes, setNotes]     = useState('')
+  const [movieOpen, setMovieOpen] = useState(false)
+  const [movieQuery, setMovieQuery] = useState("")
+  const movieRef = useRef(null)
+  const [date, setDate]         = useState(event?.event_date || "")
+  const [time, setTime]         = useState(event?.event_time?.slice(0,5) || "18:00")
+  const [maxSeats, setMaxSeats] = useState(event?.max_seats || 20)
+  const [notes, setNotes]       = useState(event?.notes || "")
+  const [coordinator, setCoordinator] = useState(null)
   const [saving, setSaving]   = useState(false)
   const [err, setErr]         = useState(null)
+  const [open, setOpen]       = useState(false)
 
   useEffect(() => {
-    supabase.from('movies').select('id, title, poster_url, year').eq('we_own', false).order('title')
+    supabase.from("movies").select("id, title, poster_url, year").eq("we_own", false).order("title")
       .then(({ data }) => setMovies(data || []))
+    if (event?.movie_id) {
+      supabase.from("movies").select("id, title, poster_url, year").eq("id", event.movie_id).single()
+        .then(({ data }) => { if (data) setPickedMovie(data) })
+    }
+    if (event?.id) {
+      supabase.from("event_coordinators").select("member_id, members(id, name, username)")
+        .eq("event_id", event.id).is("replaced_at", null).limit(1).maybeSingle()
+        .then(({ data }) => { if (data?.members) setCoordinator(data.members) })
+    }
+    requestAnimationFrame(() => setOpen(true))
   }, [])
 
-  const filtered = movieSearch
-    ? movies.filter(m => m.title.toLowerCase().includes(movieSearch.toLowerCase()))
-    : movies
+  const moviePool = movies.filter(m => !movieQuery || m.title.toLowerCase().includes(movieQuery.toLowerCase()))
+  const movieFiltered = moviePool.slice(0, movieQuery ? 40 : 5)
+
+  useEffect(() => {
+    if (!movieOpen) return
+    function handler(e) { if (movieRef.current && !movieRef.current.contains(e.target)) { setMovieOpen(false); setMovieQuery("") } }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
+  }, [movieOpen])
+
+  function handleClose() { setOpen(false); setTimeout(onClose, 280) }
 
   async function handleSubmit() {
-    if (!date || !time) { setErr('Date and time are required'); return }
+    if (!date || !time) { setErr("Date and time are required"); return }
     setSaving(true); setErr(null)
-    const res = await fetch('/api/screenings', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
-      body: JSON.stringify({ movie_id: pickedMovie?.id || null, event_date: date, event_time: time, max_seats: Number(maxSeats), notes: notes || null }),
+    const body = {
+      movie_id: pickedMovie?.id || null, event_date: date, event_time: time,
+      max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator?.id || null,
+    }
+    if (isEdit) body.event_id = event.id
+    const res = await fetch("/api/screenings", {
+      method: isEdit ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + session.access_token },
+      body: JSON.stringify(body),
     })
     const data = await res.json()
     setSaving(false)
-    if (!res.ok) { setErr(data.error || 'Failed'); addToast('Failed to add screening', 'error'); return }
-    addToast('Screening added — ' + (pickedMovie?.title || 'Movie Night') + ' on ' + date, 'success')
-    onAdded(); onClose()
+    if (!res.ok) { setErr(data.error || "Failed"); addToast("Failed to save", "error"); return }
+    addToast((isEdit ? "Screening updated" : "Screening added") + " — " + (pickedMovie?.title || "Movie Night") + " on " + date, "success")
+    onSaved()
+    handleClose()
   }
 
-  return (
-    <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', padding: '1.5rem', maxHeight: '90vh', overflowY: 'auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-        <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Add Screening</h2>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-dim)' }}>×</button>
-      </div>
+  const INPUT = { width: "100%", padding: "0.65rem 0.85rem", border: "1.5px solid var(--border)", borderRadius: "10px", fontSize: "0.9rem", background: "var(--surface2)", boxSizing: "border-box", fontFamily: "inherit" }
+  const LABEL = { display: "block", fontSize: "0.78rem", fontWeight: 700, color: "var(--text-dim)", marginBottom: "0.4rem", textTransform: "uppercase", letterSpacing: "0.05em" }
 
-      <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Movie</label>
-        {pickedMovie ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'var(--surface2)', borderRadius: '10px', padding: '0.75rem' }}>
-            {pickedMovie.poster_url && <img src={pickedMovie.poster_url} alt="" style={{ width: 36, height: 54, objectFit: 'cover', borderRadius: 4 }} />}
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>{pickedMovie.title}</div>
-              {pickedMovie.year && <div style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>{pickedMovie.year}</div>}
-            </div>
-            <button onClick={() => setPickedMovie(null)} style={{ background: 'none', border: 'none', color: 'var(--teal)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>Change</button>
-          </div>
-        ) : (
-          <>
-            <input placeholder="Type to search movies…" value={movieSearch} onChange={e => setMovieSearch(e.target.value)} autoComplete="off"
-              style={{ width: '100%', padding: '0.65rem 0.85rem', border: '1.5px solid var(--border)', borderRadius: movieSearch ? '10px 10px 0 0' : '10px', fontSize: '0.9rem', background: 'var(--surface2)', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-            {movieSearch.length > 0 && (
-              <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid var(--border)', borderTop: 'none', borderRadius: '0 0 10px 10px', background: 'var(--surface)' }}>
-                {filtered.slice(0, 40).map(m => (
-                  <div key={m.id} onClick={() => { setPickedMovie(m); setMovieSearch('') }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', padding: '0.6rem 0.85rem', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}>
-                    {m.poster_url && <img src={m.poster_url} alt="" style={{ width: 28, height: 42, objectFit: 'cover', borderRadius: 3 }} />}
-                    <span style={{ fontSize: '0.88rem' }}>{m.title}</span>
-                    {m.year && <span style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginLeft: 'auto' }}>{m.year}</span>}
+  return (
+    <>
+      <div onClick={handleClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, opacity: open ? 1 : 0, transition: "opacity 0.25s" }} />
+      <div style={{
+        position: "fixed", top: 0, right: 0, bottom: 0, width: "min(420px, 100%)",
+        background: "var(--surface)", zIndex: 201, overflowY: "auto",
+        transform: open ? "translateX(0)" : "translateX(100%)",
+        transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
+        boxShadow: "-8px 0 32px rgba(0,0,0,0.15)", paddingBottom: 32,
+      }}>
+        <div style={{ height: 4, background: "var(--teal)" }} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 1.25rem", borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "var(--surface)", zIndex: 1 }}>
+          <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: 0 }}>{isEdit ? "Edit Screening" : "Add Screening"}</h2>
+          <button onClick={handleClose} style={{ background: "var(--surface2)", border: "none", borderRadius: "50%", width: 36, height: 36, fontSize: 20, cursor: "pointer", color: "var(--text)", display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+        </div>
+
+        <div style={{ padding: "1.25rem" }}>
+          {/* Movie picker — shows first 5 on open, filter by typing */}
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={LABEL}>Movie</label>
+            {pickedMovie ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", background: "var(--surface2)", borderRadius: "10px", padding: "0.75rem" }}>
+                {pickedMovie.poster_url && <img src={pickedMovie.poster_url} alt="" style={{ width: 36, height: 54, objectFit: "cover", borderRadius: 4 }} />}
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{pickedMovie.title}</div>
+                  {pickedMovie.year && <div style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>{pickedMovie.year}</div>}
+                </div>
+                <button onClick={() => setPickedMovie(null)} style={{ background: "none", border: "none", color: "var(--teal)", cursor: "pointer", fontSize: "0.85rem", fontWeight: 600 }}>Change</button>
+              </div>
+            ) : (
+              <div ref={movieRef} style={{ position: "relative" }}>
+                <button onClick={() => setMovieOpen(v => !v)} style={{
+                  ...INPUT, cursor: "pointer", textAlign: "left", display: "flex",
+                  justifyContent: "space-between", alignItems: "center",
+                  borderRadius: movieOpen ? "10px 10px 0 0" : "10px",
+                }}>
+                  <span style={{ color: "var(--text-dim)" }}>Select a movie…</span>
+                  <span style={{ fontSize: "0.7rem", color: "var(--text-dim)" }}>{movieOpen ? "▲" : "▼"}</span>
+                </button>
+                {movieOpen && (
+                  <div style={{ position: "absolute", left: 0, right: 0, top: "100%", background: "var(--surface)", border: "1px solid var(--border)", borderTop: "none", borderRadius: "0 0 10px 10px", zIndex: 50, maxHeight: 260, overflowY: "auto" }}>
+                    <input autoFocus value={movieQuery} onChange={e => setMovieQuery(e.target.value)}
+                      placeholder="Type to filter…"
+                      style={{ width: "100%", padding: "0.6rem 0.85rem", border: "none", borderBottom: "1px solid var(--border)", fontSize: "0.9rem", background: "var(--surface2)", boxSizing: "border-box", fontFamily: "inherit", outline: "none" }} />
+                    {movieFiltered.map(m => (
+                      <div key={m.id} onClick={() => { setPickedMovie(m); setMovieOpen(false); setMovieQuery("") }}
+                        style={{ display: "flex", alignItems: "center", gap: "0.65rem", padding: "0.6rem 0.85rem", cursor: "pointer", borderBottom: "1px solid var(--border)" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "var(--surface2)"}
+                        onMouseLeave={e => e.currentTarget.style.background = ""}>
+                        {m.poster_url && <img src={m.poster_url} alt="" style={{ width: 28, height: 42, objectFit: "cover", borderRadius: 3 }} />}
+                        <span style={{ fontSize: "0.88rem" }}>{m.title}</span>
+                        {m.year && <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", marginLeft: "auto" }}>{m.year}</span>}
+                      </div>
+                    ))}
+                    {movieFiltered.length === 0 && <div style={{ padding: "0.75rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No movies found</div>}
+                    {!movieQuery && moviePool.length > 5 && <div style={{ padding: "0.5rem 0.85rem", color: "var(--text-dim)", fontSize: "0.78rem", fontStyle: "italic" }}>Showing first 5 — type to filter all {moviePool.length}</div>}
                   </div>
-                ))}
-                {filtered.length === 0 && <div style={{ padding: '0.75rem', color: 'var(--text-dim)', fontSize: '0.85rem' }}>No movies found</div>}
+                )}
               </div>
             )}
-          </>
-        )}
+          </div>
+
+          {/* Coordinator */}
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={LABEL}>Coordinator (optional)</label>
+            <CoordPicker members={members} value={coordinator} onChange={setCoordinator} />
+          </div>
+
+          {/* Date */}
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={LABEL}>Date <span style={{ color: "var(--danger)" }}>*</span></label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
+              min={new Date().toISOString().split("T")[0]}
+              style={{ ...INPUT, border: `1.5px solid ${date ? "var(--green)" : "var(--danger)"}` }} />
+            {date && <div style={{ fontSize: "0.75rem", color: "var(--teal)", fontWeight: 600, marginTop: "0.3rem" }}>
+              {new Date(date + "T00:00:00").toLocaleDateString("en-AU", { weekday: "long" })}
+            </div>}
+          </div>
+
+          {/* Time */}
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={LABEL}>Time <span style={{ color: "var(--danger)" }}>*</span></label>
+            <input type="time" value={time} onChange={e => setTime(e.target.value)}
+              style={{ ...INPUT, border: `1.5px solid ${time ? "var(--green)" : "var(--danger)"}` }} />
+          </div>
+
+          {/* Max seats */}
+          <div style={{ marginBottom: "1rem" }}>
+            <label style={LABEL}>Max Seats</label>
+            <input type="number" value={maxSeats} onChange={e => setMaxSeats(e.target.value)} min={1} max={200} style={INPUT} />
+          </div>
+
+          {/* Notes */}
+          <div style={{ marginBottom: "1.5rem" }}>
+            <label style={LABEL}>Notes (optional)</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. Bring a chair! BYO drinks." rows={2}
+              style={{ ...INPUT, resize: "vertical" }} />
+          </div>
+
+          {err && <div style={{ color: "var(--danger)", fontSize: "0.85rem", marginBottom: "1rem" }}>{err}</div>}
+
+          <button onClick={handleSubmit} disabled={saving}
+            style={{ width: "100%", padding: "0.9rem", background: "var(--teal)", color: "#fff", border: "none", borderRadius: "12px", fontSize: "1rem", fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
+            {saving ? "Saving…" : isEdit ? "Save Changes" : "Add Screening"}
+          </button>
+        </div>
       </div>
-
-      <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date *</label>
-        <input type="date" value={date} onChange={e => setDate(e.target.value)} onClick={e => e.currentTarget.showPicker?.()} min={new Date().toISOString().split('T')[0]}
-          style={{ width: '100%', padding: '0.65rem 0.85rem', border: '1.5px solid var(--border)', borderRadius: '10px', fontSize: '0.9rem', background: 'var(--surface2)', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-      </div>
-
-      <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Time *</label>
-        <input type="time" value={time} onChange={e => setTime(e.target.value)}
-          style={{ width: '100%', padding: '0.65rem 0.85rem', border: '1.5px solid var(--border)', borderRadius: '10px', fontSize: '0.9rem', background: 'var(--surface2)', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-      </div>
-
-      <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Max Seats</label>
-        <input type="number" value={maxSeats} onChange={e => setMaxSeats(e.target.value)} min={1} max={200}
-          style={{ width: '100%', padding: '0.65rem 0.85rem', border: '1.5px solid var(--border)', borderRadius: '10px', fontSize: '0.9rem', background: 'var(--surface2)', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-      </div>
-
-      <div style={{ marginBottom: '1.5rem' }}>
-        <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Notes (optional)</label>
-        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. Bring a chair! BYO drinks." rows={2}
-          style={{ width: '100%', padding: '0.65rem 0.85rem', border: '1.5px solid var(--border)', borderRadius: '10px', fontSize: '0.9rem', background: 'var(--surface2)', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-      </div>
-
-      {err && <div style={{ color: 'var(--danger)', fontSize: '0.85rem', marginBottom: '1rem' }}>{err}</div>}
-
-      <button onClick={handleSubmit} disabled={saving}
-        style={{ width: '100%', padding: '0.9rem', background: 'var(--teal)', color: '#fff', border: 'none', borderRadius: '12px', fontSize: '1rem', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>
-        {saving ? 'Saving…' : 'Add Screening'}
-      </button>
-    </div>
+    </>
   )
 }
 
 // ── Screening Card ────────────────────────────────────────────────────────────
-function ScreeningCard({ ev, session, isAdmin, freeCostData, onRefresh, addToast }) {
+function ScreeningCard({ ev, session, isAdmin, freeCostData, members, onRefresh, addToast, onEdit }) {
   const [acting,           setActing]          = useState(false)
   const [pickingSeats,     setPickingSeats]     = useState(false)
   const [changingSeats,    setChangingSeats]    = useState(false)
@@ -477,8 +547,16 @@ function ScreeningCard({ ev, session, isAdmin, freeCostData, onRefresh, addToast
 
           {/* Info */}
           <div style={{ flex: 1, padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-            <div style={{ color: 'var(--teal)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', lineHeight: 1.2 }}>
-              {fmtDateLong(ev.event_date)}{ev.event_time ? ' · ' + fmtTime24(ev.event_time) : ''}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+              <div style={{ color: 'var(--teal)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', lineHeight: 1.2 }}>
+                {fmtDateLong(ev.event_date)}{ev.event_time ? ' · ' + fmtTime24(ev.event_time) : ''}
+              </div>
+              {isAdmin && onEdit && (
+                <button onClick={e => { e.stopPropagation(); onEdit(ev) }}
+                  style={{ background: 'none', border: '1px solid var(--teal)', borderRadius: '8px', padding: '0.2rem 0.65rem', fontSize: '0.72rem', color: 'var(--teal)', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>
+                  Edit
+                </button>
+              )}
             </div>
 
             <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', flexWrap:'wrap' }}>
@@ -486,6 +564,11 @@ function ScreeningCard({ ev, session, isAdmin, freeCostData, onRefresh, addToast
               {isAdmin && freeCostData && (
                 <span style={{ background:freeCostData.isFree?'#dcfce7':'#fef3c7', color:freeCostData.isFree?'#15803d':'#d97706', borderRadius:'20px', padding:'0.15rem 0.55rem', fontSize:'0.68rem', fontWeight:700, whiteSpace:'nowrap' }}>
                   ● {freeCostData.isFree ? (freeCostData.reasons[0] || 'Free') : 'Cost'}
+                </span>
+              )}
+              {ev.coordinator && (
+                <span style={{ fontSize:'0.72rem', color:'var(--teal)', fontWeight:600 }}>
+                  👤 {ev.coordinator.name || ev.coordinator.username}
                 </span>
               )}
             </div>
@@ -739,6 +822,8 @@ export default function Screenings() {
   const [session,    setSession]    = useState(null)
   const [member,     setMember]     = useState(null)
   const [showAdd,    setShowAdd]    = useState(false)
+  const [editEvent,  setEditEvent]  = useState(null)
+  const [members,    setMembers]    = useState([])
   const [toasts,     setToasts]     = useState([])
   const [streamingServices, setStreamingServices] = useState([])
   const [dvdTmdbIds,        setDvdTmdbIds]        = useState(new Set())
@@ -757,6 +842,8 @@ export default function Screenings() {
       if (s) {
         supabase.from('members').select('id, is_admin').eq('auth_id', s.user.id).single()
           .then(({ data }) => setMember(data))
+        supabase.from('members').select('id, name, username').order('name')
+          .then(({ data }) => setMembers(data || []))
       }
     })
   }, [])
@@ -808,15 +895,20 @@ export default function Screenings() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
           {screenings.map(ev => (
-            <ScreeningCard key={ev.id} ev={ev} session={session} isAdmin={member?.is_admin} freeCostData={member?.is_admin && ev.movies ? computeFreeCost(ev.movies, { streamingServices, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecords.filter(o => o.movie_id === ev.movie_id) }) : null} onRefresh={loadScreenings} addToast={addToast} />
+            <ScreeningCard key={ev.id} ev={ev} session={session} isAdmin={member?.is_admin} members={members} freeCostData={member?.is_admin && ev.movies ? computeFreeCost(ev.movies, { streamingServices, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecords.filter(o => o.movie_id === ev.movie_id) }) : null} onRefresh={loadScreenings} addToast={addToast} onEdit={ev => setEditEvent(ev)} />
           ))}
         </div>
       )}
 
-      {showAdd && (
-        <Overlay onClose={() => setShowAdd(false)}>
-          <AddScreeningSheet session={session} onClose={() => setShowAdd(false)} onAdded={loadScreenings} addToast={addToast} />
-        </Overlay>
+      {(showAdd || editEvent) && (
+        <ScreeningSheet
+          session={session}
+          event={editEvent || null}
+          members={members}
+          onClose={() => { setShowAdd(false); setEditEvent(null) }}
+          onSaved={loadScreenings}
+          addToast={addToast}
+        />
       )}
     </div>
   )

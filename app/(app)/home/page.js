@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 
 const HUBS = [
-  { key: "movies",   label: "Cinema",    icon: "🎬", path: "/movies",   colour: "var(--teal)" },
+  { key: "movies",   label: "Movies",    icon: "🎬", path: "/movies",   colour: "var(--teal)" },
   { key: "social",   label: "Social",    icon: "🎉", path: "/social",   colour: "var(--terracotta)" },
   { key: "bookclub", label: "Book Club", icon: "📚", path: "/bookclub", colour: "var(--purple)" },
 ]

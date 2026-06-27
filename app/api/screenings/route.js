@@ -37,6 +37,16 @@ export async function GET(req) {
   const eventIds = events.map(e => e.id)
   const movieIds = [...new Set(events.filter(e => e.movie_id).map(e => e.movie_id))]
 
+  const { data: ecRows } = await supabaseAdmin
+    .from('event_coordinators')
+    .select('event_id, member_id, members(id, name, username)')
+    .in('event_id', eventIds)
+    .is('replaced_at', null)
+  const coordMap = {}
+  for (const ec of ecRows || []) {
+    coordMap[ec.event_id] = ec.members
+  }
+
   const { data: bookings } = await supabaseAdmin
     .from('bookings')
     .select('id, event_id, member_id, status, seats, booked_at, members(name, hide_name)')
@@ -106,6 +116,7 @@ export async function GET(req) {
       my_booking,
       community_score: ev.movie_id ? (communityAvg[ev.movie_id] || null) : null,
       attendees,
+      coordinator: coordMap[ev.id] || null,
     }
   })
 
@@ -119,7 +130,7 @@ export async function POST(req) {
   const member = await getMember(token)
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const { movie_id, event_date, event_time, max_seats, notes } = await req.json()
+  const { movie_id, event_date, event_time, max_seats, notes, coordinator_id } = await req.json()
   if (!event_date || !event_time) {
     return NextResponse.json({ error: 'Date and time are required' }, { status: 400 })
   }
@@ -146,5 +157,49 @@ export async function POST(req) {
     .select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Save coordinator if provided
+  if (coordinator_id && event?.id) {
+    await supabaseAdmin.from('event_coordinators').insert({ event_id: event.id, member_id: coordinator_id, assigned_by: member.id })
+  }
+
   return NextResponse.json(event)
+}
+
+export async function PATCH(req) {
+  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+  if (!token) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+  const member = await getMember(token)
+  if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+
+  const { event_id, movie_id, event_date, event_time, max_seats, notes, coordinator_id } = await req.json()
+  if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
+  if (!event_date || !event_time) return NextResponse.json({ error: 'Date and time are required' }, { status: 400 })
+
+  let title = 'Movie Night'
+  let movieSnapshot = null
+  if (movie_id) {
+    const { data: movie } = await supabaseAdmin
+      .from('movies').select('title, director, poster_url, year').eq('id', movie_id).single()
+    if (movie) {
+      title = movie.title
+      movieSnapshot = { title: movie.title, director: movie.director, poster_url: movie.poster_url, year: movie.year }
+    }
+  }
+
+  const { error } = await supabaseAdmin
+    .from('events')
+    .update({ movie_id: movie_id || null, title, event_date, event_time, max_seats: max_seats || 20, notes: notes || null, movie_snapshot: movieSnapshot })
+    .eq('id', event_id)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Update coordinator — clear existing then insert new if provided
+  await supabaseAdmin.from('event_coordinators').delete().eq('event_id', event_id)
+  if (coordinator_id) {
+    await supabaseAdmin.from('event_coordinators').insert({ event_id, member_id: coordinator_id, assigned_by: member.id })
+  }
+
+  return NextResponse.json({ ok: true })
 }
