@@ -310,7 +310,7 @@ function CoordinatorPanel({ event, colour, onRefresh }) {
       {/* Welcome Message (EC-editable) */}
       <div style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Welcome Message</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Booking Message</div>
           {!editWelcome && <button onClick={() => setEditWelcome(true)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: colour, fontWeight: 600 }}>Edit</button>}
         </div>
         {editWelcome ? (
@@ -674,11 +674,18 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
           </h2>
 
           {/* Date/time */}
-          <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: 10, fontWeight: 500 }}>
+          <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: event.location ? 4 : 10, fontWeight: 500 }}>
             📅 {fmtDate(event.event_date)} at {fmtTime(event.event_time)}
           </div>
 
-          {/* EC names — shown on all event types */}
+          {/* Location — shown for social/outings events */}
+          {!isPrivate && event.location && (
+            <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>
+              📍 {event.location_type === "offsite" ? event.location.split("\n")[0] : event.location}
+            </div>
+          )}
+
+          {/* EC names — on one line under location */}
           {!isPrivate && <ECNames coordinators={coordinators} colour={colour} />}
 
           {isPrivate && (
@@ -742,6 +749,13 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
                     {fmtCost(event.cost)}
                   </div>
                   {event.description && <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6, margin: "8px 0 0" }}>{event.description}</p>}
+                </div>
+              )}
+
+              {/* Bus driver — social/outings offsite only */}
+              {(event.hub_type === "social" || event.hub_type === "outings") && event.has_bus && event.bus_driver && (
+                <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>
+                  🚌 {event.bus_driver.name || event.bus_driver.username}
                 </div>
               )}
 

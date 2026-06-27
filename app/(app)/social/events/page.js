@@ -524,7 +524,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 
           {/* Welcome message */}
           <div style={FIELD}>
-            <label style={LABEL}>Welcome Message (shown in booking modal)</label>
+            <label style={LABEL}>Booking Message <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", fontWeight: 400 }}>(shown on booking form only)</span></label>
             <textarea value={form.welcome_message} onChange={e => set("welcome_message", e.target.value)}
               rows={2} placeholder="Optional greeting shown when residents open the booking…"
               style={{ ...INPUT, resize: "vertical" }} />
@@ -537,17 +537,21 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
             {ecError && <div style={{ color: "var(--danger)", fontSize: "0.78rem", marginTop: "0.25rem" }}>{ecError}</div>}
           </div>
 
-          {/* Bus */}
-          <div style={FIELD}>
-            <Toggle value={form.has_bus} onChange={v => { set("has_bus", v); if (!v) setBusDriver(null) }} label="Community bus" />
-          </div>
-          {form.has_bus && (
-            <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
-              <label style={LABEL}>Bus Driver (optional)</label>
-              <MemberPicker members={members} value={busDriver} onChange={setBusDriver}
-                placeholder="Search for bus driver…"
-                excludeIds={coordinators.map(m => m.id)} />
-            </div>
+          {/* Bus — only relevant for offsite events */}
+          {form.location_type === "offsite" && (
+            <>
+              <div style={FIELD}>
+                <Toggle value={form.has_bus} onChange={v => { set("has_bus", v); if (!v) setBusDriver(null) }} label="Community bus" />
+              </div>
+              {form.has_bus && (
+                <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
+                  <label style={LABEL}>Bus Driver (optional)</label>
+                  <MemberPicker members={members} value={busDriver} onChange={setBusDriver}
+                    placeholder="Search for bus driver…"
+                    excludeIds={coordinators.map(m => m.id)} />
+                </div>
+              )}
+            </>
           )}
 
           {/* Capacity */}
