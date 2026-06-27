@@ -132,7 +132,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
         right: 0,
         height: "auto",
         maxHeight: `calc(100dvh - ${TOP_OFFSET}px)`,
-        width: "min(400px, 100vw)",
+        width: "min(400px, 100%)",
         background: "var(--surface)",
         zIndex: 201,
         display: "flex",
