@@ -71,14 +71,11 @@ function CapacityBar({ booked, max, waitlist }) {
   )
 }
 
-// ── Member live-search picker (single) ───────────────────────────────────────
-// Pattern: styled trigger → panel with embedded search + results (matches CoordPicker)
-function MemberPicker({ value, onChange, placeholder = "Select member…", excludeIds = [] }) {
-  const [open,    setOpen]    = useState(false)
-  const [query,   setQuery]   = useState("")
-  const [results, setResults] = useState([])
-  const containerRef          = useRef(null)
-  const debounce              = useRef(null)
+// ── Member picker — prop-based, in-memory filter (matches Book Club CoordPicker) ──
+function MemberPicker({ members = [], value, onChange, placeholder = "Select member…", excludeIds = [] }) {
+  const [open,  setOpen]  = useState(false)
+  const [query, setQuery] = useState("")
+  const containerRef      = useRef(null)
 
   useEffect(() => {
     function handler(e) {
@@ -88,48 +85,16 @@ function MemberPicker({ value, onChange, placeholder = "Select member…", exclu
     return () => document.removeEventListener("mousedown", handler)
   }, [])
 
-  async function handleOpen() {
-    const opening = !open
-    setOpen(opening)
-    setQuery("")
-    if (opening) {
-      const { data } = await supabase
-        .from("members").select("id, name, username")
-        .eq("active", true).order("name").limit(5)
-      setResults((data || []).filter(m => !excludeIds.includes(m.id)))
-    } else {
-      setResults([])
-    }
-  }
+  const pool     = members.filter(m => !excludeIds.includes(m.id))
+  const filtered = pool.filter(m =>
+    !query || (m.name || m.username || "").toLowerCase().includes(query.toLowerCase())
+  ).slice(0, query ? 10 : 5)
 
-  function search(q) {
-    setQuery(q)
-    clearTimeout(debounce.current)
-    if (q.length < 2) {
-      // Reload initial 5
-      debounce.current = setTimeout(async () => {
-        const { data } = await supabase
-          .from("members").select("id, name, username")
-          .eq("active", true).order("name").limit(5)
-        setResults((data || []).filter(m => !excludeIds.includes(m.id)))
-      }, 100)
-      return
-    }
-    debounce.current = setTimeout(async () => {
-      const { data } = await supabase
-        .from("members").select("id, name, username")
-        .or(`name.ilike.%${q}%,username.ilike.%${q}%`)
-        .eq("active", true).limit(10)
-      setResults((data || []).filter(m => !excludeIds.includes(m.id)))
-    }, 250)
-  }
-
-  function pick(m) { onChange(m); setOpen(false); setQuery(""); setResults([]) }
+  function pick(m) { onChange(m); setOpen(false); setQuery("") }
 
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
-      {/* Trigger */}
-      <div onClick={handleOpen} style={{
+      <div onClick={() => { setOpen(o => !o); setQuery("") }} style={{
         ...INPUT, display: "flex", alignItems: "center", justifyContent: "space-between",
         cursor: "pointer", borderColor: open ? "var(--terracotta)" : "var(--border)",
       }}>
@@ -140,7 +105,6 @@ function MemberPicker({ value, onChange, placeholder = "Select member…", exclu
           transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }}>▾</span>
       </div>
 
-      {/* Panel */}
       {open && (
         <div style={{
           position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 60,
@@ -148,13 +112,10 @@ function MemberPicker({ value, onChange, placeholder = "Select member…", exclu
           boxShadow: "0 8px 24px rgba(0,0,0,0.12)", overflow: "hidden",
         }}>
           <div style={{ padding: "0.5rem 0.75rem", borderBottom: "1px solid var(--border)" }}>
-            <input
-              autoFocus
-              value={query} onChange={e => search(e.target.value)}
-              placeholder="Type name to search…"
+            <input autoFocus value={query} onChange={e => setQuery(e.target.value)}
+              placeholder="Search name…"
               style={{ width: "100%", border: "none", background: "transparent",
-                color: "var(--text)", fontSize: "0.9rem", outline: "none", fontFamily: "inherit" }}
-            />
+                color: "var(--text)", fontSize: "0.9rem", outline: "none", fontFamily: "inherit" }} />
           </div>
           <div style={{ maxHeight: 220, overflowY: "auto" }}>
             {value && (
@@ -164,7 +125,7 @@ function MemberPicker({ value, onChange, placeholder = "Select member…", exclu
                 — Clear selection —
               </div>
             )}
-            {results.map(m => (
+            {filtered.map(m => (
               <div key={m.id} onClick={() => pick(m)} style={{
                 padding: "0.65rem 1rem", cursor: "pointer", borderBottom: "1px solid var(--border)",
                 background: value?.id === m.id ? "var(--terracotta)12" : "transparent",
@@ -177,10 +138,8 @@ function MemberPicker({ value, onChange, placeholder = "Select member…", exclu
                 )}
               </div>
             ))}
-            {results.length === 0 && (
-              <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>
-                {query.length >= 2 ? "No members found" : "Loading…"}
-              </div>
+            {filtered.length === 0 && (
+              <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No members found</div>
             )}
           </div>
         </div>
@@ -189,14 +148,11 @@ function MemberPicker({ value, onChange, placeholder = "Select member…", exclu
   )
 }
 
-// ── EC multi-picker (up to 3, mandatory) ─────────────────────────────────────
-// Same panel pattern as CoordPicker — trigger button opens search panel
-function ECPicker({ value, onChange, error }) {
-  const [open,    setOpen]    = useState(false)
-  const [query,   setQuery]   = useState("")
-  const [results, setResults] = useState([])
-  const containerRef          = useRef(null)
-  const debounce              = useRef(null)
+// ── EC multi-picker — prop-based, in-memory filter (matches Book Club CoordPicker) ──
+function ECPicker({ members = [], value, onChange, valid }) {
+  const [open,  setOpen]  = useState(false)
+  const [query, setQuery] = useState("")
+  const containerRef      = useRef(null)
 
   useEffect(() => {
     function handler(e) {
@@ -206,49 +162,22 @@ function ECPicker({ value, onChange, error }) {
     return () => document.removeEventListener("mousedown", handler)
   }, [])
 
-  async function openPanel() {
-    const opening = !open
-    setOpen(opening)
-    setQuery("")
-    if (opening) {
-      const excludeIds = value.map(m => m.id)
-      const { data } = await supabase
-        .from("members").select("id, name, username")
-        .eq("active", true).order("name").limit(5)
-      setResults((data || []).filter(m => !excludeIds.includes(m.id)))
-    } else {
-      setResults([])
-    }
-  }
-
-  function search(q) {
-    setQuery(q)
-    clearTimeout(debounce.current)
-    const excludeIds = value.map(m => m.id)
-    if (q.length < 2) {
-      debounce.current = setTimeout(async () => {
-        const { data } = await supabase
-          .from("members").select("id, name, username")
-          .eq("active", true).order("name").limit(5)
-        setResults((data || []).filter(m => !excludeIds.includes(m.id)))
-      }, 100)
-      return
-    }
-    debounce.current = setTimeout(async () => {
-      const { data } = await supabase
-        .from("members").select("id, name, username")
-        .or(`name.ilike.%${q}%,username.ilike.%${q}%`)
-        .eq("active", true).limit(10)
-      setResults((data || []).filter(m => !excludeIds.includes(m.id)))
-    }, 250)
-  }
+  const excluded = value.map(m => m.id)
+  const pool     = members.filter(m => !excluded.includes(m.id))
+  const filtered = pool.filter(m =>
+    !query || (m.name || m.username || "").toLowerCase().includes(query.toLowerCase())
+  ).slice(0, query ? 10 : 5)
 
   function pick(m) {
     if (value.length >= 3) return
-    onChange([...value, m]); setOpen(false); setQuery(""); setResults([])
+    onChange([...value, m]); setOpen(false); setQuery("")
   }
-
   function remove(id) { onChange(value.filter(m => m.id !== id)) }
+
+  // Border: green when valid (≥1 EC), red when not
+  const triggerBorder = open
+    ? "var(--terracotta)"
+    : valid ? "var(--green)" : "var(--danger)"
 
   return (
     <div ref={containerRef}>
@@ -271,14 +200,11 @@ function ECPicker({ value, onChange, error }) {
         </div>
       )}
 
-      {/* Add trigger + panel */}
       {value.length < 3 && (
         <div style={{ position: "relative" }}>
-          {/* Trigger button */}
-          <div onClick={openPanel} style={{
+          <div onClick={() => { setOpen(o => !o); setQuery("") }} style={{
             ...INPUT, display: "flex", alignItems: "center", justifyContent: "space-between",
-            cursor: "pointer",
-            borderColor: error ? "var(--danger)" : open ? "var(--terracotta)" : "var(--border)",
+            cursor: "pointer", border: `1.5px solid ${triggerBorder}`,
           }}>
             <span style={{ color: "var(--text-dim)" }}>
               {value.length === 0 ? "Select coordinator…" : "Add another coordinator…"}
@@ -286,9 +212,7 @@ function ECPicker({ value, onChange, error }) {
             <span style={{ color: "var(--text-dim)", fontSize: "0.75rem",
               transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>▾</span>
           </div>
-          {error && <div style={{ color: "var(--danger)", fontSize: "0.78rem", marginTop: "0.25rem" }}>{error}</div>}
 
-          {/* Panel */}
           {open && (
             <div style={{
               position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 60,
@@ -296,16 +220,13 @@ function ECPicker({ value, onChange, error }) {
               boxShadow: "0 8px 24px rgba(0,0,0,0.12)", overflow: "hidden",
             }}>
               <div style={{ padding: "0.5rem 0.75rem", borderBottom: "1px solid var(--border)" }}>
-                <input
-                  autoFocus
-                  value={query} onChange={e => search(e.target.value)}
-                  placeholder="Type name to search…"
+                <input autoFocus value={query} onChange={e => setQuery(e.target.value)}
+                  placeholder="Search name…"
                   style={{ width: "100%", border: "none", background: "transparent",
-                    color: "var(--text)", fontSize: "0.9rem", outline: "none", fontFamily: "inherit" }}
-                />
+                    color: "var(--text)", fontSize: "0.9rem", outline: "none", fontFamily: "inherit" }} />
               </div>
               <div style={{ maxHeight: 220, overflowY: "auto" }}>
-                {results.map(m => (
+                {filtered.map(m => (
                   <div key={m.id} onClick={() => pick(m)} style={{
                     padding: "0.65rem 1rem", cursor: "pointer", borderBottom: "1px solid var(--border)",
                     fontSize: "0.88rem", color: "var(--text)",
@@ -316,11 +237,11 @@ function ECPicker({ value, onChange, error }) {
                     )}
                   </div>
                 ))}
-                {query.length >= 2 && results.length === 0 && (
-                  <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No members found</div>
+                {filtered.length === 0 && pool.length === 0 && (
+                  <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No more members to add</div>
                 )}
-                {query.length < 2 && results.length === 0 && (
-                  <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.82rem" }}>Type at least 2 characters…</div>
+                {filtered.length === 0 && pool.length > 0 && (
+                  <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No match — try a different name</div>
                 )}
               </div>
             </div>
@@ -465,6 +386,7 @@ function LocationField({ locationType, location, onTypeChange, onLocationChange 
 // ── Social Event Form (slide-over) ────────────────────────────────────────────
 function SocialEventForm({ event, session, onClose, onSaved }) {
   const editing = !!event
+  const [allMembers, setAllMembers] = useState([])
 
   const [form, setForm] = useState({
     title:                 event?.title               || "",
@@ -488,6 +410,13 @@ function SocialEventForm({ event, session, onClose, onSaved }) {
   const [ecError,      setEcError]      = useState(null)
   const [saving,       setSaving]       = useState(false)
   const [error,        setError]        = useState(null)
+
+  useEffect(() => {
+    // Load all active members once for pickers
+    supabase.from("members").select("id, name, username")
+      .eq("active", true).order("name")
+      .then(({ data }) => setAllMembers(data || []))
+  }, [])
 
   useEffect(() => {
     if (!editing) return
@@ -561,7 +490,8 @@ function SocialEventForm({ event, session, onClose, onSaved }) {
           <div style={FIELD}>
             <label style={LABEL}>Event Name <span style={{ color: "var(--danger)" }}>*</span></label>
             <input value={form.title} onChange={e => set("title", e.target.value)}
-              placeholder="e.g. Wine & Cheese Evening" style={INPUT} />
+              placeholder="e.g. Wine & Cheese Evening"
+              style={{ ...INPUT, border: `1.5px solid ${form.title.trim() ? "var(--green)" : "var(--danger)"}` }} />
           </div>
 
           {/* Date + Time */}
@@ -571,7 +501,7 @@ function SocialEventForm({ event, session, onClose, onSaved }) {
               <input type="date" value={form.event_date}
                 onChange={e => set("event_date", e.target.value)}
                 onClick={e => e.currentTarget.showPicker?.()}
-                style={INPUT} />
+                style={{ ...INPUT, border: `1.5px solid ${form.event_date ? "var(--green)" : "var(--danger)"}` }} />
               {form.event_date && (
                 <div style={{ fontSize: "0.75rem", color: "var(--terracotta)", fontWeight: 600, marginTop: "0.3rem" }}>
                   {localDate(form.event_date)?.toLocaleDateString("en-AU", { weekday: "long" })}
@@ -612,7 +542,8 @@ function SocialEventForm({ event, session, onClose, onSaved }) {
           {/* EC — mandatory */}
           <div style={FIELD}>
             <label style={LABEL}>Event Coordinator(s) <span style={{ color: "var(--danger)" }}>*</span> — max 3</label>
-            <ECPicker value={coordinators} onChange={v => { setCoordinators(v); setEcError(null) }} error={ecError} />
+            <ECPicker members={allMembers} value={coordinators} onChange={v => { setCoordinators(v); setEcError(null) }} valid={coordinators.length > 0} />
+            {ecError && <div style={{ color: "var(--danger)", fontSize: "0.78rem", marginTop: "0.25rem" }}>{ecError}</div>}
           </div>
 
           {/* Bus */}
@@ -622,7 +553,7 @@ function SocialEventForm({ event, session, onClose, onSaved }) {
           {form.has_bus && (
             <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
               <label style={LABEL}>Bus Driver (optional)</label>
-              <MemberPicker value={busDriver} onChange={setBusDriver}
+              <MemberPicker members={allMembers} value={busDriver} onChange={setBusDriver}
                 placeholder="Search for bus driver…"
                 excludeIds={coordinators.map(m => m.id)} />
             </div>

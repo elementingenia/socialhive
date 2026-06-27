@@ -361,7 +361,7 @@ function BookPicker({ onSelect, initialBook }) {
 }
 
 // ── Coordinator Typeahead Picker ─────────────────────────────────────────────
-function CoordPicker({ members, value, onChange }) {
+function CoordPicker({ members, value, onChange, valid = false }) {
   const chosen = members.find(m => m.id === value) || null
   const [query,  setQuery]  = useState("")
   const [open,   setOpen]   = useState(false)
@@ -379,12 +379,13 @@ function CoordPicker({ members, value, onChange }) {
     return () => document.removeEventListener("mousedown", handleClick)
   }, [])
 
+  const borderCol = open ? "var(--purple)" : valid ? "var(--green)" : "var(--danger)"
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
       <div
         onClick={() => { setOpen(o => !o); setQuery("") }}
         style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: 10,
-          border: "1px solid var(--border)", background: "var(--surface)",
+          border: `1.5px solid ${borderCol}`, background: "var(--surface)",
           color: chosen ? "var(--text)" : "var(--text-dim)", fontSize: "0.95rem",
           boxSizing: "border-box", fontFamily: "inherit", cursor: "pointer",
           display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -558,22 +559,23 @@ function AdminEventForm({ event, members, onSave, onClose }) {
       </div>
 
       <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Meeting Date *</label>
+        <label style={labelStyle}>Meeting Date <span style={{ color: "var(--danger)" }}>*</span></label>
         <input type="date" value={form.event_date} onChange={e => set("event_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
-          style={inputStyle} />
+          style={{ ...inputStyle, border: `1.5px solid ${form.event_date ? "var(--green)" : "var(--danger)"}` }} />
       </div>
 
       <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Book *</label>
+        <label style={labelStyle}>Book <span style={{ color: "var(--danger)" }}>*</span></label>
         <BookPicker onSelect={setSelectedBook} initialBook={event?.books || null} />
       </div>
 
       <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Event Coordinator</label>
+        <label style={labelStyle}>Event Coordinator <span style={{ color: "var(--danger)" }}>*</span></label>
         <CoordPicker
           members={members}
           value={form.coordinator_id}
           onChange={id => set("coordinator_id", id)}
+          valid={!!form.coordinator_id}
         />
       </div>
 
