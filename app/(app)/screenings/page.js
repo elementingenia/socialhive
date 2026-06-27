@@ -224,7 +224,7 @@ function CoordPicker({ members, value, onChange, valid = false }) {
 
   const filtered = members.filter(m =>
     !query || (m.name || m.username || "").toLowerCase().includes(query.toLowerCase())
-  ).slice(0, query.length >= 2 ? 10 : 5)
+  )
 
   useEffect(() => {
     function handleClick(e) {
@@ -262,7 +262,7 @@ function CoordPicker({ members, value, onChange, valid = false }) {
                 color: "var(--text)", fontSize: "0.9rem", outline: "none", fontFamily: "inherit" }}
             />
           </div>
-          <div style={{ maxHeight: 220, overflowY: "auto" }}>
+          <div style={{ maxHeight: 300, overflowY: "auto" }}>
             {value && (
               <div
                 onClick={() => { onChange(""); setOpen(false) }}
@@ -285,12 +285,7 @@ function CoordPicker({ members, value, onChange, valid = false }) {
             {filtered.length === 0 && (
               <div style={{ padding: "0.9rem 1rem", fontSize: "0.85rem", color: "var(--text-dim)" }}>No match</div>
             )}
-            {members.length > 5 && !query && (
-              <div style={{ padding: "0.5rem 1rem", fontSize: "0.72rem", color: "var(--text-dim)",
-                borderTop: "1px solid var(--border)" }}>
-                Type to search all {members.length} members
-              </div>
-            )}
+
           </div>
         </div>
       )}
@@ -331,7 +326,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   }, [])
 
   const moviePool = movies.filter(m => !movieQuery || m.title.toLowerCase().includes(movieQuery.toLowerCase()))
-  const movieFiltered = moviePool.slice(0, movieQuery ? 40 : 5)
+  const movieFiltered = moviePool
 
   useEffect(() => {
     if (!movieOpen) return
