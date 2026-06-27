@@ -373,7 +373,7 @@ export default function SocialHome() {
         onOpen={() => nextEvent && openEventSlideOut(nextEvent)}
       />
 
-      <MyBookingsCard bookings={myAllBookings} onViewAll={() => router.push("/bookings")} />
+      <MyBookingsCard bookings={myAllBookings} onViewAll={() => router.push("/social/events")} />
 
       {fullEvent && (
         <EventSlideOut event={fullEvent} onClose={() => setFullEvent(null)}
