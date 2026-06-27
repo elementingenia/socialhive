@@ -122,6 +122,7 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
   const [score,      setScore]      = useState(myVote?.score || 0)
   const [saving,     setSaving]     = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
+  const [showGrid,   setShowGrid]   = useState(!(myVote?.score > 0))
 
   const communityScore = book.avg_score ? parseFloat(book.avg_score).toFixed(1) : null
   const voteCount      = book.vote_count || 0
@@ -140,6 +141,7 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
       return
     }
     setScore(s)
+    setShowGrid(false)
     setSaving(false)
     onVote()
   }
@@ -233,31 +235,40 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
       {/* Rate This Book */}
       <div style={{ padding: "0.75rem 0.85rem 0.9rem", borderTop: "1px solid var(--border)" }}>
         <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase",
-          letterSpacing: "0.06em", marginBottom: score > 0 ? 4 : "0.5rem" }}>
+          letterSpacing: "0.06em", marginBottom: 4 }}>
           {score > 0 ? "Your Rating" : "Rate This Book"}
         </div>
         {score > 0 && (
-          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.5rem" }}>
-            You rated this {score}/10 — tap to change
+          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: showGrid ? "0.5rem" : 0 }}>
+            You rated this {score}/10 —{" "}
+            <button onClick={() => setShowGrid(g => !g)}
+              style={{ background: "none", border: "none", color: "var(--purple)", fontWeight: 700,
+                fontSize: "0.78rem", cursor: "pointer", padding: 0, fontFamily: "inherit" }}>
+              {showGrid ? "hide" : "tap to change"}
+            </button>
           </div>
         )}
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: "var(--text-dim)", marginBottom: "0.35rem" }}>
-          <span>← Not interested (1)</span><span>(10) Can't wait! →</span>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.35rem" }}>
-          {[1,2,3,4,5,6,7,8,9,10].map(s => (
-            <button key={s} onClick={() => vote(s)} disabled={saving}
-              style={{ padding: "0.5rem 0", borderRadius: 10,
-                border: score === s ? "2px solid var(--purple)" : "1.5px solid var(--border)",
-                background: score === s ? "var(--purple)" : "var(--surface)",
-                color: score === s ? "#fff" : "var(--text)",
-                fontSize: "0.9rem", fontWeight: 700,
-                cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.5 : 1,
-                fontFamily: "inherit" }}>
-              {s}
-            </button>
-          ))}
-        </div>
+        {showGrid && (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: "var(--text-dim)", marginBottom: "0.35rem" }}>
+              <span>← Not interested (1)</span><span>(10) Can't wait! →</span>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.35rem" }}>
+              {[1,2,3,4,5,6,7,8,9,10].map(s => (
+                <button key={s} onClick={() => vote(s)} disabled={saving}
+                  style={{ padding: "0.5rem 0", borderRadius: 10,
+                    border: score === s ? "2px solid var(--purple)" : "1.5px solid var(--border)",
+                    background: score === s ? "var(--purple)" : "var(--surface)",
+                    color: score === s ? "#fff" : "var(--text)",
+                    fontSize: "0.9rem", fontWeight: 700,
+                    cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.5 : 1,
+                    fontFamily: "inherit" }}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
