@@ -72,10 +72,17 @@ function CapacityBar({ booked, max, waitlist }) {
 }
 
 // ── Member picker — prop-based, in-memory filter (matches Book Club CoordPicker) ──
-function MemberPicker({ members = [], value, onChange, placeholder = "Select member…", excludeIds = [] }) {
-  const [open,  setOpen]  = useState(false)
-  const [query, setQuery] = useState("")
-  const containerRef      = useRef(null)
+function MemberPicker({ value, onChange, placeholder = "Select member…", excludeIds = [] }) {
+  const [open,    setOpen]    = useState(false)
+  const [query,   setQuery]   = useState("")
+  const [members, setMembers] = useState([])
+  const containerRef          = useRef(null)
+
+  useEffect(() => {
+    supabase.from("members").select("id, name, username")
+      .eq("active", true).order("name")
+      .then(({ data }) => setMembers(data || []))
+  }, [])
 
   useEffect(() => {
     function handler(e) {
@@ -138,8 +145,11 @@ function MemberPicker({ members = [], value, onChange, placeholder = "Select mem
                 )}
               </div>
             ))}
-            {filtered.length === 0 && (
-              <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No members found</div>
+            {members.length === 0 && (
+              <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>Loading members…</div>
+            )}
+            {members.length > 0 && filtered.length === 0 && query && (
+              <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No match for "{query}"</div>
             )}
           </div>
         </div>
@@ -149,10 +159,17 @@ function MemberPicker({ members = [], value, onChange, placeholder = "Select mem
 }
 
 // ── EC multi-picker — prop-based, in-memory filter (matches Book Club CoordPicker) ──
-function ECPicker({ members = [], value, onChange, valid }) {
-  const [open,  setOpen]  = useState(false)
-  const [query, setQuery] = useState("")
-  const containerRef      = useRef(null)
+function ECPicker({ value, onChange, valid }) {
+  const [open,    setOpen]    = useState(false)
+  const [query,   setQuery]   = useState("")
+  const [members, setMembers] = useState([])
+  const containerRef          = useRef(null)
+
+  useEffect(() => {
+    supabase.from("members").select("id, name, username")
+      .eq("active", true).order("name")
+      .then(({ data }) => setMembers(data || []))
+  }, [])
 
   useEffect(() => {
     function handler(e) {
@@ -237,11 +254,14 @@ function ECPicker({ members = [], value, onChange, valid }) {
                     )}
                   </div>
                 ))}
-                {filtered.length === 0 && pool.length === 0 && (
-                  <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No more members to add</div>
+                {members.length === 0 && (
+                  <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>Loading members…</div>
                 )}
-                {filtered.length === 0 && pool.length > 0 && (
-                  <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No match — try a different name</div>
+                {members.length > 0 && filtered.length === 0 && !query && (
+                  <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>All coordinators already added</div>
+                )}
+                {members.length > 0 && filtered.length === 0 && query && (
+                  <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No match for "{query}"</div>
                 )}
               </div>
             </div>
@@ -386,8 +406,6 @@ function LocationField({ locationType, location, onTypeChange, onLocationChange 
 // ── Social Event Form (slide-over) ────────────────────────────────────────────
 function SocialEventForm({ event, session, onClose, onSaved }) {
   const editing = !!event
-  const [allMembers, setAllMembers] = useState([])
-
   const [form, setForm] = useState({
     title:                 event?.title               || "",
     event_date:            event?.event_date          || "",
@@ -410,13 +428,6 @@ function SocialEventForm({ event, session, onClose, onSaved }) {
   const [ecError,      setEcError]      = useState(null)
   const [saving,       setSaving]       = useState(false)
   const [error,        setError]        = useState(null)
-
-  useEffect(() => {
-    // Load all active members once for pickers
-    supabase.from("members").select("id, name, username")
-      .eq("active", true).order("name")
-      .then(({ data }) => setAllMembers(data || []))
-  }, [])
 
   useEffect(() => {
     if (!editing) return
@@ -542,7 +553,7 @@ function SocialEventForm({ event, session, onClose, onSaved }) {
           {/* EC — mandatory */}
           <div style={FIELD}>
             <label style={LABEL}>Event Coordinator(s) <span style={{ color: "var(--danger)" }}>*</span> — max 3</label>
-            <ECPicker members={allMembers} value={coordinators} onChange={v => { setCoordinators(v); setEcError(null) }} valid={coordinators.length > 0} />
+            <ECPicker value={coordinators} onChange={v => { setCoordinators(v); setEcError(null) }} valid={coordinators.length > 0} />
             {ecError && <div style={{ color: "var(--danger)", fontSize: "0.78rem", marginTop: "0.25rem" }}>{ecError}</div>}
           </div>
 
@@ -553,7 +564,7 @@ function SocialEventForm({ event, session, onClose, onSaved }) {
           {form.has_bus && (
             <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
               <label style={LABEL}>Bus Driver (optional)</label>
-              <MemberPicker members={allMembers} value={busDriver} onChange={setBusDriver}
+              <MemberPicker value={busDriver} onChange={setBusDriver}
                 placeholder="Search for bus driver…"
                 excludeIds={coordinators.map(m => m.id)} />
             </div>
