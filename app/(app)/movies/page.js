@@ -220,7 +220,7 @@ function MyMovieBookingsSheet({ bookings, session, onClose, onRefresh }) {
 }
 
 // ── My Bookings Card (→ /bookings) ────────────────────────────────────────────
-function MyBookingsCard({ bookings, onViewAll }) {
+function MyBookingsCard({ bookings, onViewAll, onOpenEvent }) {
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const upcoming = bookings.filter(b => b.status !== 'cancelled' && b.events?.hub_type === 'movie' && localDate(b.events?.event_date) >= today)
 
@@ -248,7 +248,7 @@ function MyBookingsCard({ bookings, onViewAll }) {
         {groups.slice(0, 3).map(({ ev, confirmed, waitlist }, i) => {
           const movie = ev?.movies || ev?.movie_snapshot
           return (
-            <div key={ev?.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderTop: i > 0 ? '1px solid var(--border)' : 'none' }}>
+            <div key={ev?.id} onClick={() => onOpenEvent?.(ev?.id)} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderTop: i > 0 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}>
               {movie?.poster_url ? (
                 <img src={movie.poster_url} alt="" style={{ width: 40, height: 60, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
               ) : (
@@ -264,6 +264,7 @@ function MyBookingsCard({ bookings, onViewAll }) {
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 {confirmed > 0 && <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--teal)' }}>✓ {confirmed} seat{confirmed !== 1 ? 's' : ''}</div>}
                 {waitlist > 0 && <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--amber-dark)' }}>⏳ +{waitlist} waitlist</div>}
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '0.2rem' }}>Tap to manage →</div>
               </div>
             </div>
           )
@@ -478,6 +479,7 @@ function WelcomeBanner({ text, colour = "var(--teal)" }) {
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function MoviesHomePage() {
+  const router = useRouter()
   const [loading, setLoading]     = useState(true)
   const [welcomeText, setWelcomeText] = useState('')
   const [nextEvent, setNextEvent] = useState(null)
@@ -487,7 +489,6 @@ export default function MoviesHomePage() {
   const [unvoted, setUnvoted]     = useState([])
   const [memberId, setMemberId]   = useState(null)
   const [swiperDone, setSwiperDone] = useState(false)
-  const [showMyBookings, setShowMyBookings] = useState(false)
   const [session, setSession] = useState(null)
   const [slideOutEvent, setSlideOutEvent] = useState(null)
 
@@ -557,25 +558,32 @@ export default function MoviesHomePage() {
 
   useEffect(() => { load() }, [load])
 
-  async function openSlideOut() {
-    if (!nextEvent?.id || !memberId) return
-    // Fetch fresh booking counts and user's own bookings for the slide-over
+  // Opens EventSlideOut for any movie event by ID.
+  // Fetches full event + booking counts fresh on every open — always current.
+  async function openSlideOutForEvent(eventId, baseEvent = null) {
+    if (!eventId || !memberId) return
     const [
+      { data: eventData },
       { data: myRows },
       { count: confirmedCount },
       { count: waitlistCount },
     ] = await Promise.all([
+      supabase.from('events')
+        .select('*, movies(id, title, poster_url, genre, runtime, year, rating_imdb, rating_rt, imdb_id, plot)')
+        .eq('id', eventId).single(),
       supabase.from('bookings').select('id, status, seats, payment_status')
-        .eq('event_id', nextEvent.id).eq('member_id', memberId).neq('status', 'cancelled'),
+        .eq('event_id', eventId).eq('member_id', memberId).neq('status', 'cancelled'),
       supabase.from('bookings').select('*', { count: 'exact', head: true })
-        .eq('event_id', nextEvent.id).eq('status', 'confirmed'),
+        .eq('event_id', eventId).eq('status', 'confirmed'),
       supabase.from('bookings').select('*', { count: 'exact', head: true })
-        .eq('event_id', nextEvent.id).eq('status', 'waitlist'),
+        .eq('event_id', eventId).eq('status', 'waitlist'),
     ])
+    const ev = eventData || baseEvent
+    if (!ev) return
     setSlideOutEvent({
-      ...nextEvent,
+      ...ev,
       hub_type: 'movie',
-      movie: nextEvent.movies || null,
+      movie: ev.movies || null,
       bookings_count: confirmedCount || 0,
       waitlist_count: waitlistCount || 0,
       my_bookings: (myRows || []).map(b => ({ status: b.status, seats: b.seats || 1, payment_status: b.payment_status })),
@@ -598,7 +606,7 @@ export default function MoviesHomePage() {
       <WelcomeBanner text={welcomeText} colour="var(--teal)" />
 
       {nextEvent ? (
-        <NextScreeningCard event={nextEvent} myBooking={nextBookingSummary} coordinator={nextEventCoordinator} onOpen={openSlideOut} />
+        <NextScreeningCard event={nextEvent} myBooking={nextBookingSummary} coordinator={nextEventCoordinator} onOpen={() => openSlideOutForEvent(nextEvent.id, nextEvent)} />
       ) : (
         <div style={{ background: 'var(--surface)', borderRadius: '16px', border: '1px solid var(--border)', padding: '1.5rem 1.25rem', textAlign: 'center', marginBottom: '1.25rem', boxShadow: 'var(--shadow)' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🎬</div>
@@ -607,7 +615,7 @@ export default function MoviesHomePage() {
         </div>
       )}
 
-      <MyBookingsCard bookings={myBookings} onViewAll={() => setShowMyBookings(true)} />
+      <MyBookingsCard bookings={myBookings} onViewAll={() => router.push('/screenings')} onOpenEvent={id => openSlideOutForEvent(id)} />
 
       {!swiperDone && unvoted.length > 0 && memberId && (
         <RatingSwiper movies={unvoted} memberId={memberId} onDone={() => setSwiperDone(true)} />
@@ -620,16 +628,7 @@ export default function MoviesHomePage() {
         onRefresh={() => { setSlideOutEvent(null); load() }}
       />
 
-      {showMyBookings && session && (
-        <MyMovieBookingsSheet
-          bookings={myBookings}
-          session={session}
-          onClose={() => setShowMyBookings(false)}
-          onRefresh={load}
-        />
-      )}
-
-      {(swiperDone || unvoted.length === 0) && (
+{(swiperDone || unvoted.length === 0) && (
         <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '1.5rem 0' }}>
           <div style={{ fontSize: '0.88rem' }}>You&apos;re all caught up on ratings!</div>
         </div>
