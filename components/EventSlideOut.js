@@ -601,7 +601,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
 
   useEffect(() => {
     if (event) {
-      requestAnimationFrame(() => setOpen(true))
+      setTimeout(() => setOpen(true), 16)
       // Load coordinators for this event
       supabase
         .from("event_coordinators")
