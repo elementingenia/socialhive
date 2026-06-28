@@ -675,7 +675,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
 
           {/* Date/time */}
           <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: event.location ? 4 : 10, fontWeight: 500 }}>
-            📅 {fmtDate(event.event_date)} at {fmtTime(event.event_time)}
+            📅 {fmtDate(event.event_date)}{event.event_time ? ` at ${fmtTime(event.event_time)}` : ''}
           </div>
 
           {/* Location — shown for social/outings events */}
