@@ -248,7 +248,7 @@ function MyBookingsCard({ bookings, onViewAll, onOpenEvent }) {
         {groups.slice(0, 3).map(({ ev, confirmed, waitlist }, i) => {
           const movie = ev?.movies || ev?.movie_snapshot
           return (
-            <div key={ev?.id} onClick={() => onOpenEvent?.(ev?.id)} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderTop: i > 0 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}>
+            <div key={ev?.id} onClick={e => { e.stopPropagation(); onOpenEvent?.(ev?.id) }} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderTop: i > 0 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}>
               {movie?.poster_url ? (
                 <img src={movie.poster_url} alt="" style={{ width: 40, height: 60, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
               ) : (
