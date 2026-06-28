@@ -4,11 +4,12 @@ import { FormattedText } from "@/lib/textFormatter"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
+import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon } from "@/components/NavIcons"
 
 const HUBS = [
-  { key: "movies",   label: "Movies",    icon: "🎬", path: "/movies",   colour: "var(--teal)" },
-  { key: "social",   label: "Social",    icon: "🎉", path: "/social",   colour: "var(--terracotta)" },
-  { key: "bookclub", label: "Book Club", icon: "📚", path: "/bookclub", colour: "var(--purple)" },
+  { key: "movies",   label: "Movies",    Icon: MoviesIcon,   path: "/movies",   colour: "var(--teal)" },
+  { key: "social",   label: "Social",    Icon: SocialIcon,   path: "/social",   colour: "var(--terracotta)" },
+  { key: "bookclub", label: "Book Club", Icon: BookClubIcon, path: "/bookclub", colour: "var(--purple)" },
 ]
 
 // Render HTML (WYSIWYG) or legacy BBCode content
@@ -62,7 +63,7 @@ function HubTiles() {
           padding: "0.65rem 0.25rem", display: "flex", flexDirection: "column",
           alignItems: "center", gap: "0.3rem", cursor: "pointer",
         }}>
-          <span style={{ fontSize: "1.35rem" }}>{h.icon}</span>
+          <span style={{ color: h.colour, lineHeight: 0 }}><h.Icon size={36} /></span>
           <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--text)", lineHeight: 1.2, textAlign: "center" }}>{h.label}</span>
         </button>
       ))}
@@ -126,7 +127,7 @@ function BarTabCard({ memberId }) {
       alignItems: "center", justifyContent: "space-between", marginTop: "0.5rem",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-        <span style={{ fontSize: "1.4rem" }}>🍺</span>
+        <span style={{ color: "var(--amber)", lineHeight: 0 }}><BarIcon size={28} /></span>
         <div>
           <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>My Bar Tab</div>
           <div style={{ fontSize: "0.75rem", color: hasOutstanding ? "var(--amber-dark)" : "var(--text-dim)" }}>
