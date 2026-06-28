@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
+import { BusIcon } from "@/components/NavIcons"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -721,7 +722,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
         {/* Bus driver */}
         {event.has_bus && event.bus_driver && (
           <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.2rem" }}>
-            🚌 {event.bus_driver.name || event.bus_driver.username}
+            <BusIcon size={14} /> {event.bus_driver.name || event.bus_driver.username}
           </div>
         )}
 

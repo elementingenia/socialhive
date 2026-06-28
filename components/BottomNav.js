@@ -2,65 +2,42 @@
 import React from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
-import { getActiveHub, HUB_COLOURS } from "@/lib/navUtils"
-
-// Hub icon images live in /public/icons/ — drop PNG files in to activate
-// Falls back to emoji if file isn't present yet
-const HUB_ICONS = {
-  moviesHome:      "/icons/movies-home.png",
-  moviesScheduled: "/icons/movies-scheduled.png",
-  bookclubHome:    "/icons/bookclub-home.png",
-  socialHome:      "/icons/social-home.png",
-}
-
-function NavIcon({ imgKey, icon, active, colour }) {
-  const [imgFailed, setImgFailed] = React.useState(false)
-  if (imgKey && HUB_ICONS[imgKey] && !imgFailed) {
-    return (
-      <img
-        src={HUB_ICONS[imgKey]}
-        alt=""
-        aria-hidden="true"
-        style={{ width: 26, height: 26, objectFit: "contain",
-          opacity: active ? 1 : 0.5,
-          filter: active ? "none" : "grayscale(40%)" }}
-        onError={() => setImgFailed(true)}
-      />
-    )
-  }
-  return <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>{icon}</span>
-}
+import { getActiveHub } from "@/lib/navUtils"
+import {
+  HomeIcon, MoviesIcon, CalendarIcon, SuggestionsIcon, DVDIcon,
+  BookClubIcon, SocialIcon, AdminIcon, BookingsIcon, BarIcon,
+} from "@/components/NavIcons"
 
 const HUB_CONFIG = {
   movies: {
     colour: "var(--teal)",
     items: [
-      { path: "/movies",    label: "Movies Home", imgKey: "moviesHome",      icon: "🎬" },
-      { path: "/screenings",label: "Scheduled",   imgKey: "moviesScheduled", icon: "📅" },
-      { path: "/library",   label: "Suggestions", icon: "🗳️" },
-      { path: "/dvd",       label: "DVDs",        icon: "💿" },
+      { path: "/movies",    label: "Movies Home", Icon: MoviesIcon },
+      { path: "/screenings",label: "Scheduled",   Icon: CalendarIcon },
+      { path: "/library",   label: "Suggestions", Icon: SuggestionsIcon },
+      { path: "/dvd",       label: "DVDs",        Icon: DVDIcon },
     ],
   },
   bookclub: {
     colour: "var(--purple)",
     items: [
-      { path: "/bookclub",             label: "Book Club Home", imgKey: "bookclubHome", icon: "📖" },
-      { path: "/bookclub/suggestions", label: "Suggestions",   icon: "📬" },
+      { path: "/bookclub",             label: "Book Club", Icon: BookClubIcon },
+      { path: "/bookclub/suggestions", label: "Suggest",   Icon: SuggestionsIcon },
     ],
   },
   social: {
     colour: "var(--terracotta)",
     items: [
-      { path: "/social",        label: "Home",      imgKey: "socialHome", icon: "🥂" },
-      { path: "/social/events", label: "Scheduled", icon: "📅" },
+      { path: "/social",        label: "Social",    Icon: SocialIcon },
+      { path: "/social/events", label: "Scheduled", Icon: CalendarIcon },
     ],
   },
 }
 
 export default function BottomNav() {
-  const pathname               = usePathname()
-  const router                 = useRouter()
-  const { isAdmin, barOptIn }  = useUser()
+  const pathname              = usePathname()
+  const router                = useRouter()
+  const { isAdmin, barOptIn } = useUser()
 
   const activeHub = getActiveHub(pathname)
   const hub       = activeHub ? HUB_CONFIG[activeHub] : null
@@ -88,12 +65,12 @@ export default function BottomNav() {
   // ── Hub nav ───────────────────────────────────────────────────────────────
   if (activeHub && hub) {
     const hubNavItems = [
-      { path: "/home", label: "Home", icon: "🏠", exact: true },
+      { path: "/home", label: "Home", Icon: HomeIcon, exact: true },
       ...hub.items.map((item, i) => ({ ...item, exact: i === 0 })),
     ]
     return (
       <nav style={navBase}>
-        {hubNavItems.map(({ path, label, icon, imgKey, exact }) => {
+        {hubNavItems.map(({ path, label, Icon, exact }) => {
           const active = exact
             ? pathname === path
             : pathname === path || pathname.startsWith(path + "/")
@@ -101,7 +78,7 @@ export default function BottomNav() {
           return (
             <button key={path} onClick={() => router.push(path)}
               style={btn(active, colour)} aria-current={active ? "page" : undefined}>
-              <NavIcon imgKey={imgKey} icon={icon} active={active} colour={colour} />
+              <Icon size={26} />
               {label}
             </button>
           )
@@ -112,16 +89,15 @@ export default function BottomNav() {
 
   // ── Default nav ───────────────────────────────────────────────────────────
   const defaultItems = [
-    { path: "/home",     label: "Home",     icon: "🏠" },
-    { path: "/calendar", label: "Calendar", icon: "📅" },
-    { path: "/bookings", label: "Bookings", icon: "🎟️" },
-    ...(barOptIn && !isAdmin ? [{ path: "/bar", label: "Bar", icon: "🍺" }] : []),
-    ...(isAdmin             ? [{ path: "/admin", label: "Admin", icon: "⚙️" }] : []),
+    { path: "/home",     label: "Home",     Icon: HomeIcon },
+    { path: "/calendar", label: "Calendar", Icon: CalendarIcon },
+    { path: "/bookings", label: "Bookings", Icon: BookingsIcon },
+    ...(barOptIn && !isAdmin ? [{ path: "/bar",   label: "Bar",   Icon: BarIcon   }] : []),
+    ...(isAdmin              ? [{ path: "/admin", label: "Admin", Icon: AdminIcon }] : []),
   ]
 
   function handleDefaultNav(path) {
     if (path === "/admin" && pathname === "/admin") {
-      // Already on admin — dispatch reset to clear any open sub-tab
       window.dispatchEvent(new CustomEvent("admin-reset"))
     } else {
       router.push(path)
@@ -130,12 +106,12 @@ export default function BottomNav() {
 
   return (
     <nav style={navBase}>
-      {defaultItems.map(({ path, label, icon }) => {
+      {defaultItems.map(({ path, label, Icon }) => {
         const active = pathname === path
         return (
           <button key={path} onClick={() => handleDefaultNav(path)}
             style={btn(active)} aria-current={active ? "page" : undefined}>
-            <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>{icon}</span>
+            <Icon size={26} />
             {label}
           </button>
         )

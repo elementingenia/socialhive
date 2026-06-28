@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
 import { HUB_COLOURS } from "@/lib/navUtils"
+import { BusIcon } from "@/components/NavIcons"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 
@@ -755,7 +756,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
               {/* Bus driver — social/outings offsite only */}
               {(event.hub_type === "social" || event.hub_type === "outings") && event.has_bus && event.bus_driver && (
                 <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>
-                  🚌 {event.bus_driver.name || event.bus_driver.username}
+                  <BusIcon size={14} /> {event.bus_driver.name || event.bus_driver.username}
                 </div>
               )}
 
