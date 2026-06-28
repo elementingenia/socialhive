@@ -71,6 +71,47 @@ function CapacityBar({ booked, max, waitlist }) {
   )
 }
 
+
+// ── Booking Status Strip ───────────────────────────────────────────────────────
+// Always-visible bottom strip — shows booking state and tells the user what tapping does
+function BookingStrip({ myBooking, isFull }) {
+  const isConfirmed = myBooking?.status === "confirmed"
+  const isWaitlist  = myBooking?.status === "waitlist"
+  const seats       = myBooking?.seats || 1
+  const base = { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.55rem 1rem", fontSize: "0.82rem", fontWeight: 600, gap: "0.5rem" }
+
+  if (isConfirmed) {
+    return (
+      <div style={{ ...base, background: "#f0fdf4", borderTop: "1px solid #bbf7d0" }}>
+        <span style={{ color: "#15803d" }}>✓ {seats} seat{seats !== 1 ? "s" : ""} confirmed</span>
+        <span style={{ color: "#15803d", fontSize: "0.75rem" }}>Tap to modify or cancel →</span>
+      </div>
+    )
+  }
+  if (isWaitlist) {
+    return (
+      <div style={{ ...base, background: "#fffbeb", borderTop: "1px solid #fde68a" }}>
+        <span style={{ color: "#d97706" }}>⏳ On waitlist · {seats} seat{seats !== 1 ? "s" : ""}</span>
+        <span style={{ color: "#d97706", fontSize: "0.75rem" }}>Tap to manage →</span>
+      </div>
+    )
+  }
+  if (isFull) {
+    return (
+      <div style={{ ...base, background: "#fff7ed", borderTop: "1px solid #fed7aa" }}>
+        <span style={{ color: "#c2410c" }}>This event is full</span>
+        <span style={{ color: "#c2410c", fontSize: "0.75rem" }}>Tap to join the waitlist →</span>
+      </div>
+    )
+  }
+  return (
+    <div style={{ ...base, background: "rgba(176,84,64,0.06)", borderTop: "1px solid rgba(176,84,64,0.15)" }}>
+      <span style={{ color: "var(--terracotta)" }}>Book your spot</span>
+      <span style={{ color: "var(--terracotta)", fontSize: "0.75rem" }}>Tap to book →</span>
+    </div>
+  )
+}
+
 // ── Member picker — prop-based, in-memory filter (matches Book Club CoordPicker) ──
 function MemberPicker({ members = [], value, onChange, placeholder = "Select member…", excludeIds = [] }) {
   const [open,  setOpen]  = useState(false)
@@ -704,6 +745,8 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
 
         <CapacityBar booked={booked} max={event.max_seats} waitlist={waiting} />
       </div>
+      {/* Booking status strip — always visible */}
+      <BookingStrip myBooking={myBooking} isFull={booked >= event.max_seats && event.max_seats > 0} />
     </div>
   )
 }

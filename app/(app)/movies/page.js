@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { FormattedText } from '@/lib/textFormatter'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import EventSlideOut from '@/components/EventSlideOut'
 
 function parseGenres(g) {
   if (!g) return []
@@ -26,8 +27,7 @@ function fmtTime(str) {
 }
 
 // ── Next Screening Card (entire card clickable) ───────────────────────────────
-function NextScreeningCard({ event, myBooking, coordinator }) {
-  const router = useRouter()
+function NextScreeningCard({ event, myBooking, coordinator, onOpen }) {
   const movie = event.movies || event.movie_snapshot
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const evDate = localDate(event.event_date)
@@ -38,12 +38,12 @@ function NextScreeningCard({ event, myBooking, coordinator }) {
 
   return (
     <div
-      onClick={() => router.push('/screenings')}
+      onClick={onOpen}
       style={{ background: 'var(--surface)', borderRadius: '16px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow)', marginBottom: '1.25rem', cursor: 'pointer' }}
     >
       <div style={{ background: 'var(--teal)', padding: '0.6rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem' }}>Next Screening</span>
-        <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.78rem', fontWeight: 600 }}>{daysLabel} ›</span>
+        <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.78rem', fontWeight: 600 }}>{daysLabel} · Tap to book</span>
       </div>
       <div style={{ display: 'flex' }}>
         {movie?.poster_url ? (
@@ -489,6 +489,7 @@ export default function MoviesHomePage() {
   const [swiperDone, setSwiperDone] = useState(false)
   const [showMyBookings, setShowMyBookings] = useState(false)
   const [session, setSession] = useState(null)
+  const [slideOutEvent, setSlideOutEvent] = useState(null)
 
   const load = useCallback(async () => {
     fetch('/api/hub-settings').then(r => r.json()).then(d => setWelcomeText(d.movies?.text || '')).catch(() => {})
@@ -556,6 +557,31 @@ export default function MoviesHomePage() {
 
   useEffect(() => { load() }, [load])
 
+  async function openSlideOut() {
+    if (!nextEvent?.id || !memberId) return
+    // Fetch fresh booking counts and user's own bookings for the slide-over
+    const [
+      { data: myRows },
+      { count: confirmedCount },
+      { count: waitlistCount },
+    ] = await Promise.all([
+      supabase.from('bookings').select('id, status, seats, payment_status')
+        .eq('event_id', nextEvent.id).eq('member_id', memberId).neq('status', 'cancelled'),
+      supabase.from('bookings').select('*', { count: 'exact', head: true })
+        .eq('event_id', nextEvent.id).eq('status', 'confirmed'),
+      supabase.from('bookings').select('*', { count: 'exact', head: true })
+        .eq('event_id', nextEvent.id).eq('status', 'waitlist'),
+    ])
+    setSlideOutEvent({
+      ...nextEvent,
+      hub_type: 'movie',
+      movie: nextEvent.movies || null,
+      bookings_count: confirmedCount || 0,
+      waitlist_count: waitlistCount || 0,
+      my_bookings: (myRows || []).map(b => ({ status: b.status, seats: b.seats || 1, payment_status: b.payment_status })),
+    })
+  }
+
   if (loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}><div className="spinner" /></div>
   }
@@ -572,7 +598,7 @@ export default function MoviesHomePage() {
       <WelcomeBanner text={welcomeText} colour="var(--teal)" />
 
       {nextEvent ? (
-        <NextScreeningCard event={nextEvent} myBooking={nextBookingSummary} coordinator={nextEventCoordinator} />
+        <NextScreeningCard event={nextEvent} myBooking={nextBookingSummary} coordinator={nextEventCoordinator} onOpen={openSlideOut} />
       ) : (
         <div style={{ background: 'var(--surface)', borderRadius: '16px', border: '1px solid var(--border)', padding: '1.5rem 1.25rem', textAlign: 'center', marginBottom: '1.25rem', boxShadow: 'var(--shadow)' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🎬</div>
@@ -586,6 +612,13 @@ export default function MoviesHomePage() {
       {!swiperDone && unvoted.length > 0 && memberId && (
         <RatingSwiper movies={unvoted} memberId={memberId} onDone={() => setSwiperDone(true)} />
       )}
+
+      {/* Unified booking slide-over — same pattern as Social and Book Club */}
+      <EventSlideOut
+        event={slideOutEvent}
+        onClose={() => setSlideOutEvent(null)}
+        onRefresh={() => { setSlideOutEvent(null); load() }}
+      />
 
       {showMyBookings && session && (
         <MyMovieBookingsSheet
