@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
+import EventSlideOut from "@/components/EventSlideOut"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -28,9 +29,28 @@ function Toast({ msg }) {
   )
 }
 
-// ── Book Club Event Card ───────────────────────────────────────────────────────
-function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--purple)" }) {
-  const [loading,         setLoading]         = useState(false)
+// ── Booking Strip ────────────────────────────────────────────────────────────
+function BookingStrip({ isJoined }) {
+  const base = { display: "flex", alignItems: "center", justifyContent: "space-between",
+    padding: "0.55rem 1rem", fontSize: "0.82rem", fontWeight: 600, gap: "0.5rem" }
+  if (isJoined) {
+    return (
+      <div style={{ ...base, background: "#f0fdf4", borderTop: "1px solid #bbf7d0" }}>
+        <span style={{ color: "#15803d" }}>✓ You're attending</span>
+        <span style={{ color: "#15803d", fontSize: "0.75rem" }}>Tap to manage →</span>
+      </div>
+    )
+  }
+  return (
+    <div style={{ ...base, background: "rgba(124,58,237,0.06)", borderTop: "1px solid rgba(124,58,237,0.15)" }}>
+      <span style={{ color: "var(--purple)" }}>Join this session</span>
+      <span style={{ color: "var(--purple)", fontSize: "0.75rem" }}>Tap to sign up →</span>
+    </div>
+  )
+}
+
+// ── Book Club Event Card ─────────────────────────────────────────────────────
+function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) {
   const [summaryOpen,     setSummaryOpen]     = useState(false)
   const [attendeesOpen,   setAttendeesOpen]   = useState(false)
   const [attendees,       setAttendees]       = useState(null)
@@ -50,30 +70,21 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
       .eq("event_id", event.id)
       .eq("status", "confirmed")
     setAttendees((data || []).map(b => ({
-      name:  b.members?.hide_name ? "Resident" : (b.members?.name || b.members?.username || "Resident"),
+      name: b.members?.hide_name ? "Anonymous" : (b.members?.name || b.members?.username || "Member"),
       seats: b.seats || 1,
     })))
     setAttendeesLoading(false)
     setAttendeesOpen(true)
   }
-  const isJoined    = booking?.status === "confirmed"
-  const activeEC    = (event.event_coordinators || []).find(ec => !ec.replaced_at)
+
+  const isJoined = booking?.status === "confirmed"
+  const activeEC  = (event.event_coordinators || []).find(ec => !ec.replaced_at)
   const coordinator = activeEC?.members?.name || activeEC?.members?.username || null
 
-  async function handleSignUp() {
-    setLoading(true)
-    await onSignUp(event)
-    setLoading(false)
-  }
-  async function handleLeave() {
-    setLoading(true)
-    await onLeave(event)
-    setLoading(false)
-  }
-
   return (
-    <div style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",
-      overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 16 }}>
+    <div onClick={onOpen}
+      style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",
+        overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 16, cursor: "pointer" }}>
       {/* Card header */}
       <div style={{ background: colour, padding: "0.6rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.85rem" }}>{label}</span>
@@ -85,7 +96,7 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
         <div style={{ display: "flex", gap: 12, padding: "0.9rem 1rem", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
           {book.cover_url && (
             bookLink
-              ? <a href={bookLink} target="_blank" rel="noopener noreferrer">
+              ? <a href={bookLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
                   <img src={book.cover_url} alt={book.title}
                     style={{ width: 56, height: 80, objectFit: "cover", borderRadius: 6, flexShrink: 0, display: "block" }} />
                 </a>
@@ -94,7 +105,7 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
           )}
           <div style={{ flex: 1, minWidth: 0 }}>
             {bookLink
-              ? <a href={bookLink} target="_blank" rel="noopener noreferrer"
+              ? <a href={bookLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                   style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2, color: "var(--text)", textDecoration: "none", display: "block" }}>
                   {book.title}
                 </a>
@@ -120,32 +131,7 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
         </div>
       )}
 
-      <div style={{ padding: "0.9rem 1rem" }}>
-        {/* Participation — above description */}
-        <div style={{ marginBottom: 14 }}>
-          {isJoined ? (
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#dcfce7",
-                color: "#15803d", borderRadius: 20, padding: "5px 14px", fontSize: "0.82rem", fontWeight: 700 }}>
-                ✓ Participating
-              </div>
-              <button onClick={handleLeave} disabled={loading}
-                style={{ background: "transparent", border: "1px solid var(--danger)", color: "var(--danger)",
-                  borderRadius: 20, padding: "5px 14px", fontSize: "0.82rem", fontWeight: 700,
-                  cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1, fontFamily: "inherit" }}>
-                {loading ? "…" : "Leave"}
-              </button>
-            </div>
-          ) : (
-            <button onClick={handleSignUp} disabled={loading}
-              style={{ background: "var(--purple)", color: "#fff", border: "none", borderRadius: 20,
-                padding: "8px 20px", fontSize: "0.88rem", fontWeight: 700,
-                cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.6 : 1, fontFamily: "inherit" }}>
-              {loading ? "…" : "I want to Participate"}
-            </button>
-          )}
-        </div>
-
+      <div style={{ padding: "0.9rem 1rem 0.6rem" }}>
         {/* Event notes */}
         {event.description && (
           <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 10 }}>
@@ -176,13 +162,13 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
         {/* Show more / Show attendees row */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 4, paddingBottom: 2 }}>
           {book?.summary ? (
-            <button onClick={() => setSummaryOpen(o => !o)}
+            <button onClick={e => { e.stopPropagation(); setSummaryOpen(o => !o) }}
               style={{ background: "none", border: "none", color: "var(--purple)", fontSize: "0.78rem",
                 fontWeight: 700, cursor: "pointer", padding: "2px 0", fontFamily: "inherit" }}>
               {summaryOpen ? "Show less ▲" : "Show more ▼"}
             </button>
           ) : <span />}
-          <button onClick={toggleAttendees} disabled={attendeesLoading}
+          <button onClick={e => { e.stopPropagation(); toggleAttendees() }} disabled={attendeesLoading}
             style={{ background: "none", border: "none", color: "var(--purple)", fontSize: "0.78rem",
               fontWeight: 700, cursor: attendeesLoading ? "wait" : "pointer", padding: "2px 0", fontFamily: "inherit" }}>
             {attendeesLoading ? "Loading…" : attendeesOpen ? "Hide attendees ▲" : "Show attendees ▼"}
@@ -197,7 +183,6 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
                 <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0",
                   borderBottom: i < attendees.length - 1 ? "1px solid var(--border)" : "none" }}>
                   <span>{a.name}</span>
-                  <span style={{ color: "var(--text-dim)" }}>{a.seats} seat{a.seats > 1 ? "s" : ""}</span>
                 </div>
               ))
             ) : (
@@ -206,6 +191,9 @@ function EventCard({ event, label, booking, onSignUp, onLeave, colour = "var(--p
           </div>
         )}
       </div>
+
+      {/* Booking status strip */}
+      <BookingStrip isJoined={isJoined} />
     </div>
   )
 }
@@ -623,8 +611,33 @@ export default function BookClubHome() {
   const [toast,       setToast]       = useState(null)
   const [showForm,    setShowForm]    = useState(false)
   const [editEvent,   setEditEvent]   = useState(null)
+  const [slideOutEvent, setSlideOutEvent] = useState(null)
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 3000) }
+
+  function toSlideOutShape(ev, myBooking) {
+    return {
+      ...ev,
+      hub_type: "bookclub",
+      max_seats: 0,
+      bookings_count: 0,
+      waitlist_count: 0,
+      my_bookings: myBooking?.status === "confirmed"
+        ? [{ status: "confirmed", seats: 1, payment_status: null }]
+        : [],
+      book: ev.books || null,
+      payment_required: false,
+    }
+  }
+
+  function openSlideOut(ev) {
+    setSlideOutEvent(toSlideOutShape(ev, myBookings[ev.id]))
+  }
+
+  function handleSlideOutRefresh() {
+    setSlideOutEvent(null)
+    load()
+  }
 
   async function load() {
     setLoading(true)
@@ -804,8 +817,7 @@ export default function BookClubHome() {
           event={activeEvent}
           label={upcoming[0] ? "Current Meeting" : "Current Reading"}
           booking={myBookings[activeEvent.id]}
-          onSignUp={signUp}
-          onLeave={leave}
+          onOpen={() => openSlideOut(activeEvent)}
         />
       ) : (
         <div style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",
@@ -821,14 +833,20 @@ export default function BookClubHome() {
           event={nextEvent}
           label="Next Meeting"
           booking={myBookings[nextEvent.id]}
-          onSignUp={signUp}
-          onLeave={leave}
+          onOpen={() => openSlideOut(nextEvent)}
           colour="#7c3aed"
         />
       )}
 
       {/* Closed events */}
       <ClosedEventsAccordion events={closedEvents} myBookedIds={myBookedIds} />
+
+      {/* Unified booking slide-over */}
+      <EventSlideOut
+        event={slideOutEvent}
+        onClose={() => setSlideOutEvent(null)}
+        onRefresh={handleSlideOutRefresh}
+      />
     </div>
   )
 }

@@ -507,7 +507,7 @@ function BookingSection({ event, onRefresh }) {
         <SplitDialog offer={splitOffer} onAccept={() => handleBook(true)} onDecline={() => setSplitOffer(null)} />
       )}
 
-      <CapacityBar booked={booked} max={max} waitlist={event.waitlist_count || 0} />
+      {!isBookclubEvent && max > 0 && <CapacityBar booked={booked} max={max} waitlist={event.waitlist_count || 0} />}
 
       {!myConfirmed && !myWaitlist && (
         <div>
