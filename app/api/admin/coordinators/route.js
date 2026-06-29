@@ -76,7 +76,7 @@ export async function GET(req) {
 
   const { data } = await supa
     .from("event_coordinators")
-    .select("member_id, members(id, name, username)")
+    .select("member_id, members!member_id(id, name, username)")
     .eq("event_id", event_id)
     .is("replaced_at", null)
     .order("assigned_at")

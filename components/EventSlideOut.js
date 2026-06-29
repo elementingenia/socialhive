@@ -669,7 +669,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
       // Load coordinators for this event
       supabase
         .from("event_coordinators")
-        .select("member_id, members(id, name, username)")
+        .select("member_id, members!member_id(id, name, username)")
         .eq("event_id", event.id)
         .is("replaced_at", null)
         .order("assigned_at")

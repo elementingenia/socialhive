@@ -538,7 +538,7 @@ export default function MoviesHomePage() {
     const nextEv = eventsData?.[0] || null
     setNextEvent(nextEv)
     if (nextEv?.id) {
-      supabase.from('event_coordinators').select('member_id, members(id, name, username)')
+      supabase.from('event_coordinators').select('member_id, members!member_id(id, name, username)')
         .eq('event_id', nextEv.id).is('replaced_at', null).limit(1).maybeSingle()
         .then(({ data }) => setNextEventCoordinator(data?.members || null))
     } else {

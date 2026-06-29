@@ -455,7 +455,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     if (!editing) return
     supabase
       .from("event_coordinators")
-      .select("member_id, members(id, name, username)")
+      .select("member_id, members!member_id(id, name, username)")
       .eq("event_id", event.id).is("replaced_at", null).order("assigned_at")
       .then(({ data }) => setCoordinators((data || []).map(r => r.members)))
 

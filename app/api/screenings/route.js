@@ -39,7 +39,7 @@ export async function GET(req) {
 
   const { data: ecRows } = await supabaseAdmin
     .from('event_coordinators')
-    .select('event_id, member_id, members(id, name, username)')
+    .select('event_id, member_id, members!member_id(id, name, username)')
     .in('event_id', eventIds)
     .is('replaced_at', null)
   const coordMap = {}
