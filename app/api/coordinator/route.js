@@ -50,9 +50,9 @@ export async function GET(req) {
   // Fetch all bookings for the event with member info
   const { data: bookings, error: be } = await supa
     .from("bookings")
-    .select("id, seats, status, payment_status, created_at, members(id, name, username, hide_name)")
+    .select("id, seats, status, payment_status, booked_at, members(id, name, username, hide_name)")
     .eq("event_id", eventId)
-    .order("created_at")
+    .order("booked_at")
 
   if (be) return NextResponse.json({ error: be.message }, { status: 500 })
 

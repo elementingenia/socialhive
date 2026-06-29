@@ -517,9 +517,15 @@ export default function Screenings() {
     setSlideOutEvent(toSlideOutShape(ev))
   }
 
-  function handleSlideOutRefresh() {
-    setSlideOutEvent(null)
-    loadScreenings()
+  async function handleSlideOutRefresh() {
+    if (!session || !slideOutEvent) return
+    const currentId = slideOutEvent.id
+    const res = await fetch('/api/screenings', { headers: { 'Authorization': 'Bearer ' + session.access_token } })
+    const data = await res.json()
+    if (!Array.isArray(data)) return
+    setScreenings(data)
+    const updated = data.find(e => e.id === currentId)
+    if (updated) setSlideOutEvent(toSlideOutShape(updated))
   }
 
   return (

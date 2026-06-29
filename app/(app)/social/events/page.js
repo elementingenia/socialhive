@@ -819,7 +819,10 @@ export default function SocialEvents() {
       .from("events")
       .select("*, bookings(id, status, seats, payment_status, member_id, members(name, username))")
       .eq("id", event.id).single()
-    if (data) setFullEvent(data)
+    if (data) {
+      const my_bookings = (data.bookings || []).filter(b => b.member_id === member?.id)
+      setFullEvent({ ...data, my_bookings })
+    }
   }
 
   const today    = new Date(); today.setHours(0, 0, 0, 0)
@@ -900,7 +903,7 @@ export default function SocialEvents() {
 
       {fullEvent && (
         <EventSlideOut event={fullEvent} onClose={() => setFullEvent(null)}
-          onRefresh={() => { setFullEvent(null); load() }} />
+          onRefresh={async () => { if (fullEvent) await openEventSlideOut({ id: fullEvent.id }); load() }} />
       )}
 
       {showForm && session && (
