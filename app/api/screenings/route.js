@@ -159,11 +159,8 @@ export async function POST(req) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Save coordinator if provided
-  console.log('[POST /api/screenings] coordinator_id received:', coordinator_id, 'event?.id:', event?.id)
   if (coordinator_id && event?.id) {
-    const { error: insErr } = await supabaseAdmin.from('event_coordinators').insert({ event_id: event.id, member_id: coordinator_id, assigned_by: member.id })
-    if (insErr) console.error('[POST coordinator] insert error:', insErr.message)
-    else console.log('[POST coordinator] inserted OK')
+    await supabaseAdmin.from('event_coordinators').insert({ event_id: event.id, member_id: coordinator_id, assigned_by: member.id })
   }
 
   return NextResponse.json(event)
@@ -199,13 +196,9 @@ export async function PATCH(req) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Update coordinator — clear existing then insert new if provided
-  console.log('[PATCH /api/screenings] coordinator_id received:', coordinator_id, 'event_id:', event_id)
-  const { error: delErr } = await supabaseAdmin.from('event_coordinators').delete().eq('event_id', event_id)
-  if (delErr) console.error('[PATCH coordinator] delete error:', delErr.message)
+  await supabaseAdmin.from('event_coordinators').delete().eq('event_id', event_id)
   if (coordinator_id) {
-    const { error: insErr } = await supabaseAdmin.from('event_coordinators').insert({ event_id, member_id: coordinator_id, assigned_by: member.id })
-    if (insErr) console.error('[PATCH coordinator] insert error:', insErr.message)
-    else console.log('[PATCH coordinator] inserted OK for member:', coordinator_id)
+    await supabaseAdmin.from('event_coordinators').insert({ event_id, member_id: coordinator_id, assigned_by: member.id })
   }
 
   return NextResponse.json({ ok: true })
