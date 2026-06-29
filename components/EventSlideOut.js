@@ -659,7 +659,7 @@ function LoginPrompt() {
 
 // ── EventSlideOut (main export) ───────────────────────────────────────────────
 export default function EventSlideOut({ event, onClose, isAuthenticated = true, onRefresh }) {
-  const { member } = useUser()
+  const { member, isAdmin } = useUser()
   const [open, setOpen] = useState(false)
   const [coordinators, setCoordinators] = useState([])
 
@@ -688,7 +688,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
   // Check if current user is a coordinator for this event
   const isEC = member && coordinators.some(ec => ec.member_id === member.id)
   // Also allow admins to see coordinator panel
-  const showCoordinatorPanel = isAuthenticated && (isEC || member?.is_admin)
+  const showCoordinatorPanel = isAuthenticated && (isEC || isAdmin)
 
   function handleClose() {
     setOpen(false)

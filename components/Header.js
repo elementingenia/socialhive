@@ -91,8 +91,8 @@ export default function Header() {
         <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
           <img src="/logo_hex_bee.png" alt="The Social Hive" style={{ width: 46, height: 46, flexShrink: 0 }} />
           <div style={{ lineHeight: 1 }}>
-            <div style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.14em", color: moduleColour, textTransform: "uppercase" }}>The</div>
-            <div style={{ fontSize: "1.25rem", fontWeight: 900, letterSpacing: "0.07em", color: moduleColour, textTransform: "uppercase" }}>Social Hive</div>
+            <div style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.14em", color: "var(--amber)", textTransform: "uppercase" }}>The</div>
+            <div style={{ fontSize: "1.25rem", fontWeight: 900, letterSpacing: "0.07em", color: "var(--amber)", textTransform: "uppercase" }}>Social Hive</div>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
@@ -109,8 +109,8 @@ export default function Header() {
       <a href="/home" style={{ display: "flex", alignItems: "center", gap: "0.5rem", textDecoration: "none", flexShrink: 0 }}>
         <img src="/logo_hex_bee.png" alt="The Social Hive" style={{ width: 38, height: 38, flexShrink: 0 }} />
         <div style={{ lineHeight: 1 }}>
-          <div style={{ fontSize: "0.52rem", fontWeight: 700, letterSpacing: "0.14em", color: moduleColour, textTransform: "uppercase" }}>The</div>
-          <div style={{ fontSize: "1.05rem", fontWeight: 900, letterSpacing: "0.07em", color: moduleColour, textTransform: "uppercase" }}>Social Hive</div>
+          <div style={{ fontSize: "0.52rem", fontWeight: 700, letterSpacing: "0.14em", color: "var(--amber)", textTransform: "uppercase" }}>The</div>
+          <div style={{ fontSize: "1.05rem", fontWeight: 900, letterSpacing: "0.07em", color: "var(--amber)", textTransform: "uppercase" }}>Social Hive</div>
         </div>
       </a>
 

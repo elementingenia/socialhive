@@ -125,7 +125,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [time, setTime]               = useState(event?.event_time?.slice(0, 5) || '18:00')
   const [maxSeats, setMaxSeats]       = useState(event?.max_seats || 20)
   const [notes, setNotes]             = useState(event?.notes || '')
-  const [coordinator, setCoordinator] = useState(null)
+  const [coordinator, setCoordinator] = useState(event?.coordinator?.id || null)
   const [saving, setSaving]           = useState(false)
   const [err, setErr]                 = useState(null)
   const [open, setOpen]               = useState(false)
@@ -136,11 +136,6 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     if (event?.movie_id) {
       supabase.from('movies').select('id, title, poster_url, year').eq('id', event.movie_id).single()
         .then(({ data }) => { if (data) setPickedMovie(data) })
-    }
-    if (event?.id) {
-      supabase.from('event_coordinators').select('member_id, members(id, name, username)')
-        .eq('event_id', event.id).is('replaced_at', null).limit(1).maybeSingle()
-        .then(({ data }) => { if (data?.members) setCoordinator(data.members.id) })
     }
     requestAnimationFrame(() => setOpen(true))
   }, [])
