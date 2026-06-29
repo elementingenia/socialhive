@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
 import { useUI }   from "@/lib/UIContext"
-import { getModuleColour, getPageTitle, BACK_ROUTES } from "@/lib/navUtils"
+import { getModuleColour, getPageTitle } from "@/lib/navUtils"
 
 function getInitials(name) {
   if (!name) return "?"
@@ -20,7 +20,6 @@ export default function Header() {
   const router       = useRouter()
   const moduleColour = getModuleColour(pathname)
   const pageTitle    = getPageTitle(pathname)
-  const backRoute    = BACK_ROUTES[pathname] || null
   const isHome       = pathname === "/home"
 
   const [menuOpen, setMenuOpen] = useState(false)
@@ -104,23 +103,19 @@ export default function Header() {
     )
   }
 
-  // ── Sub-pages — compact single row ──
+  // ── Sub-pages — always show full wordmark logo linking to /home ──
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 50, background: "var(--surface)", borderBottom: "3px solid " + moduleColour, padding: "0.45rem 1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", boxShadow: "0 1px 8px rgba(0,0,0,0.07)" }}>
-      {backRoute ? (
-        <button onClick={() => router.push(backRoute.to)} style={{ display: "flex", alignItems: "center", gap: "0.3rem", background: "none", border: "none", cursor: "pointer", color: moduleColour, fontWeight: 700, fontSize: "0.88rem", padding: "0.25rem 0", flexShrink: 0 }}>
-          <span style={{ fontSize: "1.1rem", lineHeight: 1 }}>←</span>
-          <span>{backRoute.label}</span>
-        </button>
-      ) : (
-        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
-          <img src="/logo_hex_bee.png" alt="" style={{ width: 26, height: 26 }} />
-          <div style={{ fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.06em", color: moduleColour, textTransform: "uppercase" }}>Social Hive</div>
+      <a href="/home" style={{ display: "flex", alignItems: "center", gap: "0.5rem", textDecoration: "none", flexShrink: 0 }}>
+        <img src="/logo_hex_bee.png" alt="The Social Hive" style={{ width: 38, height: 38, flexShrink: 0 }} />
+        <div style={{ lineHeight: 1 }}>
+          <div style={{ fontSize: "0.52rem", fontWeight: 700, letterSpacing: "0.14em", color: moduleColour, textTransform: "uppercase" }}>The</div>
+          <div style={{ fontSize: "1.05rem", fontWeight: 900, letterSpacing: "0.07em", color: moduleColour, textTransform: "uppercase" }}>Social Hive</div>
         </div>
-      )}
+      </a>
 
       {pageTitle && (
-        <div style={{ fontSize: "0.95rem", fontWeight: 700, color: moduleColour, flexShrink: 0 }}>{pageTitle}</div>
+        <div style={{ fontSize: "0.9rem", fontWeight: 700, color: moduleColour, flexShrink: 0 }}>{pageTitle}</div>
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>

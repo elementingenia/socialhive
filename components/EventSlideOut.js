@@ -138,6 +138,7 @@ function ECNames({ coordinators, colour }) {
 function CoordinatorPanel({ event, colour, onRefresh }) {
   const [data,        setData]        = useState(null)
   const [loading,     setLoading]     = useState(true)
+  const [apiError,    setApiError]    = useState(null)
   const [toast,       setToast]       = useState(null)
   const [editNotes,   setEditNotes]   = useState(false)
   const [editDesc,    setEditDesc]    = useState(false)
@@ -147,6 +148,8 @@ function CoordinatorPanel({ event, colour, onRefresh }) {
   const [welcome,     setWelcome]     = useState("")
   const [saving,      setSaving]      = useState(false)
   const [cancelTarget, setCancelTarget] = useState(null)
+  const isMovie = event.hub_type === "movie"
+  const isBook  = event.hub_type === "bookclub"
 
   const inputStyle = { width: "100%", padding: "0.6rem 0.8rem", borderRadius: 8, border: "1px solid var(--border)",
     background: "var(--surface)", color: "var(--text)", fontSize: "0.88rem", boxSizing: "border-box", fontFamily: "inherit" }
@@ -163,15 +166,25 @@ function CoordinatorPanel({ event, colour, onRefresh }) {
 
   async function load() {
     setLoading(true)
-    const token = await getToken()
-    const res = await fetch(`/api/coordinator?event_id=${event.id}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    const d = await res.json()
-    setData(d)
-    setNotes(d.coordinator_notes || "")
-    setDesc(d.description || "")
-    setWelcome(d.welcome_message || "")
+    setApiError(null)
+    try {
+      const token = await getToken()
+      const res = await fetch(`/api/coordinator?event_id=${event.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      const d = await res.json()
+      if (!res.ok) {
+        setApiError(d.error || `Error ${res.status}`)
+        setLoading(false)
+        return
+      }
+      setData(d)
+      setNotes(d.coordinator_notes || "")
+      setDesc(d.description || "")
+      setWelcome(d.welcome_message || "")
+    } catch (e) {
+      setApiError(e.message || "Network error")
+    }
     setLoading(false)
   }
 
@@ -223,6 +236,15 @@ function CoordinatorPanel({ event, colour, onRefresh }) {
   if (loading) return (
     <div style={{ marginTop: 16, paddingTop: 16, borderTop: `2px solid ${colour}` }}>
       <div style={{ fontSize: 12, color: "var(--text-dim)", padding: "8px 0" }}>Loading coordinator view…</div>
+    </div>
+  )
+
+  if (apiError) return (
+    <div style={{ marginTop: 16, paddingTop: 16, borderTop: `2px solid ${colour}` }}>
+      <div style={{ fontSize: 12, color: "var(--danger)", padding: "8px 10px", background: "var(--danger)10", borderRadius: 8 }}>
+        ⚠ Coordinator view unavailable: {apiError}
+      </div>
+      <button onClick={load} style={{ marginTop: 8, fontSize: 12, color: colour, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Retry</button>
     </div>
   )
 
@@ -284,53 +306,57 @@ function CoordinatorPanel({ event, colour, onRefresh }) {
         )}
       </div>
 
-      {/* Event Description (EC-editable) */}
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Description</div>
-          {!editDesc && <button onClick={() => setEditDesc(true)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: colour, fontWeight: 600 }}>Edit</button>}
-        </div>
-        {editDesc ? (
-          <div>
-            <textarea value={desc} onChange={e => setDesc(e.target.value)}
-              style={{ ...inputStyle, minHeight: 80, resize: "vertical", marginBottom: 8 }}
-              placeholder="Event description shown to attendees…" />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setEditDesc(false)} style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cancel</button>
-              <button onClick={() => saveField("description", desc)} disabled={saving}
-                style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: colour, color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Save</button>
-            </div>
+      {/* Event Description (EC-editable) — hidden for Movies; label is "Event Details" for Books */}
+      {!isMovie && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{isBook ? "Event Details" : "Description"}</div>
+            {!editDesc && <button onClick={() => setEditDesc(true)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: colour, fontWeight: 600 }}>Edit</button>}
           </div>
-        ) : (
-          desc
-            ? <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.5 }}>{desc}</div>
-            : <div style={{ fontSize: 13, color: "var(--text-dim)", fontStyle: "italic" }}>No description</div>
-        )}
-      </div>
+          {editDesc ? (
+            <div>
+              <textarea value={desc} onChange={e => setDesc(e.target.value)}
+                style={{ ...inputStyle, minHeight: 80, resize: "vertical", marginBottom: 8 }}
+                placeholder={isBook ? "Event details shown to members…" : "Event description shown to attendees…"} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setEditDesc(false)} style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cancel</button>
+                <button onClick={() => saveField("description", desc)} disabled={saving}
+                  style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: colour, color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Save</button>
+              </div>
+            </div>
+          ) : (
+            desc
+              ? <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.5 }}>{desc}</div>
+              : <div style={{ fontSize: 13, color: "var(--text-dim)", fontStyle: "italic" }}>No {isBook ? "event details" : "description"} yet — tap Edit to add</div>
+          )}
+        </div>
+      )}
 
-      {/* Welcome Message (EC-editable) */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Booking Message</div>
-          {!editWelcome && <button onClick={() => setEditWelcome(true)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: colour, fontWeight: 600 }}>Edit</button>}
-        </div>
-        {editWelcome ? (
-          <div>
-            <textarea value={welcome} onChange={e => setWelcome(e.target.value)}
-              style={{ ...inputStyle, minHeight: 64, resize: "vertical", marginBottom: 8 }}
-              placeholder="Shown at top of booking form…" />
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setEditWelcome(false)} style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cancel</button>
-              <button onClick={() => saveField("welcome_message", welcome)} disabled={saving}
-                style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: colour, color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Save</button>
-            </div>
+      {/* Booking Message — not shown for Movies or Books */}
+      {!isMovie && !isBook && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Booking Message</div>
+            {!editWelcome && <button onClick={() => setEditWelcome(true)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: colour, fontWeight: 600 }}>Edit</button>}
           </div>
-        ) : (
-          welcome
-            ? <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.5, fontStyle: "italic" }}>"{welcome}"</div>
-            : <div style={{ fontSize: 13, color: "var(--text-dim)", fontStyle: "italic" }}>No welcome message</div>
-        )}
-      </div>
+          {editWelcome ? (
+            <div>
+              <textarea value={welcome} onChange={e => setWelcome(e.target.value)}
+                style={{ ...inputStyle, minHeight: 64, resize: "vertical", marginBottom: 8 }}
+                placeholder="Shown at top of booking form…" />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => setEditWelcome(false)} style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cancel</button>
+                <button onClick={() => saveField("welcome_message", welcome)} disabled={saving}
+                  style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: colour, color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Save</button>
+              </div>
+            </div>
+          ) : (
+            welcome
+              ? <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.5, fontStyle: "italic" }}>"{welcome}"</div>
+              : <div style={{ fontSize: 13, color: "var(--text-dim)", fontStyle: "italic" }}>No welcome message</div>
+          )}
+        </div>
+      )}
 
       {/* Attendee list */}
       <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
@@ -577,6 +603,43 @@ function BookingSection({ event, onRefresh }) {
 }
 
 // ── Login Prompt (for public calendar) ───────────────────────────────────────
+// ── Expandable text (book summary — cap at N lines) ──────────────────────────
+function ExpandableText({ text, lineHeight = 1.6, fontSize = 13, maxLines = 10 }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!text) return null
+  const maxH = maxLines * lineHeight * fontSize
+  return (
+    <div style={{ position: "relative" }}>
+      <p style={{
+        fontSize, color: "var(--text-dim)", lineHeight, margin: 0,
+        maxHeight: expanded ? "none" : maxH,
+        overflow: "hidden",
+        transition: "max-height 0.3s ease",
+      }}>{text}</p>
+      {!expanded && (
+        <div style={{
+          position: "absolute", bottom: 0, left: 0, right: 0,
+          height: 48, background: "linear-gradient(transparent, var(--surface))",
+          display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 4,
+        }}>
+          <button onClick={() => setExpanded(true)}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700,
+              color: "var(--purple)", textDecoration: "underline", fontFamily: "inherit" }}>
+            Read more ▾
+          </button>
+        </div>
+      )}
+      {expanded && (
+        <button onClick={() => setExpanded(false)}
+          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700,
+            color: "var(--purple)", textDecoration: "underline", fontFamily: "inherit", marginTop: 4, display: "block" }}>
+          Show less ▴
+        </button>
+      )}
+    </div>
+  )
+}
+
 function LoginPrompt() {
   return (
     <div style={{ background: "var(--amber-light)", borderRadius: 12, padding: 20, textAlign: "center", border: "1px solid var(--amber)" }}>
@@ -736,7 +799,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
                       ⭐ {event.book.rating} on Google Books
                     </a>
                   )}
-                  {event.book.summary && <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6, margin: 0 }}>{event.book.summary}</p>}
+                  {event.book.summary && <ExpandableText text={event.book.summary} maxLines={10} />}
                 </div>
               )}
 
