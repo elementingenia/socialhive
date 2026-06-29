@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
 import { HUB_COLOURS } from "@/lib/navUtils"
-import { BusIcon } from "@/components/NavIcons"
+import { BusIcon, CalendarIcon } from "@/components/NavIcons"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 
@@ -676,7 +676,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
 
           {/* Date/time */}
           <div style={{ fontSize: 14, color: "var(--text-dim)", marginBottom: event.location ? 4 : 10, fontWeight: 500 }}>
-            📅 {fmtDate(event.event_date)}{event.event_time ? ` at ${fmtTime(event.event_time)}` : ''}
+            <span style={{display:"inline-flex",alignItems:"center",gap:5}}><CalendarIcon size={13} />{fmtDate(event.event_date)}{event.event_time ? ` at ${fmtTime(event.event_time)}` : ''}</span>
           </div>
 
           {/* Location — shown for social/outings events */}

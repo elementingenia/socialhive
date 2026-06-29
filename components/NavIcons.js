@@ -135,3 +135,41 @@ export function BusIcon({ size = 20 }) {
     </svg>
   )
 }
+
+// ── Admin section icons ───────────────────────────────────────────────────────
+
+// Page/document silhouette with dog-ear fold corner
+export function PageTextsIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 10 5 L 48 5 L 60 19 L 60 65 L 10 65 Z
+           M 48 5 L 48 19 L 60 19 Z"/>
+    </svg>
+  )
+}
+
+// Two overlapping person silhouettes — back one at 45% opacity
+export function MembersIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fill="currentColor" fillOpacity={0.45}
+        d="M 42 5 A 11 11 0 1 0 42 27 A 11 11 0 1 0 42 5 Z
+           M 24 68 Q 24 38 42 38 Q 60 38 60 68 Z"/>
+      <path fill="currentColor"
+        d="M 26 13 A 11 11 0 1 0 26 35 A 11 11 0 1 0 26 13 Z
+           M 8 68 Q 8 46 26 46 Q 44 46 44 68 Z"/>
+    </svg>
+  )
+}
+
+// Gear centred at (35,35) — same geometry as AdminIcon gear, shifted
+export function ToolsIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 35 10 L 41 20 L 53 17 L 50 29 L 60 35 L 50 41 L 53 53 L 41 50 L 35 60 L 29 50 L 17 53 L 20 41 L 10 35 L 20 29 L 17 17 L 29 20 Z
+           M 35 21 A 14 14 0 1 0 35 49 A 14 14 0 1 0 35 21 Z"/>
+    </svg>
+  )
+}

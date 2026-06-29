@@ -4,21 +4,21 @@ import { supabase } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost } from '@/lib/freeCost'
+import { PageTextsIcon, MembersIcon, MoviesIcon, BarIcon, ToolsIcon } from '@/components/NavIcons'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const HUB_TYPES = [
   { value: 'movie',    label: 'Cinema',    icon: '🎬' },
   { value: 'social',   label: 'Social',    icon: '🎉' },
-  { value: 'outings',  label: 'Outings',   icon: '🚌' },
   { value: 'bookclub', label: 'Book Club', icon: '📚' },
 ]
 const HUB_COLOUR = { movie:'var(--teal)', social:'var(--terracotta)', outings:'var(--green)', bookclub:'var(--purple)' }
 const SECTIONS = [
-  { key: 'PageTexts', label: 'Page Texts', icon: '📝' },
-  { key: 'Members',   label: 'Members',    icon: '👥' },
-  { key: 'Movies',    label: 'Movies',     icon: '🎬' },
-  { key: 'Bar',       label: 'Bar',        icon: '🍺' },
-  { key: 'Tools',     label: 'Tools',      icon: '🔧' },
+  { key: 'PageTexts', label: 'Page Texts', Icon: PageTextsIcon },
+  { key: 'Members',   label: 'Members',    Icon: MembersIcon },
+  { key: 'Movies',    label: 'Movies',     Icon: MoviesIcon },
+  { key: 'Bar',       label: 'Bar',        Icon: BarIcon },
+  { key: 'Tools',     label: 'Tools',      Icon: ToolsIcon },
 ]
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -1545,7 +1545,7 @@ export default function AdminPage() {
   // Default: card grid — nothing selected
   return (
     <div style={{ padding:'1rem 1rem 6rem' }}>
-      <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--teal)', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:'0.75rem' }}>Admin</div>
+      <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--text-dim)', letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:'0.75rem' }}>Admin</div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.65rem' }}>
         {SECTIONS.map((s, i) => {
           const isLast = i === SECTIONS.length - 1
@@ -1554,7 +1554,7 @@ export default function AdminPage() {
             <button key={s.key} onClick={() => setTab(s.key)}
               style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'14px', padding:'1rem 0.75rem', display:'flex', flexDirection:'column', alignItems:'center', gap:'0.35rem', cursor:'pointer', fontFamily:'inherit',
                 ...(spanFull ? { gridColumn:'1/-1' } : {}) }}>
-              <span style={{ fontSize:'1.6rem' }}>{s.icon}</span>
+              <span style={{ color:'var(--text)', lineHeight:0 }}><s.Icon size={32} /></span>
               <span style={{ fontWeight:700, fontSize:'0.85rem', color:'var(--text)' }}>{s.label}</span>
             </button>
           )

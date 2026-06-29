@@ -43,7 +43,7 @@ function fmtMonthYear(d) {
 }
 
 function hubLabel(hub_type) {
-  const labels = { movie: "Movie Night", bookclub: "Book Club", social: "Social", outings: "Outing" }
+  const labels = { movie: "Movie Night", bookclub: "Book Club", social: "Social", outings: "Social" }
   return labels[hub_type] || hub_type
 }
 
@@ -452,6 +452,7 @@ function MonthView({ events, onEventTap }) {
 // ── CalendarView (main export) ────────────────────────────────────────────────
 export default function CalendarView({ events = [], onEventTap }) {
   const [view, setView] = useState("week")
+  const [activeHubs, setActiveHubs] = useState(["movie", "bookclub", "social"])
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -463,14 +464,19 @@ export default function CalendarView({ events = [], onEventTap }) {
   const monday = useMemo(() => getMondayOf(today), [])
   const month4Days = useMemo(() => Array.from({ length: 28 }, (_, i) => addDays(monday, i)), [monday])
 
+  const filteredEvents = useMemo(() => events.filter(ev => {
+    const hubKey = ev.hub_type === "outings" ? "social" : ev.hub_type
+    return activeHubs.includes(hubKey)
+  }), [events, activeHubs])
+
   const eventsByDate = useMemo(() => {
     const map = {}
-    for (const ev of events) {
+    for (const ev of filteredEvents) {
       if (!map[ev.event_date]) map[ev.event_date] = []
       map[ev.event_date].push(ev)
     }
     return map
-  }, [events])
+  }, [filteredEvents])
 
   const viewBtns = [
     { id: "week",  label: "Week"    },
@@ -502,24 +508,41 @@ export default function CalendarView({ events = [], onEventTap }) {
         ))}
       </div>
 
-      {/* Hub legend */}
-      <div style={{ display: "flex", gap: 12, padding: "8px 16px", overflowX: "auto", borderBottom: "1px solid var(--border)" }}>
+      {/* Hub filters — tap to toggle */}
+      <div style={{ display: "flex", gap: 8, padding: "8px 16px", overflowX: "auto", borderBottom: "1px solid var(--border)" }}>
         {[
-          { key: "movie",    label: "Movie Night" },
-          { key: "bookclub", label: "Book Club"   },
-          { key: "social",   label: "Social"      },
-          { key: "outings",  label: "Outings"     },
-        ].map(({ key, label }) => (
-          <div key={key} style={{ display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
-            <div style={{ width: 10, height: 10, borderRadius: "50%", background: HUB_COLOURS[key] }} />
-            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{label}</span>
-          </div>
-        ))}
+          { key: "movie",    label: "Movies"    },
+          { key: "bookclub", label: "Book Club" },
+          { key: "social",   label: "Social"    },
+        ].map(({ key, label }) => {
+          const on = activeHubs.includes(key)
+          const colour = HUB_COLOURS[key] || "var(--amber)"
+          return (
+            <button
+              key={key}
+              onClick={() => setActiveHubs(prev =>
+                prev.includes(key) ? prev.filter(h => h !== key) : [...prev, key]
+              )}
+              style={{
+                display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
+                padding: "4px 10px", borderRadius: 20,
+                border: `1px solid ${on ? colour : "var(--border)"}`,
+                background: on ? colour + "20" : "var(--surface2)",
+                cursor: "pointer", fontFamily: "inherit",
+                opacity: on ? 1 : 0.55,
+                transition: "all 0.15s",
+              }}
+            >
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: on ? colour : "var(--text-dim)", flexShrink: 0 }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: on ? colour : "var(--text-dim)" }}>{label}</span>
+            </button>
+          )
+        })}
       </div>
 
       {view === "week"  && <WeekView     days={weekDays}   eventsByDate={eventsByDate} onEventTap={onEventTap} />}
       {view === "4week" && <FourWeekView days={month4Days} eventsByDate={eventsByDate} onEventTap={onEventTap} />}
-      {view === "month" && <MonthView    events={events}   onEventTap={onEventTap} />}
+      {view === "month" && <MonthView    events={filteredEvents}   onEventTap={onEventTap} />}
     </div>
   )
 }

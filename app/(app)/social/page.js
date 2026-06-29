@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
+import { BusIcon } from "@/components/NavIcons"
 
 const COLOUR = "var(--terracotta)"
 
@@ -155,7 +156,7 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
 
         {event.has_bus && event.bus_driver && (
           <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.2rem" }}>
-            🚌 {event.bus_driver.name || event.bus_driver.username}
+            <BusIcon size={14} /> {event.bus_driver.name || event.bus_driver.username}
           </div>
         )}
 
