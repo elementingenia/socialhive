@@ -27,7 +27,7 @@ function fmtTime(str) {
 }
 
 // ── Next Screening Card (entire card clickable) ───────────────────────────────
-function NextScreeningCard({ event, myBooking, coordinator, onOpen }) {
+function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen }) {
   const movie = event.movies || event.movie_snapshot
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const evDate = localDate(event.event_date)
@@ -35,6 +35,7 @@ function NextScreeningCard({ event, myBooking, coordinator, onOpen }) {
   const daysLabel = daysUntil === 0 ? 'Today!' : daysUntil === 1 ? 'Tomorrow' : `In ${daysUntil} days`
   const isBooked = myBooking?.has_confirmed
   const isWaitlist = myBooking?.has_waitlist && !myBooking?.has_confirmed
+  const isFull = seatsLeft === 0
 
   return (
     <div
@@ -82,15 +83,29 @@ function NextScreeningCard({ event, myBooking, coordinator, onOpen }) {
             </div>
           )}
           {event.notes && <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontStyle: 'italic', lineHeight: 1.4 }}>{event.notes}</div>}
-          <div style={{ marginTop: '0.1rem' }}>
-            {isBooked ? (
+          <div style={{ marginTop: '0.1rem', display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
+            {isBooked && (
               <div style={{ display: 'inline-flex', alignItems: 'center', background: '#dcfce7', color: '#15803d', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
-                ✓ Booked · {myBooking.confirmed_seats} seat{myBooking.confirmed_seats !== 1 ? 's' : ''}
+                ✓ {myBooking.confirmed_seats} confirmed{myBooking.waitlist_seats > 0 ? ` · ${myBooking.waitlist_seats} waitlisted` : ''}
               </div>
-            ) : (
-              <div style={{ display: 'inline-flex', alignItems: 'center', background: 'rgba(0,128,128,0.1)', color: 'var(--teal)', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
-                Tap to book →
+            )}
+            {isWaitlist && !isBooked && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', background: '#fef3c7', color: '#d97706', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
+                ⏳ Waitlisted · {myBooking.waitlist_seats} seat{myBooking.waitlist_seats !== 1 ? 's' : ''}
               </div>
+            )}
+            {!isBooked && !isWaitlist && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', background: isFull ? 'rgba(217,119,6,0.1)' : 'rgba(0,128,128,0.1)', color: isFull ? 'var(--amber)' : 'var(--teal)', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
+                {isFull ? 'Full · Join waitlist →' : 'Tap to book →'}
+              </div>
+            )}
+            {seatsLeft !== null && seatsLeft > 0 && (
+              <div style={{ fontSize: '0.72rem', color: seatsLeft <= 3 ? 'var(--danger)' : 'var(--text-dim)', fontWeight: 600 }}>
+                {seatsLeft} seat{seatsLeft !== 1 ? 's' : ''} left
+              </div>
+            )}
+            {isFull && !isBooked && !isWaitlist && (
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontWeight: 600 }}>0 seats left</div>
             )}
           </div>
         </div>
@@ -486,6 +501,7 @@ export default function MoviesHomePage() {
   const [nextEventCoordinator, setNextEventCoordinator] = useState(null)
   const [myBookings, setMyBookings] = useState([])
   const [nextBooking, setNextBooking] = useState(null)
+  const [nextEventSeatsLeft, setNextEventSeatsLeft] = useState(null)
   const [unvoted, setUnvoted]     = useState([])
   const [memberId, setMemberId]   = useState(null)
   const [swiperDone, setSwiperDone] = useState(false)
@@ -541,14 +557,22 @@ export default function MoviesHomePage() {
       supabase.from('event_coordinators').select('member_id, members!member_id(id, name, username)')
         .eq('event_id', nextEv.id).is('replaced_at', null).limit(1).maybeSingle()
         .then(({ data }) => setNextEventCoordinator(data?.members || null))
+
+      // Capacity for next event
+      supabase.from('bookings').select('seats').eq('event_id', nextEv.id).eq('status', 'confirmed')
+        .then(({ data: capRows }) => {
+          const taken = (capRows || []).reduce((s, b) => s + (b.seats || 1), 0)
+          setNextEventSeatsLeft(nextEv.max_seats != null ? Math.max(0, nextEv.max_seats - taken) : null)
+        })
     } else {
       setNextEventCoordinator(null)
     }
     setMyBookings(bookingsData || [])
 
     if (nextEv && bookingsData) {
-      const nb = bookingsData.find(b => b.event_id === nextEv.id)
-      setNextBooking(nb || null)
+      // Collect ALL rows for next event (split gives confirmed + waitlist rows)
+      const nextRows = bookingsData.filter(b => b.event_id === nextEv.id)
+      setNextBooking(nextRows.length ? nextRows : null)
     }
 
     const votedIds = new Set((votesData || []).map(v => v.movie_id))
@@ -596,10 +620,11 @@ export default function MoviesHomePage() {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}><div className="spinner" /></div>
   }
 
-  const nextBookingSummary = nextBooking ? {
-    confirmed_seats: nextBooking.seats || 1,
-    has_confirmed: nextBooking.status === 'confirmed',
-    has_waitlist: nextBooking.status === 'waitlist',
+  const nextBookingSummary = nextBooking?.length ? {
+    confirmed_seats: nextBooking.filter(b => b.status === 'confirmed').reduce((s, b) => s + (b.seats || 1), 0),
+    waitlist_seats:  nextBooking.filter(b => b.status === 'waitlist').reduce((s, b) => s + (b.seats || 1), 0),
+    has_confirmed: nextBooking.some(b => b.status === 'confirmed'),
+    has_waitlist:  nextBooking.some(b => b.status === 'waitlist'),
   } : null
 
   return (
@@ -608,7 +633,7 @@ export default function MoviesHomePage() {
       <WelcomeBanner text={welcomeText} colour="var(--teal)" />
 
       {nextEvent ? (
-        <NextScreeningCard event={nextEvent} myBooking={nextBookingSummary} coordinator={nextEventCoordinator} onOpen={() => openSlideOutForEvent(nextEvent.id, nextEvent)} />
+        <NextScreeningCard event={nextEvent} myBooking={nextBookingSummary} coordinator={nextEventCoordinator} seatsLeft={nextEventSeatsLeft} onOpen={() => openSlideOutForEvent(nextEvent.id, nextEvent)} />
       ) : (
         <div style={{ background: 'var(--surface)', borderRadius: '16px', border: '1px solid var(--border)', padding: '1.5rem 1.25rem', textAlign: 'center', marginBottom: '1.25rem', boxShadow: 'var(--shadow)' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🎬</div>

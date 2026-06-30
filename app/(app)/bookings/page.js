@@ -48,15 +48,15 @@ function fmtTime(t) {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")}${ampm}`
 }
 
-function BookingCard({ booking, onClick }) {
-  const event = booking.events
+// BookingCard accepts a grouped entry: { event, confirmed, waitlist, eventId }
+function BookingCard({ group, onClick }) {
+  const event = group.event
   if (!event) return null
 
   const colour     = HUB_COLOURS[event.hub_type] || "var(--teal)"
   const hubLabel   = HUB_LABELS[event.hub_type]  || event.hub_type
-  const status     = getStatus(booking)
   const isBookClub = event.hub_type === "bookclub"
-  const seats      = booking.seats || 1
+  const { confirmed, waitlist } = group
 
   return (
     <div
@@ -94,21 +94,28 @@ function BookingCard({ booking, onClick }) {
         <div style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>
           {fmtDate(event.event_date)}
           {event.event_time ? " · " + fmtTime(event.event_time) : ""}
-          {!isBookClub && seats > 1 ? " · " + seats + " seats" : ""}
+          {!isBookClub && confirmed > 1 ? " · " + confirmed + " seats" : ""}
         </div>
       </div>
-      <div style={{
-        background: status.bg,
-        color: status.color,
-        fontSize: "0.7rem",
-        fontWeight: 700,
-        padding: "0.25rem 0.65rem",
-        borderRadius: "20px",
-        whiteSpace: "nowrap",
-        flexShrink: 0,
-        alignSelf: "center",
-      }}>
-        {status.label}
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", flexShrink: 0, alignItems: "flex-end" }}>
+        {confirmed > 0 && (
+          <div style={{
+            background: "#dcfce7", color: "#166534",
+            fontSize: "0.7rem", fontWeight: 700,
+            padding: "0.25rem 0.65rem", borderRadius: "20px", whiteSpace: "nowrap",
+          }}>
+            {confirmed === 1 ? "Confirmed" : `✓ ${confirmed} confirmed`}
+          </div>
+        )}
+        {waitlist > 0 && (
+          <div style={{
+            background: "#fef3c7", color: "#d97706",
+            fontSize: "0.7rem", fontWeight: 700,
+            padding: "0.25rem 0.65rem", borderRadius: "20px", whiteSpace: "nowrap",
+          }}>
+            ⏳ {waitlist} waitlisted
+          </div>
+        )}
       </div>
     </div>
   )
@@ -175,14 +182,26 @@ export default function BookingsPage() {
     ? bookings
     : bookings.filter(b => b.events?.hub_type === filter)
 
-  const upcoming = filtered
-    .filter(b => b.events && new Date(b.events.event_date + "T00:00:00") >= today)
-    .sort((a, b) => a.events.event_date.localeCompare(b.events.event_date))
+  // Group by event_id so split bookings (confirmed + waitlist) show as one tile
+  function groupBookings(rows) {
+    const grouped = {}
+    for (const b of rows) {
+      if (!b.events) continue
+      if (!grouped[b.event_id]) grouped[b.event_id] = { event: b.events, eventId: b.event_id, confirmed: 0, waitlist: 0 }
+      if (b.status === "waitlist") grouped[b.event_id].waitlist += (b.seats || 1)
+      else grouped[b.event_id].confirmed += (b.seats || 1)
+    }
+    return Object.values(grouped)
+  }
 
-  // Exclude waitlisted entries from past (no seat was held)
-  const past = filtered
-    .filter(b => b.events && new Date(b.events.event_date + "T00:00:00") < today && b.status !== "waitlist")
-    .sort((a, b) => b.events.event_date.localeCompare(a.events.event_date))
+  const upcoming = groupBookings(
+    filtered.filter(b => b.events && new Date(b.events.event_date + "T00:00:00") >= today)
+  ).sort((a, b) => a.event.event_date.localeCompare(b.event.event_date))
+
+  // Exclude waitlist-only from past (no seat was held)
+  const past = groupBookings(
+    filtered.filter(b => b.events && new Date(b.events.event_date + "T00:00:00") < today && b.status !== "waitlist")
+  ).sort((a, b) => b.event.event_date.localeCompare(a.event.event_date))
 
   if (loading) {
     return (
@@ -244,8 +263,8 @@ export default function BookingsPage() {
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginBottom: "1.5rem" }}>
-            {upcoming.map(b => (
-              <BookingCard key={b.id} booking={b} onClick={() => openBooking(b)} />
+            {upcoming.map(g => (
+              <BookingCard key={g.eventId} group={g} onClick={() => openBooking({ event_id: g.eventId, events: g.event })} />
             ))}
           </div>
         )}
@@ -286,12 +305,12 @@ export default function BookingsPage() {
                 borderRadius: "0 0 14px 14px",
                 overflow: "hidden",
               }}>
-                {past.map((b, i) => (
+                {past.map((g, i) => (
                   <div
-                    key={b.id}
+                    key={g.eventId}
                     style={{ borderTop: i > 0 ? "1px solid var(--border)" : "none", opacity: 0.7 }}
                   >
-                    <BookingCard booking={b} onClick={() => openBooking(b)} />
+                    <BookingCard group={g} onClick={() => openBooking({ event_id: g.eventId, events: g.event })} />
                   </div>
                 ))}
               </div>
