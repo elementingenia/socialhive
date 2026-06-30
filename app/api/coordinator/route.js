@@ -47,8 +47,8 @@ export async function GET(req) {
   const { error, status, member } = await resolveEC(req, eventId)
   if (error) return NextResponse.json({ error }, { status })
 
-  // Fetch active (non-cancelled) bookings for the event with member info
-  const { data: bookings, error: be } = await supa
+  // Fetch active bookings for the event
+  const { data: activeBookings, error: be } = await supa
     .from("bookings")
     .select("id, seats, status, payment_status, booked_at, members(id, name, username, hide_name)")
     .eq("event_id", eventId)
@@ -57,19 +57,35 @@ export async function GET(req) {
 
   if (be) return NextResponse.json({ error: be.message }, { status: 500 })
 
+  // Also fetch cancelled bookings that have payment info (refund pending or issued)
+  const { data: cancelledPayments } = await supa
+    .from("bookings")
+    .select("id, seats, status, payment_status, booked_at, members(id, name, username, hide_name)")
+    .eq("event_id", eventId)
+    .eq("status", "cancelled")
+    .in("payment_status", ["confirmed", "refunded"])
+    .order("booked_at")
+
+  const bookings = activeBookings || []
+  const refundPending  = (cancelledPayments || []).filter(b => b.payment_status === "confirmed")
+  const refundIssued   = (cancelledPayments || []).filter(b => b.payment_status === "refunded")
+
   // Fetch EC notes for the event
   const { data: event } = await supa
     .from("events")
-    .select("coordinator_notes, description, welcome_message, payment_required")
+    .select("coordinator_notes, description, welcome_message, payment_required, cost")
     .eq("id", eventId)
     .maybeSingle()
 
   return NextResponse.json({
-    bookings: bookings || [],
+    bookings,
+    refund_pending: refundPending,
+    refund_issued: refundIssued,
     coordinator_notes: event?.coordinator_notes || null,
     description: event?.description || null,
     welcome_message: event?.welcome_message || null,
     payment_required: event?.payment_required || false,
+    cost: event?.cost || null,
   })
 }
 

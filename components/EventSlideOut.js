@@ -276,10 +276,12 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
     </div>
   )
 
-  const bookings = data?.bookings || []
+  const bookings     = data?.bookings || []
+  const refundPending = data?.refund_pending || []
+  const refundIssued  = data?.refund_issued || []
   const confirmed = bookings.filter(b => b.status === "confirmed")
   const waitlisted = bookings.filter(b => b.status === "waitlist")
-  const cancelled = bookings.filter(b => b.status === "cancelled")
+  const eventCost = data?.cost ? parseFloat(data.cost) : null
   // Refund due: payment_required event, confirmed booking was cancelled (payment was made but not refunded)
   // We track these as cancelled bookings where payment_status is NOT 'refunded' and was previously 'confirmed'
   // Actually: we only see active bookings. Cancelled bookings are deleted. Refund tracking is via payment_status = 'pending' on a cancelled booking.
@@ -464,14 +466,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
                       )}
                     </div>
                   </div>
-                  {paymentRequired && isPaid && firstConf && (
-                    <div style={{ marginTop: 6, borderTop: "1px solid var(--border)", paddingTop: 6 }}>
-                      <button onClick={() => toggleRefund(firstConf)}
-                        style={{ fontSize: 11, color: "var(--text-dim)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-                        Mark refund issued
-                      </button>
-                    </div>
-                  )}
+
                 </div>
               )
             })}
@@ -479,18 +474,55 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
         )
       })()}
 
-      {/* Refund Due section — only when payment required and any booking has refund pending */}
-      {paymentRequired && bookings.some(b => b.payment_status === "refunded") && (
-        <div style={{ background: "var(--amber-light)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--amber)", marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--amber-dark)", marginBottom: 6 }}>⚠️ Refunds Marked</div>
-          {bookings.filter(b => b.payment_status === "refunded").map(b => (
-            <div key={b.id} style={{ fontSize: 13, color: "var(--amber-dark)", display: "flex", justifyContent: "space-between" }}>
-              <span>{b.members?.hide_name ? "Resident" : (b.members?.name || "—")}</span>
-              <button onClick={() => toggleRefund(b)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "var(--text-dim)", textDecoration: "underline" }}>
-                Unmark
-              </button>
-            </div>
-          ))}
+      {/* Refunds Pending — cancelled bookings that were paid, need refund */}
+      {paymentRequired && refundPending.length > 0 && (
+        <div style={{ background: "#fef3c7", borderRadius: 10, padding: "10px 12px", border: "1px solid #d97706", marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 8 }}>⚠️ Refunds Due ({refundPending.length})</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {refundPending.map(b => {
+              const name = b.members?.hide_name ? "Resident" : (b.members?.name || b.members?.username || "—")
+              const seats = b.seats || 1
+              const total = eventCost ? `$${(eventCost * seats).toFixed(2)}` : null
+              return (
+                <div key={b.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#92400e" }}>{name}</span>
+                    <span style={{ fontSize: 11, color: "#d97706", marginLeft: 6 }}>{seats} seat{seats !== 1 ? "s" : ""}{total ? ` · ${total}` : ""}</span>
+                  </div>
+                  <button onClick={() => toggleRefund(b)}
+                    style={{ fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 8, border: "1px solid #d97706", background: "none", color: "#d97706", cursor: "pointer", whiteSpace: "nowrap" }}>
+                    Mark Refunded
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Refunds Issued — cancelled bookings where refund was given */}
+      {paymentRequired && refundIssued.length > 0 && (
+        <div style={{ background: "var(--surface2)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border)", marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", marginBottom: 8 }}>✓ Refunds Issued ({refundIssued.length})</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {refundIssued.map(b => {
+              const name = b.members?.hide_name ? "Resident" : (b.members?.name || b.members?.username || "—")
+              const seats = b.seats || 1
+              const total = eventCost ? `$${(eventCost * seats).toFixed(2)}` : null
+              return (
+                <div key={b.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <div>
+                    <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{name}</span>
+                    <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 6 }}>{seats} seat{seats !== 1 ? "s" : ""}{total ? ` · ${total}` : ""}</span>
+                  </div>
+                  <button onClick={() => toggleRefund(b)}
+                    style={{ fontSize: 10, color: "var(--text-dim)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                    Unmark
+                  </button>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

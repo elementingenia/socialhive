@@ -181,15 +181,22 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
 
         {/* Booking status or CTA */}
         <div style={{ marginTop: "0.6rem" }}>
-          {isConfirmed ? (
-            <div style={{
-              display: "inline-flex", alignItems: "center",
-              background: isPending ? "#fef3c7" : "#dcfce7",
-              color: isPending ? "#92400e" : "#15803d",
-              borderRadius: "20px", padding: "0.25rem 0.75rem",
-              fontSize: "0.78rem", fontWeight: 700,
-            }}>{isPending ? "⏳ Payment pending" : "✓ You're booked"}</div>
-          ) : isWaitlist ? (
+          {isConfirmed ? (() => {
+            const seats = myBooking?.seats || 1
+            const total = event.cost ? `$${(parseFloat(event.cost) * seats).toFixed(2)}` : null
+            const label = isPending
+              ? `${seats} seat${seats !== 1 ? "s" : ""} booked · Unpaid${total ? " " + total : ""}`
+              : `✓ ${seats} seat${seats !== 1 ? "s" : ""} confirmed${total ? " · Paid " + total : ""}`
+            return (
+              <div style={{
+                display: "inline-flex", alignItems: "center",
+                background: isPending ? "#fef3c7" : "#dcfce7",
+                color: isPending ? "#92400e" : "#15803d",
+                borderRadius: "20px", padding: "0.25rem 0.75rem",
+                fontSize: "0.78rem", fontWeight: 700,
+              }}>{label}</div>
+            )
+          })() : isWaitlist ? (
             <div style={{
               display: "inline-flex", alignItems: "center",
               background: "var(--surface2)", color: "var(--text-dim)",
@@ -267,11 +274,11 @@ function MyBookingsCard({ bookings, onViewAll }) {
                     </span>
                   ) : isPending ? (
                     <span style={{ background: "#fef3c7", color: "#92400e", borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
-                      ⏳ Pending
+                      {n} seat{n !== 1 ? "s" : ""} · Unpaid{ev?.cost ? ` $${(parseFloat(ev.cost) * n).toFixed(2)}` : ""}
                     </span>
                   ) : (
-                    <span style={{ background: COLOUR, color: "#fff", borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
-                      Booked · {n} {n === 1 ? "place" : "places"}
+                    <span style={{ background: "#dcfce7", color: "#15803d", borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
+                      ✓ {n} seat{n !== 1 ? "s" : ""}{ev?.payment_required ? " · Paid" : ""}
                     </span>
                   )}
                 </div>
