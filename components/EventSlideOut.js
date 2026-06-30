@@ -100,37 +100,35 @@ function ConfirmDialog({ message, onConfirm, onCancel, paymentNote }) {
 }
 
 function SplitDialog({ offer, onAccept, onDecline }) {
+  const allWaitlist = offer.confirmed === 0
+  const title = allWaitlist ? "No seats available" : "Not enough seats"
+  const acceptLabel = allWaitlist ? "Join waitlist" : "Confirm booking"
+
+  let body
+  if (allWaitlist) {
+    body = <>
+      There are no confirmed seats available right now. All{" "}
+      <strong>{offer.waitlisted}</strong> seat{offer.waitlisted !== 1 ? "s" : ""} will
+      go on the waitlist. You&apos;ll be confirmed automatically as seats free up.
+    </>
+  } else {
+    body = <>
+      Only <strong>{offer.confirmed}</strong> seat{offer.confirmed !== 1 ? "s" : ""} are
+      available right now. <strong>{offer.confirmed}</strong> seat{offer.confirmed !== 1 ? "s" : ""} will
+      be confirmed and <strong>{offer.waitlisted}</strong> seat{offer.waitlisted !== 1 ? "s" : ""} will
+      go on the waitlist.
+    </>
+  }
+
   return (
     <div onClick={onDecline} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500,
       display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 340 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Not quite enough seats</div>
-        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 16, lineHeight: 1.5 }}>
-          Only <strong>{offer.confirmed}</strong> seat{offer.confirmed !== 1 ? "s" : ""} available right now.
-          We can confirm {offer.confirmed} and add {offer.waitlisted} to the waitlist.
-        </div>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>{title}</div>
+        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 16, lineHeight: 1.5 }}>{body}</div>
         <div style={{ display: "flex", gap: 10 }}>
           <button onClick={onDecline} style={{ flex: 1, padding: "11px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>No thanks</button>
-          <button onClick={onAccept} style={{ flex: 1, padding: "11px 0", background: "var(--amber)", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff" }}>Accept split</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-function WaitlistDialog({ offer, onAccept, onDecline }) {
-  return (
-    <div onClick={onDecline} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500,
-      display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 340 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>This event is full</div>
-        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 16, lineHeight: 1.5 }}>
-          There are no seats available right now. Would you like to join the waitlist
-          for <strong>{offer.seats}</strong> seat{offer.seats !== 1 ? "s" : ""}? You&apos;ll automatically be confirmed
-          if a spot opens up.
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onDecline} style={{ flex: 1, padding: "11px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>No thanks</button>
-          <button onClick={onAccept} style={{ flex: 1, padding: "11px 0", background: "var(--amber)", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff" }}>Join waitlist</button>
+          <button onClick={onAccept} style={{ flex: 1, padding: "11px 0", background: "var(--amber)", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff" }}>{acceptLabel}</button>
         </div>
       </div>
     </div>
@@ -495,7 +493,6 @@ function BookingSection({ event, onRefresh }) {
   const [toast, setToast] = useState(null)
   const [confirm, setConfirm] = useState(false)
   const [splitOffer, setSplitOffer] = useState(null)
-  const [waitlistOffer, setWaitlistOffer] = useState(null)
 
   const myConfirmed = event.my_bookings?.find(b => b.status === "confirmed")
   const myWaitlist  = event.my_bookings?.find(b => b.status === "waitlist")
@@ -520,25 +517,29 @@ function BookingSection({ event, onRefresh }) {
     return session?.access_token
   }
 
-  async function handleBook(acceptSplit = false, acceptWaitlist = false) {
+  async function handleBook(acceptSplit = false) {
     setLoading(true)
     try {
       const token = await getToken()
       const res = await fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ event_id: event.id, seats, accept_split: acceptSplit, accept_waitlist: acceptWaitlist }),
+        body: JSON.stringify({ event_id: event.id, seats, accept_split: acceptSplit }),
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Booking failed", "error"); return }
       if (data.status === "split_offer") { setSplitOffer(data); return }
-      if (data.status === "waitlist_offer") { setWaitlistOffer(data); return }
-      // Success — always clear any pending offer dialogs
+      // Success — clear any dialog
       setSplitOffer(null)
-      setWaitlistOffer(null)
-      if (data.status === "confirmed") showToast(`Booked — ${data.seats} seat${data.seats !== 1 ? "s" : ""} confirmed!`)
-      else if (data.status === "waitlist") showToast("Added to waitlist", "warn")
-      else if (data.status === "split_confirmed") showToast(`${data.confirmed} confirmed + ${data.waitlisted} waitlisted`, "warn")
+      if (data.status === "confirmed") {
+        showToast(`Booked — ${data.seats} seat${data.seats !== 1 ? "s" : ""} confirmed!`)
+      } else if (data.status === "split_confirmed") {
+        if (data.confirmed === 0) {
+          showToast(`${data.waitlisted} seat${data.waitlisted !== 1 ? "s" : ""} added to waitlist`, "warn")
+        } else {
+          showToast(`${data.confirmed} seat${data.confirmed !== 1 ? "s" : ""} confirmed · ${data.waitlisted} on waitlist`, "warn")
+        }
+      }
       onRefresh()
     } finally { setLoading(false) }
   }
@@ -592,9 +593,6 @@ function BookingSection({ event, onRefresh }) {
       )}
       {splitOffer && (
         <SplitDialog offer={splitOffer} onAccept={() => handleBook(true)} onDecline={() => setSplitOffer(null)} />
-      )}
-      {waitlistOffer && (
-        <WaitlistDialog offer={waitlistOffer} onAccept={() => handleBook(false, true)} onDecline={() => setWaitlistOffer(null)} />
       )}
 
       {!isBookclubEvent && max > 0 && <CapacityBar booked={booked} max={max} waitlist={event.waitlist_count || 0} />}
