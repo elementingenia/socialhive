@@ -5,6 +5,15 @@ import { useUser } from "@/lib/UserContext"
 import { useUI }   from "@/lib/UIContext"
 import { getModuleColour, getPageTitle } from "@/lib/navUtils"
 
+function BellIcon({ size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+      <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+    </svg>
+  )
+}
+
 function getInitials(name) {
   if (!name) return "?"
   const parts = name.trim().split(/\s+/)
@@ -15,7 +24,7 @@ function getInitials(name) {
 
 export default function Header() {
   const { memberName, member } = useUser()
-  const { openProfile, openPinModal } = useUI()
+  const { openProfile, openPinModal, openNotif, notifCount, refreshNotifCount } = useUI()
   const pathname     = usePathname()
   const router       = useRouter()
   const moduleColour = getModuleColour(pathname)
@@ -33,6 +42,8 @@ export default function Header() {
     document.addEventListener("mousedown", handler)
     return () => document.removeEventListener("mousedown", handler)
   }, [menuOpen])
+
+  useEffect(() => { refreshNotifCount() }, [refreshNotifCount])
 
   async function signOut() {
     setMenuOpen(false)
@@ -80,6 +91,17 @@ export default function Header() {
     </div>
   )
 
+  const bellBtn = (
+    <button onClick={openNotif} aria-label="Notifications" style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", border: "1.5px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", background: "none", cursor: "pointer", flexShrink: 0 }}>
+      <BellIcon size={16} />
+      {notifCount > 0 && (
+        <span style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: "50%", background: "#e53e3e", color: "#fff", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
+          {notifCount > 9 ? "9+" : notifCount}
+        </span>
+      )}
+    </button>
+  )
+
   const helpBtn = (
     <a href="/help" aria-label="Help" style={{ width: 30, height: 30, borderRadius: "50%", border: "1.5px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontWeight: 800, fontSize: "0.8rem", textDecoration: "none", lineHeight: 1, flexShrink: 0 }}>?</a>
   )
@@ -96,6 +118,7 @@ export default function Header() {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+          {bellBtn}
           {helpBtn}
           {avatarPill}
         </div>
@@ -119,6 +142,7 @@ export default function Header() {
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: "0.45rem" }}>
+        {bellBtn}
         {helpBtn}
         {avatarPill}
       </div>
