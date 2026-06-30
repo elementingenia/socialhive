@@ -648,7 +648,12 @@ function BookingSection({ event, onRefresh }) {
 
       {modifying && (
         <div>
-          <SeatSelector value={modifySeats} min={1} max={maxPerBooking} onChange={setModifySeats} />
+          <SeatSelector value={modifySeats} min={1} max={myWaitlist ? (myConfirmed?.seats || 0) + (myWaitlist?.seats || 0) : maxPerBooking} onChange={setModifySeats} />
+          {myWaitlist && (
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 8 }}>
+              Can&apos;t increase seats on a split booking — cancel and rebook to request more seats.
+            </div>
+          )}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={() => setModifying(false)}
               style={{ flex: 1, padding: "12px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>Cancel</button>
