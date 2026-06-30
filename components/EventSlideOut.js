@@ -117,6 +117,25 @@ function SplitDialog({ offer, onAccept, onDecline }) {
     </div>
   )
 }
+function WaitlistDialog({ offer, onAccept, onDecline }) {
+  return (
+    <div onClick={onDecline} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 340 }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>This event is full</div>
+        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 16, lineHeight: 1.5 }}>
+          There are no seats available right now. Would you like to join the waitlist
+          for <strong>{offer.seats}</strong> seat{offer.seats !== 1 ? "s" : ""}? You&apos;ll automatically be confirmed
+          if a spot opens up.
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onDecline} style={{ flex: 1, padding: "11px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>No thanks</button>
+          <button onClick={onAccept} style={{ flex: 1, padding: "11px 0", background: "var(--amber)", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff" }}>Join waitlist</button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── EC names display ──────────────────────────────────────────────────────────
 function ECNames({ coordinators, colour }) {
