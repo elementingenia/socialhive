@@ -438,19 +438,18 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
                     </div>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                       {paymentRequired && confirmedSeats > 0 && firstConf && !isRefunded && (
-                        <div onClick={() => togglePayment(firstConf)}
-                          title={isPaid ? "Mark as unpaid" : "Mark as paid"}
-                          style={{ display: "flex", alignItems: "center", borderRadius: 20, border: "1.5px solid", borderColor: isPaid ? "#16a34a" : "#d97706", background: isPaid ? "#dcfce7" : "#fef3c7", cursor: "pointer", overflow: "hidden", flexShrink: 0 }}>
-                          <span style={{ padding: "3px 9px", fontSize: 11, fontWeight: 700, borderRadius: "20px 0 0 20px",
-                            background: !isPaid ? "#d97706" : "transparent",
-                            color: !isPaid ? "#fff" : "#d97706" }}>
-                            Unpaid
-                          </span>
-                          <span style={{ padding: "3px 9px", fontSize: 11, fontWeight: 700, borderRadius: "0 20px 20px 0",
-                            background: isPaid ? "#16a34a" : "transparent",
-                            color: isPaid ? "#fff" : "#16a34a" }}>
-                            Paid
-                          </span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: !isPaid ? "var(--text)" : "var(--text-dim)" }}>Unpaid</span>
+                          <div onClick={() => togglePayment(firstConf)} role="switch" aria-checked={isPaid}
+                            title={isPaid ? "Mark as unpaid" : "Mark as paid"}
+                            style={{ position: "relative", width: 40, height: 22, borderRadius: 11,
+                              background: isPaid ? "#16a34a" : "var(--border)",
+                              cursor: "pointer", transition: "background 0.2s", flexShrink: 0 }}>
+                            <span style={{ position: "absolute", top: 3, left: isPaid ? 20 : 3, width: 16, height: 16,
+                              borderRadius: "50%", background: "#fff", transition: "left 0.2s",
+                              boxShadow: "0 1px 3px rgba(0,0,0,.25)" }} />
+                          </div>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: isPaid ? "#16a34a" : "var(--text-dim)" }}>Paid</span>
                         </div>
                       )}
                       {paymentRequired && confirmedSeats > 0 && firstConf && isRefunded && (
