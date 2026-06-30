@@ -25,7 +25,7 @@ export async function GET(req) {
 
   const { data: events, error } = await supabaseAdmin
     .from('events')
-    .select('*, movies(id, title, poster_url, genre, plot, runtime, rating_imdb, rating_rt, imdb_id, streaming_au, we_own, actors, rating)')
+    .select('*, bus_driver:members!bus_driver_id(name, username), movies(id, title, poster_url, genre, plot, runtime, rating_imdb, rating_rt, imdb_id, streaming_au, we_own, actors, rating)')
     .eq('hub_type', 'movie')
     .gte('event_date', today)
     .order('event_date')

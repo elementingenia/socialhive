@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { computeFreeCost } from '@/lib/freeCost'
 import EventSlideOut from '@/components/EventSlideOut'
+import { BusIcon } from '@/components/NavIcons'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -344,6 +345,11 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit }) {
             {ev.coordinator && (
               <span style={{ fontSize: '0.72rem', color: 'var(--teal)', fontWeight: 600 }}>
                 👤 {ev.coordinator.name || ev.coordinator.username}
+              </span>
+            )}
+            {ev.has_bus && ev.bus_driver && (
+              <span style={{ fontSize: '0.72rem', color: 'var(--teal)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                <BusIcon size={12} /> {ev.bus_driver.name || ev.bus_driver.username}
               </span>
             )}
           </div>

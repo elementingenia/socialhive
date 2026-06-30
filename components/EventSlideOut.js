@@ -946,7 +946,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
               )}
 
               {/* Bus driver — social/outings offsite only */}
-              {(event.hub_type === "social" || event.hub_type === "outings") && event.has_bus && event.bus_driver && (
+              {event.has_bus && event.bus_driver && (
                 <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>
                   <BusIcon size={14} /> {event.bus_driver.name || event.bus_driver.username}
                 </div>
