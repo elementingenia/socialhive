@@ -761,8 +761,8 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
             style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 1rem", background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", color: "var(--text-dim)", fontFamily: "inherit" }}>
             <span>
               <strong style={{ color: "var(--text)" }}>{booked} seat{booked !== 1 ? "s" : ""}</strong>
-              {isAdmin && unpaidSeats > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.4rem" }}>({unpaidSeats} unpaid)</span>}
               <span style={{ marginLeft: "0.4rem" }}>of {event.max_seats}</span>
+              {isAdmin && unpaidSeats > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.4rem" }}>({unpaidSeats} unpaid)</span>}
               {isAdmin && waiting > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.4rem" }}>· {waiting} waitlist</span>}
             </span>
             <span style={{ fontSize: "0.65rem", color: "var(--teal)" }}>{showAttendees ? "▲ Hide" : "▼ Attendees"}</span>
