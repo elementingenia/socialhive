@@ -442,6 +442,7 @@ function BookingSection({ event, onRefresh }) {
   const [toast, setToast] = useState(null)
   const [confirm, setConfirm] = useState(false)
   const [splitOffer, setSplitOffer] = useState(null)
+  const [waitlistOffer, setWaitlistOffer] = useState(null)
 
   const myConfirmed = event.my_bookings?.find(b => b.status === "confirmed")
   const myWaitlist  = event.my_bookings?.find(b => b.status === "waitlist")
@@ -466,23 +467,24 @@ function BookingSection({ event, onRefresh }) {
     return session?.access_token
   }
 
-  async function handleBook(acceptSplit = false) {
+  async function handleBook(acceptSplit = false, acceptWaitlist = false) {
     setLoading(true)
     try {
       const token = await getToken()
       const res = await fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ event_id: event.id, seats, accept_split: acceptSplit }),
+        body: JSON.stringify({ event_id: event.id, seats, accept_split: acceptSplit, accept_waitlist: acceptWaitlist }),
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Booking failed", "error"); return }
       if (data.status === "split_offer") { setSplitOffer(data); return }
+      if (data.status === "waitlist_offer") { setWaitlistOffer(data); return }
       if (data.status === "confirmed") showToast(`Booked — ${data.seats} seat${data.seats !== 1 ? "s" : ""} confirmed!`)
       else if (data.status === "waitlist") showToast("Added to waitlist", "warn")
       else if (data.status === "split_confirmed") showToast(`${data.confirmed} confirmed + ${data.waitlisted} waitlisted`, "warn")
       onRefresh()
-    } finally { setLoading(false); setSplitOffer(null) }
+    } finally { setLoading(false); setSplitOffer(null); setWaitlistOffer(null) }
   }
 
   async function handleModify() {
@@ -534,6 +536,9 @@ function BookingSection({ event, onRefresh }) {
       )}
       {splitOffer && (
         <SplitDialog offer={splitOffer} onAccept={() => handleBook(true)} onDecline={() => setSplitOffer(null)} />
+      )}
+      {waitlistOffer && (
+        <WaitlistDialog offer={waitlistOffer} onAccept={() => handleBook(false, true)} onDecline={() => setWaitlistOffer(null)} />
       )}
 
       {!isBookclubEvent && max > 0 && <CapacityBar booked={booked} max={max} waitlist={event.waitlist_count || 0} />}

@@ -135,3 +135,81 @@ test.describe('Admin panel', () => {
     await expect(page.getByText('← Admin')).toBeVisible()
   })
 })
+
+// ── Waitlist confirmation dialog ──────────────────────────────────────────────
+test.describe('Waitlist confirmation', () => {
+  test('shows waitlist dialog when event is full, dismiss works', async ({ page }) => {
+    await page.goto('/movies')
+    await page.waitForLoadState('networkidle')
+
+    // Intercept bookings POST to simulate a full event returning waitlist_offer
+    await page.route('/api/bookings', async (route) => {
+      if (route.request().method() === 'POST') {
+        const body = JSON.parse(route.request().postData() || '{}')
+        if (!body.accept_waitlist) {
+          await route.fulfill({ status: 200, contentType: 'application/json',
+            body: JSON.stringify({ status: 'waitlist_offer', seats: body.seats || 1 }) })
+        } else {
+          await route.fulfill({ status: 200, contentType: 'application/json',
+            body: JSON.stringify({ status: 'waitlist', seats: body.seats || 1 }) })
+        }
+      } else {
+        await route.continue()
+      }
+    })
+
+    // Open slideout for next screening
+    await page.locator('text=Tap to book').first().click()
+    await page.waitForLoadState('networkidle')
+
+    // Click Book Now / Join Waitlist button
+    const bookBtn = page.getByRole('button', { name: /book now|join waitlist/i }).first()
+    await expect(bookBtn).toBeVisible({ timeout: 5000 })
+    await bookBtn.click()
+
+    // Waitlist dialog must appear
+    await expect(page.getByText('This event is full')).toBeVisible({ timeout: 3000 })
+    await expect(page.getByRole('button', { name: 'Join waitlist' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'No thanks' })).toBeVisible()
+
+    // Dismiss — dialog should disappear, no booking made
+    await page.getByRole('button', { name: 'No thanks' }).click()
+    await expect(page.getByText('This event is full')).not.toBeVisible()
+  })
+
+  test('confirms waitlist placement when user accepts', async ({ page }) => {
+    await page.goto('/movies')
+    await page.waitForLoadState('networkidle')
+
+    await page.route('/api/bookings', async (route) => {
+      if (route.request().method() === 'POST') {
+        const body = JSON.parse(route.request().postData() || '{}')
+        if (!body.accept_waitlist) {
+          await route.fulfill({ status: 200, contentType: 'application/json',
+            body: JSON.stringify({ status: 'waitlist_offer', seats: body.seats || 1 }) })
+        } else {
+          await route.fulfill({ status: 200, contentType: 'application/json',
+            body: JSON.stringify({ status: 'waitlist', seats: body.seats || 1 }) })
+        }
+      } else {
+        await route.continue()
+      }
+    })
+
+    await page.locator('text=Tap to book').first().click()
+    await page.waitForLoadState('networkidle')
+
+    const bookBtn = page.getByRole('button', { name: /book now|join waitlist/i }).first()
+    await expect(bookBtn).toBeVisible({ timeout: 5000 })
+    await bookBtn.click()
+
+    // Dialog appears
+    await expect(page.getByText('This event is full')).toBeVisible({ timeout: 3000 })
+
+    // Accept waitlist
+    await page.getByRole('button', { name: 'Join waitlist' }).click()
+
+    // Toast confirmation should appear
+    await expect(page.getByText(/waitlist/i).first()).toBeVisible({ timeout: 4000 })
+  })
+})

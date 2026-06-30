@@ -23,7 +23,7 @@ export async function POST(req) {
   if (!member) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   const body = await req.json()
-  const { event_id, accept_split } = body
+  const { event_id, accept_split, accept_waitlist } = body
   const requestedSeats = Math.min(4, Math.max(1, parseInt(body.seats) || 1))
 
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
@@ -53,6 +53,9 @@ export async function POST(req) {
   const bookedAt = new Date().toISOString()
 
   if (available === 0) {
+    if (!accept_waitlist) {
+      return NextResponse.json({ status: 'waitlist_offer', seats: requestedSeats })
+    }
     const { error } = await supabaseAdmin.from('bookings').insert({
       event_id, member_id: member.id, seats: requestedSeats, status: 'waitlist', booked_at: bookedAt,
     })
