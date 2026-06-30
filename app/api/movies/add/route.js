@@ -36,13 +36,23 @@ export async function POST(req) {
 
   if (!title) return NextResponse.json({ error: 'Title required' }, { status: 400 })
 
-  // Block only if already suggested (we_own=false) — DVDs can also be suggested independently
+  // Block if already a viewing suggestion (we_own=false)
   let existingQuery = supabaseAdmin.from('movies').select('id').eq('we_own', false)
   existingQuery = tmdb_id
     ? existingQuery.eq('tmdb_id', tmdb_id.toString())
     : existingQuery.ilike('title', title)
   const { data: existing } = await existingQuery.maybeSingle()
   if (existing) return NextResponse.json({ error: `"${title}" has already been suggested` }, { status: 409 })
+
+  // Block if this is a DVD we already own — user should suggest from the DVD Library instead
+  if (tmdb_id) {
+    const { data: ownedDvd } = await supabaseAdmin
+      .from('movies').select('id, title').eq('we_own', true).eq('tmdb_id', tmdb_id.toString()).maybeSingle()
+    if (ownedDvd) return NextResponse.json({
+      error: `"${title}" is already in the DVD Library — suggest it for a screening from the DVD page instead.`,
+      dvd_exists: true,
+    }, { status: 409 })
+  }
 
   const rating_rt = await getRtRating(imdb_id)
 

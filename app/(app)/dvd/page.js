@@ -104,6 +104,8 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, active
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [borrowing,     setBorrowing]     = useState(false)
   const [returning,     setReturning]     = useState(false)
+  const [suggesting,    setSuggesting]    = useState(false)
+  const [suggested,     setSuggested]     = useState(movie.is_viewing_suggestion || false)
   const genres  = parseGenres(movie.genre)
   const imdbUrl = movie.imdb_id ? 'https://www.imdb.com/title/' + movie.imdb_id + '/' : null
 
@@ -128,6 +130,33 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, active
     if (error) { addToast('Could not return — ' + error.message, 'error'); return }
     addToast(movie.title + ' returned — thanks!')
     onLoansChanged()
+  }
+
+  async function handleSuggest() {
+    if (!session) { addToast('Sign in to suggest DVDs', 'error'); return }
+    setSuggesting(true)
+    const res = await fetch('/api/dvd/suggest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session?.access_token },
+      body: JSON.stringify({ movie_id: movie.id }),
+    })
+    setSuggesting(false)
+    if (!res.ok) { const d = await res.json().catch(() => ({})); addToast(d.error || 'Could not suggest', 'error'); return }
+    setSuggested(true)
+    addToast(movie.title + ' suggested for a future screening!')
+  }
+
+  async function handleUnsuggest() {
+    setSuggesting(true)
+    const res = await fetch('/api/dvd/suggest', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session?.access_token },
+      body: JSON.stringify({ movie_id: movie.id }),
+    })
+    setSuggesting(false)
+    if (!res.ok) { const d = await res.json().catch(() => ({})); addToast(d.error || 'Could not remove suggestion', 'error'); return }
+    setSuggested(false)
+    addToast('Suggestion removed')
   }
 
   async function handleDelete() {
@@ -240,6 +269,29 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, active
                 </div>
               ) : null}
 
+              {/* Suggest for Screening — visible to all signed-in members */}
+              {memberId && (
+                <div style={{ marginTop:'0.5rem', borderTop:'1px solid var(--border)', paddingTop:'0.75rem' }}>
+                  {suggested ? (
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.75rem' }}>
+                      <div style={{ fontSize:'0.85rem', color:'var(--teal)', fontWeight:600 }}>
+                        ✓ Suggested for a future screening
+                      </div>
+                      {isAdmin && (
+                        <button onClick={handleUnsuggest} disabled={suggesting}
+                          style={{ flexShrink:0, background:'none', border:'1px solid var(--border)', borderRadius:'8px', padding:'0.3rem 0.65rem', fontSize:'0.75rem', fontWeight:600, color:'var(--text-dim)', cursor:suggesting?'not-allowed':'pointer', opacity:suggesting?0.5:1 }}>
+                          {suggesting ? '…' : 'Remove'}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <button onClick={handleSuggest} disabled={suggesting}
+                      style={{ width:'100%', background:'transparent', color:'var(--teal)', border:'1.5px solid var(--teal)', borderRadius:'10px', padding:'0.75rem', fontSize:'0.9rem', fontWeight:700, cursor:suggesting?'not-allowed':'pointer', opacity:suggesting?0.6:1 }}>
+                      {suggesting ? 'Submitting…' : '🎬 Suggest for a Future Screening'}
+                    </button>
+                  )}
+                </div>
+              )}
 
             </div>
           </div>

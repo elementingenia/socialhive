@@ -560,7 +560,7 @@ export default function LibraryPage() {
     ])
     // Show suggestions (we_own=false) + any we_own=true movies that have upcoming events
     const scheduledMovieIds = new Set((eventsData||[]).map(e => e.movie_id))
-    const filtered = (moviesData||[]).filter(m => !m.we_own || scheduledMovieIds.has(m.id))
+    const filtered = (moviesData||[]).filter(m => !m.we_own || m.is_viewing_suggestion || scheduledMovieIds.has(m.id))
     setMovies(filtered)
     setVotes(votesData||[])
     // Store FREE/COST supporting data
