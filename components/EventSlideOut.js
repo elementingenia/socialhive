@@ -389,9 +389,21 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
       )}
 
       {/* Attendee list */}
-      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-        Attendees ({confirmed.length}{waitlisted.length > 0 ? ` + ${waitlisted.length} waitlist` : ""})
-      </div>
+      {(() => {
+        const totalSeats = confirmed.reduce((s, b) => s + (b.seats || 1), 0)
+        const unpaidSeats = confirmed.filter(b => paymentRequired && b.payment_status !== "confirmed" && b.payment_status !== "refunded").reduce((s, b) => s + (b.seats || 1), 0)
+        return (
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+            Attendees — {totalSeats} seat{totalSeats !== 1 ? "s" : ""} taken
+            {paymentRequired && unpaidSeats > 0 && (
+              <span style={{ color: "var(--amber-dark)", fontWeight: 700 }}> · {unpaidSeats} unpaid</span>
+            )}
+            {waitlisted.length > 0 && (
+              <span style={{ color: "var(--text-dim)", fontWeight: 600 }}>{" "}+ {waitlisted.length} waitlist</span>
+            )}
+          </div>
+        )
+      })()}
 
       {bookings.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--text-dim)", fontStyle: "italic", marginBottom: 12 }}>No bookings yet</div>
@@ -458,15 +470,16 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
                         <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12,
                           background: "#f3f4f6", color: "#9ca3af" }}>Refunded</span>
                       )}
-                      {!isOwnBooking && (
-                        <button onClick={() => setCancelTarget({ id: allIds[0], _allIds: allIds, members: member })}
-                          style={{ fontSize: 11, padding: "4px 8px", borderRadius: 8, border: "1px solid var(--danger)", background: "none", color: "var(--danger)", cursor: "pointer", fontWeight: 600 }}>
-                          Cancel
-                        </button>
-                      )}
                     </div>
                   </div>
-
+                  {!isOwnBooking && (
+                    <div style={{ textAlign: "center", marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
+                      <button onClick={() => setCancelTarget({ id: allIds[0], _allIds: allIds, members: member })}
+                        style={{ fontSize: 12, padding: "5px 20px", borderRadius: 8, border: "1px solid var(--danger)", background: "none", color: "var(--danger)", cursor: "pointer", fontWeight: 600 }}>
+                        Cancel Booking
+                      </button>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -539,7 +552,8 @@ function BookingSection({ event, onRefresh }) {
 
   const myConfirmed = event.my_bookings?.find(b => b.status === "confirmed")
   const myWaitlist  = event.my_bookings?.find(b => b.status === "waitlist")
-  const booked = event.bookings_count || 0
+  const booked = event.bookings_count
+    ?? (event.bookings?.filter(b => b.status === 'confirmed').reduce((s, b) => s + (b.seats || 1), 0) || 0)
   const max = event.max_seats || 0
   const maxPerBooking   = event.max_seats_per_booking || 4
   const isMovieEvent    = event.hub_type === "movie"
