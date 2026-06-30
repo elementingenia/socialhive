@@ -450,8 +450,8 @@ function MonthView({ events, onEventTap }) {
 }
 
 // ── CalendarView (main export) ────────────────────────────────────────────────
-export default function CalendarView({ events = [], onEventTap }) {
-  const [view, setView] = useState("week")
+export default function CalendarView({ events = [], onEventTap, defaultView = "week" }) {
+  const [view, setView] = useState(defaultView)
   const [activeHubs, setActiveHubs] = useState(["movie", "bookclub", "social"])
 
   const today = new Date()

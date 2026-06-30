@@ -119,7 +119,7 @@ export default function PublicCalendarPage() {
           <div style={{ fontSize: 13 }}>Check back soon</div>
         </div>
       ) : (
-        <CalendarView events={events} onEventTap={setSelected} />
+        <CalendarView events={events} onEventTap={setSelected} defaultView="month" />
       )}
 
       <EventSlideOut
