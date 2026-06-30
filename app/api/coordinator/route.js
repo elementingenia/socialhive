@@ -47,11 +47,12 @@ export async function GET(req) {
   const { error, status, member } = await resolveEC(req, eventId)
   if (error) return NextResponse.json({ error }, { status })
 
-  // Fetch all bookings for the event with member info
+  // Fetch active (non-cancelled) bookings for the event with member info
   const { data: bookings, error: be } = await supa
     .from("bookings")
     .select("id, seats, status, payment_status, booked_at, members(id, name, username, hide_name)")
     .eq("event_id", eventId)
+    .neq("status", "cancelled")
     .order("booked_at")
 
   if (be) return NextResponse.json({ error: be.message }, { status: 500 })
@@ -70,6 +71,25 @@ export async function GET(req) {
     welcome_message: event?.welcome_message || null,
     payment_required: event?.payment_required || false,
   })
+}
+
+// Promote waitlisted members when confirmed seats become available
+async function promoteWaitlist(event_id, freedSeats) {
+  const { data: event } = await supa.from("events").select("max_seats").eq("id", event_id).single()
+  const { data: confirmedRows } = await supa
+    .from("bookings").select("seats").eq("event_id", event_id).eq("status", "confirmed")
+  let available = (event?.max_seats || 0) -
+    (confirmedRows || []).reduce((s, b) => s + (b.seats || 1), 0)
+  const { data: waitlisted } = await supa
+    .from("bookings").select("id, seats")
+    .eq("event_id", event_id).eq("status", "waitlist").order("booked_at")
+  for (const waiter of (waitlisted || [])) {
+    if (available <= 0) break
+    if ((waiter.seats || 1) <= available) {
+      await supa.from("bookings").update({ status: "confirmed" }).eq("id", waiter.id)
+      available -= (waiter.seats || 1)
+    }
+  }
 }
 
 // ─── PATCH /api/coordinator ───────────────────────────────────────────────────
@@ -110,12 +130,19 @@ export async function PATCH(req) {
 
   // ── Cancel a booking on behalf of a user ──────────────────────────────────
   if (action === "cancel_booking" && booking_id) {
+    // Fetch booking first so we know seats freed (for waitlist promotion)
+    const { data: bk } = await supa
+      .from("bookings").select("status, seats").eq("id", booking_id).maybeSingle()
     const { error: ce } = await supa
       .from("bookings")
-      .delete()
+      .update({ status: "cancelled" })
       .eq("id", booking_id)
       .eq("event_id", event_id)
     if (ce) return NextResponse.json({ error: ce.message }, { status: 500 })
+    // Promote waitlisted members if a confirmed seat was freed
+    if (bk?.status === "confirmed") {
+      await promoteWaitlist(event_id, bk.seats || 1)
+    }
     return NextResponse.json({ ok: true })
   }
 
