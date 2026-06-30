@@ -398,7 +398,7 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit }) {
         <button onClick={e => { e.stopPropagation(); setShowAttendees(v => !v) }}
           style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 1rem', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'inherit' }}>
           <span>
-            <strong style={{ color: 'var(--green)' }}>{ev.confirmed_seats} confirmed</strong>
+            <strong style={{ color: 'var(--text)' }}>{ev.confirmed_seats} seat{ev.confirmed_seats !== 1 ? 's' : ''}</strong>
             {isAdmin && ev.waitlist_seats > 0 && <span style={{ color: 'var(--amber-dark)', marginLeft: '0.5rem' }}>· {ev.waitlist_seats} waitlist</span>}
             <span style={{ marginLeft: '0.5rem' }}>of {ev.max_seats}</span>
           </span>

@@ -57,6 +57,7 @@ function EventCard({ event, myBooking, isAdmin, onClick }) {
   const confirmedSeats = confirmedBookings.reduce((s, b) => s + (b.seats||1), 0)
   const waitlistCount  = waitlistBookings.length
   const showNames = event.show_attendee_names !== false
+  const unpaidSeats = event.payment_required ? confirmedBookings.filter(b => b.payment_status !== 'confirmed' && b.payment_status !== 'refunded').reduce((s, b) => s + (b.seats || 1), 0) : 0
 
   return (
     <div
@@ -103,9 +104,10 @@ function EventCard({ event, myBooking, isAdmin, onClick }) {
           <button onClick={e => { e.stopPropagation(); setShowAttendees(v => !v) }}
             style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 1rem", background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", color: "var(--text-dim)", fontFamily: "inherit" }}>
             <span>
-              <strong style={{ color: "var(--green)" }}>{confirmedSeats} confirmed</strong>
-              {isAdmin && waitlistCount > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.5rem" }}>· {waitlistCount} waitlist</span>}
-              <span style={{ marginLeft: "0.5rem" }}>of {event.max_seats}</span>
+              <strong style={{ color: "var(--text)" }}>{confirmedSeats} seat{confirmedSeats !== 1 ? "s" : ""}</strong>
+              {isAdmin && unpaidSeats > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.4rem" }}>({unpaidSeats} unpaid)</span>}
+              <span style={{ marginLeft: "0.4rem" }}>of {event.max_seats}</span>
+              {isAdmin && waitlistCount > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.4rem" }}>· {waitlistCount} waitlist</span>}
             </span>
             <span style={{ fontSize: "0.65rem", color: "var(--teal)" }}>{showAttendees ? "▲ Hide" : "▼ Attendees"}</span>
           </button>
