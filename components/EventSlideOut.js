@@ -437,13 +437,25 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
                       </div>
                     </div>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
-                      {paymentRequired && confirmedSeats > 0 && firstConf && (
-                        <button onClick={() => togglePayment(firstConf)}
-                          style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12, border: "none", cursor: "pointer",
-                            background: isPaid ? "#dcfce7" : isRefunded ? "#f3f4f6" : "#fef3c7",
-                            color: isPaid ? "#15803d" : isRefunded ? "#9ca3af" : "#d97706" }}>
-                          {isRefunded ? "Refunded" : isPaid ? "✓ Paid" : "Unpaid"}
-                        </button>
+                      {paymentRequired && confirmedSeats > 0 && firstConf && !isRefunded && (
+                        <div onClick={() => togglePayment(firstConf)}
+                          title={isPaid ? "Mark as unpaid" : "Mark as paid"}
+                          style={{ display: "flex", alignItems: "center", borderRadius: 20, border: "1.5px solid", borderColor: isPaid ? "#16a34a" : "#d97706", background: isPaid ? "#dcfce7" : "#fef3c7", cursor: "pointer", overflow: "hidden", flexShrink: 0 }}>
+                          <span style={{ padding: "3px 9px", fontSize: 11, fontWeight: 700, borderRadius: "20px 0 0 20px",
+                            background: !isPaid ? "#d97706" : "transparent",
+                            color: !isPaid ? "#fff" : "#d97706" }}>
+                            Unpaid
+                          </span>
+                          <span style={{ padding: "3px 9px", fontSize: 11, fontWeight: 700, borderRadius: "0 20px 20px 0",
+                            background: isPaid ? "#16a34a" : "transparent",
+                            color: isPaid ? "#fff" : "#16a34a" }}>
+                            Paid
+                          </span>
+                        </div>
+                      )}
+                      {paymentRequired && confirmedSeats > 0 && firstConf && isRefunded && (
+                        <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12,
+                          background: "#f3f4f6", color: "#9ca3af" }}>Refunded</span>
                       )}
                       {!isOwnBooking && (
                         <button onClick={() => setCancelTarget({ id: allIds[0], _allIds: allIds, members: member })}
@@ -614,7 +626,7 @@ function BookingSection({ event, onRefresh }) {
           </button>
           {event.payment_required && (
             <div style={{ fontSize: 12, color: "var(--text-dim)", textAlign: "center", marginTop: 8 }}>
-              Payment required to confirm your booking. The coordinator will be in touch.
+              {event.cost ? `$${parseFloat(event.cost).toFixed(2)} per seat — ` : ""}Payment is collected by your Event Coordinator.
             </div>
           )}
         </div>
@@ -623,14 +635,20 @@ function BookingSection({ event, onRefresh }) {
       {(myConfirmed || myWaitlist) && !modifying && (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
-            {myConfirmed && (
-              <StatusPill
-                label={event.payment_required
-                  ? (myConfirmed.payment_status === "confirmed" ? "✓ Payment Confirmed" : "⏳ Pending Payment")
-                  : `✓ ${myConfirmed.seats} seat${myConfirmed.seats !== 1 ? "s" : ""} confirmed`}
-                colour={myConfirmed.payment_status === "confirmed" || !event.payment_required ? "var(--green)" : "var(--amber-dark)"}
-              />
-            )}
+            {myConfirmed && (() => {
+              const seats = myConfirmed.seats || 1
+              const isPaid = myConfirmed.payment_status === "confirmed"
+              const totalCost = event.cost ? `$${(parseFloat(event.cost) * seats).toFixed(2)}` : null
+              const label = event.payment_required
+                ? (isPaid
+                    ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} confirmed · Paid${totalCost ? " " + totalCost : ""}`
+                    : `${seats} seat${seats !== 1 ? "s" : ""} booked · Unpaid${totalCost ? " " + totalCost : ""}`)
+                : `✓ ${seats} seat${seats !== 1 ? "s" : ""} confirmed`
+              const colour = event.payment_required
+                ? (isPaid ? "var(--green)" : "#d97706")
+                : "var(--green)"
+              return <StatusPill label={label} colour={colour} />
+            })()}
             {myWaitlist && <StatusPill label={`⏳ ${myWaitlist.seats} on waitlist`} colour="var(--amber-dark)" />}
           </div>
           {myConfirmed && !isBookclubEvent && (
