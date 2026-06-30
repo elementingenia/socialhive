@@ -650,6 +650,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 
 // ── Event Card ────────────────────────────────────────────────────────────────
 function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) {
+  const [showAttendees, setShowAttendees] = useState(false)
   const today     = new Date(); today.setHours(0, 0, 0, 0)
   const evDate    = localDate(event.event_date)
   const isPast    = evDate < today
@@ -660,8 +661,11 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
   const isPending   = isConfirmed && event.payment_required && myBooking?.payment_status === "pending"
   const isWaitlist  = myBooking?.status === "waitlist"
 
-  const booked  = event.bookings?.filter(b => b.status === "confirmed").reduce((s, b) => s + (b.seats || 1), 0) || 0
-  const waiting = event.bookings?.filter(b => b.status === "waitlist").length || 0
+  const confirmedBookings = event.bookings?.filter(b => b.status === "confirmed") || []
+  const waitlistBookings  = event.bookings?.filter(b => b.status === "waitlist") || []
+  const booked  = confirmedBookings.reduce((s, b) => s + (b.seats || 1), 0)
+  const waiting = waitlistBookings.length
+  const showNames = event.show_attendee_names !== false
   const ecNames = coordinators.map(c => c.members?.name || c.members?.username).filter(Boolean)
 
   return (
@@ -748,6 +752,49 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
       </div>
       {/* Booking status strip — always visible */}
       <BookingStrip myBooking={myBooking} isFull={booked >= event.max_seats && event.max_seats > 0} />
+
+      {/* Attendees accordion */}
+      {event.max_seats > 0 && (
+        <div style={{ borderTop: "1px solid var(--border)", background: "var(--surface2)" }}>
+          <button onClick={e => { e.stopPropagation(); setShowAttendees(v => !v) }}
+            style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 1rem", background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", color: "var(--text-dim)", fontFamily: "inherit" }}>
+            <span>
+              <strong style={{ color: "var(--green)" }}>{booked} confirmed</strong>
+              {isAdmin && waiting > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.5rem" }}>· {waiting} waitlist</span>}
+              <span style={{ marginLeft: "0.5rem" }}>of {event.max_seats}</span>
+            </span>
+            <span style={{ fontSize: "0.65rem", color: "var(--teal)" }}>{showAttendees ? "▲ Hide" : "▼ Attendees"}</span>
+          </button>
+          {showAttendees && (
+            <div style={{ padding: "0 1rem 0.75rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+              {confirmedBookings.length > 0 ? (
+                <>
+                  {isAdmin && <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--green)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.15rem" }}>Confirmed</div>}
+                  {confirmedBookings.map((b, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
+                      <span>{showNames ? (b.member?.name || b.member?.username || "Member") : "Guest"}</span>
+                      <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
+                    </div>
+                  ))}
+                </>
+              ) : (
+                <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", fontStyle: "italic" }}>No bookings yet</div>
+              )}
+              {isAdmin && waitlistBookings.length > 0 && (
+                <>
+                  <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--amber-dark)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "0.5rem", marginBottom: "0.15rem" }}>Waitlist</div>
+                  {waitlistBookings.map((b, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
+                      <span>{b.member?.name || b.member?.username || "Member"}</span>
+                      <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -778,7 +825,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id)")
+      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, member:members!member_id(name, username))")
       .eq("hub_type", "social")
       .eq("archived", false)
       .order("event_date", { ascending: true })
