@@ -135,7 +135,7 @@ function ECNames({ coordinators, colour }) {
 }
 
 // ── Coordinator Panel ─────────────────────────────────────────────────────────
-function CoordinatorPanel({ event, colour, onRefresh }) {
+function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   const [data,        setData]        = useState(null)
   const [loading,     setLoading]     = useState(true)
   const [apiError,    setApiError]    = useState(null)
@@ -393,11 +393,13 @@ function CoordinatorPanel({ event, colour, onRefresh }) {
                         {isRefunded ? "Refunded" : isPaid ? "✓ Paid" : "Unpaid"}
                       </button>
                     )}
-                    {/* Cancel booking */}
-                    <button onClick={() => setCancelTarget(b)}
-                      style={{ fontSize: 11, padding: "4px 8px", borderRadius: 8, border: "1px solid var(--danger)", background: "none", color: "var(--danger)", cursor: "pointer", fontWeight: 600 }}>
-                      Cancel
-                    </button>
+                    {/* Cancel booking — hide for the current user's own booking */}
+                    {b.members?.id !== currentMember?.id && (
+                      <button onClick={() => setCancelTarget(b)}
+                        style={{ fontSize: 11, padding: "4px 8px", borderRadius: 8, border: "1px solid var(--danger)", background: "none", color: "var(--danger)", cursor: "pointer", fontWeight: 600 }}>
+                        Cancel
+                      </button>
+                    )}
                   </div>
                 </div>
                 {/* Refund toggle — show if payment was confirmed and EC might want to mark refund */}
@@ -842,7 +844,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
 
               {/* Coordinator Panel */}
               {showCoordinatorPanel && (
-                <CoordinatorPanel event={event} colour={colour} onRefresh={onRefresh} />
+                <CoordinatorPanel event={event} colour={colour} onRefresh={onRefresh} currentMember={member} />
               )}
             </>
           )}
