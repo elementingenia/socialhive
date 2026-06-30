@@ -199,7 +199,7 @@ function VoteGrid({ current, onVote, onRemove, loading }) {
 
 function Overlay({ children, onClose }) {
   return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center', paddingBottom:'60px' }}>
       <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640 }}>{children}</div>
     </div>
   )
@@ -214,7 +214,7 @@ function SuggestOverlay({ children, onClose }) {
     return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update) }
   }, [])
   return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center', paddingBottom:'60px' }}>
       <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, marginBottom:bottomOffset, transition:'margin-bottom 0.18s ease' }}>{children}</div>
     </div>
   )
@@ -253,7 +253,7 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
 
   return (
     <>
-      <div style={{ background:'var(--surface)', borderRadius:'20px 20px 0 0', maxHeight:'92vh', overflowY:'auto' }}>
+      <div style={{ background:'var(--surface)', borderRadius:'20px 20px 0 0', maxHeight:'calc(92vh - 60px)', overflowY:'auto' }}>
         {movie.poster_url && (
           <div style={{ position:'relative', height:180, overflow:'hidden', borderRadius:'20px 20px 0 0' }}>
             <img src={movie.poster_url} alt={movie.title} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', filter:'blur(2px) brightness(0.6)', transform:'scale(1.05)' }} />
@@ -365,7 +365,7 @@ function SuggestSheet({ session, onClose, onAdded, addToast }) {
   const leadActor = preview?.actors?.split(',')[0]?.trim()
 
   return (
-    <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', minHeight: '60vh', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', minHeight: '60vh', maxHeight: 'calc(90vh - 60px)', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.25rem 0.75rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         {preview ? (
@@ -714,7 +714,7 @@ export default function LibraryPage() {
         </Overlay>
       )}
       {showSwiper && (
-        <div onClick={()=>setShowSwiper(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:200, display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+        <div onClick={()=>setShowSwiper(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:200, display:'flex', alignItems:'flex-end', justifyContent:'center', paddingBottom:'60px' }}>
           <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, background:'var(--surface)', borderRadius:'20px 20px 0 0', padding:'1.25rem', maxHeight:'90vh', overflowY:'auto' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.5rem' }}>
               <div style={{ fontWeight:700, fontSize:'0.95rem' }}>Rate Films</div>
