@@ -85,13 +85,16 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen })
           {event.notes && <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontStyle: 'italic', lineHeight: 1.4 }}>{event.notes}</div>}
           <div style={{ marginTop: '0.1rem', display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
             {isBooked && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', background: '#dcfce7', color: '#15803d', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
-                ✓ {myBooking.confirmed_seats} confirmed{myBooking.waitlist_seats > 0 ? ` · ${myBooking.waitlist_seats} waitlisted` : ''}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.1rem' }}>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--teal)' }}>✓ {myBooking.confirmed_seats} seat{myBooking.confirmed_seats !== 1 ? 's' : ''}</div>
+                {myBooking.waitlist_seats > 0 && (
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--amber-dark)' }}>⏳ +{myBooking.waitlist_seats} waitlist</div>
+                )}
               </div>
             )}
             {isWaitlist && !isBooked && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', background: '#fef3c7', color: '#d97706', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
-                ⏳ Waitlisted · {myBooking.waitlist_seats} seat{myBooking.waitlist_seats !== 1 ? 's' : ''}
+              <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--amber-dark)' }}>
+                ⏳ {myBooking.waitlist_seats} waitlisted
               </div>
             )}
             {!isBooked && !isWaitlist && (
@@ -276,18 +279,10 @@ function MyBookingsCard({ bookings, onViewAll, onOpenEvent }) {
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: '0.15rem' }}>{fmtDate(ev?.event_date)}</div>
                 {ev?.event_time && <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{fmtTime(ev.event_time)}</div>}
               </div>
-              <div style={{ textAlign: 'right', flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
-                {confirmed > 0 && (
-                  <div style={{ background: '#dcfce7', color: '#15803d', fontSize: '0.72rem', fontWeight: 700, padding: '0.2rem 0.55rem', borderRadius: '20px', whiteSpace: 'nowrap' }}>
-                    ✓ {confirmed} confirmed{waitlist > 0 ? ` · +${waitlist} waitlisted` : ''}
-                  </div>
-                )}
-                {waitlist > 0 && confirmed === 0 && (
-                  <div style={{ background: '#fef3c7', color: '#d97706', fontSize: '0.72rem', fontWeight: 700, padding: '0.2rem 0.55rem', borderRadius: '20px', whiteSpace: 'nowrap' }}>
-                    ⏳ {waitlist} waitlisted
-                  </div>
-                )}
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '0.1rem' }}>Tap to manage →</div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                {confirmed > 0 && <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--teal)' }}>✓ {confirmed} seat{confirmed !== 1 ? 's' : ''}</div>}
+                {waitlist > 0 && <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--amber-dark)' }}>⏳ +{waitlist} waitlist</div>}
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginTop: '0.2rem' }}>Tap to manage →</div>
               </div>
             </div>
           )
