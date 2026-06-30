@@ -634,8 +634,23 @@ export default function BookClubHome() {
     setSlideOutEvent(toSlideOutShape(ev, myBookings[ev.id]))
   }
 
-  function handleSlideOutRefresh() {
-    setSlideOutEvent(null)
+  async function handleSlideOutRefresh() {
+    if (!slideOutEvent) return
+    const currentId = slideOutEvent.id
+    // Refresh booking state in-place so user sees confirmation without slideout closing
+    const { data: bk } = await supabase
+      .from("bookings")
+      .select("id, status, seats")
+      .eq("event_id", currentId)
+      .eq("member_id", member?.id)
+      .neq("status", "cancelled")
+      .maybeSingle()
+    setSlideOutEvent(prev => prev ? {
+      ...prev,
+      my_bookings: bk?.status === "confirmed"
+        ? [{ status: "confirmed", seats: 1, payment_status: null }]
+        : [],
+    } : null)
     load()
   }
 

@@ -820,8 +820,13 @@ export default function SocialEvents() {
       .select("*, bookings(id, status, seats, payment_status, member_id, members(name, username))")
       .eq("id", event.id).single()
     if (data) {
-      const my_bookings = (data.bookings || []).filter(b => b.member_id === member?.id)
-      setFullEvent({ ...data, my_bookings })
+      const allBookings = (data.bookings || []).filter(b => b.status !== "cancelled")
+      const confirmedBookings = allBookings.filter(b => b.status === "confirmed")
+      const waitlistBookings  = allBookings.filter(b => b.status === "waitlist")
+      const bookings_count = confirmedBookings.reduce((sum, b) => sum + (b.seats || 1), 0)
+      const waitlist_count = waitlistBookings.reduce((sum, b) => sum + (b.seats || 1), 0)
+      const my_bookings = allBookings.filter(b => b.member_id === member?.id)
+      setFullEvent({ ...data, my_bookings, bookings_count, waitlist_count })
     }
   }
 
