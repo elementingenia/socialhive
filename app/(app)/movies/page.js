@@ -565,27 +565,29 @@ export default function MoviesHomePage() {
     const [
       { data: eventData },
       { data: myRows },
-      { count: confirmedCount },
-      { count: waitlistCount },
+      { data: confirmedRows },
+      { data: waitlistRows },
     ] = await Promise.all([
       supabase.from('events')
         .select('*, movies(id, title, poster_url, genre, runtime, year, rating_imdb, rating_rt, imdb_id, plot)')
         .eq('id', eventId).single(),
       supabase.from('bookings').select('id, status, seats, payment_status')
         .eq('event_id', eventId).eq('member_id', memberId).neq('status', 'cancelled'),
-      supabase.from('bookings').select('*', { count: 'exact', head: true })
+      supabase.from('bookings').select('seats')
         .eq('event_id', eventId).eq('status', 'confirmed'),
-      supabase.from('bookings').select('*', { count: 'exact', head: true })
+      supabase.from('bookings').select('seats')
         .eq('event_id', eventId).eq('status', 'waitlist'),
     ])
     const ev = eventData || baseEvent
     if (!ev) return
+    const bookings_count = (confirmedRows || []).reduce((sum, b) => sum + (b.seats || 1), 0)
+    const waitlist_count = (waitlistRows || []).reduce((sum, b) => sum + (b.seats || 1), 0)
     setSlideOutEvent({
       ...ev,
       hub_type: 'movie',
       movie: ev.movies || null,
-      bookings_count: confirmedCount || 0,
-      waitlist_count: waitlistCount || 0,
+      bookings_count,
+      waitlist_count,
       my_bookings: (myRows || []).map(b => ({ status: b.status, seats: b.seats || 1, payment_status: b.payment_status })),
     })
   }
@@ -625,7 +627,7 @@ export default function MoviesHomePage() {
       <EventSlideOut
         event={slideOutEvent}
         onClose={() => setSlideOutEvent(null)}
-        onRefresh={() => { setSlideOutEvent(null); load() }}
+        onRefresh={async () => { if (slideOutEvent?.id) await openSlideOutForEvent(slideOutEvent.id); load() }}
       />
 
 {(swiperDone || unvoted.length === 0) && (
