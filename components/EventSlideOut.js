@@ -484,7 +484,7 @@ function BookingSection({ event, onRefresh }) {
       else if (data.status === "waitlist") showToast("Added to waitlist", "warn")
       else if (data.status === "split_confirmed") showToast(`${data.confirmed} confirmed + ${data.waitlisted} waitlisted`, "warn")
       onRefresh()
-    } finally { setLoading(false); setSplitOffer(null); setWaitlistOffer(null) }
+    } finally { setLoading(false) }
   }
 
   async function handleModify() {
