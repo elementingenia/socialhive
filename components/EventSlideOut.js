@@ -566,7 +566,7 @@ function BookingSection({ event, onRefresh }) {
         <div>
           {!isBookclubEvent && availableSeats > 0 && (
             <>
-              <SeatSelector value={seats} min={1} max={Math.min(maxPerBooking, availableSeats)} onChange={setSeats} />
+              <SeatSelector value={seats} min={1} max={maxPerBooking} onChange={setSeats} />
               {isMovieEvent && maxPerBooking > 1 && (
                 <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Max {maxPerBooking} seats per booking</div>
               )}
