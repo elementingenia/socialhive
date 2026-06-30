@@ -235,7 +235,18 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
 
   async function cancelBooking(bookingId) {
     const ok = await patchAction({ action: "cancel_booking", booking_id: bookingId })
-    if (ok) { showToast("Booking cancelled"); setCancelTarget(null); load(); onRefresh() }
+    if (ok) {
+      // If member had a split booking, cancel remaining rows too
+      const extraIds = cancelTarget._allIds?.slice(1) || []
+      for (const extraId of extraIds) {
+        await fetch("/api/coordinator", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: "cancel_booking", booking_id: extraId }),
+        })
+      }
+      showToast("Booking cancelled"); setCancelTarget(null); load(); onRefresh()
+    }
     else showToast("Failed to cancel", "error")
   }
 
@@ -384,57 +395,80 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
 
       {bookings.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--text-dim)", fontStyle: "italic", marginBottom: 12 }}>No bookings yet</div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
-          {bookings.map(b => {
-            const name = b.members?.hide_name ? "Resident" : (b.members?.name || b.members?.username || "—")
-            const isWaitlist = b.status === "waitlist"
-            const isPaid = b.payment_status === "confirmed"
-            const isRefunded = b.payment_status === "refunded"
-            return (
-              <div key={b.id} style={{ background: "var(--surface2)", borderRadius: 10, padding: "10px 12px",
-                border: `1px solid ${isWaitlist ? "var(--amber)" : "var(--border)"}` }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{name}</div>
-                    <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>
-                      {b.seats} seat{b.seats !== 1 ? "s" : ""}
-                      {isWaitlist && <span style={{ color: "var(--amber-dark)", marginLeft: 6 }}>· Waitlist</span>}
+      ) : (() => {
+        // Group rows by member so a split booking shows as ONE tile
+        const grouped = {}
+        for (const b of bookings) {
+          const mid = b.members?.id || "unknown"
+          if (!grouped[mid]) grouped[mid] = { member: b.members, confirmed: [], waitlist: [] }
+          if (b.status === "waitlist") grouped[mid].waitlist.push(b)
+          else grouped[mid].confirmed.push(b)
+        }
+        const attendeeGroups = Object.values(grouped)
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
+            {attendeeGroups.map(({ member, confirmed: confRows, waitlist: waitRows }) => {
+              const name = member?.hide_name ? "Resident" : (member?.name || member?.username || "—")
+              const confirmedSeats = confRows.reduce((s, b) => s + (b.seats || 1), 0)
+              const waitlistSeats  = waitRows.reduce((s, b) => s + (b.seats || 1), 0)
+              const isOwnBooking   = member?.id === currentMember?.id
+              const hasSplit       = confirmedSeats > 0 && waitlistSeats > 0
+              const waitlistOnly   = confirmedSeats === 0 && waitlistSeats > 0
+              const borderCol      = waitlistOnly ? "var(--amber)" : "var(--border)"
+              // Payment info from first confirmed row (if any)
+              const firstConf = confRows[0]
+              const isPaid     = firstConf?.payment_status === "confirmed"
+              const isRefunded = firstConf?.payment_status === "refunded"
+              // All booking IDs for this member (for bulk cancel)
+              const allIds = [...confRows, ...waitRows].map(b => b.id)
+              return (
+                <div key={member?.id || name} style={{ background: "var(--surface2)", borderRadius: 10, padding: "10px 12px",
+                  border: `1px solid ${borderCol}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{name}</div>
+                      <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        {confirmedSeats > 0 && (
+                          <span>{confirmedSeats} seat{confirmedSeats !== 1 ? "s" : ""}</span>
+                        )}
+                        {waitlistSeats > 0 && (
+                          <span style={{ color: "var(--amber-dark)" }}>
+                            {hasSplit ? `· +${waitlistSeats} waitlist` : `${waitlistSeats} seat${waitlistSeats !== 1 ? "s" : ""} · Waitlist`}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+                      {paymentRequired && confirmedSeats > 0 && firstConf && (
+                        <button onClick={() => togglePayment(firstConf)}
+                          style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12, border: "none", cursor: "pointer",
+                            background: isPaid ? "#dcfce7" : isRefunded ? "#f3f4f6" : "#fef3c7",
+                            color: isPaid ? "#15803d" : isRefunded ? "#9ca3af" : "#d97706" }}>
+                          {isRefunded ? "Refunded" : isPaid ? "✓ Paid" : "Unpaid"}
+                        </button>
+                      )}
+                      {!isOwnBooking && (
+                        <button onClick={() => setCancelTarget({ id: allIds[0], _allIds: allIds, members: member })}
+                          style={{ fontSize: 11, padding: "4px 8px", borderRadius: 8, border: "1px solid var(--danger)", background: "none", color: "var(--danger)", cursor: "pointer", fontWeight: 600 }}>
+                          Cancel
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
-                    {/* Payment toggle — only for payment_required events, confirmed bookings */}
-                    {paymentRequired && !isWaitlist && (
-                      <button onClick={() => togglePayment(b)}
-                        style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12, border: "none", cursor: "pointer",
-                          background: isPaid ? "#dcfce7" : isRefunded ? "#f3f4f6" : "#fef3c7",
-                          color: isPaid ? "#15803d" : isRefunded ? "#9ca3af" : "#d97706" }}>
-                        {isRefunded ? "Refunded" : isPaid ? "✓ Paid" : "Unpaid"}
+                  {paymentRequired && isPaid && firstConf && (
+                    <div style={{ marginTop: 6, borderTop: "1px solid var(--border)", paddingTop: 6 }}>
+                      <button onClick={() => toggleRefund(firstConf)}
+                        style={{ fontSize: 11, color: "var(--text-dim)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                        Mark refund issued
                       </button>
-                    )}
-                    {/* Cancel booking — hide for the current user's own booking */}
-                    {b.members?.id !== currentMember?.id && (
-                      <button onClick={() => setCancelTarget(b)}
-                        style={{ fontSize: 11, padding: "4px 8px", borderRadius: 8, border: "1px solid var(--danger)", background: "none", color: "var(--danger)", cursor: "pointer", fontWeight: 600 }}>
-                        Cancel
-                      </button>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
-                {/* Refund toggle — show if payment was confirmed and EC might want to mark refund */}
-                {paymentRequired && isPaid && (
-                  <div style={{ marginTop: 6, borderTop: "1px solid var(--border)", paddingTop: 6 }}>
-                    <button onClick={() => toggleRefund(b)}
-                      style={{ fontSize: 11, color: "var(--text-dim)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-                      Mark refund issued
-                    </button>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {/* Refund Due section — only when payment required and any booking has refund pending */}
       {paymentRequired && bookings.some(b => b.payment_status === "refunded") && (
@@ -499,6 +533,9 @@ function BookingSection({ event, onRefresh }) {
       if (!res.ok) { showToast(data.error || "Booking failed", "error"); return }
       if (data.status === "split_offer") { setSplitOffer(data); return }
       if (data.status === "waitlist_offer") { setWaitlistOffer(data); return }
+      // Success — always clear any pending offer dialogs
+      setSplitOffer(null)
+      setWaitlistOffer(null)
       if (data.status === "confirmed") showToast(`Booked — ${data.seats} seat${data.seats !== 1 ? "s" : ""} confirmed!`)
       else if (data.status === "waitlist") showToast("Added to waitlist", "warn")
       else if (data.status === "split_confirmed") showToast(`${data.confirmed} confirmed + ${data.waitlisted} waitlisted`, "warn")
