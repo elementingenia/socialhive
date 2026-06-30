@@ -91,16 +91,14 @@ export default function Header() {
     </div>
   )
 
-  const bellBtn = (
-    <button onClick={openNotif} aria-label="Notifications" style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", border: "1.5px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", background: "none", cursor: "pointer", flexShrink: 0 }}>
+  const bellBtn = notifCount > 0 ? (
+    <button onClick={openNotif} aria-label="Notifications" style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", border: "1.5px solid #e53e3e", display: "flex", alignItems: "center", justifyContent: "center", color: "#e53e3e", background: "none", cursor: "pointer", flexShrink: 0 }}>
       <BellIcon size={16} />
-      {notifCount > 0 && (
-        <span style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: "50%", background: "#e53e3e", color: "#fff", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
-          {notifCount > 9 ? "9+" : notifCount}
-        </span>
-      )}
+      <span style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: "50%", background: "#e53e3e", color: "#fff", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
+        {notifCount > 9 ? "9+" : notifCount}
+      </span>
     </button>
-  )
+  ) : null
 
   const helpBtn = (
     <a href="/help" aria-label="Help" style={{ width: 30, height: 30, borderRadius: "50%", border: "1.5px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontWeight: 800, fontSize: "0.8rem", textDecoration: "none", lineHeight: 1, flexShrink: 0 }}>?</a>
