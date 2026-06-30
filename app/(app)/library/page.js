@@ -245,10 +245,15 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
   }
   async function handleDelete() {
     setConfirmDelete(false); setDeleting(true)
-    const res = await fetch(`/api/movies/${movie.id}`, { method:'DELETE', headers:{ 'Authorization':`Bearer ${session.access_token}` } })
+    // DVDs (we_own=true) must only have the suggestion flag cleared — never hard-deleted from here
+    const isDvd = movie.we_own
+    const res = isDvd
+      ? await fetch('/api/dvd/suggest', { method:'DELETE', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}` }, body: JSON.stringify({ movie_id: movie.id }) })
+      : await fetch(`/api/movies/${movie.id}`, { method:'DELETE', headers:{ 'Authorization':`Bearer ${session.access_token}` } })
     setDeleting(false)
-    if (!res.ok) { const d=await res.json().catch(()=>({})); addToast(d.error||'Delete failed','error'); return }
-    addToast(`${movie.title} removed`); onClose(); onDeleted()
+    if (!res.ok) { const d=await res.json().catch(()=>({})); addToast(d.error||'Remove failed','error'); return }
+    addToast(isDvd ? `${movie.title} removed from suggestions` : `${movie.title} removed`)
+    onClose(); onDeleted()
   }
 
   return (
@@ -310,7 +315,10 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
           )}
         </div>
       </div>
-      {confirmDelete && <ConfirmDialog title="Remove movie?" message={`Remove "${movie.title}" and all its ratings?`} confirmLabel="Remove" confirmColor="var(--danger)" onConfirm={handleDelete} onCancel={()=>setConfirmDelete(false)} />}
+      {confirmDelete && <ConfirmDialog
+        title={movie.we_own ? "Remove from suggestions?" : "Remove movie?"}
+        message={movie.we_own ? `Remove "${movie.title}" from viewing suggestions? The DVD remains in the library.` : `Remove "${movie.title}" and all its ratings?`}
+        confirmLabel="Remove" confirmColor="var(--danger)" onConfirm={handleDelete} onCancel={()=>setConfirmDelete(false)} />}
     </>
   )
 }
