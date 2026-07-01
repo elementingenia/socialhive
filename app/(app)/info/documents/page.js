@@ -12,14 +12,15 @@ const inputStyle = {
   fontFamily: "inherit", appearance: "none", WebkitAppearance: "none",
 }
 
-function FileTypeBadge({ fileType, fileName }) {
+function FileTypeBadge({ fileName }) {
   const ext = fileName?.split(".").pop()?.toUpperCase() || "FILE"
   const colours = {
-    PDF: { bg: "#fee2e2", color: "#991b1b" },
-    DOC: { bg: "#dbeafe", color: "#1e40af" },
+    PDF:  { bg: "#fee2e2", color: "#991b1b" },
+    DOC:  { bg: "#dbeafe", color: "#1e40af" },
     DOCX: { bg: "#dbeafe", color: "#1e40af" },
     PNG:  { bg: "#dcfce7", color: "#166534" },
     JPG:  { bg: "#dcfce7", color: "#166534" },
+    JPEG: { bg: "#dcfce7", color: "#166534" },
   }
   const c = colours[ext] || { bg: "var(--surface2)", color: "var(--text-dim)" }
   return (
@@ -60,16 +61,15 @@ function DocumentCard({ doc }) {
   )
 }
 
-// ── Admin upload panel ────────────────────────────────────────────────────────
+// ── Admin panel ───────────────────────────────────────────────────────────────
 function AdminPanel({ categories, onUploaded }) {
-  const [form, setForm] = useState({ title: "", description: "", category_id: "" })
-  const [file, setFile] = useState(null)
+  const [form, setForm]     = useState({ title: "", description: "", category_id: "" })
+  const [file, setFile]     = useState(null)
   const [uploading, setUploading] = useState(false)
-  const [error, setError] = useState("")
-  const [docs, setDocs] = useState([])
+  const [error, setError]   = useState("")
+  const [docs, setDocs]     = useState([])
   const [catForm, setCatForm] = useState("")
   const [catSaving, setCatSaving] = useState(false)
-  const { member } = useUser()
 
   const loadDocs = useCallback(async () => {
     const { data } = await supabase
@@ -83,10 +83,21 @@ function AdminPanel({ categories, onUploaded }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
+  async function getToken() {
+    const { data: { session } } = await supabase.auth.getSession()
+    return session?.access_token
+  }
+
   async function addCategory() {
     if (!catForm.trim()) return
     setCatSaving(true)
-    await supabase.from("document_categories").insert({ name: catForm.trim(), display_order: 99 })
+    // Categories are low-risk — but still need service role. Use API pattern:
+    const token = await getToken()
+    await fetch("/api/info/doc-categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ name: catForm.trim() }),
+    })
     setCatForm("")
     setCatSaving(false)
     onUploaded()
@@ -98,45 +109,48 @@ function AdminPanel({ categories, onUploaded }) {
     if (!file) { setError("Please select a file"); return }
     setUploading(true)
     try {
-      const ext = file.name.split(".").pop()
-      const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-      const { error: upErr } = await supabase.storage.from("community-docs").upload(path, file)
-      if (upErr) throw upErr
-      const { data: { publicUrl } } = supabase.storage.from("community-docs").getPublicUrl(path)
-      // Use signed URL approach — generate a long-lived signed URL
-      const { data: signedData } = await supabase.storage
-        .from("community-docs").createSignedUrl(path, 60 * 60 * 24 * 365 * 10) // 10 years
-      const fileUrl = signedData?.signedUrl || publicUrl
-      const { error: dbErr } = await supabase.from("documents").insert({
-        title: form.title.trim(),
-        description: form.description.trim() || null,
-        category_id: form.category_id || null,
-        file_url: fileUrl,
-        file_name: file.name,
-        file_type: file.type,
-        file_size: file.size,
-        uploaded_by: member?.id || null,
+      const token = await getToken()
+      const fd = new FormData()
+      fd.append("file", file)
+      fd.append("title", form.title.trim())
+      fd.append("description", form.description.trim())
+      fd.append("category_id", form.category_id)
+      const res = await fetch("/api/info/documents", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` },
+        body: fd,
       })
-      if (dbErr) throw dbErr
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Upload failed")
       setForm({ title: "", description: "", category_id: "" })
       setFile(null)
       document.getElementById("doc-file-input").value = ""
       loadDocs()
       onUploaded()
     } catch (e) {
-      setError(e.message || "Upload failed")
+      setError(e.message)
     }
     setUploading(false)
   }
 
   async function toggleActive(doc) {
-    await supabase.from("documents").update({ active: !doc.active }).eq("id", doc.id)
+    const token = await getToken()
+    await fetch("/api/info/documents", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ id: doc.id, active: !doc.active }),
+    })
     loadDocs()
   }
 
   async function deleteDoc(doc) {
     if (!confirm(`Delete "${doc.title}"? This cannot be undone.`)) return
-    await supabase.from("documents").delete().eq("id", doc.id)
+    const token = await getToken()
+    await fetch("/api/info/documents", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ id: doc.id }),
+    })
     loadDocs()
     onUploaded()
   }
@@ -204,9 +218,7 @@ function AdminPanel({ categories, onUploaded }) {
               marginBottom: "0.4rem", gap: "0.5rem",
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text)", truncate: true }}>
-                  {doc.title}
-                </div>
+                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text)" }}>{doc.title}</div>
                 <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
                   {doc.category?.name || "No category"} · {doc.file_name}
                 </div>
@@ -264,7 +276,6 @@ export default function DocumentsPage() {
 
   return (
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
-      {/* Category filter chips */}
       {categories.length > 0 && (
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
           {[{ id: "all", name: "All" }, ...categories].map(c => (
@@ -278,12 +289,8 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      {/* Document list */}
       {filtered.length === 0 ? (
-        <div style={{
-          textAlign: "center", padding: "2.5rem 1rem",
-          color: "var(--text-dim)", fontSize: "0.9rem",
-        }}>
+        <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--text-dim)", fontSize: "0.9rem" }}>
           <div style={{ fontSize: "1.8rem", marginBottom: "0.5rem" }}>📄</div>
           No documents yet
         </div>
