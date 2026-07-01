@@ -73,7 +73,7 @@ export async function GET(req) {
   // Fetch EC notes for the event
   const { data: event } = await supa
     .from("events")
-    .select("coordinator_notes, description, welcome_message, payment_required, cost")
+    .select("coordinator_notes, description, welcome_message, payment_required, cost, has_dining, menu_type, menu_text, menu_url, menu_file_name, image_focal_x, image_focal_y")
     .eq("id", eventId)
     .maybeSingle()
 
@@ -86,6 +86,13 @@ export async function GET(req) {
     welcome_message: event?.welcome_message || null,
     payment_required: event?.payment_required || false,
     cost: event?.cost || null,
+    has_dining: event?.has_dining || false,
+    menu_type: event?.menu_type || null,
+    menu_text: event?.menu_text || null,
+    menu_url: event?.menu_url || null,
+    menu_file_name: event?.menu_file_name || null,
+    image_focal_x: event?.image_focal_x ?? 50,
+    image_focal_y: event?.image_focal_y ?? 50,
   })
 }
 
@@ -112,7 +119,11 @@ async function promoteWaitlist(event_id, freedSeats) {
 // Multi-purpose: update payment, refund, EC notes, event description/welcome, cancel booking
 export async function PATCH(req) {
   const body = await req.json()
-  const { event_id, action, booking_id, payment_status, refunded, coordinator_notes, description, welcome_message } = body
+  const {
+    event_id, action, booking_id, payment_status, refunded,
+    coordinator_notes, description, welcome_message,
+    has_dining, menu_type, menu_text, image_focal_x, image_focal_y,
+  } = body
 
   if (!event_id) return NextResponse.json({ error: "event_id required" }, { status: 400 })
 
@@ -168,6 +179,16 @@ export async function PATCH(req) {
     if (coordinator_notes !== undefined) patch.coordinator_notes = coordinator_notes
     if (description !== undefined) patch.description = description
     if (welcome_message !== undefined) patch.welcome_message = welcome_message
+    if (has_dining !== undefined) patch.has_dining = has_dining
+    if (menu_type !== undefined) {
+      if (menu_type !== null && !["text", "file"].includes(menu_type)) {
+        return NextResponse.json({ error: "Invalid menu_type" }, { status: 400 })
+      }
+      patch.menu_type = menu_type
+    }
+    if (menu_text !== undefined) patch.menu_text = menu_text
+    if (image_focal_x !== undefined) patch.image_focal_x = image_focal_x
+    if (image_focal_y !== undefined) patch.image_focal_y = image_focal_y
     if (Object.keys(patch).length === 0) return NextResponse.json({ error: "Nothing to update" }, { status: 400 })
 
     const { error: ue } = await supa.from("events").update(patch).eq("id", event_id)

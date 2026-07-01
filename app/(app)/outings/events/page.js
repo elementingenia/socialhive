@@ -65,7 +65,7 @@ function EventCard({ event, myBooking, isAdmin, onClick }) {
       style={{ background: "var(--surface)", borderRadius: "14px", border: "1px solid var(--border)", overflow: "hidden", cursor: "pointer", opacity: isPast ? 0.65 : 1 }}
     >
       {event.image_url && (
-        <img src={event.image_url} alt={event.title} style={{ width: "100%", height: 120, objectFit: "cover" }} />
+        <img src={event.image_url} alt={event.title} style={{ width: "100%", height: 120, objectFit: "cover", objectPosition: `${event.image_focal_x ?? 50}% ${event.image_focal_y ?? 50}%` }} />
       )}
       <div style={{ padding: "0.9rem 1rem" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.4rem" }}>
@@ -158,7 +158,7 @@ export default function SocialEvents() {
     const today = new Date().toISOString().split("T")[0]
     const query = supabase
       .from("events")
-      .select("id, title, event_date, event_time, hub_type, location, description, image_url, max_seats, cost, show_attendee_names, bookings(id, status, seats, member_id, member:members!member_id(name, username))")
+      .select("id, title, event_date, event_time, hub_type, location, description, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, max_seats, cost, show_attendee_names, bookings(id, status, seats, member_id, member:members!member_id(name, username))")
       .eq("hub_type", "outings")
       .eq("archived", false)
       .order("event_date", { ascending: true })

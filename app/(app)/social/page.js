@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
+import { bbToHtml } from "@/components/RichEditor"
 import { BusIcon } from "@/components/NavIcons"
 
 const COLOUR = "var(--terracotta)"
@@ -174,7 +175,7 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
             fontSize: "0.78rem", color: "var(--text-dim)", lineHeight: 1.45,
             marginBottom: "0.4rem",
             display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
-          }}>{event.description}</div>
+          }} dangerouslySetInnerHTML={{ __html: bbToHtml(event.description) }} />
         )}
 
         <CapacityBar booked={bookedCount} max={event.max_seats} waitlist={waitlistCount} />

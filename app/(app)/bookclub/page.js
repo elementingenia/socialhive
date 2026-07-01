@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
+import { bbToHtml } from "@/components/RichEditor"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -134,9 +135,8 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) 
       <div style={{ padding: "0.9rem 1rem 0.6rem" }}>
         {/* Event notes */}
         {event.description && (
-          <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 10 }}>
-            {event.description}
-          </div>
+          <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 10 }}
+            dangerouslySetInnerHTML={{ __html: bbToHtml(event.description) }} />
         )}
 
         {/* Book summary */}

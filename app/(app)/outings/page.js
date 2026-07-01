@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
+import { bbToHtml } from "@/components/RichEditor"
 
 function localDate(str) {
   if (!str) return null
@@ -43,7 +44,7 @@ function NextEventCard({ event, myBooking, onBook }) {
         <span style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.78rem", fontWeight: 600 }}>{daysLabel}</span>
       </div>
       {event.image_url && (
-        <img src={event.image_url} alt={event.title} style={{ width: "100%", height: 140, objectFit: "cover" }} />
+        <img src={event.image_url} alt={event.title} style={{ width: "100%", height: 140, objectFit: "cover", objectPosition: `${event.image_focal_x ?? 50}% ${event.image_focal_y ?? 50}%` }} />
       )}
       <div style={{ padding: "0.9rem 1rem" }}>
         <div style={{ fontWeight: 800, fontSize: "1.05rem", lineHeight: 1.2, marginBottom: "0.3rem" }}>{event.title}</div>
@@ -66,9 +67,8 @@ function NextEventCard({ event, myBooking, onBook }) {
         )}
       </div>
       {event.description && (
-        <div style={{ padding: "0.65rem 1rem", borderTop: "1px solid var(--border)", fontSize: "0.83rem", color: "var(--text-dim)", lineHeight: 1.5 }}>
-          {event.description}
-        </div>
+        <div style={{ padding: "0.65rem 1rem", borderTop: "1px solid var(--border)", fontSize: "0.83rem", color: "var(--text-dim)", lineHeight: 1.5 }}
+          dangerouslySetInnerHTML={{ __html: bbToHtml(event.description) }} />
       )}
     </div>
   )
@@ -88,7 +88,7 @@ export default function SocialHome() {
       const today = new Date().toISOString().split("T")[0]
       const { data: events } = await supabase
         .from("events")
-        .select("id, title, event_date, event_time, hub_type, location, description, image_url, max_seats, cost")
+        .select("id, title, event_date, event_time, hub_type, location, description, welcome_message, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, max_seats, cost, payment_required")
         .eq("hub_type", "outings")
         .gte("event_date", today)
         .eq("archived", false)
