@@ -4,6 +4,8 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import { BusIcon } from "@/components/NavIcons"
+import RichEditor, { bbToHtml } from "@/components/RichEditor"
+import EventImagePicker from "@/components/EventImagePicker"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -443,6 +445,9 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     has_bus:               event?.has_bus             || false,
     location_type:         event?.location_type       || "onsite",
     location:              event?.location            || "",
+    has_dining:            event?.has_dining          || false,
+    menu_type:             event?.menu_type           || null,
+    menu_text:             event?.menu_text           || "",
   })
 
   const [coordinators, setCoordinators] = useState([])
@@ -450,6 +455,12 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
   const [ecError,      setEcError]      = useState(null)
   const [saving,       setSaving]       = useState(false)
   const [error,        setError]        = useState(null)
+  const [createdId,    setCreatedId]    = useState(null)
+  const [justCreated,  setJustCreated]  = useState(false)
+  const [uploadingMenu, setUploadingMenu] = useState(false)
+  const [localMenuUrl,      setLocalMenuUrl]      = useState(event?.menu_url || null)
+  const [localMenuFileName, setLocalMenuFileName] = useState(event?.menu_file_name || null)
+  const activeId = event?.id || createdId
 
   useEffect(() => {
     if (!editing) return
@@ -482,18 +493,58 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
       max_seats_per_booking: Number(form.max_seats_per_booking),
       coordinator_ids:       coordinators.map(m => m.id),
       bus_driver_id:         form.has_bus ? busDriver?.id || null : null,
+      has_dining:            form.has_dining,
+      menu_type:             form.has_dining ? form.menu_type : null,
+      menu_text:             form.has_dining && form.menu_type === "text" ? form.menu_text : null,
     }
-    if (editing) payload.id = event.id
+    if (activeId) payload.id = activeId
 
     const res = await fetch("/api/social", {
-      method:  editing ? "PATCH" : "POST",
+      method:  activeId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + session.access_token },
       body: JSON.stringify(payload),
     })
     const data = await res.json()
     setSaving(false)
     if (!res.ok) { setError(data.error || "Save failed"); return }
-    onSaved(); onClose()
+    onSaved()
+    if (!activeId) {
+      // First-time create: keep the form open so the coordinator can add a photo /
+      // upload a menu file straight away, using the id we just got back.
+      setCreatedId(data.id)
+      setJustCreated(true)
+      return
+    }
+    onClose()
+  }
+
+  async function getToken() { return session.access_token }
+
+  async function uploadMenuFile(file) {
+    setUploadingMenu(true)
+    const fd = new FormData()
+    fd.append("event_id", activeId)
+    fd.append("file", file)
+    const res = await fetch("/api/events/menu", {
+      method: "POST",
+      headers: { Authorization: "Bearer " + session.access_token },
+      body: fd,
+    })
+    const d = await res.json()
+    setUploadingMenu(false)
+    if (res.ok) { setLocalMenuUrl(d.menu_url); setLocalMenuFileName(d.menu_file_name) }
+    else setError(d.error || "Menu upload failed")
+  }
+
+  async function removeMenuFile() {
+    setUploadingMenu(true)
+    const res = await fetch("/api/events/menu", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+      body: JSON.stringify({ event_id: activeId }),
+    })
+    setUploadingMenu(false)
+    if (res.ok) { setLocalMenuUrl(null); setLocalMenuFileName(null) }
   }
 
   return (
@@ -572,6 +623,99 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
               style={{ ...INPUT, resize: "vertical" }} />
           </div>
 
+          {/* Dining Option */}
+          <div style={FIELD}>
+            <Toggle value={form.has_dining} onChange={v => set("has_dining", v)} label="Dining option" />
+          </div>
+          {form.has_dining && (
+            <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <button type="button" onClick={() => set("menu_type", "text")} style={{
+                  flex: 1, padding: "8px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                  border: `1px solid ${form.menu_type === "text" ? "var(--terracotta)" : "var(--border)"}`,
+                  background: form.menu_type === "text" ? "var(--terracotta)15" : "var(--surface)",
+                  color: form.menu_type === "text" ? "var(--terracotta)" : "var(--text)",
+                }}>Type it in</button>
+                <button type="button" onClick={() => set("menu_type", "file")} style={{
+                  flex: 1, padding: "8px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                  border: `1px solid ${form.menu_type === "file" ? "var(--terracotta)" : "var(--border)"}`,
+                  background: form.menu_type === "file" ? "var(--terracotta)15" : "var(--surface)",
+                  color: form.menu_type === "file" ? "var(--terracotta)" : "var(--text)",
+                }}>Upload a document</button>
+              </div>
+
+              {form.menu_type === "text" && (
+                <RichEditor
+                  initialValue={form.menu_text}
+                  hubColour="var(--terracotta)"
+                  onChange={html => set("menu_text", html)}
+                  placeholder="Type the menu shown to residents…"
+                />
+              )}
+
+              {form.menu_type === "file" && (
+                activeId ? (
+                  <div>
+                    {localMenuUrl && (
+                      <div style={{
+                        display: "flex", alignItems: "center", background: "var(--surface2)",
+                        borderRadius: 8, padding: "8px 10px", marginBottom: 8, fontSize: 13,
+                      }}>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📄 {localMenuFileName || "Menu"}</span>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <label style={{
+                        flex: 1, padding: "8px", borderRadius: 8, border: "1px solid var(--terracotta)",
+                        color: "var(--terracotta)", fontWeight: 700, fontSize: 13, cursor: uploadingMenu ? "not-allowed" : "pointer",
+                        textAlign: "center", opacity: uploadingMenu ? 0.6 : 1, fontFamily: "inherit",
+                      }}>
+                        {uploadingMenu ? "Uploading…" : localMenuUrl ? "Replace" : "Upload Menu"}
+                        <input
+                          type="file"
+                          accept="application/pdf,image/jpeg,image/png,image/webp"
+                          style={{ display: "none" }}
+                          disabled={uploadingMenu}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadMenuFile(f) }}
+                        />
+                      </label>
+                      {localMenuUrl && (
+                        <button type="button" onClick={removeMenuFile} disabled={uploadingMenu} style={{
+                          padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border)",
+                          background: "var(--surface2)", color: "var(--danger)", fontWeight: 700,
+                          fontSize: 13, cursor: uploadingMenu ? "not-allowed" : "pointer", fontFamily: "inherit",
+                        }}>Remove</button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>
+                    Tap "{editing ? "Save Changes" : "Create Event"}" below first — you'll be able to upload the menu document right after.
+                  </div>
+                )
+              )}
+            </div>
+          )}
+
+          {/* Event Image */}
+          <div style={FIELD}>
+            <label style={LABEL}>Event Image</label>
+            {activeId ? (
+              <EventImagePicker
+                eventId={activeId}
+                imageUrl={event?.image_url}
+                focalX={event?.image_focal_x}
+                focalY={event?.image_focal_y}
+                colour="var(--terracotta)"
+                getToken={getToken}
+              />
+            ) : (
+              <div style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>
+                You'll be able to add a photo once you've created the event — it'll appear right here.
+              </div>
+            )}
+          </div>
+
           {/* EC — mandatory */}
           <div style={FIELD}>
             <label style={LABEL}>Event Coordinator(s) <span style={{ color: "var(--danger)" }}>*</span> — max 3</label>
@@ -632,6 +776,12 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
             <Toggle value={form.show_attendee_names} onChange={v => set("show_attendee_names", v)} label="Show attendee names" />
           </div>
 
+          {justCreated && (
+            <div style={{ fontSize: 13, color: "var(--green)", fontWeight: 600, marginBottom: "1rem" }}>
+              ✓ Event created — add a photo or menu above if you'd like, then tap Done.
+            </div>
+          )}
+
           {error && <div style={{ color: "var(--danger)", fontSize: "0.85rem", marginBottom: "1rem" }}>{error}</div>}
 
           <button onClick={save} disabled={saving} style={{
@@ -640,7 +790,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
             fontSize: "1rem", fontWeight: 700, cursor: saving ? "not-allowed" : "pointer",
             opacity: saving ? 0.6 : 1, fontFamily: "inherit",
           }}>
-            {saving ? "Saving…" : editing ? "Save Changes" : "Create Event"}
+            {saving ? "Saving…" : activeId ? (editing ? "Save Changes" : "Done") : "Create Event"}
           </button>
         </div>
       </div>
@@ -970,7 +1120,7 @@ export default function SocialEvents() {
       {showForm && session && (
         <SocialEventForm event={editEvent} session={session} members={allMembers}
           onClose={() => { setShowForm(false); setEditEvent(null) }}
-          onSaved={() => { setShowForm(false); setEditEvent(null); load() }} />
+          onSaved={() => { load() }} />
       )}
     </div>
   )

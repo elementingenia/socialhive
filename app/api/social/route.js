@@ -38,8 +38,11 @@ function buildEventPayload(body, isInsert = false) {
     title, event_date, event_time, description, welcome_message,
     max_seats, max_seats_per_booking, cost, payment_required,
     show_attendee_names, is_public, has_bus, bus_driver_id,
-    location_type, location,
+    location_type, location, has_dining, menu_type, menu_text,
   } = body
+
+  const diningOn = !!has_dining
+  const menuTypeValue = diningOn && ['text', 'file'].includes(menu_type) ? menu_type : null
 
   return {
     ...(isInsert ? { hub_type: 'social', archived: false } : {}),
@@ -58,6 +61,12 @@ function buildEventPayload(body, isInsert = false) {
     bus_driver_id:         (has_bus && bus_driver_id) ? bus_driver_id : null,
     location_type:         location_type || 'onsite',
     location:              location || null,
+    has_dining:            diningOn,
+    menu_type:             menuTypeValue,
+    // Only overwrite menu_text for the 'text' path — switching to 'file' (or off)
+    // leaves any previously-uploaded menu_url alone; the file upload endpoint
+    // owns clearing/replacing that column.
+    menu_text:             menuTypeValue === 'text' ? (menu_text || null) : null,
   }
 }
 
