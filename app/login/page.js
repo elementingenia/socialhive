@@ -199,7 +199,7 @@ function Field({ label, value, onChange, placeholder, type = 'text' }) {
         style={{
           width: '100%', padding: '0.85rem 1rem', boxSizing: 'border-box',
           background: 'var(--surface2)', border: '1px solid var(--border)',
-          borderRadius: '10px', color: 'var(--text)', fontSize: '0.95rem', outline: 'none'
+          borderRadius: '10px', color: 'var(--text)', fontSize: '1rem', outline: 'none'
         }}
       />
     </div>
