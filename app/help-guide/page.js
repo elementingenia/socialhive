@@ -4,21 +4,29 @@ import { useState } from "react"
 const BASE = "https://tzzxwvbqszzrruxjrpcs.supabase.co/storage/v1/object/public/help-screenshots"
 const IMG = (name) => `${BASE}/${name}`
 
-// ── Print styles injected once ────────────────────────────────────────────────
 const PRINT_STYLE = `
   @media print {
     .no-print { display: none !important; }
+    .print-break { page-break-before: always; break-before: page; }
     body { background: #fff !important; }
-    img { max-width: 280px !important; break-inside: avoid; }
+    img { max-width: 260px !important; break-inside: avoid; }
     section { break-inside: avoid; page-break-inside: avoid; }
     h2 { page-break-after: avoid; break-after: avoid; }
+    a { color: inherit !important; text-decoration: none !important; }
   }
 `
+
+const teal   = "#2a9d8f"
+const amber  = "#e6a817"
+const text   = "#2d2d2d"
+const muted  = "#666"
+const border = "#e2e8f0"
+const bg     = "#faf8f5"
 
 const EC_BADGE = (
   <span style={{
     display: "inline-block",
-    background: "#2a9d8f",
+    background: teal,
     color: "#fff",
     fontSize: "0.6rem",
     fontWeight: 700,
@@ -31,17 +39,46 @@ const EC_BADGE = (
   }}>EC only</span>
 )
 
-function Section({ id, title, children }) {
+const SECTIONS = [
+  { id: "access",   num: 1, title: "Signing In, Registering & Changing Your Password" },
+  { id: "profile",  num: 2, title: "Your Profile & PIN" },
+  { id: "movies",   num: 3, title: "Movies — Screenings, Booking & Library" },
+  { id: "social",   num: 4, title: "Social Events — Community Activities & Trips" },
+  { id: "bookclub", num: 5, title: "Book Club" },
+  { id: "bar",      num: 6, title: "My Bar — Honour Bar & Tab" },
+  { id: "calendar", num: 7, title: "Community Calendar" },
+  { id: "bookings", num: 8, title: "My Bookings" },
+]
+
+function Section({ id, num, title, children }) {
   return (
-    <section id={id} style={{ marginBottom: "2.5rem" }}>
+    <section id={id} style={{ marginBottom: "3rem" }}>
       <h2 style={{
-        fontSize: "1.05rem",
-        fontWeight: 700,
-        color: "#2a9d8f",
+        fontSize: "1.1rem",
+        fontWeight: 800,
+        color: teal,
         margin: "0 0 1rem",
-        paddingBottom: "0.4rem",
-        borderBottom: "2px solid #2a9d8f",
-      }}>{title}</h2>
+        paddingBottom: "0.5rem",
+        borderBottom: `3px solid ${teal}`,
+        display: "flex",
+        alignItems: "baseline",
+        gap: "0.6rem",
+      }}>
+        <span style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 28,
+          height: 28,
+          borderRadius: "50%",
+          background: teal,
+          color: "#fff",
+          fontSize: "0.8rem",
+          fontWeight: 800,
+          flexShrink: 0,
+        }}>{num}</span>
+        {title}
+      </h2>
       {children}
     </section>
   )
@@ -49,11 +86,11 @@ function Section({ id, title, children }) {
 
 function Subsection({ title, ecOnly, children }) {
   return (
-    <div style={{ marginBottom: "1.5rem" }}>
+    <div style={{ marginBottom: "1.75rem", paddingLeft: "0.5rem", borderLeft: `3px solid ${border}` }}>
       <h3 style={{
         fontSize: "0.9rem",
-        fontWeight: 600,
-        color: "#333",
+        fontWeight: 700,
+        color: text,
         margin: "0 0 0.75rem",
         display: "flex",
         alignItems: "center",
@@ -67,294 +104,333 @@ function Subsection({ title, ecOnly, children }) {
 
 function Step({ img, alt, children }) {
   return (
-    <div style={{ marginBottom: "1.25rem" }}>
+    <div style={{ marginBottom: "1rem" }}>
       {img && (
         <img
           src={img}
           alt={alt || ""}
           style={{
             width: "100%",
-            maxWidth: 300,
+            maxWidth: 280,
             display: "block",
-            margin: "0 auto 0.75rem",
-            borderRadius: 10,
-            border: "1px solid #e2e8f0",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+            margin: "0 auto 0.85rem",
+            borderRadius: 12,
+            border: `1px solid ${border}`,
+            boxShadow: "0 2px 12px rgba(0,0,0,0.09)",
           }}
         />
       )}
-      <p style={{ fontSize: "0.88rem", color: "#444", lineHeight: 1.6, margin: 0 }}>{children}</p>
+      <p style={{ fontSize: "0.88rem", color: "#444", lineHeight: 1.65, margin: 0 }}>{children}</p>
     </div>
   )
 }
 
-const NAV_ITEMS = [
-  { id: "access",   label: "Sign In & Register" },
-  { id: "profile",  label: "Profile" },
-  { id: "movies",   label: "Movies" },
-  { id: "social",   label: "Social" },
-  { id: "bookclub", label: "Book Club" },
-  { id: "bar",      label: "My Bar" },
-  { id: "calendar", label: "Calendar" },
-  { id: "bookings", label: "Bookings" },
-]
-
 export default function HelpGuidePage() {
-  const [activeSection, setActiveSection] = useState(null)
+  const [tocOpen, setTocOpen] = useState(true)
 
   const scrollTo = (id) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
-    setActiveSection(id)
   }
 
   return (
     <>
       <style>{PRINT_STYLE}</style>
+      <div style={{ minHeight: "100vh", background: bg, fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif", color: text }}>
 
-      <div style={{ minHeight: "100vh", background: "#faf8f5", fontFamily: "'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif" }}>
-
-        {/* ── Header ── */}
+        {/* ── Document header ── */}
         <header style={{
-          position: "sticky", top: 0, zIndex: 50,
-          background: "#fff",
-          borderBottom: "3px solid #e6a817",
-          padding: "0.6rem 1.25rem",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-          boxShadow: "0 1px 8px rgba(0,0,0,0.07)",
+          background: `linear-gradient(135deg, ${teal} 0%, #1a7a6e 100%)`,
+          color: "#fff",
+          padding: "2rem 1.5rem 1.75rem",
+          position: "relative",
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
-            <img src="/logo_hex_bee.png" alt="The Social Hive" style={{ width: 40, height: 40 }} />
-            <div style={{ lineHeight: 1 }}>
-              <div style={{ fontSize: "0.55rem", fontWeight: 700, letterSpacing: "0.14em", color: "#e6a817", textTransform: "uppercase" }}>The</div>
-              <div style={{ fontSize: "1.1rem", fontWeight: 900, letterSpacing: "0.07em", color: "#e6a817", textTransform: "uppercase" }}>Social Hive</div>
+          {/* Print button */}
+          <button
+            className="no-print"
+            onClick={() => window.print()}
+            style={{
+              position: "absolute", top: "1rem", right: "1rem",
+              padding: "0.45rem 1rem",
+              background: "rgba(255,255,255,0.2)",
+              color: "#fff",
+              border: "1px solid rgba(255,255,255,0.4)",
+              borderRadius: 20,
+              fontSize: "0.78rem",
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >↓ Save as PDF</button>
+
+          {/* Logo + title */}
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem" }}>
+            <img src="/logo_hex_bee.png" alt="" style={{ width: 52, height: 52, filter: "brightness(0) invert(1) opacity(0.9)" }} />
+            <div>
+              <div style={{ fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.18em", opacity: 0.8, textTransform: "uppercase", marginBottom: 2 }}>The Social Hive</div>
+              <div style={{ fontSize: "1.6rem", fontWeight: 900, lineHeight: 1.1 }}>User Guide</div>
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <span className="no-print" style={{ fontSize: "0.75rem", color: "#888", fontWeight: 500 }}>Help Guide</span>
-            <button
-              className="no-print"
-              onClick={() => window.print()}
-              style={{
-                padding: "0.45rem 1rem",
-                background: "#2a9d8f",
-                color: "#fff",
-                border: "none",
-                borderRadius: 20,
-                fontSize: "0.8rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                fontFamily: "inherit",
-              }}
-            >
-              ↓ Save as PDF
-            </button>
-          </div>
+
+          {/* Intro */}
+          <p style={{ fontSize: "0.9rem", lineHeight: 1.65, opacity: 0.92, margin: 0, maxWidth: 560 }}>
+            This guide covers everything you need to use The Social Hive — from signing in for the first
+            time to booking events, recording bar purchases, and browsing the community calendar.
+            Sections marked <strong>EC only</strong> are for Element Communities coordinators.
+          </p>
         </header>
 
-        {/* ── Jump nav ── */}
-        <div className="no-print" style={{
-          overflowX: "auto",
-          whiteSpace: "nowrap",
-          padding: "0.65rem 1rem",
-          borderBottom: "1px solid #e2e8f0",
+        {/* ── Table of Contents ── */}
+        <div style={{
           background: "#fff",
-          scrollbarWidth: "none",
+          borderBottom: `1px solid ${border}`,
+          padding: "0",
         }}>
-          {NAV_ITEMS.map(item => (
-            <button
-              key={item.id}
-              onClick={() => scrollTo(item.id)}
-              style={{
-                display: "inline-block",
-                marginRight: "0.4rem",
-                padding: "0.35rem 0.85rem",
-                borderRadius: 20,
-                border: "1px solid #e2e8f0",
-                background: activeSection === item.id ? "#2a9d8f" : "transparent",
-                color: activeSection === item.id ? "#fff" : "#666",
-                fontSize: "0.78rem",
-                fontWeight: 500,
-                cursor: "pointer",
-                fontFamily: "inherit",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {item.label}
-            </button>
-          ))}
+          {/* TOC toggle header */}
+          <button
+            className="no-print"
+            onClick={() => setTocOpen(v => !v)}
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "0.85rem 1.25rem",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              color: text,
+              borderBottom: tocOpen ? `1px solid ${border}` : "none",
+            }}
+          >
+            <span>📋 Contents</span>
+            <span style={{ fontSize: "0.75rem", color: muted }}>{tocOpen ? "▲ hide" : "▼ show"}</span>
+          </button>
+
+          {/* TOC always visible for print */}
+          <div style={{ display: tocOpen ? "block" : "none" }} className="toc-body">
+            <ol style={{ margin: 0, padding: "0.75rem 1.25rem 1rem 2.5rem", listStyle: "decimal" }}>
+              {SECTIONS.map(s => (
+                <li key={s.id} style={{ marginBottom: "0.5rem" }}>
+                  <button
+                    className="no-print"
+                    onClick={() => scrollTo(s.id)}
+                    style={{
+                      background: "none", border: "none", cursor: "pointer",
+                      fontFamily: "inherit", fontSize: "0.88rem",
+                      color: teal, fontWeight: 600, padding: 0,
+                      textAlign: "left", textDecoration: "underline",
+                      textDecorationColor: "rgba(42,157,143,0.3)",
+                    }}
+                  >{s.title}</button>
+                  <span className="no-print" style={{ display: "none" }}>{s.title}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          {/* Print-only TOC (always visible in print) */}
+          <div className="print-toc" style={{ display: "none" }}>
+            <style>{`@media print { .print-toc { display: block !important; padding: 0.75rem 1.25rem 1rem 2.5rem; } .toc-body { display: block !important; } }`}</style>
+          </div>
         </div>
 
-        {/* ── Content ── */}
-        <div style={{ maxWidth: 600, margin: "0 auto", padding: "1.5rem 1.25rem 3rem" }}>
+        {/* ── Main content ── */}
+        <div style={{ maxWidth: 640, margin: "0 auto", padding: "2rem 1.25rem 4rem" }}>
 
-          <h1 style={{ fontSize: "1.3rem", fontWeight: 800, color: "#2a9d8f", margin: "0 0 1.5rem" }}>
-            The Social Hive — User Guide
-          </h1>
-
-          {/* SIGN IN & REGISTER */}
-          <Section id="access" title="Sign In & Register">
+          {/* 1. SIGN IN & REGISTER */}
+          <Section id="access" num={1} title="Signing In, Registering & Changing Your Password">
             <Subsection title="Sign In">
               <Step img={IMG("01-login.png")} alt="Sign In screen">
-                Enter your username and password, then tap <strong>Sign In</strong>.
+                Open The Social Hive and you'll arrive at the sign-in screen. Enter your
+                <strong> username</strong> and <strong>password</strong>, then tap <strong>Sign In</strong>.
               </Step>
             </Subsection>
-            <Subsection title="Register">
+            <Subsection title="Register — first time users">
               <Step img={IMG("02-register.png")} alt="Register screen">
-                Tap <strong>Register</strong> at the top of the sign-in screen. Enter the invite code,
-                choose a username and password, then tap <strong>Register</strong>.
+                Tap <strong>Register</strong> at the top of the screen. Enter the invite code provided
+                by your coordinator, choose a username and password, then tap <strong>Register</strong>.
               </Step>
             </Subsection>
             <Subsection title="Change Password">
               <Step img={IMG("03-change-password.png")} alt="Change Password screen">
                 Tap <strong>Change Password</strong> at the top of the sign-in screen. Enter your
-                username, current password, and a new password, then confirm.
+                username, current password, and your new password, then confirm.
               </Step>
             </Subsection>
           </Section>
 
-          {/* PROFILE */}
-          <Section id="profile" title="Profile &amp; PIN">
-            <Subsection title="Your Profile">
+          {/* 2. PROFILE */}
+          <Section id="profile" num={2} title="Your Profile & PIN">
+            <Subsection title="Updating your profile">
               <Step img={IMG("05-profile.png")} alt="Profile screen">
-                Tap your name in the top-right corner on any screen. Select <strong>Update Profile</strong>
-                to update your display name, email, and house number.
+                Tap your name or avatar in the top-right corner of any page to open the account menu.
+                Select <strong>Update Profile</strong> to update your display name, email address,
+                and house number.
               </Step>
             </Subsection>
-            <Subsection title="Change PIN">
+            <Subsection title="Changing your PIN">
               <Step>
-                Tap your name in the top-right, then select <strong>Change PIN</strong> to set a new
-                4-digit PIN. Your PIN is used when recording bar purchases.
+                From the same account menu (top-right), select <strong>Change PIN</strong>.
+                Enter your current PIN, then enter and confirm your new 4-digit PIN.
+                Your PIN is required when recording purchases at the community bar.
               </Step>
             </Subsection>
           </Section>
 
-          {/* MOVIES */}
-          <Section id="movies" title="Movies">
-            <Subsection title="Movies Home">
+          {/* 3. MOVIES */}
+          <Section id="movies" num={3} title="Movies — Screenings, Booking & Library">
+            <Subsection title="Movies home">
               <Step img={IMG("06-movies.png")} alt="Movies home">
-                Shows your next upcoming screening and quick links to scheduled events and suggestions.
+                The Movies section shows your next upcoming screening at a glance, with links to all
+                scheduled events, the suggestions library, and the DVD collection.
               </Step>
             </Subsection>
-            <Subsection title="Scheduled Screenings">
-              <Step img={IMG("07-screenings.png")} alt="Scheduled screenings list">
-                See all upcoming screenings with date, ratings, and seat availability.
-                Tap any card to open the booking panel.
+            <Subsection title="Scheduled screenings">
+              <Step img={IMG("07-screenings.png")} alt="Scheduled screenings">
+                The Scheduled tab lists all upcoming screenings with date, time, ratings, and seat
+                availability. Tap any card to open the booking panel.
               </Step>
             </Subsection>
-            <Subsection title="Booking a Seat">
+            <Subsection title="Booking a seat">
               <Step img={IMG("10-screening-slideout.png")} alt="Booking panel">
-                Tap <strong>Reserve my seat</strong> and choose the number of seats.
-                If full, tap <strong>Join Waitlist</strong>.
+                Inside the booking panel, tap <strong>Reserve my seat</strong> and select how many
+                seats you need. If the screening is full, tap <strong>Join Waitlist</strong> — you'll
+                be notified automatically if a seat becomes available.
               </Step>
             </Subsection>
-            <Subsection title="Suggestions Library">
-              <Step img={IMG("08-library.png")} alt="Movie suggestions library">
-                Browse or search movies suggested for future screenings.
+            <Subsection title="Suggestions library">
+              <Step img={IMG("08-library.png")} alt="Movie suggestions">
+                Browse or search movies that residents have suggested for future screenings.
+                Tap any title to see full details.
               </Step>
             </Subsection>
-            <Subsection title="DVD Library">
+            <Subsection title="DVD library">
               <Step img={IMG("09-dvd.png")} alt="DVD library">
-                Browse the community DVD collection and suggest titles for an upcoming screening.
+                Browse the community's physical DVD collection. Tap any title to suggest it for an
+                upcoming screening.
               </Step>
             </Subsection>
-            <Subsection title="Coordinator Panel" ecOnly>
+            <Subsection title="Coordinator panel" ecOnly>
               <Step>
-                ECs see a <strong>Coordinator View</strong> inside each booking panel — attendee names,
-                seat counts, unpaid seats, notes editor, and the ability to cancel individual bookings.
+                ECs see a <strong>Coordinator View</strong> section inside every booking panel.
+                This shows the full attendee list, seat counts, unpaid seats, and allows adding notes
+                or cancelling individual bookings.
               </Step>
             </Subsection>
           </Section>
 
-          {/* SOCIAL */}
-          <Section id="social" title="Social">
-            <Subsection title="Social Hub">
+          {/* 4. SOCIAL */}
+          <Section id="social" num={4} title="Social Events — Community Activities & Trips">
+            <Subsection title="Social hub">
               <Step img={IMG("11-social.png")} alt="Social hub">
-                Lists upcoming community events — dinners, trips, activities.
+                The Social section lists upcoming community events — dinners, day trips, activities,
+                and more.
               </Step>
             </Subsection>
-            <Subsection title="Event List">
+            <Subsection title="Viewing and booking events">
               <Step img={IMG("12-social-events.png")} alt="Social events list">
-                Tap any event card to open the detail panel and book your seat.
+                Tap the <strong>Scheduled</strong> tab to see all upcoming events. Tap any card to
+                open the full event detail.
               </Step>
             </Subsection>
-            <Subsection title="Event Detail & Booking">
-              <Step img={IMG("13-social-slideout.png")} alt="Social event detail">
-                Shows the description, date, location, coordinator, bus info, and available seats.
-                Tap <strong>Reserve seats</strong> to book.
+            <Subsection title="Event detail">
+              <Step img={IMG("13-social-slideout.png")} alt="Event detail panel">
+                The detail panel shows the event description, date, location, coordinator name, bus
+                information, and available seats. Tap <strong>Reserve seats</strong> to book your place.
               </Step>
             </Subsection>
-            <Subsection title="Coordinator Panel" ecOnly>
+            <Subsection title="Coordinator panel" ecOnly>
               <Step>
-                ECs see the full attendee list with seat counts and unpaid bookings, and can
-                cancel any booking from the coordinator panel.
+                ECs see the full attendee list with seat counts and unpaid bookings. They can add
+                notes or cancel any booking directly from the coordinator panel.
               </Step>
             </Subsection>
           </Section>
 
-          {/* BOOK CLUB */}
-          <Section id="bookclub" title="Book Club">
-            <Subsection title="Book Club Home">
+          {/* 5. BOOK CLUB */}
+          <Section id="bookclub" num={5} title="Book Club">
+            <Subsection title="Book Club home">
               <Step img={IMG("14-bookclub.png")} alt="Book Club home">
-                See the current book pick, upcoming meetings, and recent suggestions.
+                The Book Club section shows the current book pick, upcoming meeting dates, and recent
+                book suggestions from residents.
               </Step>
             </Subsection>
-            <Subsection title="Suggest a Book">
+            <Subsection title="Suggesting a book">
               <Step img={IMG("15-bookclub-suggest.png")} alt="Book suggestions">
-                Tap <strong>Suggestions</strong> to browse existing suggestions or add your own
-                for the group to vote on.
+                Tap <strong>Suggestions</strong> to browse books that others have put forward, or tap
+                <strong> Add suggestion</strong> to propose your own. The group votes on the next read.
               </Step>
             </Subsection>
           </Section>
 
-          {/* BAR */}
-          <Section id="bar" title="My Bar">
-            <Subsection title="Bar Home">
+          {/* 6. BAR */}
+          <Section id="bar" num={6} title="My Bar — Honour Bar & Tab">
+            <Subsection title="The bar menu">
               <Step img={IMG("16-bar.png")} alt="Bar home">
-                Browse available drinks and prices. Tap <strong>Add</strong> to record a purchase
-                against your tab.
+                The community bar operates on an honour system. Browse available drinks and current
+                prices, then tap <strong>Add</strong> next to any item to record a purchase.
               </Step>
             </Subsection>
-            <Subsection title="Recording a Purchase">
+            <Subsection title="Confirming a purchase">
               <Step>
-                Select an item, confirm quantity, then enter your 4-digit PIN to confirm.
-                Your tab updates immediately.
+                After tapping <strong>Add</strong>, confirm the quantity and enter your 4-digit PIN
+                to approve the charge. Your personal tab updates immediately.
+                If you haven't set a PIN yet, do so via the account menu (top-right → Change PIN).
               </Step>
             </Subsection>
-            <Subsection title="Bar Reconciliation" ecOnly>
+            <Subsection title="Tab reconciliation" ecOnly>
               <Step>
-                ECs can view all member tabs, mark amounts as paid, and reconcile the full bar
-                ledger from the Bar admin panel.
+                ECs can view all member tabs, mark amounts as paid, and reconcile the full bar ledger
+                from the Bar admin panel.
               </Step>
             </Subsection>
           </Section>
 
-          {/* CALENDAR */}
-          <Section id="calendar" title="Calendar">
+          {/* 7. CALENDAR */}
+          <Section id="calendar" num={7} title="Community Calendar">
             <Step img={IMG("17-calendar.png")} alt="Community calendar">
-              All upcoming events across Movies, Social, and Book Club in one view.
-              Toggle between month and week view at the top.
-              Tap any event to open its detail panel and book.
+              The Calendar brings all upcoming events together — Movies, Social, and Book Club — in
+              a single view. Use the buttons at the top to switch between <strong>month</strong> and
+              <strong> week</strong> view. Tap any event to open its detail panel where you can
+              read more or book your place.
             </Step>
           </Section>
 
-          {/* BOOKINGS */}
-          <Section id="bookings" title="My Bookings">
+          {/* 8. BOOKINGS */}
+          <Section id="bookings" num={8} title="My Bookings">
             <Step img={IMG("18-bookings.png")} alt="My bookings">
-              All your current reservations in one place. Filter by hub using the tabs at the top.
-              Tap any booking to view the event detail or manage your seat.
+              My Bookings shows all your current reservations across every hub in one place.
+              Use the filter tabs at the top to narrow down by Movies, Social, or Book Club.
+              Tap any booking card to view the event detail or manage your seat.
             </Step>
-            <Subsection title="Booking Status">
+            <Subsection title="Understanding booking status">
               <Step>
-                <strong>Confirmed</strong> — seat secured.{" "}
-                <strong>Pending Payment</strong> — payment required before the event.{" "}
-                <strong>Waitlisted</strong> — you will be notified if a seat becomes available.
+                <strong style={{ color: "#166534" }}>Confirmed</strong> — your seat is secured and
+                ready.{" "}
+                <strong style={{ color: "#92400e" }}>Pending Payment</strong> — payment is required
+                before the event date.{" "}
+                <strong style={{ color: "#64748b" }}>Waitlisted</strong> — you are on the waitlist
+                and will be notified automatically if a seat opens up.
               </Step>
             </Subsection>
           </Section>
 
-          <p style={{ fontSize: "0.75rem", color: "#aaa", textAlign: "center", marginTop: "1.5rem" }}>
-            Need further help? Speak to your Element Communities coordinator.
-          </p>
+          {/* Footer */}
+          <div style={{
+            marginTop: "2rem",
+            paddingTop: "1.5rem",
+            borderTop: `1px solid ${border}`,
+            textAlign: "center",
+          }}>
+            <img src="/logo_hex_bee.png" alt="" style={{ width: 36, height: 36, opacity: 0.4, marginBottom: "0.5rem" }} />
+            <p style={{ fontSize: "0.8rem", color: muted, margin: 0, lineHeight: 1.6 }}>
+              The Social Hive — Fullerton Cove Community App<br />
+              Need further help? Speak to your Element Communities coordinator.
+            </p>
+          </div>
 
         </div>
       </div>
