@@ -10,7 +10,7 @@ const HUBS = [
   { key: "movies",   label: "Movies",    Icon: MoviesIcon,   path: "/movies",   colour: "var(--teal)" },
   { key: "social",   label: "Social",    Icon: SocialIcon,   path: "/social",   colour: "var(--terracotta)" },
   { key: "bookclub", label: "Book Club", Icon: BookClubIcon, path: "/bookclub", colour: "var(--purple)" },
-  { key: "info",     label: "Info",       Icon: InfoIcon,     path: "/info",     colour: "#4e7aab" },
+  { key: "info",     label: "Info",       Icon: InfoIcon,     path: "/info/documents", colour: "#4e7aab" },
 ]
 
 // Render HTML (WYSIWYG) or legacy BBCode content
