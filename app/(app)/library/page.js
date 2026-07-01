@@ -545,6 +545,8 @@ export default function LibraryPage() {
   const [showSwiper, setShowSwiper] = useState(false)
   const [toasts, setToasts] = useState([])
   const [introExpanded, setIntroExpanded] = useState(false)
+  const [screenedMovies, setScreenedMovies] = useState([])
+  const [screenedExpanded, setScreenedExpanded] = useState(false)
   const [streamingServices, setStreamingServices] = useState([])
   const [dvdTmdbIds,        setDvdTmdbIds]        = useState(new Set())
   const [dvdImdbIds,        setDvdImdbIds]        = useState(new Set())
@@ -558,18 +560,22 @@ export default function LibraryPage() {
 
   const loadData = useCallback(async () => {
     const today = new Date().toISOString().split('T')[0]
-    const [{ data: moviesData }, { data: votesData }, { data: eventsData }, { data: dvdData }, settingsRes, { data: ownData }] = await Promise.all([
+    const [{ data: moviesData }, { data: votesData }, { data: futureEventsData }, { data: pastEventsData }, { data: dvdData }, settingsRes, { data: ownData }] = await Promise.all([
       supabase.from('movies').select('*').order('title'),
       supabase.from('votes').select('movie_id, member_id, score'),
       supabase.from('events').select('movie_id').gte('event_date', today).not('movie_id', 'is', null),
+      supabase.from('events').select('movie_id').lt('event_date', today).not('movie_id', 'is', null),
       supabase.from('movies').select('tmdb_id, imdb_id').eq('we_own', true),
       supabase.from('settings').select('value').eq('key', 'our_streaming_services').single(),
       supabase.from('movie_ownership').select('movie_id, ownership_type, members(name)'),
     ])
-    // Show suggestions (we_own=false) + any we_own=true movies that have upcoming events
-    const scheduledMovieIds = new Set((eventsData||[]).map(e => e.movie_id))
-    const filtered = (moviesData||[]).filter(m => !m.we_own || m.is_viewing_suggestion || scheduledMovieIds.has(m.id))
-    setMovies(filtered)
+    const scheduledMovieIds = new Set((futureEventsData||[]).map(e => e.movie_id))
+    // Movies with only past events (not also scheduled for the future) go to screened bucket
+    const pastMovieIds = new Set((pastEventsData||[]).map(e => e.movie_id))
+    const onlyScreenedIds = new Set([...pastMovieIds].filter(id => !scheduledMovieIds.has(id)))
+    const allVisible = (moviesData||[]).filter(m => !m.we_own || m.is_viewing_suggestion || scheduledMovieIds.has(m.id) || onlyScreenedIds.has(m.id))
+    setMovies(allVisible.filter(m => !onlyScreenedIds.has(m.id)))
+    setScreenedMovies(allVisible.filter(m => onlyScreenedIds.has(m.id)))
     setVotes(votesData||[])
     // Store FREE/COST supporting data
     const dvds = dvdData || []
@@ -695,6 +701,31 @@ export default function LibraryPage() {
             {sorted.map(m=>(
               <MovieCard key={m.id} movie={m} myVote={myVotes[m.id]} avgData={avgVotes[m.id]} isAdmin={member?.is_admin} freeCostData={member?.is_admin ? computeFreeCost(m, { streamingServices, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecords.filter(o => o.movie_id === m.id) }) : null} onClick={()=>setSelectedId(m.id)} />
             ))}
+          </div>
+        )}
+
+        {screenedMovies.length > 0 && (
+          <div style={{ marginTop: '1.5rem' }}>
+            <button
+              onClick={() => setScreenedExpanded(e => !e)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10,
+                padding: '0.65rem 1rem', cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-dim)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                Previously Screened ({screenedMovies.length})
+              </span>
+              <span style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>{screenedExpanded ? '▲' : '▼'}</span>
+            </button>
+            {screenedExpanded && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginTop: '0.65rem' }}>
+                {screenedMovies.map(m => (
+                  <MovieCard key={m.id} movie={m} myVote={myVotes[m.id]} avgData={avgVotes[m.id]} isAdmin={member?.is_admin} freeCostData={member?.is_admin ? computeFreeCost(m, { streamingServices, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecords.filter(o => o.movie_id === m.id) }) : null} onClick={()=>setSelectedId(m.id)} />
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
