@@ -49,7 +49,7 @@ function fmtTime(t) {
 }
 
 // BookingCard accepts a grouped entry: { event, confirmed, waitlist, eventId }
-function BookingCard({ group, onClick }) {
+function BookingCard({ group, waitlistPosition, onClick }) {
   const event = group.event
   if (!event) return null
 
@@ -113,7 +113,7 @@ function BookingCard({ group, onClick }) {
             fontSize: "0.7rem", fontWeight: 700,
             padding: "0.25rem 0.65rem", borderRadius: "20px", whiteSpace: "nowrap",
           }}>
-            ⏳ {waitlist} waitlisted
+            {`⏳ ${waitlist} waitlisted${waitlistPosition ? ` (#${waitlistPosition})` : ''}`}
           </div>
         )}
       </div>
@@ -148,14 +148,15 @@ export default function BookingsPage() {
   const [loading,     setLoading]     = useState(true)
   const [filter,      setFilter]      = useState("all")
   const [pastOpen,    setPastOpen]    = useState(false)
-  const [selectedEvent, setSelectedEvent] = useState(null)
-  const [loadingEvent,  setLoadingEvent]  = useState(false)
+  const [selectedEvent,    setSelectedEvent]    = useState(null)
+  const [loadingEvent,     setLoadingEvent]     = useState(false)
+  const [waitlistPositions, setWaitlistPositions] = useState({})
 
   const load = useCallback(async () => {
     if (!member?.id) return
     const { data } = await supabase
       .from("bookings")
-      .select("id, status, seats, payment_status, event_id, events(id, title, event_date, event_time, hub_type)")
+      .select("id, status, seats, payment_status, created_at, event_id, events(id, title, event_date, event_time, hub_type)")
       .eq("member_id", member.id)
       .neq("status", "cancelled")
 
@@ -164,6 +165,23 @@ export default function BookingsPage() {
   }, [member?.id])
 
   useEffect(() => { load() }, [load])
+
+  // Batch-fetch waitlist positions whenever bookings change
+  useEffect(() => {
+    const waitlisted = bookings.filter(b => b.status === "waitlist" && b.created_at)
+    if (waitlisted.length === 0) { setWaitlistPositions({}); return }
+    Promise.all(
+      waitlisted.map(b =>
+        supabase
+          .from("bookings")
+          .select("id", { count: "exact", head: true })
+          .eq("event_id", b.event_id)
+          .eq("status", "waitlist")
+          .lt("created_at", b.created_at)
+          .then(({ count }) => [b.event_id, (count ?? 0) + 1])
+      )
+    ).then(results => setWaitlistPositions(Object.fromEntries(results)))
+  }, [bookings])
 
   async function openBooking(booking) {
     setLoadingEvent(true)
@@ -264,7 +282,7 @@ export default function BookingsPage() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginBottom: "1.5rem" }}>
             {upcoming.map(g => (
-              <BookingCard key={g.eventId} group={g} onClick={() => openBooking({ event_id: g.eventId, events: g.event })} />
+              <BookingCard key={g.eventId} group={g} waitlistPosition={waitlistPositions[g.eventId]} onClick={() => openBooking({ event_id: g.eventId, events: g.event })} />
             ))}
           </div>
         )}
@@ -310,7 +328,7 @@ export default function BookingsPage() {
                     key={g.eventId}
                     style={{ borderTop: i > 0 ? "1px solid var(--border)" : "none", opacity: 0.7 }}
                   >
-                    <BookingCard group={g} onClick={() => openBooking({ event_id: g.eventId, events: g.event })} />
+                    <BookingCard group={g} waitlistPosition={waitlistPositions[g.eventId]} onClick={() => openBooking({ event_id: g.eventId, events: g.event })} />
                   </div>
                 ))}
               </div>

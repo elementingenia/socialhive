@@ -827,7 +827,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, member:members!member_id(name, username))")
+      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, created_at, member:members!member_id(name, username))")
       .eq("hub_type", "social")
       .eq("archived", false)
       .order("event_date", { ascending: true })
@@ -866,7 +866,7 @@ export default function SocialEvents() {
   async function openEventSlideOut(event) {
     const { data } = await supabase
       .from("events")
-      .select("*, bookings(id, status, seats, payment_status, member_id, members(name, username))")
+      .select("*, bookings(id, status, seats, payment_status, member_id, created_at, members(name, username))")
       .eq("id", event.id).single()
     if (data) {
       const allBookings = (data.bookings || []).filter(b => b.status !== "cancelled")

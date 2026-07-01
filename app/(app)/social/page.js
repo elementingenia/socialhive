@@ -88,7 +88,7 @@ function CapacityBar({ booked, max, waitlist }) {
 }
 
 // ── Next Event tile — surface card + terracotta header strip (matches Movies) ─
-function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCount, onOpen }) {
+function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCount, waitlistPosition, onOpen }) {
   if (!event) {
     return (
       <div style={{
@@ -202,7 +202,7 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
               background: "var(--surface2)", color: "var(--text-dim)",
               borderRadius: "20px", padding: "0.25rem 0.75rem",
               fontSize: "0.78rem", fontWeight: 700,
-            }}>⏳ You're on the waitlist</div>
+            }}>{`⏳ You're on the waitlist${waitlistPosition ? ` (#${waitlistPosition})` : ''}`}</div>
           ) : (
             <div style={{
               display: "inline-flex", alignItems: "center",
@@ -300,6 +300,7 @@ export default function SocialHome() {
   const [myBooking,         setMyBooking]         = useState(null)
   const [bookedCount,       setBookedCount]       = useState(0)
   const [waitlistCount,     setWaitlistCount]     = useState(0)
+  const [waitlistPosition,  setWaitlistPosition]  = useState(null)
   const [myAllBookings,     setMyAllBookings]     = useState([])
   const [welcomeText,       setWelcomeText]       = useState("")
   const [fullEvent,         setFullEvent]         = useState(null)
@@ -313,7 +314,7 @@ export default function SocialHome() {
     const [eventsRes, myBookingsRes, hubRes] = await Promise.all([
       supabase
         .from("events")
-        .select("id, title, event_date, event_time, description, max_seats, cost, payment_required, has_bus, location_type, location, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id)")
+        .select("id, title, event_date, event_time, description, max_seats, cost, payment_required, has_bus, location_type, location, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, created_at)")
         .eq("hub_type", "social").eq("archived", false)
         .gte("event_date", todayStr)
         .order("event_date", { ascending: true })
@@ -334,7 +335,19 @@ export default function SocialHome() {
       const confirmed = ev.bookings?.filter(b => b.status === "confirmed") || []
       setBookedCount(confirmed.reduce((s, b) => s + (b.seats || 1), 0))
       setWaitlistCount(ev.bookings?.filter(b => b.status === "waitlist").length || 0)
-      setMyBooking(ev.bookings?.find(b => b.member_id === member.id && b.status !== "cancelled") || null)
+      const myBk = ev.bookings?.find(b => b.member_id === member.id && b.status !== "cancelled") || null
+      setMyBooking(myBk)
+      if (myBk?.status === "waitlist" && myBk?.created_at) {
+        supabase
+          .from("bookings")
+          .select("id", { count: "exact", head: true })
+          .eq("event_id", ev.id)
+          .eq("status", "waitlist")
+          .lt("created_at", myBk.created_at)
+          .then(({ count }) => setWaitlistPosition((count ?? 0) + 1))
+      } else {
+        setWaitlistPosition(null)
+      }
 
       const { data: ecs } = await supabase
         .from("event_coordinators")
@@ -378,6 +391,7 @@ export default function SocialHome() {
         myBooking={myBooking}
         bookedCount={bookedCount}
         waitlistCount={waitlistCount}
+        waitlistPosition={waitlistPosition}
         onOpen={() => nextEvent && openEventSlideOut(nextEvent)}
       />
 

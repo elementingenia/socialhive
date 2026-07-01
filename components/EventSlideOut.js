@@ -552,6 +552,19 @@ function BookingSection({ event, onRefresh }) {
 
   const myConfirmed = event.my_bookings?.find(b => b.status === "confirmed")
   const myWaitlist  = event.my_bookings?.find(b => b.status === "waitlist")
+
+  const [waitlistPos, setWaitlistPos] = useState(null)
+  useEffect(() => {
+    if (!myWaitlist?.created_at) { setWaitlistPos(null); return }
+    supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("event_id", event.id)
+      .eq("status", "waitlist")
+      .lt("created_at", myWaitlist.created_at)
+      .then(({ count }) => setWaitlistPos((count ?? 0) + 1))
+  }, [event.id, myWaitlist?.created_at])
+
   const booked = event.bookings_count
     ?? (event.bookings?.filter(b => b.status === 'confirmed').reduce((s, b) => s + (b.seats || 1), 0) || 0)
   const max = event.max_seats || 0
@@ -694,7 +707,7 @@ function BookingSection({ event, onRefresh }) {
                 : "var(--green)"
               return <StatusPill label={label} colour={colour} />
             })()}
-            {myWaitlist && <StatusPill label={`⏳ ${myWaitlist.seats} on waitlist`} colour="var(--amber-dark)" />}
+            {myWaitlist && <StatusPill label={`⏳ ${myWaitlist.seats} on waitlist${waitlistPos ? ` (#${waitlistPos})` : ""}`} colour="var(--amber-dark)" />}
           </div>
           {myConfirmed && !isBookclubEvent && (
             <button onClick={() => { setModifySeats((myConfirmed.seats || 1) + (myWaitlist?.seats || 0)); setModifying(true) }}

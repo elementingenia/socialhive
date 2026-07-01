@@ -88,13 +88,13 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen })
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.1rem' }}>
                 <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--teal)' }}>✓ {myBooking.confirmed_seats} seat{myBooking.confirmed_seats !== 1 ? 's' : ''}</div>
                 {myBooking.waitlist_seats > 0 && (
-                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--amber-dark)' }}>⏳ +{myBooking.waitlist_seats} waitlist</div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--amber-dark)' }}>⏳ +{myBooking.waitlist_seats} waitlist{myBooking.waitlist_position ? ` (#${myBooking.waitlist_position})` : ''}</div>
                 )}
               </div>
             )}
             {isWaitlist && !isBooked && (
               <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--amber-dark)' }}>
-                ⏳ {myBooking.waitlist_seats} waitlisted
+                ⏳ {myBooking.waitlist_seats} waitlisted{myBooking.waitlist_position ? ` (#${myBooking.waitlist_position})` : ''}
               </div>
             )}
             {!isBooked && !isWaitlist && (
@@ -510,6 +510,7 @@ export default function MoviesHomePage() {
   const [swiperDone, setSwiperDone] = useState(false)
   const [session, setSession] = useState(null)
   const [slideOutEvent, setSlideOutEvent] = useState(null)
+  const [nextWaitlistPosition, setNextWaitlistPosition] = useState(null)
 
   const load = useCallback(async () => {
     fetch('/api/hub-settings').then(r => r.json()).then(d => setWelcomeText(d.movies?.text || '')).catch(() => {})
@@ -539,7 +540,7 @@ export default function MoviesHomePage() {
         .limit(1),
 
       supabase.from('bookings')
-        .select('id, event_id, status, seats, booked_at, events(id, event_date, event_time, title, hub_type, movies(id, title, poster_url))')
+        .select('id, event_id, status, seats, booked_at, created_at, events(id, event_date, event_time, title, hub_type, movies(id, title, poster_url))')
         .eq('member_id', memberData.id)
         .neq('status', 'cancelled'),
 
@@ -576,6 +577,19 @@ export default function MoviesHomePage() {
       // Collect ALL rows for next event (split gives confirmed + waitlist rows)
       const nextRows = bookingsData.filter(b => b.event_id === nextEv.id)
       setNextBooking(nextRows.length ? nextRows : null)
+      // Fetch waitlist position for user if they're waitlisted on next event
+      const waitlistRow = nextRows.find(b => b.status === 'waitlist')
+      if (waitlistRow?.created_at) {
+        supabase
+          .from('bookings')
+          .select('id', { count: 'exact', head: true })
+          .eq('event_id', nextEv.id)
+          .eq('status', 'waitlist')
+          .lt('created_at', waitlistRow.created_at)
+          .then(({ count }) => setNextWaitlistPosition((count ?? 0) + 1))
+      } else {
+        setNextWaitlistPosition(null)
+      }
     }
 
     const votedIds = new Set((votesData || []).map(v => v.movie_id))
@@ -598,7 +612,7 @@ export default function MoviesHomePage() {
       supabase.from('events')
         .select('*, movies(id, title, poster_url, genre, runtime, year, rating_imdb, rating_rt, imdb_id, plot)')
         .eq('id', eventId).single(),
-      supabase.from('bookings').select('id, status, seats, payment_status')
+      supabase.from('bookings').select('id, status, seats, payment_status, created_at')
         .eq('event_id', eventId).eq('member_id', memberId).neq('status', 'cancelled'),
       supabase.from('bookings').select('seats')
         .eq('event_id', eventId).eq('status', 'confirmed'),
@@ -615,7 +629,7 @@ export default function MoviesHomePage() {
       movie: ev.movies || null,
       bookings_count,
       waitlist_count,
-      my_bookings: (myRows || []).map(b => ({ status: b.status, seats: b.seats || 1, payment_status: b.payment_status })),
+      my_bookings: (myRows || []).map(b => ({ status: b.status, seats: b.seats || 1, payment_status: b.payment_status, created_at: b.created_at })),
     })
   }
 
@@ -628,6 +642,7 @@ export default function MoviesHomePage() {
     waitlist_seats:  nextBooking.filter(b => b.status === 'waitlist').reduce((s, b) => s + (b.seats || 1), 0),
     has_confirmed: nextBooking.some(b => b.status === 'confirmed'),
     has_waitlist:  nextBooking.some(b => b.status === 'waitlist'),
+    waitlist_position: nextWaitlistPosition,
   } : null
 
   return (
