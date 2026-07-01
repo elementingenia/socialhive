@@ -540,7 +540,7 @@ export default function MoviesHomePage() {
         .limit(1),
 
       supabase.from('bookings')
-        .select('id, event_id, status, seats, booked_at, created_at, events(id, event_date, event_time, title, hub_type, movies(id, title, poster_url))')
+        .select('id, event_id, status, seats, booked_at, events(id, event_date, event_time, title, hub_type, movies(id, title, poster_url))')
         .eq('member_id', memberData.id)
         .neq('status', 'cancelled'),
 
@@ -579,13 +579,13 @@ export default function MoviesHomePage() {
       setNextBooking(nextRows.length ? nextRows : null)
       // Fetch waitlist position for user if they're waitlisted on next event
       const waitlistRow = nextRows.find(b => b.status === 'waitlist')
-      if (waitlistRow?.created_at) {
+      if (waitlistRow?.booked_at) {
         supabase
           .from('bookings')
           .select('id', { count: 'exact', head: true })
           .eq('event_id', nextEv.id)
           .eq('status', 'waitlist')
-          .lt('created_at', waitlistRow.created_at)
+          .lt('booked_at', waitlistRow.booked_at)
           .then(({ count }) => setNextWaitlistPosition((count ?? 0) + 1))
       } else {
         setNextWaitlistPosition(null)
@@ -612,7 +612,7 @@ export default function MoviesHomePage() {
       supabase.from('events')
         .select('*, movies(id, title, poster_url, genre, runtime, year, rating_imdb, rating_rt, imdb_id, plot)')
         .eq('id', eventId).single(),
-      supabase.from('bookings').select('id, status, seats, payment_status, created_at')
+      supabase.from('bookings').select('id, status, seats, payment_status, booked_at')
         .eq('event_id', eventId).eq('member_id', memberId).neq('status', 'cancelled'),
       supabase.from('bookings').select('seats')
         .eq('event_id', eventId).eq('status', 'confirmed'),
@@ -629,7 +629,7 @@ export default function MoviesHomePage() {
       movie: ev.movies || null,
       bookings_count,
       waitlist_count,
-      my_bookings: (myRows || []).map(b => ({ status: b.status, seats: b.seats || 1, payment_status: b.payment_status, created_at: b.created_at })),
+      my_bookings: (myRows || []).map(b => ({ status: b.status, seats: b.seats || 1, payment_status: b.payment_status, booked_at: b.booked_at })),
     })
   }
 

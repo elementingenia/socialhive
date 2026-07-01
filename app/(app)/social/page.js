@@ -314,7 +314,7 @@ export default function SocialHome() {
     const [eventsRes, myBookingsRes, hubRes] = await Promise.all([
       supabase
         .from("events")
-        .select("id, title, event_date, event_time, description, max_seats, cost, payment_required, has_bus, location_type, location, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, created_at)")
+        .select("id, title, event_date, event_time, description, max_seats, cost, payment_required, has_bus, location_type, location, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, booked_at)")
         .eq("hub_type", "social").eq("archived", false)
         .gte("event_date", todayStr)
         .order("event_date", { ascending: true })
@@ -337,13 +337,13 @@ export default function SocialHome() {
       setWaitlistCount(ev.bookings?.filter(b => b.status === "waitlist").length || 0)
       const myBk = ev.bookings?.find(b => b.member_id === member.id && b.status !== "cancelled") || null
       setMyBooking(myBk)
-      if (myBk?.status === "waitlist" && myBk?.created_at) {
+      if (myBk?.status === "waitlist" && myBk?.booked_at) {
         supabase
           .from("bookings")
           .select("id", { count: "exact", head: true })
           .eq("event_id", ev.id)
           .eq("status", "waitlist")
-          .lt("created_at", myBk.created_at)
+          .lt("booked_at", myBk.booked_at)
           .then(({ count }) => setWaitlistPosition((count ?? 0) + 1))
       } else {
         setWaitlistPosition(null)

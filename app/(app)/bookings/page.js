@@ -156,7 +156,7 @@ export default function BookingsPage() {
     if (!member?.id) return
     const { data } = await supabase
       .from("bookings")
-      .select("id, status, seats, payment_status, created_at, event_id, events(id, title, event_date, event_time, hub_type)")
+      .select("id, status, seats, payment_status, booked_at, event_id, events(id, title, event_date, event_time, hub_type)")
       .eq("member_id", member.id)
       .neq("status", "cancelled")
 
@@ -168,7 +168,7 @@ export default function BookingsPage() {
 
   // Batch-fetch waitlist positions whenever bookings change
   useEffect(() => {
-    const waitlisted = bookings.filter(b => b.status === "waitlist" && b.created_at)
+    const waitlisted = bookings.filter(b => b.status === "waitlist" && b.booked_at)
     if (waitlisted.length === 0) { setWaitlistPositions({}); return }
     Promise.all(
       waitlisted.map(b =>
@@ -177,7 +177,7 @@ export default function BookingsPage() {
           .select("id", { count: "exact", head: true })
           .eq("event_id", b.event_id)
           .eq("status", "waitlist")
-          .lt("created_at", b.created_at)
+          .lt("booked_at", b.booked_at)
           .then(({ count }) => [b.event_id, (count ?? 0) + 1])
       )
     ).then(results => setWaitlistPositions(Object.fromEntries(results)))
