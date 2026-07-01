@@ -1,6 +1,5 @@
 "use client"
 import { useState } from "react"
-import Header from "@/components/Header"
 
 const IMG = (name) =>
   `https://tzzxwvbqszzrruxjrpcs.supabase.co/storage/v1/object/public/help-screenshots/${name}`
@@ -99,8 +98,7 @@ export default function HelpPage() {
   }
 
   return (
-    <div style={{ minHeight: "100dvh", background: "var(--bg)" }}>
-      <Header />
+    <>
 
       <div style={{
         overflowX: "auto",
@@ -298,6 +296,6 @@ export default function HelpPage() {
         </p>
 
       </div>
-    </div>
+    </>
   )
 }
