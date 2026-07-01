@@ -248,8 +248,8 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
     // DVDs (we_own=true) must only have the suggestion flag cleared — never hard-deleted from here
     const isDvd = movie.we_own
     const res = isDvd
-      ? await fetch('/api/dvd/suggest', { method:'DELETE', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${session.access_token}` }, body: JSON.stringify({ movie_id: movie.id }) })
-      : await fetch(`/api/movies/${movie.id}`, { method:'DELETE', headers:{ 'Authorization':`Bearer ${session.access_token}` } })
+      ? await fetch('/api/dvd/suggest', { method:'DELETE', headers:{ 'Content-Type':'application/json', 'Authorization':`Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` }, body: JSON.stringify({ movie_id: movie.id }) })
+      : await fetch(`/api/movies/${movie.id}`, { method:'DELETE', headers:{ 'Authorization':`Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` } })
     setDeleting(false)
     if (!res.ok) { const d=await res.json().catch(()=>({})); addToast(d.error||'Remove failed','error'); return }
     addToast(isDvd ? `${movie.title} removed from suggestions` : `${movie.title} removed`)
@@ -358,9 +358,12 @@ function SuggestSheet({ session, onClose, onAdded, addToast }) {
   async function handleAdd() {
     if (!preview) return
     setSaving(true)
+    const { data: { session: freshSession } } = await supabase.auth.getSession()
+    const token = freshSession?.access_token
+    if (!token) { addToast('Session expired — please log in again', 'error'); setSaving(false); return }
     const res = await fetch('/api/movies/add', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify(preview),
     })
     const data = await res.json()
