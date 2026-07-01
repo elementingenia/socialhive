@@ -26,16 +26,16 @@ function MainNoticeCard({ text, memberName }) {
   if (!text) return null
   return (
     <div style={{
-      background: "var(--teal)", color: "#fff", borderRadius: "14px",
+      background: "var(--amber)", color: "#000", borderRadius: "14px",
       padding: "1.1rem 1.25rem", marginBottom: "0.75rem",
     }}>
       {memberName && (
-        <div style={{ fontSize: "0.88rem", fontWeight: 700, opacity: 0.9, marginBottom: "0.4rem" }}>
+        <div style={{ fontSize: "0.88rem", fontWeight: 700, opacity: 0.8, marginBottom: "0.4rem" }}>
           Welcome {memberName},
         </div>
       )}
       <div style={{ fontSize: "0.95rem", lineHeight: 1.5 }}>
-        <HubContent text={text} c1Colour="rgba(255,255,255,0.85)" c2Colour="rgba(255,255,255,0.65)" />
+        <HubContent text={text} c1Colour="var(--teal)" c2Colour="rgba(0,0,0,0.65)" />
       </div>
     </div>
   )
