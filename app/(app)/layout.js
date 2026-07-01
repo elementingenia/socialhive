@@ -50,7 +50,7 @@ function InnerLayout({ children }) {
   }
 
   return (
-    <div style={{ paddingBottom: 70 }}>
+    <div style={{ paddingBottom: 70, overflowX: "hidden", maxWidth: "100vw" }}>
       <Header />
       {children}
       <BottomNav />
