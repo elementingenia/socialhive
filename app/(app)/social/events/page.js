@@ -675,6 +675,13 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
       border: "1px solid var(--border)", overflow: "hidden",
       opacity: isPast ? 0.65 : 1, cursor: "pointer",
     }}>
+      {event.image_url && (
+        <img
+          src={event.image_url}
+          alt={event.title}
+          style={{ width: "100%", height: 140, objectFit: "cover", display: "block" }}
+        />
+      )}
       <div style={{ padding: "0.9rem 1rem" }}>
         {/* Title + badges */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.35rem" }}>
@@ -827,7 +834,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, booked_at, member:members!member_id(name, username))")
+      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, image_url, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, booked_at, member:members!member_id(name, username))")
       .eq("hub_type", "social")
       .eq("archived", false)
       .order("event_date", { ascending: true })

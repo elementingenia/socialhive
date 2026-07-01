@@ -163,10 +163,13 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   const [notes,       setNotes]       = useState("")
   const [desc,        setDesc]        = useState("")
   const [welcome,     setWelcome]     = useState("")
-  const [saving,      setSaving]      = useState(false)
-  const [cancelTarget, setCancelTarget] = useState(null)
-  const isMovie = event.hub_type === "movie"
-  const isBook  = event.hub_type === "bookclub"
+  const [saving,        setSaving]        = useState(false)
+  const [cancelTarget,  setCancelTarget]  = useState(null)
+  const [uploadingImg,  setUploadingImg]  = useState(false)
+  const [localImageUrl, setLocalImageUrl] = useState(null)
+  const isMovie  = event.hub_type === "movie"
+  const isBook   = event.hub_type === "bookclub"
+  const isSocial = event.hub_type === "social" || event.hub_type === "outings"
 
   const inputStyle = { width: "100%", padding: "0.6rem 0.8rem", borderRadius: 8, border: "1px solid var(--border)",
     background: "var(--surface)", color: "var(--text)", fontSize: "0.88rem", boxSizing: "border-box", fontFamily: "inherit" }
@@ -259,6 +262,46 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
       if (field === "welcome_message") setEditWelcome(false)
       load()
     } else showToast("Failed to save", "error")
+  }
+
+  async function uploadImage(file) {
+    setUploadingImg(true)
+    const token = await getToken()
+    const fd = new FormData()
+    fd.append("event_id", event.id)
+    fd.append("file", file)
+    const res = await fetch("/api/events/image", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    })
+    const d = await res.json()
+    setUploadingImg(false)
+    if (res.ok) {
+      setLocalImageUrl(d.image_url)
+      showToast("Image uploaded")
+      onRefresh()
+    } else {
+      showToast(d.error || "Upload failed", "error")
+    }
+  }
+
+  async function removeImage() {
+    setUploadingImg(true)
+    const token = await getToken()
+    const res = await fetch("/api/events/image", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ event_id: event.id }),
+    })
+    setUploadingImg(false)
+    if (res.ok) {
+      setLocalImageUrl(null)
+      showToast("Image removed")
+      onRefresh()
+    } else {
+      showToast("Failed to remove", "error")
+    }
   }
 
   if (loading) return (
@@ -385,6 +428,46 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
               ? <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.5, fontStyle: "italic" }}>"{welcome}"</div>
               : <div style={{ fontSize: 13, color: "var(--text-dim)", fontStyle: "italic" }}>No welcome message</div>
           )}
+        </div>
+      )}
+
+      {/* Event Image — social/outings only */}
+      {isSocial && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Event Image</div>
+          {(localImageUrl || event.image_url) && (
+            <img
+              src={localImageUrl || event.image_url}
+              alt="Event"
+              style={{ width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 10, marginBottom: 8, display: "block" }}
+            />
+          )}
+          <div style={{ display: "flex", gap: 8 }}>
+            <label style={{
+              flex: 1, padding: "8px", borderRadius: 8, border: `1px solid ${colour}`,
+              color: colour, fontWeight: 700, fontSize: 13, cursor: uploadingImg ? "not-allowed" : "pointer",
+              textAlign: "center", opacity: uploadingImg ? 0.6 : 1, fontFamily: "inherit",
+            }}>
+              {uploadingImg ? "Uploading…" : (localImageUrl || event.image_url) ? "Replace" : "Upload Image"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                style={{ display: "none" }}
+                disabled={uploadingImg}
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadImage(f) }}
+              />
+            </label>
+            {(localImageUrl || event.image_url) && (
+              <button
+                onClick={removeImage}
+                disabled={uploadingImg}
+                style={{
+                  padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border)",
+                  background: "var(--surface2)", color: "var(--danger)", fontWeight: 700,
+                  fontSize: 13, cursor: uploadingImg ? "not-allowed" : "pointer", fontFamily: "inherit",
+                }}>Remove</button>
+            )}
+          </div>
         </div>
       )}
 
@@ -871,6 +954,11 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
               <img src={event.book.cover_url} alt={event.book.title}
                 style={{ height: 160, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }} />
             </div>
+          )}
+          {/* Social / outings event image */}
+          {(event.hub_type === "social" || event.hub_type === "outings") && event.image_url && (
+            <img src={event.image_url} alt={event.title}
+              style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 12, marginBottom: 14 }} />
           )}
 
           {/* Title */}
