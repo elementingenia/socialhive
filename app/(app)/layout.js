@@ -50,7 +50,7 @@ function InnerLayout({ children }) {
   }
 
   return (
-    <div style={{ paddingBottom: 70, overflowX: "hidden", maxWidth: "100vw" }}>
+    <div style={{ paddingBottom: "calc(70px + env(safe-area-inset-bottom, 0px))", overflowX: "hidden", maxWidth: "100vw" }}>
       <Header />
       {children}
       <BottomNav />
@@ -178,7 +178,7 @@ export default function AppLayout({ children }) {
   }, [router])
 
   if (!ready) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100dvh" }}>
       <div className="spinner" />
     </div>
   )

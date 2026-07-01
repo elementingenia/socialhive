@@ -46,6 +46,7 @@ export default function BottomNav() {
     position: "fixed", bottom: 0, left: 0, right: 0,
     background: "var(--surface)", borderTop: "1px solid var(--border)",
     display: "flex", zIndex: 100, minHeight: 60,
+    paddingBottom: "env(safe-area-inset-bottom, 0px)",
   }
 
   const btn = (active, colour = "var(--amber)") => ({
