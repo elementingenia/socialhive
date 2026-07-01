@@ -101,7 +101,7 @@ export default function Header() {
   ) : null
 
   const helpBtn = (
-    <a href="/help" aria-label="Help" style={{ width: 30, height: 30, borderRadius: "50%", border: "1.5px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontWeight: 800, fontSize: "0.8rem", textDecoration: "none", lineHeight: 1, flexShrink: 0 }}>?</a>
+    <a href="/help-guide" target="_blank" rel="noopener noreferrer" aria-label="Help" style={{ width: 30, height: 30, borderRadius: "50%", border: "1.5px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontWeight: 800, fontSize: "0.8rem", textDecoration: "none", lineHeight: 1, flexShrink: 0 }}>?</a>
   )
 
   // ── HOME — larger branded header ──
