@@ -17,7 +17,6 @@ const PRINT_STYLE = `
 `
 
 const teal   = "#2a9d8f"
-const amber  = "#e6a817"
 const text   = "#2d2d2d"
 const muted  = "#666"
 const border = "#e2e8f0"
@@ -41,51 +40,76 @@ const EC_BADGE = (
 
 const SECTIONS = [
   {
-    id: "header",   num: "—", title: "Getting Around — The App Header",
-    subs: ["The header bar", "Your account menu (avatar pill)"],
-  },
-  {
-    id: "access",   num: 1,   title: "Signing In, Registering & Changing Your Password",
-    subs: ["Sign In", "Register — first time users", "Change Password"],
-  },
-  {
-    id: "profile",  num: 2,   title: "Your Profile & PIN",
-    subs: ["Updating your profile", "Changing your PIN"],
-  },
-  {
-    id: "movies",   num: 3,   title: "Movies — Screenings, Booking & Library",
+    id: "header", num: "—", title: "Getting Around — The App Header",
     subs: [
-      "Movies Home layout",
-      "The Next Screening card",
-      "IMDb & Rotten Tomatoes ratings",
-      "Booking a seat",
-      "After you have booked",
-      "Rating films — the community voting panel",
-      "Scheduled screenings list",
-      "Suggestions library",
-      "DVD library",
-      "Coordinator panel (EC only)",
+      { title: "The header bar",                    id: "sub-header-bar" },
+      { title: "Your account menu (avatar pill)",   id: "sub-header-account" },
     ],
   },
   {
-    id: "social",   num: 4,   title: "Social Events — Community Activities & Trips",
-    subs: ["Social hub home", "Viewing and booking events", "Event detail & booking", "Coordinator panel (EC only)"],
+    id: "access", num: 1, title: "Signing In, Registering & Changing Your Password",
+    subs: [
+      { title: "Sign In",                    id: "sub-signin" },
+      { title: "Register — first time users", id: "sub-register" },
+      { title: "Change Password",             id: "sub-password" },
+    ],
   },
   {
-    id: "bookclub", num: 5,   title: "Book Club",
-    subs: ["Book Club home", "Signing up & suggestions"],
+    id: "profile", num: 2, title: "Your Profile & PIN",
+    subs: [
+      { title: "Updating your profile", id: "sub-profile-update" },
+      { title: "Changing your PIN",     id: "sub-profile-pin" },
+    ],
   },
   {
-    id: "bar",      num: 6,   title: "My Bar — Honour Bar & Tab",
-    subs: ["The bar menu", "Adding to your tab", "Your current tab", "Reconciliation (EC only)"],
+    id: "movies", num: 3, title: "Movies — Screenings, Booking & Library",
+    subs: [
+      { title: "Movies Home layout",                         id: "sub-movies-home" },
+      { title: "The Next Screening card",                    id: "sub-movies-nextcard" },
+      { title: "IMDb & Rotten Tomatoes ratings",             id: "sub-movies-ratings" },
+      { title: "Booking a seat",                             id: "sub-movies-booking" },
+      { title: "After you have booked",                      id: "sub-movies-afterbook" },
+      { title: "Rating films — the community voting panel",  id: "sub-movies-voting" },
+      { title: "Scheduled screenings list",                  id: "sub-movies-scheduled" },
+      { title: "Suggestions library",                        id: "sub-movies-library" },
+      { title: "DVD library",                                id: "sub-movies-dvd" },
+      { title: "Coordinator panel (EC only)",                id: "sub-movies-ec" },
+    ],
   },
   {
-    id: "calendar", num: 7,   title: "Community Calendar",
+    id: "social", num: 4, title: "Social Events — Community Activities & Trips",
+    subs: [
+      { title: "Social hub home",              id: "sub-social-home" },
+      { title: "Viewing and booking events",   id: "sub-social-events" },
+      { title: "Event detail & booking",       id: "sub-social-detail" },
+      { title: "Coordinator panel (EC only)",  id: "sub-social-ec" },
+    ],
+  },
+  {
+    id: "bookclub", num: 5, title: "Book Club",
+    subs: [
+      { title: "Book Club home",       id: "sub-bookclub-home" },
+      { title: "Signing up & suggestions", id: "sub-bookclub-signup" },
+    ],
+  },
+  {
+    id: "bar", num: 6, title: "My Bar — Honour Bar & Tab",
+    subs: [
+      { title: "The bar menu",              id: "sub-bar-menu" },
+      { title: "Adding to your tab",        id: "sub-bar-add" },
+      { title: "Your current tab",          id: "sub-bar-tab" },
+      { title: "Reconciliation (EC only)",  id: "sub-bar-ec" },
+    ],
+  },
+  {
+    id: "calendar", num: 7, title: "Community Calendar",
     subs: [],
   },
   {
-    id: "bookings", num: 8,   title: "My Bookings",
-    subs: ["Understanding booking status"],
+    id: "bookings", num: 8, title: "My Bookings",
+    subs: [
+      { title: "Understanding booking status", id: "sub-bookings-status" },
+    ],
   },
 ]
 
@@ -125,9 +149,9 @@ function Section({ id, num, title, children }) {
   )
 }
 
-function Subsection({ title, ecOnly, children }) {
+function Subsection({ id, title, ecOnly, children }) {
   return (
-    <div style={{ marginBottom: "1.75rem", paddingLeft: "0.5rem", borderLeft: `3px solid ${border}` }}>
+    <div id={id} style={{ marginBottom: "1.75rem", paddingLeft: "0.5rem", borderLeft: `3px solid ${border}`, scrollMarginTop: "1rem" }}>
       <h3 style={{
         fontSize: "0.9rem",
         fontWeight: 700,
@@ -188,6 +212,12 @@ export default function HelpGuidePage() {
 
   const scrollTo = (id) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
+  const tocBtnStyle = {
+    background: "none", border: "none", cursor: "pointer",
+    fontFamily: "inherit", padding: 0, textAlign: "left",
+    textDecoration: "underline",
   }
 
   return (
@@ -261,27 +291,39 @@ export default function HelpGuidePage() {
           </button>
 
           <div style={{ display: tocOpen ? "block" : "none" }}>
-            <ol style={{ margin: 0, padding: "0.75rem 1.25rem 1rem 2.5rem", listStyle: "none", counterReset: "toc" }}>
+            <ol style={{ margin: 0, padding: "0.75rem 1.25rem 1rem 2.5rem", listStyle: "none" }}>
               {SECTIONS.map(s => (
                 <li key={s.id} style={{ marginBottom: "0.6rem" }}>
                   <button
                     className="no-print"
                     onClick={() => scrollTo(s.id)}
                     style={{
-                      background: "none", border: "none", cursor: "pointer",
-                      fontFamily: "inherit", fontSize: "0.88rem",
-                      color: teal, fontWeight: 700, padding: 0,
-                      textAlign: "left", textDecoration: "underline",
+                      ...tocBtnStyle,
+                      fontSize: "0.88rem",
+                      color: teal,
+                      fontWeight: 700,
                       textDecorationColor: "rgba(42,157,143,0.3)",
                     }}
                   >
                     {s.num !== "—" ? `${s.num}. ` : ""}{s.title}
                   </button>
                   {s.subs && s.subs.length > 0 && (
-                    <ul style={{ margin: "0.35rem 0 0 1rem", padding: 0, listStyle: "none" }}>
+                    <ul style={{ margin: "0.3rem 0 0 1rem", padding: 0, listStyle: "none" }}>
                       {s.subs.map(sub => (
-                        <li key={sub} style={{ marginBottom: "0.2rem" }}>
-                          <span style={{ fontSize: "0.8rem", color: muted }}>› {sub}</span>
+                        <li key={sub.id} style={{ marginBottom: "0.15rem" }}>
+                          <button
+                            className="no-print"
+                            onClick={() => scrollTo(sub.id)}
+                            style={{
+                              ...tocBtnStyle,
+                              fontSize: "0.79rem",
+                              color: "#2a7a72",
+                              fontWeight: 500,
+                              textDecorationColor: "rgba(42,157,143,0.2)",
+                            }}
+                          >
+                            › {sub.title}
+                          </button>
                         </li>
                       ))}
                     </ul>
@@ -295,10 +337,9 @@ export default function HelpGuidePage() {
         {/* ── Main content ── */}
         <div style={{ maxWidth: 640, margin: "0 auto", padding: "2rem 1.25rem 4rem" }}>
 
-          {/* ── HEADER (no number — applies everywhere) ── */}
+          {/* ── HEADER (no number) ── */}
           <Section id="header" num="—" title="Getting Around — The App Header">
-
-            <Subsection title="The header bar">
+            <Subsection id="sub-header-bar" title="The header bar">
               <Step img={IMG("06-movies.png")} alt="App header bar">
                 Every page in The Social Hive has a header bar at the top of the screen. It has three
                 parts:
@@ -321,7 +362,7 @@ export default function HelpGuidePage() {
               </Step>
             </Subsection>
 
-            <Subsection title="Your account menu (avatar pill)">
+            <Subsection id="sub-header-account" title="Your account menu (avatar pill)">
               <Step>
                 Tap your name or profile photo on the right-hand side of the header to open the account
                 menu. This menu has three options:
@@ -344,13 +385,11 @@ export default function HelpGuidePage() {
                 the bell to open the notifications panel and see what's new.
               </InfoBox>
             </Subsection>
-
           </Section>
 
           {/* ── 1. SIGN IN & REGISTER ── */}
           <Section id="access" num={1} title="Signing In, Registering & Changing Your Password">
-
-            <Subsection title="Sign In">
+            <Subsection id="sub-signin" title="Sign In">
               <Step img={IMG("01-login.png")} alt="Sign In screen">
                 When you open The Social Hive you will see the sign-in screen. Enter your{" "}
                 <strong>username</strong> and <strong>password</strong>, then tap{" "}
@@ -359,7 +398,7 @@ export default function HelpGuidePage() {
               </Step>
             </Subsection>
 
-            <Subsection title="Register — first time users">
+            <Subsection id="sub-register" title="Register — first time users">
               <Step img={IMG("02-register.png")} alt="Register screen">
                 If this is your first time, tap <strong>Register</strong> at the top of the sign-in
                 screen. You will need the <strong>invite code</strong> provided by your Element
@@ -369,7 +408,7 @@ export default function HelpGuidePage() {
               </Step>
             </Subsection>
 
-            <Subsection title="Change Password">
+            <Subsection id="sub-password" title="Change Password">
               <Step img={IMG("03-change-password.png")} alt="Change Password screen">
                 Tap <strong>Change Password</strong> at the top of the sign-in screen. Enter your
                 username, your current password, then your new password. Tap{" "}
@@ -377,13 +416,11 @@ export default function HelpGuidePage() {
                 new password.
               </Step>
             </Subsection>
-
           </Section>
 
           {/* ── 2. PROFILE ── */}
           <Section id="profile" num={2} title="Your Profile & PIN">
-
-            <Subsection title="Updating your profile">
+            <Subsection id="sub-profile-update" title="Updating your profile">
               <Step img={IMG("05-profile.png")} alt="Profile screen">
                 Tap your name or photo in the top-right corner of any page to open the account menu,
                 then tap <strong>Update Profile</strong>. From here you can update your display name,
@@ -392,7 +429,7 @@ export default function HelpGuidePage() {
               </Step>
             </Subsection>
 
-            <Subsection title="Changing your PIN">
+            <Subsection id="sub-profile-pin" title="Changing your PIN">
               <Step>
                 From the same account menu (top-right), tap <strong>Change PIN</strong>. Enter your
                 current 4-digit PIN, then enter and confirm your new PIN. Your PIN is required every
@@ -403,13 +440,11 @@ export default function HelpGuidePage() {
                 💡 If you forget your PIN, contact your coordinator — they can reset it for you.
               </InfoBox>
             </Subsection>
-
           </Section>
 
           {/* ── 3. MOVIES ── */}
           <Section id="movies" num={3} title="Movies — Screenings, Booking & Library">
-
-            <Subsection title="Movies Home layout">
+            <Subsection id="sub-movies-home" title="Movies Home layout">
               <Step img={IMG("06-movies.png")} alt="Movies Home screen">
                 The Movies Home screen is your central hub for everything related to community
                 screenings. It is divided into several panels stacked vertically on the page:
@@ -417,8 +452,7 @@ export default function HelpGuidePage() {
               <Step>
                 <strong>Welcome message</strong> — if your coordinator has posted a message, it
                 appears as a banner at the top in a warm amber and teal gradient. Tap the{" "}
-                <strong>✕</strong> to dismiss it. It will not reappear unless the coordinator posts
-                a new one.
+                <strong>✕</strong> to dismiss it.
               </Step>
               <Step>
                 <strong>Next Screening card</strong> — a teal-headed card showing the very next
@@ -434,224 +468,167 @@ export default function HelpGuidePage() {
                 <strong>Rate a Film panel</strong> — if you have recently attended a screening and
                 have not yet rated the movie, a voting panel appears here. See "Rating films" below.
               </Step>
+            </Subsection>
+
+            <Subsection id="sub-movies-nextcard" title="The Next Screening card">
               <Step>
-                Below the cards, you will find navigation buttons to <strong>Scheduled</strong>{" "}
-                (all upcoming screenings), <strong>Suggestions</strong> (movies residents want to
-                watch), and <strong>DVD Library</strong> (the community's physical collection).
+                The teal header strip shows the event name, how many days away it is, and a prompt to
+                tap and book. Inside the card you will see the movie <strong>poster</strong>, title and{" "}
+                <strong>date/time</strong> highlighted in teal, <strong>IMDb and Rotten Tomatoes score
+                chips</strong> (tap either to read reviews), the <strong>coordinator's name</strong>,
+                and a short two-line <strong>plot summary</strong>.
+              </Step>
+              <Step>
+                At the bottom you will see either a <strong>seat count chip</strong> with a "Tap to
+                book →" prompt, or a green confirmation if you have already booked.
+                <strong> Tap anywhere on the card</strong> to open the full booking panel.
               </Step>
             </Subsection>
 
-            <Subsection title="The Next Screening card">
+            <Subsection id="sub-movies-ratings" title="IMDb & Rotten Tomatoes ratings">
               <Step>
-                The teal header strip of this card shows the event name, how many days away it is,
-                and a prompt to tap and book. Inside the card you will see:
-              </Step>
-              <Step>
-                <strong>Movie poster</strong> on the left. <strong>Title and date/time</strong>{" "}
-                (highlighted in teal) on the right. Below those, <strong>IMDb and Rotten Tomatoes
-                score chips</strong> — tap either score to open that website and read full reviews
-                (see below). The <strong>coordinator's name</strong> appears below the scores, and
-                a short two-line <strong>plot summary</strong> is shown beneath that.
-              </Step>
-              <Step>
-                At the bottom of the card, you will see one of the following depending on availability:
-                a <strong>seat count chip</strong> (e.g. "4 seats left") with a "Tap to book →"
-                prompt, or if you have already booked, a green confirmation showing how many seats
-                you have.
-              </Step>
-              <Step>
-                <strong>Tap anywhere on the card</strong> to open the full booking panel for that
-                screening.
+                You will see two rating chips on movie cards — a gold <strong>⭐ IMDb</strong> score
+                and a red <strong>🍅 Rotten Tomatoes</strong> score. <strong>Tap the IMDb chip</strong>{" "}
+                to open the film's full page on IMDb in a new browser tab — cast list, synopsis, and
+                reviews. <strong>Tap the Rotten Tomatoes chip</strong> to search for the film on Rotten
+                Tomatoes and read critic and audience reviews. Both links open safely in a new tab.
               </Step>
             </Subsection>
 
-            <Subsection title="IMDb & Rotten Tomatoes ratings">
-              <Step>
-                You will see two rating chips on movie cards throughout the app — a gold{" "}
-                <strong>⭐ IMDb</strong> score and a red <strong>🍅 Rotten Tomatoes</strong> score.
-                These are the same ratings you see on those websites for any film.
-              </Step>
-              <Step>
-                <strong>Tap the IMDb chip</strong> to open the full movie page on IMDb in a new
-                browser tab — you can read the full synopsis, cast list, and audience reviews there.
-                <strong> Tap the Rotten Tomatoes chip</strong> to search for the film on Rotten
-                Tomatoes in a new tab and read critic and audience reviews. Both links are safe and
-                take you directly to those public websites.
-              </Step>
-            </Subsection>
-
-            <Subsection title="Booking a seat">
+            <Subsection id="sub-movies-booking" title="Booking a seat">
               <Step img={IMG("10-screening-slideout.png")} alt="Booking panel">
-                Tap any movie card or the Next Screening card to open the booking panel, which slides
-                up from the bottom of the screen. The panel shows the full event details — title,
-                poster, date, time, plot, IMDb and Rotten Tomatoes ratings, coordinator name, and a
-                real-time capacity bar showing how many seats have been taken (e.g. "8/20 seats
-                taken").
+                Tap any movie card to open the booking panel, which slides up from the bottom of the
+                screen. It shows the full event details — title, poster, date, time, plot, ratings,
+                coordinator name, and a real-time capacity bar (e.g. "8/20 seats taken").
               </Step>
               <Step>
-                To book, select how many seats you need using the number selector, then tap:
+                Select how many seats you need, then tap:
               </Step>
               <Step>
-                <strong>Book Now</strong> — this button appears when seats are available. Tap it to
-                confirm your booking immediately.
+                <strong>Book Now</strong> — appears when seats are available. Confirms your booking
+                immediately.
               </Step>
               <Step>
-                <strong>Join Waitlist</strong> — this button appears when the screening is full. Tap
-                it to join the waitlist. If a seat becomes available you will receive a notification
-                automatically.
+                <strong>Join Waitlist</strong> — appears when the screening is full. Joins the waitlist;
+                you will be notified automatically if a seat opens up.
               </Step>
             </Subsection>
 
-            <Subsection title="After you have booked">
+            <Subsection id="sub-movies-afterbook" title="After you have booked">
               <Step>
-                Once booked, the booking panel updates to show a green confirmation: <strong>✓ X
-                seats confirmed</strong> (where X is the number you booked). Two additional buttons
-                appear:
+                Once booked, the panel updates to show a green confirmation: <strong>✓ X seats
+                confirmed</strong>. Two buttons appear:
               </Step>
               <Step>
-                <strong>Modify Seats</strong> — tap this to change the number of seats in your
-                booking.
+                <strong>Modify Seats</strong> — change the number of seats in your booking.
               </Step>
               <Step>
-                <strong>Cancel Booking</strong> — tap this (shown with a red border) to cancel your
-                reservation entirely. Your seat will be released for other residents.
-              </Step>
-              <Step>
-                If payment is required for an event, your booking will show a{" "}
-                <strong>Pending Payment</strong> status until the coordinator has marked it as paid.
+                <strong>Cancel Booking</strong> — cancel your reservation entirely (shown with a red
+                border). Your seat is released immediately for other residents.
               </Step>
             </Subsection>
 
-            <Subsection title="Rating films — the community voting panel">
-              <Step img={IMG("06-movies.png")} alt="Rating panel">
-                The Social Hive lets residents rate upcoming films before a screening so everyone can
-                see what the community is most keen to watch. This helps coordinators choose the most
-                popular picks.
+            <Subsection id="sub-movies-voting" title="Rating films — the community voting panel">
+              <Step>
+                The voting panel appears on Movies Home when there are upcoming films waiting for your
+                rating. It shows the film title, how many films are in your queue (e.g. "3 of 5 to
+                rate"), and a grid of buttons numbered <strong>1 to 10</strong>, ranging from "Not
+                interested" to "Can't wait!".
               </Step>
               <Step>
-                The voting panel appears on the Movies Home screen when there are films waiting for
-                your rating. It shows the film title, how many films are still in your queue (e.g.
-                "3 of 5 to rate"), and a grid of buttons numbered <strong>1 to 10</strong>.
-              </Step>
-              <Step>
-                The scale runs from "Not interested" (1) through to "Can't wait!" (10). Simply tap
-                the number that matches your level of interest. Your rating is recorded instantly and
-                the next film in your queue appears automatically.
-              </Step>
-              <Step>
-                If you don't want to rate a particular film, tap <strong>Skip this one</strong>. To
-                dismiss all remaining films at once, tap <strong>Skip all</strong>. Your ratings
-                contribute to the <strong>community score</strong> shown on movie cards — the average
-                of all resident ratings.
+                Tap the number that matches your interest. Your rating is saved instantly and the next
+                film appears. Tap <strong>Skip this one</strong> to pass, or <strong>Skip all</strong>{" "}
+                to dismiss the queue. Your ratings contribute to the <strong>community score</strong>{" "}
+                shown on movie cards.
               </Step>
             </Subsection>
 
-            <Subsection title="Scheduled screenings list">
+            <Subsection id="sub-movies-scheduled" title="Scheduled screenings list">
               <Step img={IMG("07-screenings.png")} alt="Scheduled screenings">
-                Tap <strong>Scheduled</strong> from the Movies Home to see a full list of all
-                upcoming screenings. Each card shows the movie title, date and time, IMDb and Rotten
-                Tomatoes scores, how many seats are still available, and your booking status if you
-                have already reserved a seat. Tap any card to open the booking panel.
+                Tap <strong>Scheduled</strong> from the Movies Home to see all upcoming screenings.
+                Each card shows the title, date and time, IMDb and Rotten Tomatoes scores, seats
+                available, and your booking status. Tap any card to open the booking panel.
               </Step>
             </Subsection>
 
-            <Subsection title="Suggestions library">
+            <Subsection id="sub-movies-library" title="Suggestions library">
               <Step img={IMG("08-library.png")} alt="Suggestions library">
-                The Suggestions library is a collection of films that residents have proposed for
-                future screenings. You can browse the full list, search by title, or filter by
-                genre. Tap any title to see the full details including plot, cast, IMDb rating,
-                and the community voting score. You can also rate the film from this detail view.
+                The Suggestions library is a collection of films proposed by residents for future
+                screenings. Browse, search, or filter by genre. Tap any title for full details
+                including plot, cast, IMDb rating, and the community voting score. You can rate the
+                film from this detail view.
               </Step>
             </Subsection>
 
-            <Subsection title="DVD library">
+            <Subsection id="sub-movies-dvd" title="DVD library">
               <Step img={IMG("09-dvd.png")} alt="DVD library">
-                The DVD Library shows the community's physical disc collection — films, TV series,
-                and music or documentary titles owned by the community. Browse or search the
-                collection. Tap any title to see details and, if you think it would make a great
-                screening, tap <strong>Suggest for Screening</strong> to add it to the Suggestions
+                The DVD Library shows the community's physical disc collection. Browse or search the
+                collection. Tap any title to see details and — if you think it would make a great
+                screening — tap <strong>Suggest for Screening</strong> to add it to the Suggestions
                 list for coordinator review.
               </Step>
             </Subsection>
 
-            <Subsection title="Coordinator panel" ecOnly>
+            <Subsection id="sub-movies-ec" title="Coordinator panel" ecOnly>
               <Step>
-                ECs see an additional <strong>Coordinator View</strong> section at the bottom of
-                every booking panel. This lists all confirmed attendees with their names, number of
-                seats, and unpaid counts. ECs can cancel any individual booking directly from this
-                panel, add event notes, and monitor waitlist numbers in real time.
+                ECs see an additional <strong>Coordinator View</strong> section at the bottom of every
+                booking panel — a full attendee list with names, seat counts, and unpaid tallies. ECs
+                can cancel individual bookings and monitor waitlist numbers in real time.
               </Step>
             </Subsection>
-
           </Section>
 
           {/* ── 4. SOCIAL ── */}
           <Section id="social" num={4} title="Social Events — Community Activities & Trips">
-
-            <Subsection title="Social hub home">
+            <Subsection id="sub-social-home" title="Social hub home">
               <Step img={IMG("11-social.png")} alt="Social hub home">
                 The Social hub is your home for community activities — dinners, day trips, outings,
                 themed evenings, and more. The layout mirrors the Movies Home: a <strong>Next Social
-                Event</strong> card at the top (terracotta header strip) with the nearest upcoming
-                event, followed by a <strong>My Bookings</strong> card showing your upcoming social
-                reservations.
+                Event</strong> card at the top (terracotta header) with the nearest upcoming event,
+                followed by a <strong>My Bookings</strong> card for your social reservations.
               </Step>
               <Step>
-                The Next Social Event card shows the event title, date, time, location, a brief
-                description, coordinator name, and seat availability. A cost chip appears if the
-                event has a per-person price. If transport is available, a bus icon and driver name
-                will also appear.
-              </Step>
-              <Step>
-                <strong>Tap the card</strong> to open the full event detail and booking panel.
+                The Next Social Event card shows title, date, time, location, description, coordinator
+                name, seat availability, and a cost chip if the event has a per-person price. A bus
+                icon and driver name appear if transport is available. <strong>Tap the card</strong> to
+                open the full booking panel.
               </Step>
             </Subsection>
 
-            <Subsection title="Viewing and booking events">
+            <Subsection id="sub-social-events" title="Viewing and booking events">
               <Step img={IMG("12-social-events.png")} alt="Social events list">
-                Tap <strong>Scheduled</strong> from the Social hub to see a full list of all upcoming
-                social events. Each card shows the event title, date and time, location, cost (if
-                any), and seat availability. Tap any card to open the event detail panel.
+                Tap <strong>Scheduled</strong> from the Social hub to see all upcoming social events.
+                Each card shows the event title, date and time, location, cost, and seat availability.
+                Tap any card to open the event detail panel.
               </Step>
             </Subsection>
 
-            <Subsection title="Event detail & booking">
+            <Subsection id="sub-social-detail" title="Event detail & booking">
               <Step img={IMG("13-social-slideout.png")} alt="Event detail panel">
-                The event detail panel slides up from the bottom of the screen and shows everything
-                about the event: description, date, time, location (with an offsite address if the
-                event is away from the community), coordinator name, bus details if transport is
-                running, cost per person, and the seat capacity bar.
+                The event detail panel slides up from the bottom and shows the full event description,
+                date, time, location (including an offsite address if applicable), coordinator name, bus
+                details, cost per person, and the seat capacity bar.
               </Step>
               <Step>
-                To reserve your place, select the number of seats you need and tap:
-              </Step>
-              <Step>
-                <strong>Book Now</strong> — confirms your booking when seats are available.
-              </Step>
-              <Step>
-                <strong>Join Waitlist</strong> — joins the waitlist when the event is full. You
-                will be notified automatically if a space opens up.
-              </Step>
-              <Step>
-                After booking, the panel shows your confirmation with the option to <strong>Modify
-                Seats</strong> or <strong>Cancel Booking</strong> — the same as for movie screenings.
+                Select the number of seats you need, then tap <strong>Book Now</strong> (seats
+                available) or <strong>Join Waitlist</strong> (event full). After booking, the panel
+                shows your confirmation with <strong>Modify Seats</strong> and{" "}
+                <strong>Cancel Booking</strong> options — the same as movie screenings.
               </Step>
             </Subsection>
 
-            <Subsection title="Coordinator panel" ecOnly>
+            <Subsection id="sub-social-ec" title="Coordinator panel" ecOnly>
               <Step>
                 ECs see the full attendee list inside the event detail panel, with each resident's
                 name, seat count, and payment status. ECs can cancel individual bookings or update
                 event details directly from this view.
               </Step>
             </Subsection>
-
           </Section>
 
           {/* ── 5. BOOK CLUB ── */}
           <Section id="bookclub" num={5} title="Book Club">
-
-            <Subsection title="Book Club home">
+            <Subsection id="sub-bookclub-home" title="Book Club home">
               <Step img={IMG("14-bookclub.png")} alt="Book Club home">
                 The Book Club section shows the current book pick, upcoming meeting dates, and recent
                 suggestions from residents. The current read is displayed prominently at the top with
@@ -659,115 +636,94 @@ export default function HelpGuidePage() {
               </Step>
             </Subsection>
 
-            <Subsection title="Signing up & suggestions">
+            <Subsection id="sub-bookclub-signup" title="Signing up & suggestions">
               <Step img={IMG("15-bookclub-suggest.png")} alt="Book suggestions">
                 To attend the next Book Club meeting, tap <strong>Sign Up</strong> on the event card.
-                This registers your attendance in the same way as any other event — the coordinator
-                will see your name on the attendee list.
+                This registers your attendance — the coordinator will see your name on the attendee list.
               </Step>
               <Step>
-                Tap <strong>Suggestions</strong> to see books that other residents have put forward
-                for the next read. You can vote on suggestions you like or tap{" "}
+                Tap <strong>Suggestions</strong> to see books that other residents have put forward for
+                the next read. You can vote on suggestions you like, or tap{" "}
                 <strong>Add suggestion</strong> to propose your own book — search by title and your
                 suggestion is sent to the group straight away.
               </Step>
             </Subsection>
-
           </Section>
 
           {/* ── 6. BAR ── */}
           <Section id="bar" num={6} title="My Bar — Honour Bar & Tab">
-
-            <Subsection title="The bar menu">
+            <Subsection id="sub-bar-menu" title="The bar menu">
               <Step img={IMG("16-bar.png")} alt="Bar home">
                 The community bar operates on an honour system — you record what you take and settle
                 your tab at the end of each period. The bar screen shows all available products
-                organised by category (beer, wine, spirits, soft drinks, and so on), each with an
-                icon, name, brief description, and price.
+                organised by category, each with an icon, name, description, and price.
               </Step>
             </Subsection>
 
-            <Subsection title="Adding to your tab">
+            <Subsection id="sub-bar-add" title="Adding to your tab">
               <Step>
-                Tap <strong>+ Add to Tab</strong> on any product to record a purchase. A confirmation
-                prompt will ask you to enter your <strong>4-digit PIN</strong> to approve the
-                charge — this prevents accidental or unauthorised additions. Once confirmed, the
-                product is added to your personal tab immediately and a brief confirmation message
-                appears at the bottom of the screen.
+                Tap <strong>+ Add to Tab</strong> on any product to record a purchase. You will be
+                prompted to enter your <strong>4-digit PIN</strong> to approve the charge — this
+                prevents accidental or unauthorised additions. Once confirmed, the product is added
+                to your personal tab immediately.
               </Step>
               <InfoBox>
                 💡 If you have not yet set a PIN, go to the account menu (top-right → Change PIN)
-                and set one before using the bar. You will not be able to confirm purchases without it.
+                and set one before using the bar.
               </InfoBox>
             </Subsection>
 
-            <Subsection title="Your current tab">
+            <Subsection id="sub-bar-tab" title="Your current tab">
               <Step>
-                Below the product menu, you can see your <strong>current open tab</strong> — a list
-                of everything you have added since the last reconciliation, with quantities and a
-                running total. If there are any previously reconciled periods that have not yet been
-                settled, those outstanding amounts are also shown so you have a clear picture of what
-                you owe.
+                Below the product menu, you can see your <strong>current open tab</strong> — a list of
+                everything you have added since the last reconciliation, with quantities and a running
+                total. Outstanding amounts from previous unreconciled periods are also shown so you
+                have a clear picture of what you owe.
               </Step>
             </Subsection>
 
-            <Subsection title="Reconciliation" ecOnly>
+            <Subsection id="sub-bar-ec" title="Reconciliation" ecOnly>
               <Step>
-                ECs can view all member tabs from the Bar administration panel, mark individual
-                amounts as paid, and close reconciliation periods for the whole community. Once a
-                period is reconciled, tabs reset to zero for the next period.
+                ECs can view all member tabs from the Bar administration panel, mark individual amounts
+                as paid, and close reconciliation periods for the whole community. Once a period is
+                reconciled, tabs reset to zero for the next period.
               </Step>
             </Subsection>
-
           </Section>
 
           {/* ── 7. CALENDAR ── */}
           <Section id="calendar" num={7} title="Community Calendar">
             <Step img={IMG("17-calendar.png")} alt="Community calendar">
-              The Calendar brings every upcoming community event together in one view — Movies,
-              Social Events, and Book Club meetings all appear here. You can see the full picture of
-              what is coming up across every hub without switching between sections.
+              The Calendar brings every upcoming community event together in one view — Movies, Social
+              Events, and Book Club meetings all appear here without switching between sections.
             </Step>
             <Step>
-              Use the filter buttons at the top of the calendar to show or hide events by type — for
-              example, show only Movie events or only Social events. You can switch between{" "}
-              <strong>Month view</strong> and <strong>Week view</strong> using the view toggle at
-              the top.
-            </Step>
-            <Step>
-              Tap any event on the calendar to open its full detail panel — the same booking panel
-              you would see from within Movies or Social Events. You can read the full details and
-              book your place directly from the calendar.
+              Use the filter buttons at the top to show or hide events by type. Switch between{" "}
+              <strong>Month view</strong> and <strong>Week view</strong> using the view toggle. Tap
+              any event to open its full detail panel and book your place directly from the calendar.
             </Step>
           </Section>
 
           {/* ── 8. MY BOOKINGS ── */}
           <Section id="bookings" num={8} title="My Bookings">
             <Step img={IMG("18-bookings.png")} alt="My Bookings screen">
-              My Bookings is a single screen that shows all your current reservations across every
-              section of the app — Movies, Social Events, and Book Club — in one place. Use the
-              filter tabs at the top to narrow the list to a specific hub.
-            </Step>
-            <Step>
-              Each booking card shows the event name, date, time, number of seats, and your current
-              status. Tap any card to open the full event detail panel where you can modify seats or
-              cancel if your plans change.
+              My Bookings shows all your current reservations across every section of the app —
+              Movies, Social Events, and Book Club — in one place. Use the filter tabs at the top
+              to narrow the list. Tap any card to open the event detail panel and manage your seat.
             </Step>
 
-            <Subsection title="Understanding booking status">
+            <Subsection id="sub-bookings-status" title="Understanding booking status">
               <Step>
                 <strong style={{ color: "#166534" }}>Confirmed</strong> — your seat is secured. No
-                further action is needed unless you want to change the number of seats or cancel.
+                further action needed unless you want to modify or cancel.
               </Step>
               <Step>
-                <strong style={{ color: "#92400e" }}>Pending Payment</strong> — your booking is
-                held but payment has not yet been recorded by the coordinator. Your seat is reserved
-                while you sort payment.
+                <strong style={{ color: "#92400e" }}>Pending Payment</strong> — your booking is held
+                but payment has not yet been recorded by the coordinator. Your seat is reserved.
               </Step>
               <Step>
                 <strong style={{ color: "#64748b" }}>Waitlisted</strong> — the event was full when
-                you registered. You are on the waitlist and will receive a notification automatically
-                if a confirmed seat opens up. No action is needed — the system handles this for you.
+                you registered. You will be notified automatically if a confirmed seat opens up.
               </Step>
             </Subsection>
           </Section>
