@@ -173,3 +173,47 @@ export function ToolsIcon({ size = 26 }) {
     </svg>
   )
 }
+
+// ── Useful Information hub icons ─────────────────────────────────────────────
+
+// Info circle with "i" — hub nav icon
+export function InfoIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 35 3 A 32 32 0 1 0 35 67 A 32 32 0 1 0 35 3 Z
+           M 35 7 A 28 28 0 1 0 35 63 A 28 28 0 1 0 35 7 Z
+           M 35 16 A 5 5 0 1 0 35 26 A 5 5 0 1 0 35 16 Z
+           M 30 31 L 30 52 L 40 52 L 40 31 Z"/>
+    </svg>
+  )
+}
+
+// Stacked document pages — documents sub-page icon
+export function DocumentsIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 18 8 L 48 8 L 58 20 L 58 60 L 18 60 Z
+           M 48 8 L 48 20 L 58 20 Z
+           M 27 32 L 49 32 L 49 37 L 27 37 Z
+           M 27 42 L 49 42 L 49 47 L 27 47 Z
+           M 27 22 L 38 22 L 38 27 L 27 27 Z"/>
+    </svg>
+  )
+}
+
+// Address book — contacts sub-page icon
+export function ContactsIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 15 5 L 57 5 Q 63 5 63 11 L 63 59 Q 63 65 57 65 L 15 65 Q 9 65 9 59 L 9 11 Q 9 5 15 5 Z
+           M 5 18 L 13 18 L 13 26 L 5 26 Z
+           M 5 31 L 13 31 L 13 39 L 5 39 Z
+           M 5 44 L 13 44 L 13 52 L 5 52 Z
+           M 36 15 A 10 10 0 1 0 36 35 A 10 10 0 1 0 36 15 Z
+           M 18 54 Q 18 38 36 38 Q 54 38 54 54 Z"/>
+    </svg>
+  )
+}

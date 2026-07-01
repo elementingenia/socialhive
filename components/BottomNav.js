@@ -6,6 +6,7 @@ import { getActiveHub } from "@/lib/navUtils"
 import {
   HomeIcon, MoviesIcon, CalendarIcon, SuggestionsIcon, DVDIcon,
   BookClubIcon, SocialIcon, AdminIcon, BookingsIcon, BarIcon,
+  InfoIcon, DocumentsIcon, ContactsIcon,
 } from "@/components/NavIcons"
 
 const HUB_CONFIG = {
@@ -30,6 +31,13 @@ const HUB_CONFIG = {
     items: [
       { path: "/social",        label: "Social",    Icon: SocialIcon },
       { path: "/social/events", label: "Scheduled", Icon: CalendarIcon },
+    ],
+  },
+  info: {
+    colour: "#4e7aab",
+    items: [
+      { path: "/info/documents", label: "Documents", Icon: DocumentsIcon },
+      { path: "/info/contacts",  label: "Contacts",  Icon: ContactsIcon  },
     ],
   },
 }

@@ -65,6 +65,7 @@ export async function POST(req) {
       rating_imdb: rating_imdb || null,
       rating_rt,
       we_own: false,
+      is_viewing_suggestion: true,
       suggested_by: member.id,
     })
     .select().single()
