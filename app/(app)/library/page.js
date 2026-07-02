@@ -270,7 +270,7 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
           {!movie.poster_url && <div style={{ display:'flex', justifyContent:'flex-end' }}><button onClick={onClose} style={{ background:'none', border:'none', fontSize:'1.5rem', cursor:'pointer', color:'var(--text-dim)' }}>×</button></div>}
           <div>
             <div style={{ fontWeight:800, fontSize:'1.2rem', lineHeight:1.2 }}>
-              {movie.title}{movie.rating && <span style={{ fontWeight:400, color:'var(--text-dim)' }}> ({movie.rating})</span>}
+              {movie.title}{movie.rating && <span style={{ fontWeight: 400, fontSize: '0.75em', verticalAlign: 'baseline', color: 'var(--text-dim)' }}> ({movie.rating})</span>}
             </div>
             {movie.year && <div style={{ color:'var(--text-dim)', fontSize:'0.85rem', marginTop:'0.2rem' }}>{movie.year}{movie.runtime&&` · ${movie.runtime}`}</div>}
           </div>
@@ -497,7 +497,7 @@ function MovieCard({ movie, myVote, avgData, isAdmin, freeCostData, onClick }) {
         : <div style={{ width:65, background:'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem', flexShrink:0 }}>🎬</div>}
       <div style={{ flex:1, padding:'0.55rem 0.65rem', overflow:'hidden' }}>
         <div style={{ fontWeight:700, fontSize:'0.88rem', lineHeight:1.2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-          {movie.title}{movie.rating && <span style={{ fontWeight:400, color:'var(--text-dim)' }}> ({movie.rating})</span>}
+          {movie.title}{movie.rating && <span style={{ fontWeight: 400, fontSize: '0.75em', verticalAlign: 'baseline', color: 'var(--text-dim)' }}> ({movie.rating})</span>}
         </div>
         {leadActor && (
           <div style={{ color:'var(--text-dim)', fontSize:'0.72rem', marginTop:'0.1rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>

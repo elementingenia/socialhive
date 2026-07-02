@@ -337,7 +337,7 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit }) {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <div style={{ fontWeight: 800, fontSize: '1.1rem', lineHeight: 1.2 }}>
-              {movie?.title || ev.title}{movie?.rating && <span style={{ fontWeight: 400, color: 'var(--text-dim)' }}> ({movie.rating})</span>}
+              {movie?.title || ev.title}{movie?.rating && <span style={{ fontWeight: 400, fontSize: '0.75em', verticalAlign: 'baseline', color: 'var(--text-dim)' }}> ({movie.rating})</span>}
             </div>
             {isAdmin && freeCostData && (
               <span style={{ background: freeCostData.isFree ? '#dcfce7' : '#fef3c7', color: freeCostData.isFree ? '#15803d' : '#d97706', borderRadius: '20px', padding: '0.15rem 0.55rem', fontSize: '0.68rem', fontWeight: 700, whiteSpace: 'nowrap' }}>

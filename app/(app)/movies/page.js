@@ -54,7 +54,7 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen })
         )}
         <div style={{ flex: 1, padding: '0.9rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
           <div style={{ fontWeight: 800, fontSize: '1.05rem', lineHeight: 1.2 }}>
-            {movie?.title || event.title}{movie?.rating && <span style={{ fontWeight: 400, color: 'var(--text-dim)' }}> ({movie.rating})</span>}
+            {movie?.title || event.title}{movie?.rating && <span style={{ fontWeight: 400, fontSize: '0.75em', verticalAlign: 'baseline', color: 'var(--text-dim)' }}> ({movie.rating})</span>}
           </div>
           <div style={{ fontSize: '0.8rem', color: 'var(--teal)', fontWeight: 600 }}>
             {fmtDate(event.event_date)} · {fmtTime(event.event_time)}
@@ -191,7 +191,7 @@ function MyMovieBookingsSheet({ bookings, session, onClose, onRefresh }) {
                       )}
                       <div style={{ flex:1, padding:'0.85rem 1rem' }}>
                         <div style={{ fontWeight:700, fontSize:'0.95rem', lineHeight:1.2, marginBottom:'0.25rem' }}>
-                          {movie?.title || ev?.title}{movie?.rating && <span style={{ fontWeight:400, color:'var(--text-dim)' }}> ({movie.rating})</span>}
+                          {movie?.title || ev?.title}{movie?.rating && <span style={{ fontWeight: 400, fontSize: '0.75em', verticalAlign: 'baseline', color: 'var(--text-dim)' }}> ({movie.rating})</span>}
                         </div>
                         <div style={{ fontSize:'0.8rem', color:'var(--teal)', fontWeight:600, marginBottom:'0.15rem' }}>{fmtDate(ev?.event_date)}</div>
                         {ev?.event_time && <div style={{ fontSize:'0.78rem', color:'var(--text-dim)', marginBottom:'0.4rem' }}>{fmtTime(ev.event_time)}</div>}
@@ -399,7 +399,7 @@ function RatingSwiper({ movies, memberId, onDone }) {
           )}
           <div style={{ flex: 1, padding: '0.9rem 1rem' }}>
             <div style={{ fontWeight: 800, fontSize: '1rem', lineHeight: 1.2, marginBottom: '0.25rem' }}>
-              {movie.title}{movie.rating && <span style={{ fontWeight: 400, color: 'var(--text-dim)' }}> ({movie.rating})</span>}
+              {movie.title}{movie.rating && <span style={{ fontWeight: 400, fontSize: '0.75em', verticalAlign: 'baseline', color: 'var(--text-dim)' }}> ({movie.rating})</span>}
             </div>
             {movie.year && <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginBottom: '0.35rem' }}>{movie.year}{movie.runtime ? ` · ${movie.runtime}` : ''}</div>}
             {genres.length > 0 && (
