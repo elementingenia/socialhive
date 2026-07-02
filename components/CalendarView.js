@@ -43,7 +43,7 @@ function fmtMonthYear(d) {
 }
 
 function hubLabel(hub_type) {
-  const labels = { movie: "Movie Night", bookclub: "Book Club", social: "Social", outings: "Social" }
+  const labels = { movie: "Movie Night", bookclub: "Book Club", social: "Social" }
   return labels[hub_type] || hub_type
 }
 
@@ -464,10 +464,7 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
   const monday = useMemo(() => getMondayOf(today), [])
   const month4Days = useMemo(() => Array.from({ length: 28 }, (_, i) => addDays(monday, i)), [monday])
 
-  const filteredEvents = useMemo(() => events.filter(ev => {
-    const hubKey = ev.hub_type === "outings" ? "social" : ev.hub_type
-    return activeHubs.includes(hubKey)
-  }), [events, activeHubs])
+  const filteredEvents = useMemo(() => events.filter(ev => activeHubs.includes(ev.hub_type)), [events, activeHubs])
 
   const eventsByDate = useMemo(() => {
     const map = {}

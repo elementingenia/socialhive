@@ -8,11 +8,10 @@ const HUB_COLOURS = {
   movie:    "var(--teal)",
   bookclub: "var(--purple)",
   social:   "var(--terracotta)",
-  outings:  "var(--green)",
 }
 
 const HUB_LABELS = {
-  movie: "Movies", bookclub: "Book Club", social: "Social", outings: "Outings",
+  movie: "Movies", bookclub: "Book Club", social: "Social",
 }
 
 const FILTERS = [

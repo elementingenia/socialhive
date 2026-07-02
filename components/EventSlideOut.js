@@ -5,7 +5,6 @@ import { BusIcon, CalendarIcon } from "@/components/NavIcons"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
-import EventImagePicker from "@/components/EventImagePicker"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -210,16 +209,9 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   const [welcome,     setWelcome]     = useState("")
   const [saving,        setSaving]        = useState(false)
   const [cancelTarget,  setCancelTarget]  = useState(null)
-  const [hasDining,     setHasDining]     = useState(false)
-  const [menuType,      setMenuType]      = useState(null)
-  const [menuText,      setMenuText]      = useState("")
-  const [editMenuText,  setEditMenuText]  = useState(false)
-  const [uploadingMenu, setUploadingMenu] = useState(false)
-  const [localMenuUrl,      setLocalMenuUrl]      = useState(null)
-  const [localMenuFileName, setLocalMenuFileName] = useState(null)
   const isMovie  = event.hub_type === "movie"
   const isBook   = event.hub_type === "bookclub"
-  const isSocial = event.hub_type === "social" || event.hub_type === "outings"
+  const isSocial = event.hub_type === "social"
 
   const inputStyle = { width: "100%", padding: "0.6rem 0.8rem", borderRadius: 8, border: "1px solid var(--border)",
     background: "var(--surface)", color: "var(--text)", fontSize: "0.88rem", boxSizing: "border-box", fontFamily: "inherit" }
@@ -252,11 +244,6 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
       setNotes(d.coordinator_notes || "")
       setDesc(d.description || "")
       setWelcome(d.welcome_message || "")
-      setHasDining(!!d.has_dining)
-      setMenuType(d.menu_type || null)
-      setMenuText(d.menu_text || "")
-      setLocalMenuUrl(d.menu_url || null)
-      setLocalMenuFileName(d.menu_file_name || null)
     } catch (e) {
       setApiError(e.message || "Network error")
     }
@@ -317,71 +304,6 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
       if (field === "welcome_message") setEditWelcome(false)
       load()
     } else showToast("Failed to save", "error")
-  }
-
-  async function toggleDining() {
-    const next = !hasDining
-    setHasDining(next)
-    const ok = await patchAction({ action: "update_event", has_dining: next })
-    if (ok) { showToast(next ? "Dining option enabled" : "Dining option disabled"); onRefresh() }
-    else { setHasDining(!next); showToast("Failed to update", "error") }
-  }
-
-  async function chooseMenuType(type) {
-    setMenuType(type)
-    const ok = await patchAction({ action: "update_event", menu_type: type })
-    if (ok) onRefresh()
-    else showToast("Failed to update", "error")
-  }
-
-  async function saveMenuText() {
-    setSaving(true)
-    const ok = await patchAction({ action: "update_event", menu_text: menuText, menu_type: "text" })
-    setSaving(false)
-    if (ok) { showToast("Menu saved"); setEditMenuText(false); onRefresh() }
-    else showToast("Failed to save", "error")
-  }
-
-  async function uploadMenuFile(file) {
-    setUploadingMenu(true)
-    const token = await getToken()
-    const fd = new FormData()
-    fd.append("event_id", event.id)
-    fd.append("file", file)
-    const res = await fetch("/api/events/menu", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
-      body: fd,
-    })
-    const d = await res.json()
-    setUploadingMenu(false)
-    if (res.ok) {
-      setLocalMenuUrl(d.menu_url)
-      setLocalMenuFileName(d.menu_file_name)
-      setMenuType("file")
-      showToast("Menu uploaded")
-      onRefresh()
-    } else {
-      showToast(d.error || "Upload failed", "error")
-    }
-  }
-
-  async function removeMenuFile() {
-    setUploadingMenu(true)
-    const token = await getToken()
-    const res = await fetch("/api/events/menu", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ event_id: event.id }),
-    })
-    setUploadingMenu(false)
-    if (res.ok) {
-      setLocalMenuUrl(null); setLocalMenuFileName(null); setMenuType(null)
-      showToast("Menu removed")
-      onRefresh()
-    } else {
-      showToast("Failed to remove", "error")
-    }
   }
 
   if (loading) return (
@@ -510,136 +432,6 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
             welcome
               ? <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.5, fontStyle: "italic" }}>"{welcome}"</div>
               : <div style={{ fontSize: 13, color: "var(--text-dim)", fontStyle: "italic" }}>No welcome message</div>
-          )}
-        </div>
-      )}
-
-      {/* Event Image — Outings only. Social events manage this in the New/Edit Event form. */}
-      {event.hub_type === "outings" && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Event Image</div>
-          <EventImagePicker
-            eventId={event.id}
-            imageUrl={event.image_url}
-            focalX={event.image_focal_x}
-            focalY={event.image_focal_y}
-            colour={colour}
-            getToken={getToken}
-            onUpdated={onRefresh}
-          />
-        </div>
-      )}
-
-      {/* Dining / Menu — Outings only. Social events manage this in the New/Edit Event form. */}
-      {event.hub_type === "outings" && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: hasDining ? 10 : 0 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Dining Option</div>
-            <button
-              onClick={toggleDining}
-              role="switch"
-              aria-checked={hasDining}
-              style={{
-                width: 42, height: 24, borderRadius: 12, border: "none", cursor: "pointer",
-                background: hasDining ? colour : "var(--surface2)", position: "relative", transition: "background 0.15s ease",
-              }}
-            >
-              <span style={{
-                position: "absolute", top: 2, left: hasDining ? 20 : 2, width: 20, height: 20, borderRadius: "50%",
-                background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,0.3)", transition: "left 0.15s ease",
-              }} />
-            </button>
-          </div>
-
-          {hasDining && (
-            <div>
-              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                <button
-                  onClick={() => chooseMenuType("text")}
-                  style={{
-                    flex: 1, padding: "8px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                    border: `1px solid ${menuType === "text" ? colour : "var(--border)"}`,
-                    background: menuType === "text" ? colour + "15" : "var(--surface)",
-                    color: menuType === "text" ? colour : "var(--text)",
-                  }}
-                >Type it in</button>
-                <button
-                  onClick={() => chooseMenuType("file")}
-                  style={{
-                    flex: 1, padding: "8px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                    border: `1px solid ${menuType === "file" ? colour : "var(--border)"}`,
-                    background: menuType === "file" ? colour + "15" : "var(--surface)",
-                    color: menuType === "file" ? colour : "var(--text)",
-                  }}
-                >Upload a document</button>
-              </div>
-
-              {menuType === "text" && (
-                editMenuText ? (
-                  <div>
-                    <RichEditor
-                      initialValue={menuText}
-                      hubColour={colour}
-                      onChange={html => setMenuText(html)}
-                      placeholder="Type the menu shown to residents…"
-                    />
-                    <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                      <button onClick={() => setEditMenuText(false)} style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cancel</button>
-                      <button onClick={saveMenuText} disabled={saving}
-                        style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: colour, color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Save</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    {menuText
-                      ? <div style={{ fontSize: 13, color: "var(--text)", lineHeight: 1.5, marginBottom: 8 }} dangerouslySetInnerHTML={{ __html: bbToHtml(menuText, colour) }} />
-                      : <div style={{ fontSize: 13, color: "var(--text-dim)", fontStyle: "italic", marginBottom: 8 }}>No menu text yet</div>}
-                    <button onClick={() => setEditMenuText(true)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: colour, fontWeight: 600 }}>
-                      {menuText ? "Edit menu" : "Add menu"}
-                    </button>
-                  </div>
-                )
-              )}
-
-              {menuType === "file" && (
-                <div>
-                  {(localMenuUrl) && (
-                    <div style={{
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      background: "var(--surface2)", borderRadius: 8, padding: "8px 10px", marginBottom: 8, fontSize: 13,
-                    }}>
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📄 {localMenuFileName || "Menu"}</span>
-                    </div>
-                  )}
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <label style={{
-                      flex: 1, padding: "8px", borderRadius: 8, border: `1px solid ${colour}`,
-                      color: colour, fontWeight: 700, fontSize: 13, cursor: uploadingMenu ? "not-allowed" : "pointer",
-                      textAlign: "center", opacity: uploadingMenu ? 0.6 : 1, fontFamily: "inherit",
-                    }}>
-                      {uploadingMenu ? "Uploading…" : localMenuUrl ? "Replace" : "Upload Menu"}
-                      <input
-                        type="file"
-                        accept="application/pdf,image/jpeg,image/png,image/webp"
-                        style={{ display: "none" }}
-                        disabled={uploadingMenu}
-                        onChange={e => { const f = e.target.files?.[0]; if (f) uploadMenuFile(f) }}
-                      />
-                    </label>
-                    {localMenuUrl && (
-                      <button
-                        onClick={removeMenuFile}
-                        disabled={uploadingMenu}
-                        style={{
-                          padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border)",
-                          background: "var(--surface2)", color: "var(--danger)", fontWeight: 700,
-                          fontSize: 13, cursor: uploadingMenu ? "not-allowed" : "pointer", fontFamily: "inherit",
-                        }}>Remove</button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
           )}
         </div>
       )}
@@ -1129,8 +921,8 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
                 style={{ height: 160, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }} />
             </div>
           )}
-          {/* Social / outings event image */}
-          {(event.hub_type === "social" || event.hub_type === "outings") && event.image_url && (
+          {/* Social event image */}
+          {event.hub_type === "social" && event.image_url && (
             <img src={event.image_url} alt={event.title}
               style={{
                 width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 12, marginBottom: 14,
@@ -1149,7 +941,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
             <span style={{display:"inline-flex",alignItems:"center",gap:5}}><CalendarIcon size={13} />{fmtDate(event.event_date)}{event.event_time ? ` at ${fmtTime(event.event_time)}` : ''}</span>
           </div>
 
-          {/* Location — shown for social/outings events */}
+          {/* Location — shown for social events */}
           {!isPrivate && event.location && (
             <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>
               📍 {event.location_type === "offsite" ? event.location.split("\n")[0] : event.location}
@@ -1210,8 +1002,8 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
                 </div>
               )}
 
-              {/* Social/Outings */}
-              {(event.hub_type === "social" || event.hub_type === "outings") && (
+              {/* Social */}
+              {event.hub_type === "social" && (
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                     <div style={{ display: "inline-block", padding: "4px 12px",
@@ -1235,7 +1027,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
                 <MenuModal event={event} colour={colour} onClose={() => setShowMenu(false)} />
               )}
 
-              {/* Bus driver — social/outings offsite only */}
+              {/* Bus driver — social offsite only */}
               {event.has_bus && event.bus_driver && (
                 <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>
                   <BusIcon size={14} /> {event.bus_driver.name || event.bus_driver.username}

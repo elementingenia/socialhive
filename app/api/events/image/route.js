@@ -35,11 +35,11 @@ export async function POST(req) {
   const member = await getAdminOrEC(token, eventId)
   if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-  // Verify event is social or outings
+  // Verify event is social
   const { data: event } = await supa.from("events").select("hub_type, image_url").eq("id", eventId).single()
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 })
-  if (event.hub_type !== "social" && event.hub_type !== "outings") {
-    return NextResponse.json({ error: "Image upload only supported for social/outings events" }, { status: 400 })
+  if (event.hub_type !== "social") {
+    return NextResponse.json({ error: "Image upload only supported for social events" }, { status: 400 })
   }
 
   // Delete existing image if present

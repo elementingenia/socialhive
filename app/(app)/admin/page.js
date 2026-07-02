@@ -13,7 +13,7 @@ const HUB_TYPES = [
   { value: 'social',   label: 'Social',    icon: '🎉' },
   { value: 'bookclub', label: 'Book Club', icon: '📚' },
 ]
-const HUB_COLOUR = { movie:'var(--teal)', social:'var(--terracotta)', outings:'var(--green)', bookclub:'var(--purple)' }
+const HUB_COLOUR = { movie:'var(--teal)', social:'var(--terracotta)', bookclub:'var(--purple)' }
 const SECTIONS = [
   { key: 'PageTexts', label: 'Page Texts', Icon: PageTextsIcon },
   { key: 'Members',   label: 'Members',    Icon: MembersIcon },

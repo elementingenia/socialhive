@@ -41,8 +41,8 @@ export async function POST(req) {
 
   const { data: event } = await supa.from("events").select("hub_type, menu_url").eq("id", eventId).single()
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 })
-  if (event.hub_type !== "social" && event.hub_type !== "outings") {
-    return NextResponse.json({ error: "Menu upload only supported for social/outings events" }, { status: 400 })
+  if (event.hub_type !== "social") {
+    return NextResponse.json({ error: "Menu upload only supported for social events" }, { status: 400 })
   }
 
   // Remove existing menu file if present
