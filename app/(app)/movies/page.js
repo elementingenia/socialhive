@@ -62,10 +62,14 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen })
           {(movie?.rating_imdb || movie?.rating_rt) && (
             <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
               {movie.rating_imdb && (
-                <span style={{ background: 'rgba(180,150,0,0.15)', color: 'var(--amber-dark)', fontWeight: 700, fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '20px' }}>IMDb {movie.rating_imdb}</span>
+                movie.imdb_id
+                  ? <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                      style={{ background: 'rgba(180,150,0,0.15)', color: 'var(--amber-dark)', fontWeight: 700, fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '20px', textDecoration: 'none' }}>IMDb {movie.rating_imdb}</a>
+                  : <span style={{ background: 'rgba(180,150,0,0.15)', color: 'var(--amber-dark)', fontWeight: 700, fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '20px' }}>IMDb {movie.rating_imdb}</span>
               )}
               {movie.rating_rt && (
-                <span style={{ background: 'rgba(220,50,30,0.12)', color: '#c0392b', fontWeight: 700, fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '20px' }}>🍅 RT {movie.rating_rt}</span>
+                <a href={`https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title || '')}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                  style={{ background: 'rgba(220,50,30,0.12)', color: '#c0392b', fontWeight: 700, fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '20px', textDecoration: 'none' }}>🍅 RT {movie.rating_rt}</a>
               )}
               {coordinator && (
                 <span style={{ fontSize: '0.68rem', color: 'var(--teal)', fontWeight: 600 }}>
