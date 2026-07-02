@@ -838,7 +838,7 @@ function SuggestedMoviesView() {
   useEffect(() => {
     async function load() {
       const [movRes, dvdRes, settRes, ownRes] = await Promise.all([
-        supabase.from('movies').select('id, title, year, poster_url, tmdb_id, imdb_id, streaming_au, actors').eq('we_own', false).order('title'),
+        supabase.from('movies').select('id, title, year, poster_url, tmdb_id, imdb_id, streaming_offers, streaming_checked_at, actors').eq('we_own', false).order('title'),
         supabase.from('movies').select('tmdb_id, imdb_id').eq('we_own', true),
         supabase.from('settings').select('value').eq('key', 'our_streaming_services').single(),
         supabase.from('movie_ownership').select('movie_id, ownership_type, members(name)'),
@@ -1090,6 +1090,14 @@ function StreamingServicesTab({ addToast }) {
   const [saving,   setSaving]   = useState(false)
   const [loading,  setLoading]  = useState(true)
 
+  // Streaming-refresh runner
+  const [refreshing,    setRefreshing]    = useState(false)
+  const [refreshTotal,  setRefreshTotal]  = useState(0)
+  const [refreshDone,   setRefreshDone]   = useState(0)
+  const [refreshFound,  setRefreshFound]  = useState(0)
+  const [refreshResults, setRefreshResults] = useState([])
+  const refreshStopRef = useRef(false)
+
   async function loadServices() {
     const { data } = await supabase.from('settings').select('value').eq('key', 'our_streaming_services').single()
     try { setServices(JSON.parse(data?.value || '[]')) } catch { setServices([]) }
@@ -1097,6 +1105,46 @@ function StreamingServicesTab({ addToast }) {
   }
 
   useEffect(() => { loadServices() }, [])
+
+  async function runStreamingRefresh() {
+    refreshStopRef.current = false
+    setRefreshing(true)
+    setRefreshDone(0)
+    setRefreshFound(0)
+    setRefreshResults([])
+
+    const { count } = await supabase.from('movies').select('id', { count: 'exact', head: true }).eq('we_own', false)
+    setRefreshTotal(count || 0)
+
+    let done = 0, found = 0
+    const allResults = []
+
+    while (!refreshStopRef.current) {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const res = await fetch('/api/admin/refresh-streaming?limit=15', { headers: { Authorization: `Bearer ${session.access_token}` } })
+        const data = await res.json()
+        if (data.error) { addToast(data.error, 'error'); setRefreshing(false); return }
+        if (data.processed === 0) break
+
+        done += data.processed
+        found += (data.results || []).filter(r => r.status === 'ok' && r.flatrate?.length > 0).length
+        allResults.push(...(data.results || []))
+
+        setRefreshDone(done)
+        setRefreshFound(found)
+        setRefreshResults([...allResults])
+      } catch (err) {
+        addToast(err.message, 'error')
+        setRefreshing(false)
+        return
+      }
+    }
+    setRefreshing(false)
+    addToast(`Checked ${done} title${done !== 1 ? 's' : ''} — ${found} now match a subscribed service`)
+  }
+
+  function stopRefresh() { refreshStopRef.current = true }
 
   async function saveServices(updated) {
     setSaving(true)
@@ -1156,6 +1204,42 @@ function StreamingServicesTab({ addToast }) {
               </div>
             )}
         {saving && <div style={{ fontSize:'0.72rem', color:'var(--text-dim)', marginTop:'0.5rem' }}>Saving…</div>}
+      </div>
+
+      {/* Refresh streaming availability */}
+      <div style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', padding:'1.1rem' }}>
+        <div style={{ fontWeight:700, fontSize:'0.88rem', marginBottom:'0.5rem' }}>Refresh Streaming Availability</div>
+        <div style={{ fontSize:'0.8rem', color:'var(--text-dim)', marginBottom:'0.85rem', lineHeight:1.5 }}>
+          Re-checks every suggested movie against JustWatch and resets its FREE/COST pill based on
+          the services above. Run this after adding a new service, or periodically since streaming
+          availability changes over time.
+        </div>
+        <button onClick={refreshing ? stopRefresh : runStreamingRefresh}
+          style={{ ...btnPrimary(refreshing ? 'var(--danger)' : 'var(--teal)'), width:'auto', padding:'0 1.1rem', marginTop:0 }}>
+          {refreshing ? 'Stop' : 'Refresh All Suggested Movies'}
+        </button>
+        {refreshTotal > 0 && (
+          <div style={{ marginTop:'0.85rem' }}>
+            <div style={{ fontSize:'0.8rem', color:'var(--text-dim)', marginBottom:'0.35rem' }}>
+              {refreshDone} / {refreshTotal} checked — {refreshFound} match a subscribed service
+            </div>
+            <div style={{ height:6, borderRadius:3, background:'var(--surface2)', overflow:'hidden' }}>
+              <div style={{ height:'100%', width:`${Math.min(100, (refreshDone / refreshTotal) * 100)}%`, background:'var(--teal)', transition:'width 0.3s' }} />
+            </div>
+          </div>
+        )}
+        {refreshResults.length > 0 && !refreshing && (
+          <div style={{ marginTop:'0.85rem', maxHeight:200, overflowY:'auto', display:'flex', flexDirection:'column', gap:'0.3rem' }}>
+            {refreshResults.filter(r => r.status !== 'ok' || r.flatrate?.length > 0).map(r => (
+              <div key={r.id} style={{ background:'var(--surface2)', borderRadius:'8px', padding:'0.45rem 0.75rem', fontSize:'0.78rem', display:'flex', justifyContent:'space-between', gap:'0.5rem' }}>
+                <span style={{ fontWeight:600 }}>{r.title}</span>
+                <span style={{ color: r.status === 'not_found' ? 'var(--text-dim)' : '#15803d', fontSize:'0.72rem', flexShrink:0 }}>
+                  {r.status === 'not_found' ? 'Not found on JustWatch' : r.flatrate?.join(', ')}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

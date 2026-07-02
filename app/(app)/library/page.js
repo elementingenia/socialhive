@@ -276,7 +276,7 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
             <GenreChips genres={genres} />
             {isAdmin && freeCostData && (
               <span style={{ background:freeCostData.isFree?'#dcfce7':'#fef3c7', color:freeCostData.isFree?'#15803d':'#d97706', borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', fontWeight:700 }}>
-                ● {freeCostData.isFree ? (freeCostData.reasons[0] || 'Free') : 'Cost'}
+                ● {freeCostData.reasons[0] || (freeCostData.isFree ? 'Free' : 'Cost')}
               </span>
             )}
           </div>
@@ -508,7 +508,7 @@ function MovieCard({ movie, myVote, avgData, isAdmin, freeCostData, onClick }) {
         {isAdmin && freeCostData && (
           <div style={{ marginTop:'0.2rem' }}>
             <span style={{ background:freeCostData.isFree?'#dcfce7':'#fef3c7', color:freeCostData.isFree?'#15803d':'#d97706', borderRadius:'20px', padding:'0.1rem 0.45rem', fontSize:'0.62rem', fontWeight:700 }}>
-              ● {freeCostData.isFree ? (freeCostData.reasons[0] || 'Free') : 'Cost'}
+              ● {freeCostData.reasons[0] || (freeCostData.isFree ? 'Free' : 'Cost')}
             </span>
           </div>
         )}

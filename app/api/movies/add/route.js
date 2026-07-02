@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { fetchStreamingOffers } from '@/lib/justwatch'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -56,6 +57,18 @@ export async function POST(req) {
 
   const rating_rt = await getRtRating(imdb_id)
 
+  // Streaming availability — non-fatal if JustWatch is down or the title
+  // isn't found; the movie still gets suggested, just shows "not checked yet"
+  // until an admin runs a refresh.
+  let streaming_offers = null
+  let streaming_checked_at = null
+  try {
+    streaming_offers = await fetchStreamingOffers({ title, tmdbId: tmdb_id, year })
+    streaming_checked_at = new Date().toISOString()
+  } catch {
+    // leave both null — treated as "not checked yet" by computeFreeCost
+  }
+
   const { data: movie, error } = await supabaseAdmin
     .from('movies')
     .insert({
@@ -67,6 +80,8 @@ export async function POST(req) {
       we_own: false,
       is_viewing_suggestion: true,
       suggested_by: member.id,
+      streaming_offers,
+      streaming_checked_at,
     })
     .select().single()
 
