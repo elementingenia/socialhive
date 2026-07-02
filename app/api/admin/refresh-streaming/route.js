@@ -24,8 +24,23 @@ const delay = ms => new Promise(r => setTimeout(r, ms))
 
 // Re-checks streaming availability for viewing-suggestion movies (we_own=false)
 // in small batches, oldest/never-checked first. Admin UI calls this repeatedly
-// with an increasing offset until processed === 0 — kept batched rather than
-// one giant request so it never risks hitting a serverless function timeout.
+// until processed === 0 — kept batched rather than one giant request so it
+// never risks hitting a serverless function timeout.
+//
+// IMPORTANT: eligibility is governed entirely server-side by a fixed cooldown
+// window, not by anything the client sends. An earlier version relied on the
+// client passing a "before" cutoff captured once at the start of a run — that
+// broke the moment the browser served a stale cached bundle that didn't send
+// it: the server fell back to computing "now" fresh on every single request,
+// which never excludes anything a batch just checked, recreating the exact
+// infinite loop this was meant to fix (confirmed live: it looped past 1200
+// processed with 20 of 65 movies still never actually checked). A cooldown
+// hardcoded here can't be defeated by a stale, buggy, or naive client — no
+// matter what it sends (or doesn't), a movie checked within the last
+// COOLDOWN_MS is never eligible again until real time passes, so a full pass
+// is always guaranteed to exhaust and hit processed: 0.
+const COOLDOWN_MS = 2 * 60 * 1000 // 2 minutes — long enough that one run can't re-select a row it just checked, short enough to re-run again shortly after if needed
+
 export async function GET(req) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
   const member = await getAdmin(token)
@@ -33,14 +48,7 @@ export async function GET(req) {
 
   const { searchParams } = new URL(req.url)
   const limit  = Math.min(parseInt(searchParams.get('limit') || '10'), 20)
-  // Cutoff captured once by the client at the start of a refresh run. Without
-  // this, a batch that just checked a movie sets its streaming_checked_at to
-  // "now", which only pushes it to the back of the oldest-first queue rather
-  // than out of it — with fewer total rows than would naturally exhaust in
-  // one pass, the same movies get re-picked forever and processed never hits
-  // 0. Excluding anything already checked at/after the cutoff makes each row
-  // eligible at most once per run.
-  const before = searchParams.get('before') || new Date().toISOString()
+  const cutoff = new Date(Date.now() - COOLDOWN_MS).toISOString()
 
   const supabaseAdmin = makeAdminClient()
 
@@ -48,7 +56,7 @@ export async function GET(req) {
     .from('movies')
     .select('id, title, year, tmdb_id')
     .eq('we_own', false)
-    .or(`streaming_checked_at.is.null,streaming_checked_at.lt.${before}`)
+    .or(`streaming_checked_at.is.null,streaming_checked_at.lt.${cutoff}`)
     .order('streaming_checked_at', { ascending: true, nullsFirst: true })
     .limit(limit)
 

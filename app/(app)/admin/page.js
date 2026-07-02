@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
-import { computeFreeCost } from '@/lib/freeCost'
+import { computeFreeCost, normaliseService } from '@/lib/freeCost'
 import { PageTextsIcon, MembersIcon, MoviesIcon, BarIcon, ToolsIcon } from '@/components/NavIcons'
 import RichEditor, { bbToHtml } from '@/components/RichEditor'
 
@@ -1116,10 +1116,16 @@ function StreamingServicesTab({ addToast }) {
     const { count } = await supabase.from('movies').select('id', { count: 'exact', head: true }).eq('we_own', false)
     setRefreshTotal(count || 0)
 
-    // Captured once per run — every row checked during this run gets excluded
-    // from re-selection so the batch loop actually terminates. See route.js
-    // comment for why this matters.
-    const runCutoff = new Date().toISOString()
+    // Match against the actual subscribed-services list, same fuzzy logic
+    // freeCost.js uses — "has some streaming service" is not the same claim
+    // as "matches one we pay for".
+    const ourNorm = services.map(normaliseService)
+    function matchesOurServices(flatrate = []) {
+      return flatrate.some(svc => {
+        const norm = normaliseService(svc)
+        return ourNorm.some(o => o === norm || o.includes(norm) || norm.includes(o))
+      })
+    }
 
     let done = 0, found = 0
     const allResults = []
@@ -1127,13 +1133,13 @@ function StreamingServicesTab({ addToast }) {
     while (!refreshStopRef.current) {
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        const res = await fetch(`/api/admin/refresh-streaming?limit=15&before=${encodeURIComponent(runCutoff)}`, { headers: { Authorization: `Bearer ${session.access_token}` } })
+        const res = await fetch('/api/admin/refresh-streaming?limit=15', { headers: { Authorization: `Bearer ${session.access_token}` } })
         const data = await res.json()
         if (data.error) { addToast(data.error, 'error'); setRefreshing(false); return }
         if (data.processed === 0) break
 
         done += data.processed
-        found += (data.results || []).filter(r => r.status === 'ok' && r.flatrate?.length > 0).length
+        found += (data.results || []).filter(r => r.status === 'ok' && matchesOurServices(r.flatrate)).length
         allResults.push(...(data.results || []))
 
         setRefreshDone(done)
@@ -1215,9 +1221,10 @@ function StreamingServicesTab({ addToast }) {
       <div style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', padding:'1.1rem' }}>
         <div style={{ fontWeight:700, fontSize:'0.88rem', marginBottom:'0.5rem' }}>Refresh Streaming Availability</div>
         <div style={{ fontSize:'0.8rem', color:'var(--text-dim)', marginBottom:'0.85rem', lineHeight:1.5 }}>
-          Re-checks every suggested movie against JustWatch and resets its FREE/COST pill based on
-          the services above. Run this after adding a new service, or periodically since streaming
-          availability changes over time.
+          Re-checks every suggested movie against JustWatch. Matching against the services above
+          already happens live — adding or removing a service here doesn't need a refresh. Run
+          this periodically instead, since a title's actual streaming availability can change on
+          JustWatch's end over time (added or dropped from a service).
         </div>
         <button onClick={refreshing ? stopRefresh : runStreamingRefresh}
           style={{ ...btnPrimary(refreshing ? 'var(--danger)' : 'var(--teal)'), width:'auto', padding:'0 1.1rem', marginTop:0 }}>
