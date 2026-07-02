@@ -1116,13 +1116,18 @@ function StreamingServicesTab({ addToast }) {
     const { count } = await supabase.from('movies').select('id', { count: 'exact', head: true }).eq('we_own', false)
     setRefreshTotal(count || 0)
 
+    // Captured once per run — every row checked during this run gets excluded
+    // from re-selection so the batch loop actually terminates. See route.js
+    // comment for why this matters.
+    const runCutoff = new Date().toISOString()
+
     let done = 0, found = 0
     const allResults = []
 
     while (!refreshStopRef.current) {
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        const res = await fetch('/api/admin/refresh-streaming?limit=15', { headers: { Authorization: `Bearer ${session.access_token}` } })
+        const res = await fetch(`/api/admin/refresh-streaming?limit=15&before=${encodeURIComponent(runCutoff)}`, { headers: { Authorization: `Bearer ${session.access_token}` } })
         const data = await res.json()
         if (data.error) { addToast(data.error, 'error'); setRefreshing(false); return }
         if (data.processed === 0) break

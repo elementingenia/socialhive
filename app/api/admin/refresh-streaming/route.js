@@ -32,7 +32,15 @@ export async function GET(req) {
   if (!member) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
   const { searchParams } = new URL(req.url)
-  const limit = Math.min(parseInt(searchParams.get('limit') || '10'), 20)
+  const limit  = Math.min(parseInt(searchParams.get('limit') || '10'), 20)
+  // Cutoff captured once by the client at the start of a refresh run. Without
+  // this, a batch that just checked a movie sets its streaming_checked_at to
+  // "now", which only pushes it to the back of the oldest-first queue rather
+  // than out of it — with fewer total rows than would naturally exhaust in
+  // one pass, the same movies get re-picked forever and processed never hits
+  // 0. Excluding anything already checked at/after the cutoff makes each row
+  // eligible at most once per run.
+  const before = searchParams.get('before') || new Date().toISOString()
 
   const supabaseAdmin = makeAdminClient()
 
@@ -40,6 +48,7 @@ export async function GET(req) {
     .from('movies')
     .select('id, title, year, tmdb_id')
     .eq('we_own', false)
+    .or(`streaming_checked_at.is.null,streaming_checked_at.lt.${before}`)
     .order('streaming_checked_at', { ascending: true, nullsFirst: true })
     .limit(limit)
 
