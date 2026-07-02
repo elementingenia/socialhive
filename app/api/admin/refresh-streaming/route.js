@@ -2,6 +2,24 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { fetchStreamingOffers } from '@/lib/justwatch'
 
+const OMDB_KEY = process.env.OMDB_API_KEY || 'ed1ed939'
+
+// Only fetched for movies that don't have a maturity rating yet — same gap as
+// streaming_offers: movies/add never wrote this field until now, so every
+// suggestion added before that fix is missing it. Piggybacks on this same
+// batch loop rather than a separate runner, since it's a single lightweight
+// OMDb call keyed on the imdb_id every suggestion already has.
+async function fetchMaturityRating(imdbId) {
+  if (!imdbId) return null
+  try {
+    const res = await fetch(`https://www.omdbapi.com/?i=${imdbId}&apikey=${OMDB_KEY}`)
+    const data = await res.json()
+    return (data.Rated && data.Rated !== 'N/A') ? data.Rated : null
+  } catch {
+    return null
+  }
+}
+
 function makeAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -54,7 +72,7 @@ export async function GET(req) {
 
   const { data: movies, error: queryErr } = await supabaseAdmin
     .from('movies')
-    .select('id, title, year, tmdb_id')
+    .select('id, title, year, tmdb_id, imdb_id, rating')
     .eq('we_own', false)
     .or(`streaming_checked_at.is.null,streaming_checked_at.lt.${cutoff}`)
     .order('streaming_checked_at', { ascending: true, nullsFirst: true })
@@ -69,9 +87,13 @@ export async function GET(req) {
   for (const movie of movies) {
     try {
       const offers = await fetchStreamingOffers({ title: movie.title, tmdbId: movie.tmdb_id, year: movie.year })
+      const patch = { streaming_offers: offers, streaming_checked_at: new Date().toISOString() }
+      if (!movie.rating) {
+        patch.rating = await fetchMaturityRating(movie.imdb_id)
+      }
       const { error: writeErr } = await supabaseAdmin
         .from('movies')
-        .update({ streaming_offers: offers, streaming_checked_at: new Date().toISOString() })
+        .update(patch)
         .eq('id', movie.id)
 
       if (writeErr) {

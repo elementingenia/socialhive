@@ -7,17 +7,24 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-async function getRtRating(imdbId) {
-  if (!imdbId) return null
+// Single OMDb call, used for both the Rotten Tomatoes score and the AU/US
+// maturity classification (e.g. PG, M, MA15+) — was previously fetched for
+// rating_rt only and the classification silently dropped, even though the
+// movies.rating column exists and the UI already expects to display it.
+async function getOmdbExtras(imdbId) {
+  if (!imdbId) return { rating_rt: null, rating: null }
   try {
     const res = await fetch(
       `https://www.omdbapi.com/?i=${imdbId}&apikey=${process.env.OMDB_API_KEY || 'ed1ed939'}`
     )
     const data = await res.json()
     const rt = (data.Ratings || []).find(r => r.Source === 'Rotten Tomatoes')
-    return rt?.Value || null
+    return {
+      rating_rt: rt?.Value || null,
+      rating: (data.Rated && data.Rated !== 'N/A') ? data.Rated : null,
+    }
   } catch {
-    return null
+    return { rating_rt: null, rating: null }
   }
 }
 
@@ -55,7 +62,7 @@ export async function POST(req) {
     }, { status: 409 })
   }
 
-  const rating_rt = await getRtRating(imdb_id)
+  const { rating_rt, rating: maturityRating } = await getOmdbExtras(imdb_id)
 
   // Streaming availability — non-fatal if JustWatch is down or the title
   // isn't found; the movie still gets suggested, just shows "not checked yet"
@@ -77,6 +84,7 @@ export async function POST(req) {
       title, year, genre, plot, poster_url, runtime, director, actors,
       rating_imdb: rating_imdb || null,
       rating_rt,
+      rating: maturityRating,
       we_own: false,
       is_viewing_suggestion: true,
       suggested_by: member.id,

@@ -269,7 +269,9 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
         <div style={{ padding:movie.poster_url?'3rem 1.25rem 1.5rem':'1.5rem 1.25rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
           {!movie.poster_url && <div style={{ display:'flex', justifyContent:'flex-end' }}><button onClick={onClose} style={{ background:'none', border:'none', fontSize:'1.5rem', cursor:'pointer', color:'var(--text-dim)' }}>×</button></div>}
           <div>
-            <div style={{ fontWeight:800, fontSize:'1.2rem', lineHeight:1.2 }}>{movie.title}</div>
+            <div style={{ fontWeight:800, fontSize:'1.2rem', lineHeight:1.2 }}>
+              {movie.title}{movie.rating && <span style={{ fontWeight:400, color:'var(--text-dim)' }}> ({movie.rating})</span>}
+            </div>
             {movie.year && <div style={{ color:'var(--text-dim)', fontSize:'0.85rem', marginTop:'0.2rem' }}>{movie.year}{movie.runtime&&` · ${movie.runtime}`}</div>}
           </div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', alignItems:'center' }}>
@@ -494,10 +496,12 @@ function MovieCard({ movie, myVote, avgData, isAdmin, freeCostData, onClick }) {
         ? <img src={movie.poster_url} alt={movie.title} style={{ width:65, objectFit:'cover', flexShrink:0 }} />
         : <div style={{ width:65, background:'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem', flexShrink:0 }}>🎬</div>}
       <div style={{ flex:1, padding:'0.55rem 0.65rem', overflow:'hidden' }}>
-        <div style={{ fontWeight:700, fontSize:'0.88rem', lineHeight:1.2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{movie.title}</div>
-        {(leadActor || movie.rating) && (
+        <div style={{ fontWeight:700, fontSize:'0.88rem', lineHeight:1.2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+          {movie.title}{movie.rating && <span style={{ fontWeight:400, color:'var(--text-dim)' }}> ({movie.rating})</span>}
+        </div>
+        {leadActor && (
           <div style={{ color:'var(--text-dim)', fontSize:'0.72rem', marginTop:'0.1rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-            {leadActor}{leadActor && movie.rating ? ' ' : ''}{movie.rating ? `(${movie.rating})` : ''}
+            {leadActor}
           </div>
         )}
         {genres.length>0 && (
@@ -610,6 +614,7 @@ export default function LibraryPage() {
     const matchSearch = !search || m.title.toLowerCase().includes(search.toLowerCase()) || (m.actors||'').toLowerCase().includes(search.toLowerCase())
     let matchGenre = true
     if (genreFilter==='unscored') matchGenre = !myVotes[m.id]
+    else if (genreFilter==='free') matchGenre = computeFreeCost(m, { streamingServices, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecords.filter(o => o.movie_id === m.id) }).isFree
     else if (genreFilter!=='all') matchGenre = parseGenres(m.genre).includes(genreFilter)
     return matchSearch && matchGenre
   })
@@ -676,7 +681,7 @@ export default function LibraryPage() {
         </div>
 
         {(() => {
-          const FIXED = [['all','All'],['unscored','Unscored']]
+          const FIXED = [['all','All'],['free','Free'],['unscored','Unscored']]
           const VISIBLE = 6
           const btnStyle = (active) => ({ padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px solid', borderColor:active?'var(--teal)':'var(--border)', background:active?'var(--teal)':'transparent', color:active?'#fff':'var(--text)', fontSize:'0.78rem', fontWeight:active?700:400, cursor:'pointer' })
           const moreStyle = { padding:'0.3rem 0.75rem', borderRadius:'20px', border:'1.5px dashed var(--border)', background:'transparent', color:'var(--text-dim)', fontSize:'0.78rem', fontWeight:400, cursor:'pointer', opacity:0.7 }

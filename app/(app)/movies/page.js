@@ -53,7 +53,9 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen })
           <div style={{ width: 100, minHeight: 130, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', flexShrink: 0 }}>🎬</div>
         )}
         <div style={{ flex: 1, padding: '0.9rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-          <div style={{ fontWeight: 800, fontSize: '1.05rem', lineHeight: 1.2 }}>{movie?.title || event.title}</div>
+          <div style={{ fontWeight: 800, fontSize: '1.05rem', lineHeight: 1.2 }}>
+            {movie?.title || event.title}{movie?.rating && <span style={{ fontWeight: 400, color: 'var(--text-dim)' }}> ({movie.rating})</span>}
+          </div>
           <div style={{ fontSize: '0.8rem', color: 'var(--teal)', fontWeight: 600 }}>
             {fmtDate(event.event_date)} · {fmtTime(event.event_time)}
           </div>
@@ -184,7 +186,9 @@ function MyMovieBookingsSheet({ bookings, session, onClose, onRefresh }) {
                         <div style={{ width:80, minHeight:110, background:'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem', flexShrink:0 }}>🎬</div>
                       )}
                       <div style={{ flex:1, padding:'0.85rem 1rem' }}>
-                        <div style={{ fontWeight:700, fontSize:'0.95rem', lineHeight:1.2, marginBottom:'0.25rem' }}>{movie?.title || ev?.title}</div>
+                        <div style={{ fontWeight:700, fontSize:'0.95rem', lineHeight:1.2, marginBottom:'0.25rem' }}>
+                          {movie?.title || ev?.title}{movie?.rating && <span style={{ fontWeight:400, color:'var(--text-dim)' }}> ({movie.rating})</span>}
+                        </div>
                         <div style={{ fontSize:'0.8rem', color:'var(--teal)', fontWeight:600, marginBottom:'0.15rem' }}>{fmtDate(ev?.event_date)}</div>
                         {ev?.event_time && <div style={{ fontSize:'0.78rem', color:'var(--text-dim)', marginBottom:'0.4rem' }}>{fmtTime(ev.event_time)}</div>}
                         <div style={{ display:'flex', gap:'0.4rem', alignItems:'center', flexWrap:'wrap' }}>
@@ -390,7 +394,9 @@ function RatingSwiper({ movies, memberId, onDone }) {
             <div style={{ width: 90, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', flexShrink: 0 }}>🎬</div>
           )}
           <div style={{ flex: 1, padding: '0.9rem 1rem' }}>
-            <div style={{ fontWeight: 800, fontSize: '1rem', lineHeight: 1.2, marginBottom: '0.25rem' }}>{movie.title}</div>
+            <div style={{ fontWeight: 800, fontSize: '1rem', lineHeight: 1.2, marginBottom: '0.25rem' }}>
+              {movie.title}{movie.rating && <span style={{ fontWeight: 400, color: 'var(--text-dim)' }}> ({movie.rating})</span>}
+            </div>
             {movie.year && <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginBottom: '0.35rem' }}>{movie.year}{movie.runtime ? ` · ${movie.runtime}` : ''}</div>}
             {genres.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>
@@ -532,7 +538,7 @@ export default function MoviesHomePage() {
       { data: votesData },
     ] = await Promise.all([
       supabase.from('events')
-        .select('*, movies(id, title, poster_url, genre, runtime, year, rating_imdb, rating_rt, imdb_id, plot)')
+        .select('*, movies(id, title, poster_url, genre, runtime, year, rating, rating_imdb, rating_rt, imdb_id, plot)')
         .eq('hub_type', 'movie')
         .gte('event_date', today)
         .order('event_date', { ascending: true })
@@ -540,12 +546,12 @@ export default function MoviesHomePage() {
         .limit(1),
 
       supabase.from('bookings')
-        .select('id, event_id, status, seats, booked_at, events(id, event_date, event_time, title, hub_type, movies(id, title, poster_url))')
+        .select('id, event_id, status, seats, booked_at, events(id, event_date, event_time, title, hub_type, movies(id, title, poster_url, rating))')
         .eq('member_id', memberData.id)
         .neq('status', 'cancelled'),
 
       supabase.from('movies')
-        .select('id, title, poster_url, genre, year, runtime')
+        .select('id, title, poster_url, genre, year, runtime, rating')
         .eq('we_own', false)
         .order('added_at', { ascending: false })
         .limit(50),
@@ -610,7 +616,7 @@ export default function MoviesHomePage() {
       { data: waitlistRows },
     ] = await Promise.all([
       supabase.from('events')
-        .select('*, movies(id, title, poster_url, genre, runtime, year, rating_imdb, rating_rt, imdb_id, plot)')
+        .select('*, movies(id, title, poster_url, genre, runtime, year, rating, rating_imdb, rating_rt, imdb_id, plot)')
         .eq('id', eventId).single(),
       supabase.from('bookings').select('id, status, seats, payment_status, booked_at')
         .eq('event_id', eventId).eq('member_id', memberId).neq('status', 'cancelled'),

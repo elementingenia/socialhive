@@ -1221,9 +1221,10 @@ function StreamingServicesTab({ addToast }) {
       <div style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', padding:'1.1rem' }}>
         <div style={{ fontWeight:700, fontSize:'0.88rem', marginBottom:'0.5rem' }}>Refresh Streaming Availability</div>
         <div style={{ fontSize:'0.8rem', color:'var(--text-dim)', marginBottom:'0.85rem', lineHeight:1.5 }}>
-          Re-checks every suggested movie against JustWatch. Matching against the services above
-          already happens live — adding or removing a service here doesn't need a refresh. Run
-          this periodically instead, since a title's actual streaming availability can change on
+          Re-checks every suggested movie against JustWatch, and fills in the maturity rating
+          (PG/M/MA15+ etc.) for any suggestion that's missing one. Matching against the services
+          above already happens live — adding or removing a service here doesn't need a refresh.
+          Run this periodically since a title's actual streaming availability can change on
           JustWatch's end over time (added or dropped from a service).
         </div>
         <button onClick={refreshing ? stopRefresh : runStreamingRefresh}
