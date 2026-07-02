@@ -50,7 +50,7 @@ export async function GET(req) {
   // Fetch active bookings for the event
   const { data: activeBookings, error: be } = await supa
     .from("bookings")
-    .select("id, seats, status, payment_status, booked_at, members(id, name, username, hide_name)")
+    .select("id, seats, status, payment_status, has_book, book_given_at, name_hidden, booked_at, members(id, name, username, hide_name)")
     .eq("event_id", eventId)
     .neq("status", "cancelled")
     .order("booked_at")
@@ -60,15 +60,27 @@ export async function GET(req) {
   // Also fetch cancelled bookings that have payment info (refund pending or issued)
   const { data: cancelledPayments } = await supa
     .from("bookings")
-    .select("id, seats, status, payment_status, booked_at, members(id, name, username, hide_name)")
+    .select("id, seats, status, payment_status, has_book, book_given_at, name_hidden, booked_at, members(id, name, username, hide_name)")
     .eq("event_id", eventId)
     .eq("status", "cancelled")
     .in("payment_status", ["confirmed", "refunded"])
     .order("booked_at")
 
+  // Also fetch cancelled bookings where the book is still out — cancelling attendance
+  // doesn't clear book status (per Book Club scope), so these must stay visible to
+  // the EC/admin attendee list rather than silently disappearing.
+  const { data: cancelledWithBook } = await supa
+    .from("bookings")
+    .select("id, seats, status, payment_status, has_book, book_given_at, name_hidden, booked_at, members(id, name, username, hide_name)")
+    .eq("event_id", eventId)
+    .eq("status", "cancelled")
+    .eq("has_book", true)
+    .order("book_given_at")
+
   const bookings = activeBookings || []
   const refundPending  = (cancelledPayments || []).filter(b => b.payment_status === "confirmed")
   const refundIssued   = (cancelledPayments || []).filter(b => b.payment_status === "refunded")
+  const cancelledBookOut = cancelledWithBook || []
 
   // Fetch EC notes for the event
   const { data: event } = await supa
@@ -81,6 +93,7 @@ export async function GET(req) {
     bookings,
     refund_pending: refundPending,
     refund_issued: refundIssued,
+    cancelled_book_out: cancelledBookOut,
     coordinator_notes: event?.coordinator_notes || null,
     description: event?.description || null,
     welcome_message: event?.welcome_message || null,
@@ -123,6 +136,7 @@ export async function PATCH(req) {
     event_id, action, booking_id, payment_status, refunded,
     coordinator_notes, description, welcome_message,
     has_dining, menu_type, menu_text, image_focal_x, image_focal_y,
+    has_book, name_hidden,
   } = body
 
   if (!event_id) return NextResponse.json({ error: "event_id required" }, { status: 400 })
@@ -152,6 +166,32 @@ export async function PATCH(req) {
       .eq("id", booking_id)
       .eq("event_id", event_id)
     if (re) return NextResponse.json({ error: re.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  }
+
+  // ── Toggle whether this attendee currently holds the physical Book Club kit ──
+  // Turning it on stamps book_given_at = now. Turning off is manual only — per
+  // scope, nothing auto-clears this (not a cancelled booking, not the return date).
+  if (action === "set_has_book" && booking_id) {
+    const patch = { has_book: !!has_book }
+    if (has_book) patch.book_given_at = new Date().toISOString()
+    const { error: hbe } = await supa
+      .from("bookings")
+      .update(patch)
+      .eq("id", booking_id)
+      .eq("event_id", event_id)
+    if (hbe) return NextResponse.json({ error: hbe.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  }
+
+  // ── Toggle whether this attendee's name is hidden in the attendee list ───────
+  if (action === "set_name_hidden" && booking_id) {
+    const { error: nhe } = await supa
+      .from("bookings")
+      .update({ name_hidden: !!name_hidden })
+      .eq("id", booking_id)
+      .eq("event_id", event_id)
+    if (nhe) return NextResponse.json({ error: nhe.message }, { status: 500 })
     return NextResponse.json({ ok: true })
   }
 

@@ -254,8 +254,33 @@ function BookPicker({ onSelect, initialBook }) {
   const [open,     setOpen]     = useState(!initialBook)
 
   useEffect(() => {
-    supabase.from("books").select("id, title, author, cover_url, published_year").order("title")
-      .then(({ data }) => setAllBooks(data || []))
+    async function loadBooks() {
+      const { data: books } = await supabase.from("books").select("id, title, author, cover_url, published_year").order("title")
+      const ids = (books || []).map(b => b.id)
+      const sums = {}, counts = {}
+      if (ids.length) {
+        const { data: votes } = await supabase.from("book_votes").select("book_id, score").in("book_id", ids)
+        for (const v of votes || []) {
+          sums[v.book_id]   = (sums[v.book_id]   || 0) + v.score
+          counts[v.book_id] = (counts[v.book_id] || 0) + 1
+        }
+      }
+      // Sort by community score (descending) so the organiser can see what's
+      // actually winning without leaving this screen — was previously
+      // alphabetical with no score shown at all. Unscored books sort last.
+      const withScores = (books || []).map(b => ({
+        ...b,
+        avg_score:  counts[b.id] ? (sums[b.id] / counts[b.id]).toFixed(1) : null,
+        vote_count: counts[b.id] || 0,
+      })).sort((a, b) => {
+        if (a.avg_score == null && b.avg_score == null) return a.title.localeCompare(b.title)
+        if (a.avg_score == null) return 1
+        if (b.avg_score == null) return -1
+        return parseFloat(b.avg_score) - parseFloat(a.avg_score)
+      })
+      setAllBooks(withScores)
+    }
+    loadBooks()
   }, [])
 
   const filtered = allBooks.filter(b =>
@@ -319,6 +344,11 @@ function BookPicker({ onSelect, initialBook }) {
                 <div style={{ fontWeight: 700, fontSize: "0.85rem", lineHeight: 1.2 }}>{b.title}</div>
                 <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{b.author}{b.published_year ? ` (${b.published_year})` : ""}</div>
               </div>
+              {b.avg_score != null && (
+                <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--amber-dark)", background: "rgba(180,150,0,0.15)", padding: "0.15rem 0.5rem", borderRadius: 20, whiteSpace: "nowrap", flexShrink: 0 }}>
+                  ⭐ {b.avg_score}
+                </span>
+              )}
             </div>
           ))}
         </div>
@@ -335,11 +365,16 @@ function BookPicker({ onSelect, initialBook }) {
                 <div style={{ fontWeight: 700, fontSize: "0.85rem" }}>{b.title}</div>
                 <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{b.author}{b.published_year ? ` (${b.published_year})` : ""}</div>
               </div>
+              {b.avg_score != null && (
+                <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--amber-dark)", background: "rgba(180,150,0,0.15)", padding: "0.15rem 0.5rem", borderRadius: 20, whiteSpace: "nowrap", flexShrink: 0 }}>
+                  ⭐ {b.avg_score}
+                </span>
+              )}
             </div>
           ))}
           {allBooks.length > 5 && (
             <div style={{ padding: "0.5rem 1rem", fontSize: "0.75rem", color: "var(--text-dim)" }}>
-              Type to search {allBooks.length} books…
+              Type to search {allBooks.length} books… (sorted by community score)
             </div>
           )}
         </div>
@@ -443,6 +478,7 @@ function AdminEventForm({ event, members, onSave, onClose }) {
   const activeEC = event ? (event.event_coordinators || []).find(ec => !ec.replaced_at) : null
   const [form,   setForm]   = useState({
     event_date:   event?.event_date || "",
+    book_return_date: event?.book_return_date || "",
     description:  event?.description || "",
     welcome_message: event?.welcome_message || "",
     coordinator_id: activeEC?.member_id || "",
@@ -499,6 +535,7 @@ function AdminEventForm({ event, members, onSave, onClose }) {
       description:     form.description,
       welcome_message: form.welcome_message,
       book_id:         bookId,
+      book_return_date: form.book_return_date || null,
       archived:        false,
       book_snapshot:   selectedBook ? {
         title:     selectedBook.title,
@@ -550,6 +587,12 @@ function AdminEventForm({ event, members, onSave, onClose }) {
         <label style={labelStyle}>Meeting Date <span style={{ color: "var(--danger)" }}>*</span></label>
         <input type="date" value={form.event_date} onChange={e => set("event_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
           style={{ ...inputStyle, border: `1.5px solid ${form.event_date ? "var(--green)" : "var(--danger)"}` }} />
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Kit Return Date</label>
+        <input type="date" value={form.book_return_date} onChange={e => set("book_return_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
+          style={inputStyle} />
       </div>
 
       <div style={{ marginBottom: 12 }}>
@@ -612,10 +655,17 @@ export default function BookClubHome() {
   const [showForm,    setShowForm]    = useState(false)
   const [editEvent,   setEditEvent]   = useState(null)
   const [slideOutEvent, setSlideOutEvent] = useState(null)
+  const [outstandingBook, setOutstandingBook] = useState(null) // { book_id, title } — member's most recent unreturned book, if any
 
   function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
   function toSlideOutShape(ev, myBooking) {
+    // Block joining a different book while a previously-issued kit copy hasn't
+    // been returned yet (has_book=true, cleared manually by EC/admin). Same
+    // book (a repeat cycle) is always allowed through.
+    const bookConflictTitle = (outstandingBook && ev.book_id && outstandingBook.book_id !== ev.book_id)
+      ? outstandingBook.title
+      : null
     return {
       ...ev,
       hub_type: "bookclub",
@@ -623,9 +673,10 @@ export default function BookClubHome() {
       bookings_count: 0,
       waitlist_count: 0,
       my_bookings: myBooking?.status === "confirmed"
-        ? [{ status: "confirmed", seats: 1, payment_status: null }]
+        ? [{ status: "confirmed", seats: 1, payment_status: null, has_book: !!myBooking.has_book }]
         : [],
       book: ev.books || null,
+      book_conflict_title: bookConflictTitle,
       payment_required: false,
     }
   }
@@ -640,7 +691,7 @@ export default function BookClubHome() {
     // Refresh booking state in-place so user sees confirmation without slideout closing
     const { data: bk } = await supabase
       .from("bookings")
-      .select("id, status, seats")
+      .select("id, status, seats, has_book")
       .eq("event_id", currentId)
       .eq("member_id", member?.id)
       .neq("status", "cancelled")
@@ -648,7 +699,7 @@ export default function BookClubHome() {
     setSlideOutEvent(prev => prev ? {
       ...prev,
       my_bookings: bk?.status === "confirmed"
-        ? [{ status: "confirmed", seats: 1, payment_status: null }]
+        ? [{ status: "confirmed", seats: 1, payment_status: null, has_book: !!bk.has_book }]
         : [],
     } : null)
     load()
@@ -666,7 +717,7 @@ export default function BookClubHome() {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, description, welcome_message, book_snapshot, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, description, welcome_message, book_id, book_return_date, book_snapshot, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("hub_type", "bookclub")
       .eq("archived", false)
       .order("event_date", { ascending: true })
@@ -697,7 +748,7 @@ export default function BookClubHome() {
       const ids = evs.map(e => e.id)
       const { data: bks } = await supabase
         .from("bookings")
-        .select("id, event_id, status")
+        .select("id, event_id, status, has_book, book_given_at")
         .eq("member_id", member.id)
         .in("event_id", ids)
 
@@ -709,6 +760,25 @@ export default function BookClubHome() {
       const past = (evs || []).filter(e => e.event_date < today)
       const participated = new Set(past.filter(e => byEvent[e.id]?.status === "confirmed").map(e => e.id))
       setMyBookedIds(participated)
+    }
+
+    // Outstanding book check — this member's most recent unreturned kit copy, if
+    // any (has_book=true is never auto-cleared, including on cancellation — see
+    // Book Club scope). Used to block joining a different book until it's back.
+    if (member?.id) {
+      const { data: outRows } = await supabase
+        .from("bookings")
+        .select("id, has_book, book_given_at, events(id, book_id, title, books(title))")
+        .eq("member_id", member.id)
+        .eq("has_book", true)
+        .order("book_given_at", { ascending: false })
+        .limit(1)
+      const row = outRows?.[0]
+      setOutstandingBook(row?.events?.book_id
+        ? { book_id: row.events.book_id, title: row.events.books?.title || row.events.title }
+        : null)
+    } else {
+      setOutstandingBook(null)
     }
 
     // Members for EC picker (admin only)

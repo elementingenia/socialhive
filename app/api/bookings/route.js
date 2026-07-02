@@ -88,8 +88,32 @@ export async function POST(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('id, max_seats').eq('id', event_id).single()
+    .from('events').select('id, max_seats, hub_type, book_id').eq('id', event_id).single()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+
+  // Book Club: block joining a different book while a previously-issued kit
+  // copy hasn't been returned. has_book is never auto-cleared (not by
+  // cancellation, not by the return date passing — EC/admin resets it
+  // manually), so this checks across ALL of the member's bookings, any
+  // status, for the most recent one still marked has_book=true. Same book
+  // (a repeat cycle) is allowed through.
+  if (event.hub_type === 'bookclub' && event.book_id) {
+    const { data: outstandingRows } = await supabaseAdmin
+      .from('bookings')
+      .select('id, book_given_at, events(book_id, title, books(title))')
+      .eq('member_id', member.id)
+      .eq('has_book', true)
+      .order('book_given_at', { ascending: false })
+      .limit(1)
+    const outstanding = outstandingRows?.[0]
+    if (outstanding?.events?.book_id && outstanding.events.book_id !== event.book_id) {
+      const title = outstanding.events.books?.title || outstanding.events.title || 'a book'
+      return NextResponse.json({
+        error: `You still have "${title}" checked out — return it to your Event Coordinator before joining a different book.`,
+        book_conflict: true,
+      }, { status: 409 })
+    }
+  }
 
   const { data: allBookings } = await supabaseAdmin
     .from('bookings').select('id, member_id, status, seats')

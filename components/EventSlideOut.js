@@ -277,6 +277,18 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
     else showToast("Failed", "error")
   }
 
+  async function toggleHasBook(booking) {
+    const ok = await patchAction({ action: "set_has_book", booking_id: booking.id, has_book: !booking.has_book })
+    if (ok) { showToast(booking.has_book ? "Marked as returned" : "Book marked as given out"); load() }
+    else showToast("Failed to update", "error")
+  }
+
+  async function toggleNameHidden(booking) {
+    const ok = await patchAction({ action: "set_name_hidden", booking_id: booking.id, name_hidden: !booking.name_hidden })
+    if (ok) { showToast(booking.name_hidden ? "Name shown again" : "Name hidden"); load() }
+    else showToast("Failed to update", "error")
+  }
+
   async function cancelBooking(bookingId) {
     const ok = await patchAction({ action: "cancel_booking", booking_id: bookingId })
     if (ok) {
@@ -482,6 +494,11 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
               const isRefunded = firstConf?.payment_status === "refunded"
               // All booking IDs for this member (for bulk cancel)
               const allIds = [...confRows, ...waitRows].map(b => b.id)
+              // Book Club: has_book / name_hidden live on the booking row itself —
+              // one member = one row here (no split-seat concept for Book Club).
+              const primaryRow = confRows[0] || waitRows[0]
+              const hasBook    = !!primaryRow?.has_book
+              const isHidden   = !!primaryRow?.name_hidden
               return (
                 <div key={member?.id || name} style={{ background: "var(--surface2)", borderRadius: 10, padding: "10px 12px",
                   border: `1px solid ${borderCol}` }}>
@@ -521,6 +538,27 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
                       )}
                     </div>
                   </div>
+                  {isBook && primaryRow && (
+                    <div style={{ display: "flex", gap: 14, marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: hasBook ? colour : "var(--text-dim)" }}>{hasBook ? "Has Book" : "No Book"}</span>
+                        <div onClick={() => toggleHasBook(primaryRow)} role="switch" aria-checked={hasBook}
+                          title={hasBook ? "Mark as returned" : "Mark book as given out"}
+                          style={{ position: "relative", width: 40, height: 22, borderRadius: 11,
+                            background: hasBook ? colour : "var(--border)",
+                            cursor: "pointer", transition: "background 0.2s", flexShrink: 0 }}>
+                          <span style={{ position: "absolute", top: 3, left: hasBook ? 20 : 3, width: 16, height: 16,
+                            borderRadius: "50%", background: "#fff", transition: "left 0.2s",
+                            boxShadow: "0 1px 3px rgba(0,0,0,.25)" }} />
+                        </div>
+                      </div>
+                      <button onClick={() => toggleNameHidden(primaryRow)}
+                        style={{ fontSize: 11, fontWeight: 600, background: "none", border: "none", cursor: "pointer",
+                          color: isHidden ? colour : "var(--text-dim)", textDecoration: "underline", padding: 0 }}>
+                        {isHidden ? "Name hidden — show" : "Hide name"}
+                      </button>
+                    </div>
+                  )}
                   {!isOwnBooking && (
                     <div style={{ textAlign: "center", marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
                       <button onClick={() => setCancelTarget({ id: allIds[0], _allIds: allIds, members: member })}
@@ -535,6 +573,35 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
           </div>
         )
       })()}
+
+      {/* Book Club: cancelled attendees whose book is still out — cancelling attendance
+          doesn't return the physical book, so these stay visible until an EC/admin clears them. */}
+      {isBook && (data?.cancelled_book_out?.length > 0) && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--amber-dark)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+            Book Not Returned — Cancelled Attendee{data.cancelled_book_out.length > 1 ? "s" : ""}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {data.cancelled_book_out.map(b => {
+              const bname = b.members?.hide_name || b.name_hidden ? "Resident" : (b.members?.name || b.members?.username || "—")
+              return (
+                <div key={b.id} style={{ background: "var(--surface2)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--amber)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <div>
+                      <span style={{ fontWeight: 600, fontSize: 14 }}>{bname}</span>
+                      <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 6 }}>· Cancelled, book still out</span>
+                    </div>
+                    <button onClick={() => toggleHasBook(b)}
+                      style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 8, border: `1px solid ${colour}`, background: "none", color: colour, cursor: "pointer", whiteSpace: "nowrap" }}>
+                      Mark Returned
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Refunds Pending — cancelled bookings that were paid, need refund */}
       {paymentRequired && refundPending.length > 0 && (
@@ -718,23 +785,33 @@ function BookingSection({ event, onRefresh }) {
 
       {!myConfirmed && !myWaitlist && (
         <div>
-          {!isBookclubEvent && availableSeats > 0 && (
+          {isBookclubEvent && event.book_conflict_title ? (
+            <div style={{ background: "var(--danger)10", border: "1px solid var(--danger)", borderRadius: 10,
+              padding: "12px 14px", fontSize: 13, color: "var(--danger)", lineHeight: 1.5 }}>
+              You still have <strong>"{event.book_conflict_title}"</strong> checked out — return it to your Event
+              Coordinator before joining a different book.
+            </div>
+          ) : (
             <>
-              <SeatSelector value={seats} min={1} max={maxPerBooking} onChange={setSeats} />
-              {isMovieEvent && maxPerBooking > 1 && (
-                <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Max {maxPerBooking} seats per booking</div>
+              {!isBookclubEvent && availableSeats > 0 && (
+                <>
+                  <SeatSelector value={seats} min={1} max={maxPerBooking} onChange={setSeats} />
+                  {isMovieEvent && maxPerBooking > 1 && (
+                    <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Max {maxPerBooking} seats per booking</div>
+                  )}
+                </>
+              )}
+              <button onClick={() => handleBook()} disabled={loading}
+                style={{ width: "100%", padding: "14px 0", background: "var(--amber)", color: "#fff", border: "none",
+                  borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
+                {loading ? "Booking…" : isBookclubEvent ? "Sign Up" : availableSeats === 0 ? "Join Waitlist" : "Book Now"}
+              </button>
+              {event.payment_required && (
+                <div style={{ fontSize: 12, color: "var(--text-dim)", textAlign: "center", marginTop: 8 }}>
+                  {event.cost ? `$${parseFloat(event.cost).toFixed(2)} per seat — ` : ""}Payment is collected by your Event Coordinator.
+                </div>
               )}
             </>
-          )}
-          <button onClick={() => handleBook()} disabled={loading}
-            style={{ width: "100%", padding: "14px 0", background: "var(--amber)", color: "#fff", border: "none",
-              borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
-            {loading ? "Booking…" : isBookclubEvent ? "Sign Up" : availableSeats === 0 ? "Join Waitlist" : "Book Now"}
-          </button>
-          {event.payment_required && (
-            <div style={{ fontSize: 12, color: "var(--text-dim)", textAlign: "center", marginTop: 8 }}>
-              {event.cost ? `$${parseFloat(event.cost).toFixed(2)} per seat — ` : ""}Payment is collected by your Event Coordinator.
-            </div>
           )}
         </div>
       )}
@@ -942,6 +1019,14 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
                     {event.movie.runtime && <span style={{ fontSize: 12, color: "var(--text-dim)" }}>⏱ {event.movie.runtime}</span>}
                   </div>
                   {event.movie.plot && <p style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6, margin: 0 }}>{event.movie.plot}</p>}
+                </div>
+              )}
+
+              {/* Book Club: member has the physical kit checked out */}
+              {event.hub_type === "bookclub" && event.my_bookings?.find(b => b.status === "confirmed")?.has_book && (
+                <div style={{ background: "var(--purple)15", border: "1px solid var(--purple)", borderRadius: 10,
+                  padding: "10px 12px", marginBottom: 14, fontSize: 13, fontWeight: 600, color: "var(--purple)" }}>
+                  📖 You have the book{event.book_return_date ? ` — return by ${fmtDate(event.book_return_date)}` : ""}
                 </div>
               )}
 

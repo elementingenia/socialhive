@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MembersIcon, MoviesIcon, BarIcon, ToolsIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MembersIcon, MoviesIcon, BarIcon, ToolsIcon, BookClubIcon } from '@/components/NavIcons'
 import RichEditor, { bbToHtml } from '@/components/RichEditor'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -18,6 +18,7 @@ const SECTIONS = [
   { key: 'PageTexts', label: 'Page Texts', Icon: PageTextsIcon },
   { key: 'Members',   label: 'Members',    Icon: MembersIcon },
   { key: 'Movies',    label: 'Movies',     Icon: MoviesIcon },
+  { key: 'BookClub',  label: 'Book Club',  Icon: BookClubIcon },
   { key: 'Bar',       label: 'Bar',        Icon: BarIcon },
   { key: 'Tools',     label: 'Tools',      Icon: ToolsIcon },
 ]
@@ -332,6 +333,81 @@ function BarProductsTab() {
 
 
 // ── BAR TAB (sub-tabs wrapper) ────────────────────────────────────────────────
+// ── BOOK CLUB TAB — Outstanding Books ──────────────────────────────────────────
+// Cross-event view of every physical kit copy currently checked out. Independent
+// of any single event, since "who has a kit copy out" is a standing question,
+// not something tied to one meeting.
+function BookClubTab() {
+  const [rows,    setRows]    = useState([])
+  const [loading, setLoading] = useState(true)
+  const [clearing, setClearing] = useState(null)
+
+  async function load() {
+    setLoading(true)
+    const { data } = await supabase
+      .from('bookings')
+      .select('id, status, has_book, book_given_at, name_hidden, members(name, username, hide_name), events(id, title, book_id, book_snapshot, books(title))')
+      .eq('has_book', true)
+      .order('book_given_at', { ascending: true })
+    setRows(data || [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function markReturned(id) {
+    setClearing(id)
+    await supabase.from('bookings').update({ has_book: false }).eq('id', id)
+    setClearing(null)
+    load()
+  }
+
+  function daysOut(givenAt) {
+    if (!givenAt) return null
+    const days = Math.floor((Date.now() - new Date(givenAt).getTime()) / 86400000)
+    if (days <= 0) return 'Given today'
+    return `${days} day${days !== 1 ? 's' : ''} out`
+  }
+
+  if (loading) return <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)' }}>Loading…</div>
+
+  return (
+    <div>
+      <div style={{ fontSize:'0.78rem', fontWeight:700, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.85rem' }}>
+        Outstanding Books {rows.length > 0 && `(${rows.length})`}
+      </div>
+      {rows.length === 0 ? (
+        <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)', fontSize:'0.9rem' }}>No kit copies currently checked out</div>
+      ) : (
+        <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+          {rows.map(r => {
+            const name = (r.members?.hide_name || r.name_hidden) ? 'Resident' : (r.members?.name || r.members?.username || '—')
+            const bookTitle = r.events?.books?.title || r.events?.book_snapshot?.title || r.events?.title || 'Unknown book'
+            return (
+              <div key={r.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.75rem',
+                background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.7rem 0.9rem' }}>
+                <div style={{ minWidth:0, flex:1 }}>
+                  <div style={{ fontWeight:700, fontSize:'0.88rem' }}>
+                    {name}
+                    {r.status === 'cancelled' && <span style={{ color:'var(--danger)', fontWeight:600, fontSize:'0.72rem' }}> · Cancelled</span>}
+                  </div>
+                  <div style={{ fontSize:'0.78rem', color:'var(--text-dim)', marginTop:'0.15rem' }}>{bookTitle}</div>
+                  <div style={{ fontSize:'0.72rem', color:'var(--purple)', fontWeight:600, marginTop:'0.2rem' }}>{daysOut(r.book_given_at)}</div>
+                </div>
+                <button onClick={() => markReturned(r.id)} disabled={clearing === r.id}
+                  style={{ fontSize:'0.78rem', fontWeight:700, padding:'0.4rem 0.8rem', borderRadius:'8px', border:'1px solid var(--purple)',
+                    background:'none', color:'var(--purple)', cursor: clearing === r.id ? 'not-allowed' : 'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
+                  {clearing === r.id ? 'Saving…' : 'Mark Returned'}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function BarTab() {
   const [sub, setSub] = useState('Products')
   return (
@@ -1545,6 +1621,7 @@ export default function AdminPage() {
         {tab === 'PageTexts' && <PageTextsTab />}
         {tab === 'Members'   && <MembersTab />}
         {tab === 'Movies'    && <MoviesTab />}
+        {tab === 'BookClub'  && <BookClubTab />}
         {tab === 'Bar'       && <BarTab />}
         {tab === 'Tools'     && <ToolsTab />}
       </div>
