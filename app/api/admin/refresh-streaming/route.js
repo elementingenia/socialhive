@@ -74,6 +74,7 @@ export async function GET(req) {
     .from('movies')
     .select('id, title, year, tmdb_id, imdb_id, rating')
     .eq('we_own', false)
+    .eq('is_viewing_suggestion', true)
     .or(`streaming_checked_at.is.null,streaming_checked_at.lt.${cutoff}`)
     .order('streaming_checked_at', { ascending: true, nullsFirst: true })
     .limit(limit)

@@ -132,7 +132,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [open, setOpen]               = useState(false)
 
   useEffect(() => {
-    supabase.from('movies').select('id, title, poster_url, year').eq('we_own', false).order('title')
+    supabase.from('movies').select('id, title, poster_url, year').eq('we_own', false).eq('is_viewing_suggestion', true).order('title')
       .then(({ data }) => setMovies(data || []))
     if (event?.movie_id) {
       supabase.from('movies').select('id, title, poster_url, year').eq('id', event.movie_id).single()

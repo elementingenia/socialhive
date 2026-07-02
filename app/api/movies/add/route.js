@@ -44,13 +44,21 @@ export async function POST(req) {
 
   if (!title) return NextResponse.json({ error: 'Title required' }, { status: 400 })
 
-  // Block if already a viewing suggestion (we_own=false)
-  let existingQuery = supabaseAdmin.from('movies').select('id').eq('we_own', false)
+  // Look up any existing we_own=false row for this movie (by tmdb_id, or
+  // title if no tmdb_id supplied). This row may be a genuine prior suggestion,
+  // OR an "ownership-only" row created via Admin > Movies > Ownership (a
+  // resident's personal DVD/digital copy recorded so it can price as Free —
+  // those are deliberately NOT suggestions and don't appear in the Suggested
+  // list, see is_viewing_suggestion). Both cases share the same tmdb_id/title
+  // match, so we branch on is_viewing_suggestion rather than presence alone.
+  let existingQuery = supabaseAdmin.from('movies').select('id, is_viewing_suggestion').eq('we_own', false)
   existingQuery = tmdb_id
     ? existingQuery.eq('tmdb_id', tmdb_id.toString())
     : existingQuery.ilike('title', title)
   const { data: existing } = await existingQuery.maybeSingle()
-  if (existing) return NextResponse.json({ error: `"${title}" has already been suggested` }, { status: 409 })
+  if (existing?.is_viewing_suggestion) {
+    return NextResponse.json({ error: `"${title}" has already been suggested` }, { status: 409 })
+  }
 
   // Block if this is a DVD we already own — user should suggest from the DVD Library instead
   if (tmdb_id) {
@@ -76,21 +84,37 @@ export async function POST(req) {
     // leave both null — treated as "not checked yet" by computeFreeCost
   }
 
+  const enrichedFields = {
+    tmdb_id: tmdb_id?.toString() || null,
+    imdb_id: imdb_id || null,
+    title, year, genre, plot, poster_url, runtime, director, actors,
+    rating_imdb: rating_imdb || null,
+    rating_rt,
+    rating: maturityRating,
+    is_viewing_suggestion: true,
+    suggested_by: member.id,
+    streaming_offers,
+    streaming_checked_at,
+  }
+
+  // Promote an existing ownership-only row rather than inserting a duplicate
+  // movie for the same title — this keeps the ownership record (movie_ownership
+  // is keyed to this row's id) correctly linked once it becomes a real
+  // suggestion, and gives it the same full IMDB/TMDB/OMDB enrichment a normal
+  // suggestion gets rather than whatever the simpler Ownership add flow captured.
+  if (existing) {
+    const { data: movie, error } = await supabaseAdmin
+      .from('movies')
+      .update(enrichedFields)
+      .eq('id', existing.id)
+      .select().single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(movie)
+  }
+
   const { data: movie, error } = await supabaseAdmin
     .from('movies')
-    .insert({
-      tmdb_id: tmdb_id?.toString() || null,
-      imdb_id: imdb_id || null,
-      title, year, genre, plot, poster_url, runtime, director, actors,
-      rating_imdb: rating_imdb || null,
-      rating_rt,
-      rating: maturityRating,
-      we_own: false,
-      is_viewing_suggestion: true,
-      suggested_by: member.id,
-      streaming_offers,
-      streaming_checked_at,
-    })
+    .insert({ ...enrichedFields, we_own: false })
     .select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

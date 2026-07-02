@@ -580,7 +580,7 @@ export default function LibraryPage() {
     // Movies with only past events (not also scheduled for the future) go to screened bucket
     const pastMovieIds = new Set((pastEventsData||[]).map(e => e.movie_id))
     const onlyScreenedIds = new Set([...pastMovieIds].filter(id => !scheduledMovieIds.has(id)))
-    const allVisible = (moviesData||[]).filter(m => !m.we_own || m.is_viewing_suggestion || scheduledMovieIds.has(m.id) || onlyScreenedIds.has(m.id))
+    const allVisible = (moviesData||[]).filter(m => m.is_viewing_suggestion || scheduledMovieIds.has(m.id) || onlyScreenedIds.has(m.id))
     setMovies(allVisible.filter(m => !onlyScreenedIds.has(m.id)))
     setScreenedMovies(allVisible.filter(m => onlyScreenedIds.has(m.id)))
     setVotes(votesData||[])

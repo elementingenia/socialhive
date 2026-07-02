@@ -557,6 +557,7 @@ export default function MoviesHomePage() {
       supabase.from('movies')
         .select('id, title, poster_url, genre, year, runtime, rating')
         .eq('we_own', false)
+        .eq('is_viewing_suggestion', true)
         .order('added_at', { ascending: false })
         .limit(50),
 

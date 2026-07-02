@@ -838,7 +838,7 @@ function SuggestedMoviesView() {
   useEffect(() => {
     async function load() {
       const [movRes, dvdRes, settRes, ownRes] = await Promise.all([
-        supabase.from('movies').select('id, title, year, poster_url, tmdb_id, imdb_id, streaming_offers, streaming_checked_at, actors').eq('we_own', false).order('title'),
+        supabase.from('movies').select('id, title, year, poster_url, tmdb_id, imdb_id, streaming_offers, streaming_checked_at, actors').eq('we_own', false).eq('is_viewing_suggestion', true).order('title'),
         supabase.from('movies').select('tmdb_id, imdb_id').eq('we_own', true),
         supabase.from('settings').select('value').eq('key', 'our_streaming_services').single(),
         supabase.from('movie_ownership').select('movie_id, ownership_type, members(name)'),
@@ -960,7 +960,7 @@ function PrivateOwnershipTab({ addToast }) {
         runtime: details.runtime || null, director: details.director || null,
         actors: details.actors || null, rating_imdb: details.rating_imdb || null,
         rating_rt: details.rating_rt || null, rating: details.rating || null,
-        we_own: false,
+        we_own: false, is_viewing_suggestion: false,
       }).select('id').single()
       if (insErr) { addToast('Could not add movie: ' + insErr.message, 'error'); setAdding(false); return }
       movieId = newMov.id
@@ -1113,7 +1113,7 @@ function StreamingServicesTab({ addToast }) {
     setRefreshFound(0)
     setRefreshResults([])
 
-    const { count } = await supabase.from('movies').select('id', { count: 'exact', head: true }).eq('we_own', false)
+    const { count } = await supabase.from('movies').select('id', { count: 'exact', head: true }).eq('we_own', false).eq('is_viewing_suggestion', true)
     setRefreshTotal(count || 0)
 
     // Match against the actual subscribed-services list, same fuzzy logic
