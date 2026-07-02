@@ -5,6 +5,7 @@ import { BusIcon, CalendarIcon } from "@/components/NavIcons"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
+import ExpandableText from "@/components/ExpandableText"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -794,42 +795,6 @@ function BookingSection({ event, onRefresh }) {
 
 // ── Login Prompt (for public calendar) ───────────────────────────────────────
 // ── Expandable text (book summary — cap at N lines) ──────────────────────────
-function ExpandableText({ text, lineHeight = 1.6, fontSize = 13, maxLines = 10 }) {
-  const [expanded, setExpanded] = useState(false)
-  if (!text) return null
-  const maxH = maxLines * lineHeight * fontSize
-  return (
-    <div style={{ position: "relative" }}>
-      <p style={{
-        fontSize, color: "var(--text-dim)", lineHeight, margin: 0,
-        maxHeight: expanded ? "none" : maxH,
-        overflow: "hidden",
-        transition: "max-height 0.3s ease",
-      }}>{text}</p>
-      {!expanded && (
-        <div style={{
-          position: "absolute", bottom: 0, left: 0, right: 0,
-          height: 48, background: "linear-gradient(transparent, var(--surface))",
-          display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 4,
-        }}>
-          <button onClick={() => setExpanded(true)}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700,
-              color: "var(--purple)", textDecoration: "underline", fontFamily: "inherit" }}>
-            Read more ▾
-          </button>
-        </div>
-      )}
-      {expanded && (
-        <button onClick={() => setExpanded(false)}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700,
-            color: "var(--purple)", textDecoration: "underline", fontFamily: "inherit", marginTop: 4, display: "block" }}>
-          Show less ▴
-        </button>
-      )}
-    </div>
-  )
-}
-
 function LoginPrompt() {
   return (
     <div style={{ background: "var(--amber-light)", borderRadius: 12, padding: 20, textAlign: "center", border: "1px solid var(--amber)" }}>

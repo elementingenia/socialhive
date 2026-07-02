@@ -6,6 +6,7 @@ import EventSlideOut from "@/components/EventSlideOut"
 import { BusIcon } from "@/components/NavIcons"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import EventImagePicker from "@/components/EventImagePicker"
+import ExpandableText from "@/components/ExpandableText"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -900,10 +901,16 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
 
         {/* Description */}
         {event.description && (
-          <div style={{
-            fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.5, marginBottom: "0.5rem",
-            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
-          }}>{event.description}</div>
+          <div style={{ marginBottom: "0.5rem" }}>
+            <ExpandableText
+              text={bbToHtml(event.description)}
+              html
+              fontSize={13}
+              lineHeight={1.5}
+              maxLines={4}
+              colour="var(--terracotta)"
+            />
+          </div>
         )}
 
         <CapacityBar booked={booked} max={event.max_seats} waitlist={waiting} />
