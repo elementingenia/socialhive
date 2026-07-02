@@ -17,6 +17,15 @@ module.exports = defineConfig({
     viewport: { width: 390, height: 844 },
   },
 
+  // Boots the app before tests run (unless BASE_URL points at an already-running
+  // target, e.g. a Vercel preview deployment — in that case skip this entirely).
+  webServer: process.env.BASE_URL ? undefined : {
+    command: 'npm run start',
+    url: 'http://localhost:3000',
+    reuseExistingServer: !process.env.CI,
+    timeout: 60_000,
+  },
+
   projects: [
     { name: 'setup', testMatch: '**/auth.setup.js' },
     {
