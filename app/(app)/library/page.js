@@ -396,20 +396,33 @@ function SuggestSheet({ session, onClose, onAdded, addToast, maxHeight }) {
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
   // Results only ever show after an explicit Search tap — no live-as-you-type
-  // search. Keeps the sheet down to just the input field until the user asks
-  // for results, since vertical space here is scarce (space is a premium).
-  // Tapping back into the field collapses to that minimal view again; the
-  // last results stay cached (searchedQuery) so re-pressing Search on an
-  // unchanged query just re-shows them instead of re-fetching.
+  // search. Sheet starts minimal (just the field) since vertical space here
+  // is scarce. Once a search has run, the results stay visible from then on
+  // — editing the field and searching again just updates them in place; we
+  // don't collapse back to the minimal view on refocus anymore. That was
+  // the previous approach and caused a real bug: collapsing the sheet's
+  // height synchronously inside the focus handler, mid-tap, could shift the
+  // layout enough that the tap's own click event landed on the backdrop
+  // behind the now-shrunken sheet instead of the input — closing the whole
+  // modal. Letting the native keyboard do the show/hide work instead (blur
+  // on search, focus on tap) avoids that resize-during-gesture race
+  // entirely: the sheet's own height only ever changes in response to the
+  // visualViewport resize that the keyboard itself causes, never inside a
+  // click/focus handler.
   const [resultsVisible, setResultsVisible] = useState(false)
   const [searchedQuery, setSearchedQuery] = useState(null)
   const [preview, setPreview] = useState(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [saving, setSaving] = useState(false)
+  const searchInputRef = React.useRef(null)
 
   async function runSearch() {
     const q = query.trim()
     if (q.length < 3) return
+    // Drop the keyboard natively once a search runs — reveals the full
+    // results view using the space the keyboard just gave back, matching
+    // every other native search screen.
+    searchInputRef.current?.blur()
     if (q === searchedQuery) { setResultsVisible(true); return }
     setSearching(true)
     try {
@@ -470,10 +483,10 @@ function SuggestSheet({ session, onClose, onAdded, addToast, maxHeight }) {
           <>
             <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
               <input
+                ref={searchInputRef}
                 placeholder="Search by title…"
                 value={query}
                 onChange={e => setQuery(e.target.value)}
-                onFocus={() => setResultsVisible(false)}
                 onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runSearch() } }}
                 autoFocus
                 style={{ flex: 1, minWidth: 0, padding: '0.7rem 0.9rem', border: '1.5px solid var(--border)', borderRadius: '12px', fontSize: '1rem', background: 'var(--surface2)', fontFamily: 'inherit', boxSizing: 'border-box' }}
