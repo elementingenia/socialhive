@@ -257,18 +257,30 @@ function SuggestOverlay({ children, onClose }) {
     return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update) }
   }, [])
 
+  // BottomNav sits fixed at the bottom of the app (60px) and the backdrop
+  // reserves that much space below the sheet so it doesn't collide with it.
+  // But once the keyboard is open, BottomNav is already covered by the OS
+  // keyboard — that reserved 60px is then dead space taken from the sheet
+  // for a nav bar the user can't see or reach anyway. window.innerHeight is
+  // the stable layout-viewport height (doesn't shrink for the keyboard);
+  // visualViewport.height does — so a real gap between them is a reliable
+  // "keyboard is up" signal, not a guess.
+  const fullHeight = typeof window !== 'undefined' ? window.innerHeight : vp.height
+  const keyboardOpen = fullHeight - vp.height > 100
+  const bottomPad = keyboardOpen ? 12 : 60
+
   // Concrete pixel cap for the sheet's own content, derived from the same
   // visualViewport measurement as the container above — not a vh/dvh guess.
   // Passed down so the sheet clamps to whatever space is actually visible
   // (keyboard up or not) instead of forcing a fixed vh floor that can be
   // taller than the real available space when the keyboard is open.
-  const contentMaxHeight = Math.max(240, vp.height - 60)
+  const contentMaxHeight = Math.max(240, vp.height - bottomPad)
   const child = React.isValidElement(children)
     ? React.cloneElement(children, { maxHeight: contentMaxHeight })
     : children
 
   return (
-    <div onClick={onClose} style={{ position:'fixed', top:vp.top, left:0, right:0, height:vp.height, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center', paddingBottom:'60px' }}>
+    <div onClick={onClose} style={{ position:'fixed', top:vp.top, left:0, right:0, height:vp.height, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center', paddingBottom:`${bottomPad}px` }}>
       <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640 }}>{child}</div>
     </div>
   )
@@ -383,22 +395,31 @@ function SuggestSheet({ session, onClose, onAdded, addToast, maxHeight }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
+  // Results only ever show after an explicit Search tap — no live-as-you-type
+  // search. Keeps the sheet down to just the input field until the user asks
+  // for results, since vertical space here is scarce (space is a premium).
+  // Tapping back into the field collapses to that minimal view again; the
+  // last results stay cached (searchedQuery) so re-pressing Search on an
+  // unchanged query just re-shows them instead of re-fetching.
+  const [resultsVisible, setResultsVisible] = useState(false)
+  const [searchedQuery, setSearchedQuery] = useState(null)
   const [preview, setPreview] = useState(null)
   const [loadingPreview, setLoadingPreview] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  React.useEffect(() => {
-    if (query.trim().length < 3) { setResults([]); return }
+  async function runSearch() {
+    const q = query.trim()
+    if (q.length < 3) return
+    if (q === searchedQuery) { setResultsVisible(true); return }
     setSearching(true)
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(query.trim())}`)
-        setResults(await res.json() || [])
-      } catch { setResults([]) }
-      setSearching(false)
-    }, 400)
-    return () => clearTimeout(timer)
-  }, [query])
+    try {
+      const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(q)}`)
+      setResults(await res.json() || [])
+    } catch { setResults([]) }
+    setSearching(false)
+    setSearchedQuery(q)
+    setResultsVisible(true)
+  }
 
   async function pickMovie(tmdbId) {
     setLoadingPreview(true)
@@ -447,23 +468,30 @@ function SuggestSheet({ session, onClose, onAdded, addToast, maxHeight }) {
         {/* Search state */}
         {!preview && (
           <>
-            <div style={{ position: 'relative', marginBottom: '0.75rem' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
               <input
                 placeholder="Search by title…"
                 value={query}
                 onChange={e => setQuery(e.target.value)}
+                onFocus={() => setResultsVisible(false)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); runSearch() } }}
                 autoFocus
-                style={{ width: '100%', padding: '0.7rem 2.4rem 0.7rem 0.9rem', border: '1.5px solid var(--border)', borderRadius: '12px', fontSize: '1rem', background: 'var(--surface2)', fontFamily: 'inherit', boxSizing: 'border-box' }}
+                style={{ flex: 1, minWidth: 0, padding: '0.7rem 0.9rem', border: '1.5px solid var(--border)', borderRadius: '12px', fontSize: '1rem', background: 'var(--surface2)', fontFamily: 'inherit', boxSizing: 'border-box' }}
               />
-              {searching ? (
-                <div style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, border: '2px solid var(--teal)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
-              ) : (
-                <span style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)', fontSize: '1rem' }}>🔍</span>
-              )}
+              <button onClick={runSearch} disabled={query.trim().length < 3 || searching}
+                style={{ flexShrink: 0, padding: '0 1.1rem', background: 'var(--teal)', color: '#fff', border: 'none', borderRadius: '12px', fontSize: '0.9rem', fontWeight: 700, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: (query.trim().length < 3 || searching) ? 'not-allowed' : 'pointer', opacity: (query.trim().length < 3 || searching) ? 0.5 : 1 }}>
+                {searching
+                  ? <span style={{ width: 14, height: 14, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
+                  : <>🔍 Search</>}
+              </button>
             </div>
 
-            {query.length > 0 && query.length < 3 && (
-              <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', textAlign: 'center', padding: '1rem 0' }}>Keep typing…</div>
+            {!resultsVisible && query.trim().length > 0 && query.trim().length < 3 && (
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', textAlign: 'center', padding: '1rem 0' }}>Enter at least 3 characters…</div>
+            )}
+
+            {!resultsVisible && query.trim().length >= 3 && !searching && (
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', textAlign: 'center', padding: '1rem 0' }}>Tap Search to find "{query.trim()}"</div>
             )}
 
             {loadingPreview && (
@@ -472,24 +500,28 @@ function SuggestSheet({ session, onClose, onAdded, addToast, maxHeight }) {
               </div>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              {results.map(r => (
-                <div key={r.tmdb_id} onClick={() => pickMovie(r.tmdb_id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '0.6rem 0.75rem', background: 'var(--surface2)', borderRadius: '12px', cursor: 'pointer', border: '1px solid var(--border)' }}>
-                  {r.poster_url
-                    ? <img src={r.poster_url} alt="" style={{ width: 42, height: 63, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />
-                    : <div style={{ width: 42, height: 63, background: 'var(--border)', borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🎬</div>}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.2 }}>{r.title}</div>
-                    {r.year && <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginTop: '0.15rem' }}>{r.year}</div>}
-                  </div>
-                  <span style={{ color: 'var(--teal)', fontSize: '1rem', flexShrink: 0 }}>›</span>
+            {resultsVisible && (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {results.map(r => (
+                    <div key={r.tmdb_id} onClick={() => pickMovie(r.tmdb_id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '0.6rem 0.75rem', background: 'var(--surface2)', borderRadius: '12px', cursor: 'pointer', border: '1px solid var(--border)' }}>
+                      {r.poster_url
+                        ? <img src={r.poster_url} alt="" style={{ width: 42, height: 63, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />
+                        : <div style={{ width: 42, height: 63, background: 'var(--border)', borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🎬</div>}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.2 }}>{r.title}</div>
+                        {r.year && <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginTop: '0.15rem' }}>{r.year}</div>}
+                      </div>
+                      <span style={{ color: 'var(--teal)', fontSize: '1rem', flexShrink: 0 }}>›</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
 
-            {results.length === 0 && query.length >= 3 && !searching && (
-              <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2rem 0', fontSize: '0.88rem' }}>No results for "{query}"</div>
+                {results.length === 0 && !searching && (
+                  <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2rem 0', fontSize: '0.88rem' }}>No results for "{searchedQuery}"</div>
+                )}
+              </>
             )}
           </>
         )}
