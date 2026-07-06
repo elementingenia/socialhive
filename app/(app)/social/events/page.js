@@ -139,7 +139,10 @@ function MemberPicker({ members = [], value, onChange, placeholder = "Select mem
 
   return (
     <div ref={containerRef} style={{ position: "relative" }}>
-      <div onClick={() => { setOpen(o => !o); setQuery("") }} style={{
+      <div onClick={() => { setOpen(o => !o); setQuery("") }}
+        role="button" tabIndex={0} aria-haspopup="listbox" aria-expanded={open}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); setQuery("") } }}
+        style={{
         ...INPUT, display: "flex", alignItems: "center", justifyContent: "space-between",
         cursor: "pointer", borderColor: open ? "var(--terracotta)" : "var(--border)",
       }}>
@@ -247,7 +250,10 @@ function ECPicker({ members = [], value, onChange, valid }) {
 
       {value.length < 3 && (
         <div style={{ position: "relative" }}>
-          <div onClick={() => { setOpen(o => !o); setQuery("") }} style={{
+          <div onClick={() => { setOpen(o => !o); setQuery("") }}
+            role="button" tabIndex={0} aria-haspopup="listbox" aria-expanded={open}
+            onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); setQuery("") } }}
+            style={{
             ...INPUT, display: "flex", alignItems: "center", justifyContent: "space-between",
             cursor: "pointer", border: `1.5px solid ${triggerBorder}`,
           }}>

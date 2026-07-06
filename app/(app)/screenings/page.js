@@ -83,6 +83,8 @@ function CoordPicker({ members, value, onChange }) {
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
       <div onClick={() => { setOpen(o => !o); setQuery('') }}
+        role="button" tabIndex={0} aria-haspopup="listbox" aria-expanded={open}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => !o); setQuery('') } }}
         style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: 10, border: `1.5px solid ${open ? 'var(--teal)' : 'var(--border)'}`, background: 'var(--surface)', color: chosen ? 'var(--text)' : 'var(--text-dim)', fontSize: '0.95rem', boxSizing: 'border-box', fontFamily: 'inherit', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>{chosen ? (chosen.name || chosen.username) : '— Select coordinator —'}</span>
         <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>▾</span>

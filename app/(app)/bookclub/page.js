@@ -406,6 +406,8 @@ function CoordPicker({ members, value, onChange, valid = false }) {
     <div ref={containerRef} style={{ position: "relative" }}>
       <div
         onClick={() => { setOpen(o => !o); setQuery("") }}
+        role="button" tabIndex={0} aria-haspopup="listbox" aria-expanded={open}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); setQuery("") } }}
         style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: 10,
           border: `1.5px solid ${borderCol}`, background: "var(--surface)",
           color: chosen ? "var(--text)" : "var(--text-dim)", fontSize: "0.95rem",
