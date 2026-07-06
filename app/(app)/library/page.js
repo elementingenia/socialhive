@@ -206,16 +206,29 @@ function Overlay({ children, onClose }) {
 }
 
 function SuggestOverlay({ children, onClose }) {
-  const [bottomOffset, setBottomOffset] = React.useState(0)
+  // Previous approach computed a marginBottom "correction" from
+  // window.innerHeight vs visualViewport.height/offsetTop. That's fragile —
+  // on iPhone Safari, with the search input autofocused (keyboard opens the
+  // instant this sheet mounts), the correction came out far too large and
+  // pushed the whole sheet off the top of the screen instead of just above
+  // the keyboard, confirmed live (screenshots + Iain: "its the keyboard
+  // pushing the modal UP").
+  //
+  // Fixed properly this time: instead of nudging the child sheet by a
+  // computed delta, make the CONTAINER itself exactly match the currently
+  // visible region by reading visualViewport.offsetTop/height directly and
+  // applying them as this div's own top/height. No arithmetic to get wrong —
+  // whatever iOS reports as "currently visible" is exactly what this
+  // container occupies, every time, and the sheet (pinned to its bottom via
+  // alignItems:'flex-end') naturally lands just above the keyboard.
+  const [vp, setVp] = React.useState(() => ({
+    top: 0,
+    height: typeof window !== 'undefined' ? window.innerHeight : 0,
+  }))
 
-  // Lock body scroll while this sheet (with an autofocused search input) is
-  // open. Without this, iOS's own "scroll the page to reveal the focused
-  // input above the keyboard" behaviour fights with our marginBottom
-  // compensation below — the sheet ends up "bleeding" far off the top of the
-  // screen instead of sitting just above the keyboard. Locking scroll means
-  // there's nothing for iOS to auto-scroll, so the only thing that changes on
-  // focus is the visualViewport shrinking by the keyboard height, which the
-  // compensation below already handles correctly.
+  // Lock body scroll while open — removes the scrollable ancestor iOS would
+  // otherwise try to auto-scroll to reveal the focused input, which is a
+  // second, independent source of the same "sheet jumps around" problem.
   React.useEffect(() => {
     const scrollY = window.scrollY
     const { style } = document.body
@@ -232,15 +245,21 @@ function SuggestOverlay({ children, onClose }) {
   }, [])
 
   React.useEffect(() => {
-    const vv = window.visualViewport; if (!vv) return
-    function update() { setBottomOffset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop)) }
+    const vv = window.visualViewport
+    function update() {
+      if (vv) setVp({ top: vv.offsetTop, height: vv.height })
+      else setVp({ top: 0, height: window.innerHeight })
+    }
     update()
-    vv.addEventListener('resize', update); vv.addEventListener('scroll', update)
+    if (!vv) return
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
     return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update) }
   }, [])
+
   return (
-    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center', paddingBottom:'60px' }}>
-      <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, marginBottom:bottomOffset, transition:'margin-bottom 0.18s ease' }}>{children}</div>
+    <div onClick={onClose} style={{ position:'fixed', top:vp.top, left:0, right:0, height:vp.height, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center', paddingBottom:'60px' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640 }}>{children}</div>
     </div>
   )
 }
