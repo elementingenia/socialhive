@@ -257,9 +257,19 @@ function SuggestOverlay({ children, onClose }) {
     return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update) }
   }, [])
 
+  // Concrete pixel cap for the sheet's own content, derived from the same
+  // visualViewport measurement as the container above — not a vh/dvh guess.
+  // Passed down so the sheet clamps to whatever space is actually visible
+  // (keyboard up or not) instead of forcing a fixed vh floor that can be
+  // taller than the real available space when the keyboard is open.
+  const contentMaxHeight = Math.max(240, vp.height - 60)
+  const child = React.isValidElement(children)
+    ? React.cloneElement(children, { maxHeight: contentMaxHeight })
+    : children
+
   return (
     <div onClick={onClose} style={{ position:'fixed', top:vp.top, left:0, right:0, height:vp.height, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center', paddingBottom:'60px' }}>
-      <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640 }}>{children}</div>
+      <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640 }}>{child}</div>
     </div>
   )
 }
@@ -369,7 +379,7 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
   )
 }
 
-function SuggestSheet({ session, onClose, onAdded, addToast }) {
+function SuggestSheet({ session, onClose, onAdded, addToast, maxHeight }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -422,7 +432,7 @@ function SuggestSheet({ session, onClose, onAdded, addToast }) {
   const leadActor = preview?.actors?.split(',')[0]?.trim()
 
   return (
-    <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', minHeight: '60vh', maxHeight: 'calc(90vh - 60px)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', minHeight: 0, maxHeight: maxHeight ? `${maxHeight}px` : 'calc(90vh - 60px)', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.25rem 0.75rem', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
         {preview ? (
