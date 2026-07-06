@@ -4,6 +4,7 @@ import { FormattedText } from '@/lib/textFormatter'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import EventSlideOut from '@/components/EventSlideOut'
+import VoteScoreGrid from '@/components/VoteScoreGrid'
 
 function parseGenres(g) {
   if (!g) return []
@@ -417,27 +418,8 @@ function RatingSwiper({ movies, memberId, onDone }) {
           <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem', textAlign: 'center' }}>
             How keen are you to watch this?
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '0.35rem', marginBottom: '0.5rem' }}>
-            {[1,2,3,4,5,6,7,8,9,10].map(score => (
-              <button key={score} onClick={() => submitRating(score)} disabled={submitting}
-                style={{
-                  padding: '0.5rem 0',
-                  borderRadius: '10px',
-                  border: '1.5px solid var(--border)',
-                  background: 'var(--surface)',
-                  color: 'var(--text)',
-                  fontSize: '0.9rem',
-                  fontWeight: 700,
-                  cursor: submitting ? 'not-allowed' : 'pointer',
-                  opacity: submitting ? 0.5 : 1,
-                }}>
-                {score}
-              </button>
-            ))}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: 'var(--text-dim)', paddingLeft: '0.1rem', paddingRight: '0.1rem', marginBottom: '0.6rem' }}>
-            <span>Not interested</span>
-            <span>Can't wait!</span>
+          <div style={{ marginBottom: '0.6rem' }}>
+            <VoteScoreGrid onVote={submitRating} disabled={submitting} accentColor="var(--teal)" />
           </div>
           <button onClick={skipOne}
             style={{ width: '100%', padding: '0.5rem', background: 'none', border: '1px solid var(--border)', borderRadius: '10px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-dim)', cursor: 'pointer' }}>

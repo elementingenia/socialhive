@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
+import VoteScoreGrid from "@/components/VoteScoreGrid"
 
 // ── Bulk swiper (unrated books) ────────────────────────────────────────────────
 function RatingSwiper({ books, memberId, onDone }) {
@@ -82,18 +83,8 @@ function RatingSwiper({ books, memberId, onDone }) {
           <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.5rem", textAlign: "center" }}>
             How interested are you in reading this?
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.35rem", marginBottom: "0.5rem" }}>
-            {[1,2,3,4,5,6,7,8,9,10].map(score => (
-              <button key={score} onClick={() => submitRating(score)} disabled={submitting}
-                style={{ padding: "0.5rem 0", borderRadius: 10, border: "1.5px solid var(--border)",
-                  background: "var(--surface)", color: "var(--text)", fontSize: "0.9rem", fontWeight: 700,
-                  cursor: submitting ? "not-allowed" : "pointer", opacity: submitting ? 0.5 : 1, fontFamily: "inherit" }}>
-                {score}
-              </button>
-            ))}
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: "var(--text-dim)", marginBottom: "0.35rem" }}>
-            <span>← Not interested (1)</span><span>(10) Can't wait! →</span>
+          <div style={{ marginBottom: "0.5rem" }}>
+            <VoteScoreGrid onVote={submitRating} disabled={submitting} accentColor="var(--purple)" />
           </div>
           <button onClick={skipOne}
             style={{ width: "100%", padding: "0.5rem", background: "none", border: "1px solid var(--border)", borderRadius: 10, fontSize: "0.8rem", fontWeight: 600, color: "var(--text-dim)", cursor: "pointer", fontFamily: "inherit" }}>
@@ -249,25 +240,7 @@ function BookCard({ book, myVote, memberId, onVote, isAdmin, onDelete }) {
           </div>
         )}
         {showGrid && (
-          <>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.68rem", color: "var(--text-dim)", marginBottom: "0.35rem" }}>
-              <span>← Not interested (1)</span><span>(10) Can't wait! →</span>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0.35rem" }}>
-              {[1,2,3,4,5,6,7,8,9,10].map(s => (
-                <button key={s} onClick={() => vote(s)} disabled={saving}
-                  style={{ padding: "0.5rem 0", borderRadius: 10,
-                    border: score === s ? "2px solid var(--purple)" : "1.5px solid var(--border)",
-                    background: score === s ? "var(--purple)" : "var(--surface)",
-                    color: score === s ? "#fff" : "var(--text)",
-                    fontSize: "0.9rem", fontWeight: 700,
-                    cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.5 : 1,
-                    fontFamily: "inherit" }}>
-                  {s}
-                </button>
-              ))}
-            </div>
-          </>
+          <VoteScoreGrid current={score} onVote={vote} disabled={saving} accentColor="var(--purple)" />
         )}
       </div>
     </div>
