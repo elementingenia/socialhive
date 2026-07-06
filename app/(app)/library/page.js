@@ -207,9 +207,34 @@ function Overlay({ children, onClose }) {
 
 function SuggestOverlay({ children, onClose }) {
   const [bottomOffset, setBottomOffset] = React.useState(0)
+
+  // Lock body scroll while this sheet (with an autofocused search input) is
+  // open. Without this, iOS's own "scroll the page to reveal the focused
+  // input above the keyboard" behaviour fights with our marginBottom
+  // compensation below — the sheet ends up "bleeding" far off the top of the
+  // screen instead of sitting just above the keyboard. Locking scroll means
+  // there's nothing for iOS to auto-scroll, so the only thing that changes on
+  // focus is the visualViewport shrinking by the keyboard height, which the
+  // compensation below already handles correctly.
+  React.useEffect(() => {
+    const scrollY = window.scrollY
+    const { style } = document.body
+    const prev = { position: style.position, top: style.top, width: style.width }
+    style.position = 'fixed'
+    style.top = `-${scrollY}px`
+    style.width = '100%'
+    return () => {
+      style.position = prev.position
+      style.top = prev.top
+      style.width = prev.width
+      window.scrollTo(0, scrollY)
+    }
+  }, [])
+
   React.useEffect(() => {
     const vv = window.visualViewport; if (!vv) return
     function update() { setBottomOffset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop)) }
+    update()
     vv.addEventListener('resize', update); vv.addEventListener('scroll', update)
     return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update) }
   }, [])
@@ -399,7 +424,7 @@ function SuggestSheet({ session, onClose, onAdded, addToast }) {
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 autoFocus
-                style={{ width: '100%', padding: '0.7rem 2.4rem 0.7rem 0.9rem', border: '1.5px solid var(--border)', borderRadius: '12px', fontSize: '0.95rem', background: 'var(--surface2)', fontFamily: 'inherit', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '0.7rem 2.4rem 0.7rem 0.9rem', border: '1.5px solid var(--border)', borderRadius: '12px', fontSize: '1rem', background: 'var(--surface2)', fontFamily: 'inherit', boxSizing: 'border-box' }}
               />
               {searching ? (
                 <div style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, border: '2px solid var(--teal)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }} />
@@ -652,7 +677,7 @@ export default function LibraryPage() {
         <div style={{ position:'relative', marginBottom:'1rem' }}>
           <span style={{ position:'absolute', left:'0.85rem', top:'50%', transform:'translateY(-50%)', color:'var(--text-dim)' }}>🔍</span>
           <input placeholder="Search movies…" value={search} onChange={e=>setSearch(e.target.value)}
-            style={{ width:'100%', padding:'0.7rem 0.85rem 0.7rem 2.4rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
+            style={{ width:'100%', padding:'0.7rem 0.85rem 0.7rem 2.4rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'1rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
         </div>
 
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.75rem' }}>

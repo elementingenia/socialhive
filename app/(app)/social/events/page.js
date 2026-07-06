@@ -12,7 +12,7 @@ import ExpandableText from "@/components/ExpandableText"
 const INPUT = {
   width: "100%", padding: "0.75rem 1rem", borderRadius: "10px",
   border: "1px solid var(--border)", background: "var(--surface)",
-  color: "var(--text)", fontSize: "0.95rem", boxSizing: "border-box",
+  color: "var(--text)", fontSize: "1rem", boxSizing: "border-box",
   fontFamily: "inherit", appearance: "none", WebkitAppearance: "none",
 }
 const LABEL = {

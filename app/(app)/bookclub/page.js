@@ -321,7 +321,7 @@ function BookPicker({ onSelect, initialBook }) {
         autoFocus
         onChange={e => setQuery(e.target.value)}
         style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: 10, border: "1px solid var(--purple)",
-          background: "var(--surface)", color: "var(--text)", fontSize: "0.95rem",
+          background: "var(--surface)", color: "var(--text)", fontSize: "1rem",
           boxSizing: "border-box", fontFamily: "inherit" }}
       />
       {allBooks.length === 0 && (
@@ -428,7 +428,7 @@ function CoordPicker({ members, value, onChange, valid = false }) {
               value={query}
               onChange={e => setQuery(e.target.value)}
               style={{ width: "100%", border: "none", background: "transparent",
-                color: "var(--text)", fontSize: "0.9rem", outline: "none", fontFamily: "inherit" }}
+                color: "var(--text)", fontSize: "1rem", outline: "none", fontFamily: "inherit" }}
             />
           </div>
           <div style={{ maxHeight: 220, overflowY: "auto" }}>
@@ -473,7 +473,7 @@ function CoordPicker({ members, value, onChange, valid = false }) {
 function AdminEventForm({ event, members, onSave, onClose }) {
   const inputStyle = { width: "100%", padding: "0.75rem 1rem", borderRadius: 10,
     border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)",
-    fontSize: "0.95rem", boxSizing: "border-box", fontFamily: "inherit" }
+    fontSize: "1rem", boxSizing: "border-box", fontFamily: "inherit" }
 
   const activeEC = event ? (event.event_coordinators || []).find(ec => !ec.replaced_at) : null
   const [form,   setForm]   = useState({
