@@ -169,7 +169,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     onSaved(); handleClose()
   }
 
-  const INPUT = { width: '100%', padding: '0.65rem 0.85rem', border: '1.5px solid var(--border)', borderRadius: '10px', fontSize: '1rem', background: 'var(--surface2)', boxSizing: 'border-box', fontFamily: 'inherit' }
+  const INPUT = { width: '100%', padding: '0.65rem 0.85rem', border: '1.5px solid var(--border)', borderRadius: '10px', fontSize: '1rem', background: 'var(--surface2)', boxSizing: 'border-box', fontFamily: 'inherit', appearance: 'none', WebkitAppearance: 'none' }
   const LABEL = { display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-dim)', marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '0.05em' }
 
   return (
