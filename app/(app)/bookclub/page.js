@@ -318,7 +318,6 @@ function BookPicker({ onSelect, initialBook }) {
         type="text"
         placeholder="Search community suggestions…"
         value={query}
-        autoFocus
         onChange={e => setQuery(e.target.value)}
         style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: 10, border: "1px solid var(--purple)",
           background: "var(--surface)", color: "var(--text)", fontSize: "1rem",
@@ -586,7 +585,7 @@ function AdminEventForm({ event, members, onSave, onClose }) {
 
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Meeting Date <span style={{ color: "var(--danger)" }}>*</span></label>
-        <input type="date" value={form.event_date} onChange={e => set("event_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
+        <input type="date" autoFocus value={form.event_date} onChange={e => set("event_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
           style={{ ...inputStyle, border: `1.5px solid ${form.event_date ? "var(--green)" : "var(--danger)"}` }} />
       </div>
 
