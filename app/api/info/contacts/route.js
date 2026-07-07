@@ -42,28 +42,59 @@ export async function POST(req) {
   return NextResponse.json(contact)
 }
 
-// PATCH — update contact + categories
+// PATCH — update a standalone contact (by id) OR a resident's contact-card
+// overrides (by member_id — the linked contacts row is created on first
+// edit if it doesn't exist yet). Also handles is_admin/hide_name, which are
+// members-table fields, when member_id is supplied.
 export async function PATCH(req) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
-  const member = await getAdminMember(token)
-  if (!member) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+  const admin = await getAdminMember(token)
+  if (!admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const { id, category_ids, ...updates } = await req.json()
-  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  const { id, member_id, category_ids, is_admin, hide_name, ...updates } = await req.json()
+  if (!id && !member_id) return NextResponse.json({ error: 'id or member_id required' }, { status: 400 })
+
+  let targetId = id
+
+  if (!targetId) {
+    const { data: existing } = await supabaseAdmin
+      .from('contacts').select('id').eq('member_id', member_id).maybeSingle()
+    if (existing) {
+      targetId = existing.id
+    } else {
+      const { data: memberRow } = await supabaseAdmin
+        .from('members').select('name').eq('id', member_id).single()
+      const { data: created, error: createErr } = await supabaseAdmin
+        .from('contacts')
+        .insert({ member_id, name: memberRow?.name || 'Resident', active: true })
+        .select('id').single()
+      if (createErr) return NextResponse.json({ error: createErr.message }, { status: 500 })
+      targetId = created.id
+    }
+  }
 
   if (Object.keys(updates).length) {
-    const { error } = await supabaseAdmin.from('contacts').update(updates).eq('id', id)
+    const { error } = await supabaseAdmin.from('contacts').update(updates).eq('id', targetId)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   if (category_ids !== undefined) {
     if (!category_ids.length) return NextResponse.json({ error: 'At least one category required' }, { status: 400 })
-    await supabaseAdmin.from('contact_category_members').delete().eq('contact_id', id)
+    await supabaseAdmin.from('contact_category_members').delete().eq('contact_id', targetId)
     await supabaseAdmin.from('contact_category_members').insert(
-      category_ids.map(cid => ({ contact_id: id, category_id: cid }))
+      category_ids.map(cid => ({ contact_id: targetId, category_id: cid }))
     )
   }
-  return NextResponse.json({ ok: true })
+
+  if (member_id && (is_admin !== undefined || hide_name !== undefined)) {
+    const memberUpdates = {}
+    if (is_admin !== undefined) memberUpdates.is_admin = is_admin
+    if (hide_name !== undefined) memberUpdates.hide_name = hide_name
+    const { error } = await supabaseAdmin.from('members').update(memberUpdates).eq('id', member_id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true, id: targetId })
 }
 
 // DELETE

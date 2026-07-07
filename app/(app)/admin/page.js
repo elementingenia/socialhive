@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
 import { PageTextsIcon, MembersIcon, MoviesIcon, BarIcon, ToolsIcon, BookClubIcon } from '@/components/NavIcons'
 import RichEditor, { bbToHtml } from '@/components/RichEditor'
+import ResidentEditForm, { Sheet } from '@/components/ResidentEditPanel'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const HUB_TYPES = [
@@ -138,14 +139,32 @@ function NoticesTab() {
 
 // ── MEMBERS TAB ───────────────────────────────────────────────────────────────
 function MembersTab() {
-  const [members, setMembers] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [search,  setSearch]  = useState('')
+  const [members, setMembers]     = useState([])
+  const [categories, setCategories] = useState([])
+  const [contacts, setContacts]   = useState([])
+  const [loading, setLoading]     = useState(true)
+  const [search,  setSearch]      = useState('')
+  const [editing, setEditing]     = useState(null) // member being edited, or null
   const { member: me } = useUser()
 
-  useEffect(()=>{
-    supabase.from('members').select('id, name, username, status, is_admin, hide_name, joined_date').order('name').then(({data})=>{ setMembers(data||[]); setLoading(false) })
+  const load = useCallback(() => {
+    Promise.all([
+      supabase.from('members').select('id, name, username, status, is_admin, hide_name, email, house_number, joined_date').order('name'),
+      supabase.from('contact_categories').select('id, name, display_order').eq('active', true).order('display_order'),
+      supabase.from('contacts').select('id, member_id, title, phone, contact_category_members(category_id)').not('member_id', 'is', null),
+    ]).then(([mRes, cRes, ctRes]) => {
+      setMembers(mRes.data || [])
+      setCategories(cRes.data || [])
+      setContacts(ctRes.data || [])
+      setLoading(false)
+    })
   }, [])
+
+  useEffect(() => { load() }, [load])
+
+  const residentsId = categories.find(c => c.name.toLowerCase() === 'residents')?.id
+  const contactByMemberId = {}
+  for (const c of contacts) if (c.member_id) contactByMemberId[c.member_id] = c
 
   async function toggle(id, field, val) {
     await supabase.from('members').update({ [field]: val }).eq('id', id)
@@ -183,12 +202,33 @@ function MembersTab() {
                     style={{ padding:'0.3rem 0.6rem', borderRadius:'8px', border:'1px solid', borderColor:m.hide_name?'var(--purple)':'var(--border)', background:m.hide_name?'var(--purple)20':'var(--surface)', fontSize:'0.72rem', fontWeight:700, cursor:'pointer', color:m.hide_name?'var(--purple)':'var(--text-dim)' }}>
                     {m.hide_name ? '🔒 Private' : 'Private'}
                   </button>
+                  <button
+                    onClick={()=> setEditing(m)}
+                    style={{ padding:'0.3rem 0.6rem', borderRadius:'8px', border:'1px solid var(--border)', background:'var(--surface)', fontSize:'0.72rem', fontWeight:700, cursor:'pointer', color:'var(--text)' }}>
+                    Edit
+                  </button>
                 </div>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      <Sheet open={!!editing} onClose={() => setEditing(null)} title="Edit Resident">
+        {editing && (
+          <ResidentEditForm
+            member={editing}
+            linkedCategoryIds={(contactByMemberId[editing.id]?.contact_category_members || []).map(x => x.category_id)}
+            linkedTitle={contactByMemberId[editing.id]?.title}
+            linkedPhone={contactByMemberId[editing.id]?.phone}
+            categories={categories}
+            residentsId={residentsId}
+            isSelf={editing.id === me?.id}
+            onSaved={load}
+            onClose={() => setEditing(null)}
+          />
+        )}
+      </Sheet>
     </div>
   )
 }
