@@ -816,7 +816,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
   const daysLabel = isPast ? null : daysUntil === 0 ? "Today!" : daysUntil === 1 ? "Tomorrow" : `In ${daysUntil} days`
 
   const isConfirmed = myBooking?.status === "confirmed"
-  const isPending   = isConfirmed && event.payment_required && myBooking?.payment_status === "pending"
+  const isPending   = isConfirmed && event.payment_required && myBooking?.payment_status !== "confirmed"
   const isWaitlist  = myBooking?.status === "waitlist"
 
   const confirmedBookings = event.bookings?.filter(b => b.status === "confirmed") || []

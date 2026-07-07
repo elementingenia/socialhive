@@ -118,7 +118,7 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
   const daysLabel = daysUntil === 0 ? "Today!" : daysUntil === 1 ? "Tomorrow" : `In ${daysUntil} days`
 
   const isConfirmed = myBooking?.status === "confirmed"
-  const isPending   = isConfirmed && event.payment_required && myBooking?.payment_status === "pending"
+  const isPending   = isConfirmed && event.payment_required && myBooking?.payment_status !== "confirmed"
   const isWaitlist  = myBooking?.status === "waitlist"
   const ecNames     = coordinators.map(c => c.name || c.username).filter(Boolean)
 
@@ -255,7 +255,7 @@ function MyBookingsCard({ bookings, onViewAll }) {
       ) : (
         <div style={{ display: "flex", flexDirection: "column" }}>
           {sorted.slice(0, 3).map(({ events: ev, status, seats, payment_status }, i) => {
-            const isPending = status === "confirmed" && ev?.payment_required && payment_status === "pending"
+            const isPending = status === "confirmed" && ev?.payment_required && payment_status !== "confirmed"
             const isWait    = status === "waitlist"
             const n         = seats || 1
             return (

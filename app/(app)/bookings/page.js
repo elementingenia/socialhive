@@ -22,11 +22,11 @@ const FILTERS = [
 ]
 
 // Derive display status from booking record
-function getStatus(booking) {
+function getStatus(booking, event) {
   if (booking.status === "waitlist") {
     return { label: "Waitlisted", bg: "#f1f5f9", color: "#64748b" }
   }
-  if (booking.payment_status === "pending") {
+  if (event?.payment_required && booking.payment_status !== "confirmed") {
     return { label: "Pending Payment", bg: "#fef3c7", color: "#92400e" }
   }
   return { label: "Confirmed", bg: "#dcfce7", color: "#166534" }

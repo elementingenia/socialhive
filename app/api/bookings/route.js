@@ -36,7 +36,7 @@ async function promoteWaitlist(event_id) {
   if (available <= 0) return
 
   const { data: waitlisted } = await supabaseAdmin
-    .from('bookings').select('id, seats, member_id, event_id, booked_at')
+    .from('bookings').select('id, seats, member_id, event_id, booked_at, payment_status')
     .eq('event_id', event_id).eq('status', 'waitlist').order('booked_at')
 
   for (const waiter of (waitlisted || [])) {
@@ -52,11 +52,12 @@ async function promoteWaitlist(event_id) {
       // Partially promote — shrink waitlist row, insert new confirmed row
       await supabaseAdmin.from('bookings').update({ seats: remaining }).eq('id', waiter.id)
       await supabaseAdmin.from('bookings').insert({
-        event_id:   waiter.event_id,
-        member_id:  waiter.member_id,
-        seats:      toConfirm,
-        status:     'confirmed',
-        booked_at:  new Date().toISOString(),
+        event_id:       waiter.event_id,
+        member_id:      waiter.member_id,
+        seats:          toConfirm,
+        status:         'confirmed',
+        booked_at:      new Date().toISOString(),
+        payment_status: waiter.payment_status,
       })
     }
 
@@ -88,8 +89,14 @@ export async function POST(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('id, max_seats, hub_type, book_id').eq('id', event_id).single()
+    .from('events').select('id, max_seats, hub_type, book_id, payment_required').eq('id', event_id).single()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+
+  // Paid events must start life as 'pending' (awaiting payment), not the
+  // DB default of 'not_required' (which means "this event is free"). Without
+  // this, every fresh booking on a paid event silently reads as un-set,
+  // which downstream UIs then interpret inconsistently.
+  const initialPaymentStatus = event.payment_required ? 'pending' : 'not_required'
 
   // Book Club: block joining a different book while a previously-issued kit
   // copy hasn't been returned. has_book is never auto-cleared (not by
@@ -139,6 +146,7 @@ export async function POST(req) {
   if (available >= requestedSeats) {
     const { error } = await supabaseAdmin.from('bookings').insert({
       event_id, member_id: member.id, seats: requestedSeats, status: 'confirmed', booked_at: bookedAt,
+      payment_status: initialPaymentStatus,
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ status: 'confirmed', seats: requestedSeats })
@@ -159,9 +167,9 @@ export async function POST(req) {
   // User confirmed — insert rows
   const rows = []
   if (willConfirm > 0) {
-    rows.push({ event_id, member_id: member.id, seats: willConfirm,  status: 'confirmed', booked_at: bookedAt })
+    rows.push({ event_id, member_id: member.id, seats: willConfirm,  status: 'confirmed', booked_at: bookedAt, payment_status: initialPaymentStatus })
   }
-  rows.push({ event_id, member_id: member.id, seats: willWaitlist, status: 'waitlist',  booked_at: bookedAt })
+  rows.push({ event_id, member_id: member.id, seats: willWaitlist, status: 'waitlist',  booked_at: bookedAt, payment_status: initialPaymentStatus })
 
   const { error } = await supabaseAdmin.from('bookings').insert(rows)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -199,7 +207,7 @@ export async function PATCH(req) {
   const oldConfirmed = myConfirmed.seats || 1
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('max_seats').eq('id', event_id).single()
+    .from('events').select('max_seats, payment_required').eq('id', event_id).single()
   const { data: confirmedRows } = await supabaseAdmin
     .from('bookings').select('seats')
     .eq('event_id', event_id).eq('status', 'confirmed').neq('id', myConfirmed.id)
@@ -226,6 +234,7 @@ export async function PATCH(req) {
     const { error: insertErr } = await supabaseAdmin.from('bookings').insert({
       event_id, member_id: member.id, seats: newWaitlisted,
       status: 'waitlist', booked_at: new Date().toISOString(),
+      payment_status: event?.payment_required ? 'pending' : 'not_required',
     })
     if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 })
   }
