@@ -181,15 +181,13 @@ function MembersTab() {
 
   return (
     <div>
-      <div style={{ marginBottom:'0.6rem', display:'flex', justifyContent:'flex-end' }}>
-        <button onClick={() => setInviteOpen(true)}
-          style={{ padding:'0.4rem 0.75rem', borderRadius:'8px', border:'1px solid var(--border)', background:'var(--surface)', fontSize:'0.78rem', fontWeight:700, cursor:'pointer', color:'var(--text)', display:'flex', alignItems:'center', gap:'0.35rem' }}>
-          🔑 Invite Code
-        </button>
-      </div>
       <div style={{ marginBottom:'0.85rem', display:'flex', gap:'0.5rem', alignItems:'center' }}>
         <input style={{ ...inputStyle, flex:1 }} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search members…" />
         <span style={{ fontSize:'0.82rem', color:'var(--text-dim)', whiteSpace:'nowrap' }}>{filtered.length} members</span>
+        <button onClick={() => setInviteOpen(true)} title="Invite Code"
+          style={{ padding:'0.55rem 0.65rem', borderRadius:'8px', border:'1px solid var(--border)', background:'var(--surface)', fontSize:'0.9rem', cursor:'pointer', color:'var(--text)', flexShrink:0, lineHeight:1 }}>
+          🔑
+        </button>
       </div>
       {loading ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)' }}>Loading…</div> : (
         <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
