@@ -714,12 +714,12 @@ export default function HelpGuidePage() {
 
             <Subsection id="sub-bookings-status" title="Understanding booking status">
               <Step>
-                <strong style={{ color: "#166534" }}>Confirmed</strong> — your seat is secured. No
-                further action needed unless you want to modify or cancel.
+                <strong style={{ color: "#92400e" }}>Booked</strong> — your seat is reserved and held,
+                but payment has not yet been recorded by the coordinator.
               </Step>
               <Step>
-                <strong style={{ color: "#92400e" }}>Pending Payment</strong> — your booking is held
-                but payment has not yet been recorded by the coordinator. Your seat is reserved.
+                <strong style={{ color: "#166534" }}>Confirmed</strong> — your seat is secured and
+                paid. No further action needed unless you want to modify or cancel.
               </Step>
               <Step>
                 <strong style={{ color: "#64748b" }}>Waitlisted</strong> — the event was full when

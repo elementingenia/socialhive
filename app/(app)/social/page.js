@@ -7,7 +7,7 @@ import EventSlideOut from "@/components/EventSlideOut"
 import { bbToHtml } from "@/components/RichEditor"
 import { BusIcon } from "@/components/NavIcons"
 import { FormattedText } from "@/lib/textFormatter"
-import { isAwaitingPayment, seatsCost } from "@/lib/payments"
+import { seatsCost, bookingStatusBadge } from "@/lib/payments"
 
 const COLOUR = "var(--terracotta)"
 
@@ -119,7 +119,6 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
   const daysLabel = daysUntil === 0 ? "Today!" : daysUntil === 1 ? "Tomorrow" : `In ${daysUntil} days`
 
   const isConfirmed = myBooking?.status === "confirmed"
-  const isPending   = isConfirmed && isAwaitingPayment(myBooking, event)
   const isWaitlist  = myBooking?.status === "waitlist"
   const ecNames     = coordinators.map(c => c.name || c.username).filter(Boolean)
 
@@ -190,14 +189,15 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
           {isConfirmed ? (() => {
             const seats = myBooking?.seats || 1
             const total = seatsCost(event, seats)
-            const label = isPending
-              ? `${seats} seat${seats !== 1 ? "s" : ""} booked · Unpaid${total ? " " + total : ""}`
-              : `✓ ${seats} seat${seats !== 1 ? "s" : ""} confirmed${total ? " · Paid " + total : ""}`
+            const badge = bookingStatusBadge(myBooking, event)
+            const statusWord = badge.label.toLowerCase() // "booked" or "confirmed" — never re-worded per screen
+            const label = badge.label === "Confirmed"
+              ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Paid " + total : ""}`
+              : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Unpaid " + total : ""}`
             return (
               <div style={{
                 display: "inline-flex", alignItems: "center",
-                background: isPending ? "#fef3c7" : "#dcfce7",
-                color: isPending ? "#92400e" : "#15803d",
+                background: badge.bg, color: badge.color,
                 borderRadius: "20px", padding: "0.25rem 0.75rem",
                 fontSize: "0.78rem", fontWeight: 700,
               }}>{label}</div>
@@ -256,9 +256,9 @@ function MyBookingsCard({ bookings, onViewAll }) {
       ) : (
         <div style={{ display: "flex", flexDirection: "column" }}>
           {sorted.slice(0, 3).map(({ events: ev, status, seats, payment_status }, i) => {
-            const isPending = isAwaitingPayment({ status, payment_status }, ev)
-            const isWait    = status === "waitlist"
-            const n         = seats || 1
+            const isWait = status === "waitlist"
+            const n      = seats || 1
+            const badge  = bookingStatusBadge({ status, payment_status }, ev)
             return (
               <div key={ev?.id} style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -275,16 +275,12 @@ function MyBookingsCard({ bookings, onViewAll }) {
                 </div>
                 <div style={{ flexShrink: 0 }}>
                   {isWait ? (
-                    <span style={{ background: "var(--surface2)", color: "var(--text-dim)", borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
-                      ⏳ Waitlisted
-                    </span>
-                  ) : isPending ? (
-                    <span style={{ background: "#fef3c7", color: "#92400e", borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
-                      {n} seat{n !== 1 ? "s" : ""} · Unpaid{seatsCost(ev, n) ? ` ${seatsCost(ev, n)}` : ""}
+                    <span style={{ background: badge.bg, color: badge.color, borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
+                      ⏳ {badge.label}
                     </span>
                   ) : (
-                    <span style={{ background: "#dcfce7", color: "#15803d", borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
-                      ✓ {n} seat{n !== 1 ? "s" : ""}{ev?.payment_required ? " · Paid" : ""}
+                    <span style={{ background: badge.bg, color: badge.color, borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
+                      {badge.label === "Confirmed" ? "✓ " : ""}{n} seat{n !== 1 ? "s" : ""} · {badge.label}{seatsCost(ev, n) ? ` ${seatsCost(ev, n)}` : ""}
                     </span>
                   )}
                 </div>

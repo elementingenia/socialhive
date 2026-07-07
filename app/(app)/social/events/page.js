@@ -7,7 +7,7 @@ import { BusIcon } from "@/components/NavIcons"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import EventImagePicker from "@/components/EventImagePicker"
 import ExpandableText from "@/components/ExpandableText"
-import { isAwaitingPayment, sumUnpaidSeats } from "@/lib/payments"
+import { sumUnpaidSeats, bookingStatusBadge } from "@/lib/payments"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -817,7 +817,6 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
   const daysLabel = isPast ? null : daysUntil === 0 ? "Today!" : daysUntil === 1 ? "Tomorrow" : `In ${daysUntil} days`
 
   const isConfirmed = myBooking?.status === "confirmed"
-  const isPending   = isConfirmed && isAwaitingPayment(myBooking, event)
   const isWaitlist  = myBooking?.status === "waitlist"
 
   const confirmedBookings = event.bookings?.filter(b => b.status === "confirmed") || []
@@ -854,14 +853,16 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
                 color: "var(--text-dim)", fontFamily: "inherit",
               }}>Edit</button>
             )}
-            {isConfirmed && (
-              <span style={{
-                background: isPending ? "#fef3c7" : "#dcfce7",
-                color: isPending ? "#92400e" : "#166534",
-                borderRadius: "20px", padding: "0.2rem 0.55rem",
-                fontSize: "0.7rem", fontWeight: 700,
-              }}>{isPending ? "⏳ Pending" : "✓ Going"}</span>
-            )}
+            {isConfirmed && (() => {
+              const badge = bookingStatusBadge(myBooking, event)
+              return (
+                <span style={{
+                  background: badge.bg, color: badge.color,
+                  borderRadius: "20px", padding: "0.2rem 0.55rem",
+                  fontSize: "0.7rem", fontWeight: 700,
+                }}>{badge.label === "Confirmed" ? `✓ ${badge.label}` : badge.label}</span>
+              )
+            })()}
             {isWaitlist && (
               <span style={{ background: "#f1f5f9", color: "#64748b", borderRadius: "20px", padding: "0.2rem 0.55rem", fontSize: "0.7rem", fontWeight: 700 }}>Waitlisted</span>
             )}

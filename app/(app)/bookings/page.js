@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
-import { isAwaitingPayment } from "@/lib/payments"
+import { bookingStatusBadge } from "@/lib/payments"
 
 const HUB_COLOURS = {
   movie:    "var(--teal)",
@@ -21,25 +21,6 @@ const FILTERS = [
   { key: "bookclub", label: "Book Club" },
   { key: "social",   label: "Social" },
 ]
-
-// Derive display status from booking record.
-// NOTE: not currently called — BookingCard groups bookings down to seat
-// COUNTS per event (grouped[event_id].confirmed/.waitlist are numbers, see
-// the grouping logic further down), which loses the individual
-// payment_status needed here. Left correct and routed through the shared
-// lib/payments convention so that whenever this page grows a real
-// paid/unpaid indicator (it currently has none), it starts from the right
-// logic instead of a fresh copy that can drift, like the other 5 copies of
-// this exact check did before 2026-07-07.
-function getStatus(booking, event) {
-  if (booking.status === "waitlist") {
-    return { label: "Waitlisted", bg: "#f1f5f9", color: "#64748b" }
-  }
-  if (isAwaitingPayment(booking, event)) {
-    return { label: "Pending Payment", bg: "#fef3c7", color: "#92400e" }
-  }
-  return { label: "Confirmed", bg: "#dcfce7", color: "#166534" }
-}
 
 function fmtDate(str) {
   if (!str) return ""
@@ -106,15 +87,21 @@ function BookingCard({ group, waitlistPosition, onClick }) {
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", flexShrink: 0, alignItems: "flex-end" }}>
-        {confirmed > 0 && (
-          <div style={{
-            background: "#dcfce7", color: "#166534",
-            fontSize: "0.7rem", fontWeight: 700,
-            padding: "0.25rem 0.65rem", borderRadius: "20px", whiteSpace: "nowrap",
-          }}>
-            {confirmed === 1 ? "Confirmed" : `✓ ${confirmed} confirmed`}
-          </div>
-        )}
+        {confirmed > 0 && (() => {
+          const badge = bookingStatusBadge(group.confirmedBooking, event)
+          const label = confirmed === 1
+            ? badge.label
+            : `${badge.label === "Confirmed" ? "✓ " : ""}${confirmed} ${badge.label.toLowerCase()}`
+          return (
+            <div style={{
+              background: badge.bg, color: badge.color,
+              fontSize: "0.7rem", fontWeight: 700,
+              padding: "0.25rem 0.65rem", borderRadius: "20px", whiteSpace: "nowrap",
+            }}>
+              {label}
+            </div>
+          )
+        })()}
         {waitlist > 0 && (
           <div style={{
             background: "#fef3c7", color: "#d97706",
@@ -213,9 +200,9 @@ export default function BookingsPage() {
     const grouped = {}
     for (const b of rows) {
       if (!b.events) continue
-      if (!grouped[b.event_id]) grouped[b.event_id] = { event: b.events, eventId: b.event_id, confirmed: 0, waitlist: 0 }
+      if (!grouped[b.event_id]) grouped[b.event_id] = { event: b.events, eventId: b.event_id, confirmed: 0, waitlist: 0, confirmedBooking: null }
       if (b.status === "waitlist") grouped[b.event_id].waitlist += (b.seats || 1)
-      else grouped[b.event_id].confirmed += (b.seats || 1)
+      else { grouped[b.event_id].confirmed += (b.seats || 1); grouped[b.event_id].confirmedBooking = b }
     }
     return Object.values(grouped)
   }

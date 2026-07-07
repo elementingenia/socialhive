@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
-import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, sumUnpaidSeats, seatsCost } from "@/lib/payments"
+import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, sumUnpaidSeats, seatsCost, bookingStatusBadge } from "@/lib/payments"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -844,15 +844,16 @@ function BookingSection({ event, onRefresh }) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
             {myConfirmed && (() => {
               const seats = myConfirmed.seats || 1
-              const isPaid = computeIsPaid(myConfirmed)
               const totalCost = seatsCost(event, seats)
+              const badge = bookingStatusBadge(myConfirmed, event)
+              const statusWord = badge.label.toLowerCase() // "booked" or "confirmed" — canonical, see lib/payments.js
               const label = event.payment_required
-                ? (isPaid
-                    ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} confirmed · Paid${totalCost ? " " + totalCost : ""}`
-                    : `${seats} seat${seats !== 1 ? "s" : ""} booked · Unpaid${totalCost ? " " + totalCost : ""}`)
+                ? (badge.label === "Confirmed"
+                    ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Paid${totalCost ? " " + totalCost : ""}`
+                    : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid${totalCost ? " " + totalCost : ""}`)
                 : `✓ ${seats} seat${seats !== 1 ? "s" : ""} confirmed`
               const colour = event.payment_required
-                ? (isPaid ? "var(--green)" : "#d97706")
+                ? (badge.label === "Confirmed" ? "var(--green)" : "#d97706")
                 : "var(--green)"
               return <StatusPill label={label} colour={colour} />
             })()}
