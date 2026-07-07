@@ -121,22 +121,22 @@ function BarTabCard({ memberId }) {
 
   return (
     <div onClick={() => router.push("/bar")} style={{
-      background: hasOutstanding ? "rgba(217,119,6,0.06)" : "var(--surface)",
-      border: "1px solid " + (hasOutstanding ? "var(--amber)" : "var(--border)"),
+      background: hasOutstanding ? "rgba(102,29,77,0.06)" : "var(--surface)",
+      border: "1px solid " + (hasOutstanding ? "var(--wine)" : "var(--border)"),
       borderRadius: "14px",
       padding: "1rem 1.25rem", cursor: "pointer", display: "flex",
       alignItems: "center", justifyContent: "space-between", marginTop: "0.5rem",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-        <span style={{ color: "var(--amber)", lineHeight: 0 }}><BarIcon size={28} /></span>
+        <span style={{ color: "var(--wine)", lineHeight: 0 }}><BarIcon size={28} /></span>
         <div>
           <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>My Bar Tab</div>
-          <div style={{ fontSize: "0.75rem", color: hasOutstanding ? "var(--amber-dark)" : "var(--text-dim)" }}>
+          <div style={{ fontSize: "0.75rem", color: hasOutstanding ? "var(--wine-dark)" : "var(--text-dim)" }}>
             {label()}
           </div>
         </div>
       </div>
-      <span style={{ color: hasOutstanding ? "var(--amber)" : "var(--text-dim)", fontSize: "1.1rem" }}>›</span>
+      <span style={{ color: hasOutstanding ? "var(--wine)" : "var(--text-dim)", fontSize: "1.1rem" }}>›</span>
     </div>
   )
 }
