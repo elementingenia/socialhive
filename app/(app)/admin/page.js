@@ -145,6 +145,8 @@ function MembersTab() {
   const [loading, setLoading]     = useState(true)
   const [search,  setSearch]      = useState('')
   const [editing, setEditing]     = useState(null) // member being edited, or null
+  const [inviteCode, setInviteCode] = useState('')
+  const [inviteOpen, setInviteOpen] = useState(false)
   const { member: me } = useUser()
 
   const load = useCallback(() => {
@@ -152,10 +154,12 @@ function MembersTab() {
       supabase.from('members').select('id, name, username, status, is_admin, hide_name, email, house_number, joined_date').order('name'),
       supabase.from('contact_categories').select('id, name, display_order').eq('active', true).order('display_order'),
       supabase.from('contacts').select('id, member_id, title, phone, contact_category_members(category_id)').not('member_id', 'is', null),
-    ]).then(([mRes, cRes, ctRes]) => {
+      supabase.from('settings').select('value').eq('key', 'invite_token').single(),
+    ]).then(([mRes, cRes, ctRes, sRes]) => {
       setMembers(mRes.data || [])
       setCategories(cRes.data || [])
       setContacts(ctRes.data || [])
+      setInviteCode(sRes.data?.value || '')
       setLoading(false)
     })
   }, [])
@@ -177,6 +181,12 @@ function MembersTab() {
 
   return (
     <div>
+      <div style={{ marginBottom:'0.6rem', display:'flex', justifyContent:'flex-end' }}>
+        <button onClick={() => setInviteOpen(true)}
+          style={{ padding:'0.4rem 0.75rem', borderRadius:'8px', border:'1px solid var(--border)', background:'var(--surface)', fontSize:'0.78rem', fontWeight:700, cursor:'pointer', color:'var(--text)', display:'flex', alignItems:'center', gap:'0.35rem' }}>
+          🔑 Invite Code
+        </button>
+      </div>
       <div style={{ marginBottom:'0.85rem', display:'flex', gap:'0.5rem', alignItems:'center' }}>
         <input style={{ ...inputStyle, flex:1 }} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search members…" />
         <span style={{ fontSize:'0.82rem', color:'var(--text-dim)', whiteSpace:'nowrap' }}>{filtered.length} members</span>
@@ -229,6 +239,86 @@ function MembersTab() {
           />
         )}
       </Sheet>
+
+      <Sheet open={inviteOpen} onClose={() => setInviteOpen(false)} title="Invite Code">
+        <InviteCodeControl
+          code={inviteCode}
+          onSaved={code => { setInviteCode(code); }}
+        />
+      </Sheet>
+    </div>
+  )
+}
+
+// ── Invite Code control (Admin > Members) ──────────────────────────────────
+// New residents need this code to register. Stored in the settings table
+// (key 'invite_token') - RLS already restricts writes to admins, matching
+// the existing our_streaming_services pattern in this file.
+function InviteCodeControl({ code, onSaved }) {
+  const labelStyle = { fontSize:'0.78rem', fontWeight:700, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:4, display:'block' }
+  const [revealed, setRevealed] = useState(false)
+  const [editing,  setEditing]  = useState(false)
+  const [draft,    setDraft]    = useState(code)
+  const [saving,   setSaving]   = useState(false)
+  const [error,    setError]    = useState('')
+
+  useEffect(() => { setDraft(code) }, [code])
+
+  async function save() {
+    const trimmed = draft.trim()
+    if (!trimmed) { setError('Invite code cannot be empty'); return }
+    setSaving(true)
+    setError('')
+    const { error: err } = await supabase.from('settings')
+      .update({ value: trimmed, updated_at: new Date().toISOString() })
+      .eq('key', 'invite_token')
+    setSaving(false)
+    if (err) { setError('Could not save — try again'); return }
+    onSaved(trimmed)
+    setEditing(false)
+    setRevealed(true)
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize:'0.85rem', color:'var(--text-dim)', lineHeight:1.5, marginBottom:'1rem' }}>
+        New residents enter this code to register. Change it any time — existing members are unaffected.
+      </div>
+
+      {editing ? (
+        <div>
+          <label style={labelStyle}>New Invite Code</label>
+          <input style={inputStyle} value={draft} onChange={e => setDraft(e.target.value)} autoFocus />
+          {error && <div style={{ color:'var(--danger)', fontSize:'0.8rem', marginTop:'0.4rem' }}>{error}</div>}
+          <div style={{ display:'flex', gap:'0.5rem', marginTop:'0.85rem' }}>
+            <button onClick={() => { setEditing(false); setDraft(code); setError('') }}
+              style={{ flex:1, padding:'0.7rem', borderRadius:'10px', border:'1px solid var(--border)', background:'var(--surface2)', cursor:'pointer', fontSize:'0.85rem', fontWeight:600 }}>
+              Cancel
+            </button>
+            <button onClick={save} disabled={saving}
+              style={{ flex:1, padding:'0.7rem', borderRadius:'10px', border:'none', background:'var(--amber)', color:'#fff', cursor: saving ? 'wait' : 'pointer', fontSize:'0.85rem', fontWeight:700 }}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.6rem',
+            background:'var(--surface2)', borderRadius:'10px', border:'1px solid var(--border)', padding:'0.85rem 1rem', marginBottom:'0.85rem' }}>
+            <span style={{ fontFamily:'monospace', fontSize:'1.1rem', fontWeight:700, letterSpacing: revealed ? '0.03em' : '0.2em' }}>
+              {revealed ? code : '•'.repeat(Math.max(code.length, 6))}
+            </span>
+            <button onClick={() => setRevealed(r => !r)}
+              style={{ background:'none', border:'none', cursor:'pointer', fontSize:'0.78rem', fontWeight:700, color:'var(--amber-dark)', whiteSpace:'nowrap' }}>
+              {revealed ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          <button onClick={() => { setEditing(true); setDraft(code) }}
+            style={{ width:'100%', padding:'0.7rem', borderRadius:'10px', border:'1px solid var(--amber)', background:'none', color:'var(--amber-dark)', cursor:'pointer', fontSize:'0.85rem', fontWeight:700 }}>
+            Change Code
+          </button>
+        </div>
+      )}
     </div>
   )
 }
