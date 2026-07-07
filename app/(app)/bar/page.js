@@ -23,11 +23,11 @@ function ProductCard({ product, onAdd, adding }) {
       <div style={{ fontSize:"2rem" }}>{product.icon || CATEGORY_ICONS[product.category] || "🍺"}</div>
       <div style={{ fontWeight:700, fontSize:"0.88rem", lineHeight:1.2 }}>{product.name}</div>
       {product.description && <div style={{ fontSize:"0.72rem", color:"var(--text-dim)", lineHeight:1.3 }}>{product.description}</div>}
-      <div style={{ fontWeight:800, fontSize:"1rem", color:"var(--amber-dark)", marginTop:"0.15rem" }}>{fmtPrice(product.price)}</div>
+      <div style={{ fontWeight:800, fontSize:"1rem", color:"var(--wine-dark)", marginTop:"0.15rem" }}>{fmtPrice(product.price)}</div>
       <button
         onClick={() => onAdd(product)}
         disabled={adding === product.id}
-        style={{ marginTop:"0.25rem", background:"var(--amber)", color:"#fff", border:"none", borderRadius:"20px", padding:"0.45rem 1rem", fontWeight:700, fontSize:"0.8rem", cursor:"pointer", width:"100%", opacity:adding===product.id?0.6:1 }}>
+        style={{ marginTop:"0.25rem", background:"var(--wine)", color:"#fff", border:"none", borderRadius:"20px", padding:"0.45rem 1rem", fontWeight:700, fontSize:"0.8rem", cursor:"pointer", width:"100%", opacity:adding===product.id?0.6:1 }}>
         {adding === product.id ? "Adding…" : "+ Add to Tab"}
       </button>
     </div>
@@ -175,7 +175,7 @@ export default function BarPage() {
 
       {/* Outstanding balance warning banner */}
       {outstanding.length > 0 && (
-        <div onClick={() => setView("tab")} style={{ background:"var(--amber)", borderRadius:"14px", padding:"0.85rem 1rem", marginBottom:"0.75rem", display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer" }}>
+        <div onClick={() => setView("tab")} style={{ background:"var(--wine)", borderRadius:"14px", padding:"0.85rem 1rem", marginBottom:"0.75rem", display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer" }}>
           <div>
             <div style={{ color:"#fff", fontWeight:700, fontSize:"0.9rem" }}>⚠ Balance Due</div>
             <div style={{ color:"rgba(255,255,255,0.85)", fontSize:"0.78rem" }}>
@@ -188,12 +188,12 @@ export default function BarPage() {
 
       {/* Running total banner */}
       {openItems.length > 0 && (
-        <div style={{ background:"var(--surface)", border:"1px solid var(--amber)", borderRadius:"14px", padding:"0.85rem 1rem", marginBottom:"1rem", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div style={{ background:"var(--surface)", border:"1px solid var(--wine)", borderRadius:"14px", padding:"0.85rem 1rem", marginBottom:"1rem", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
             <div style={{ fontWeight:700, fontSize:"0.9rem" }}>My Open Tab</div>
             <div style={{ color:"var(--text-dim)", fontSize:"0.78rem" }}>{openItems.length} item{openItems.length!==1?"s":""}</div>
           </div>
-          <div style={{ color:"var(--amber-dark)", fontWeight:800, fontSize:"1.4rem" }}>{fmtPrice(runningTotal)}</div>
+          <div style={{ color:"var(--wine-dark)", fontWeight:800, fontSize:"1.4rem" }}>{fmtPrice(runningTotal)}</div>
         </div>
       )}
 
@@ -201,7 +201,7 @@ export default function BarPage() {
       <div style={{ display:"flex", gap:"0.4rem", marginBottom:"1rem" }}>
         {[["order","🍺 Order"],["tab","📋 My Tab"]].map(([v,l]) => (
           <button key={v} onClick={()=>setView(v)}
-            style={{ flex:1, padding:"0.55rem", borderRadius:"10px", border:"1px solid", borderColor:view===v?"var(--amber)":"var(--border)", background:view===v?"var(--amber)20":"var(--surface)", fontWeight:600, fontSize:"0.85rem", cursor:"pointer", color:view===v?"var(--amber-dark)":"var(--text)" }}>
+            style={{ flex:1, padding:"0.55rem", borderRadius:"10px", border:"1px solid", borderColor:view===v?"var(--wine)":"var(--border)", background:view===v?"var(--wine)20":"var(--surface)", fontWeight:600, fontSize:"0.85rem", cursor:"pointer", color:view===v?"var(--wine-dark)":"var(--text)" }}>
             {l}
           </button>
         ))}
@@ -213,7 +213,7 @@ export default function BarPage() {
           <div style={{ display:"flex", gap:"0.4rem", overflowX:"auto", paddingBottom:"0.25rem", marginBottom:"1rem" }}>
             {["all",...CATEGORIES].map(c => (
               <button key={c} onClick={()=>setCat(c)}
-                style={{ padding:"0.35rem 0.75rem", borderRadius:"20px", border:"1px solid", borderColor:catFilter===c?"var(--amber)":"var(--border)", background:catFilter===c?"var(--amber)":"var(--surface)", color:catFilter===c?"#fff":"var(--text)", fontSize:"0.75rem", fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" }}>
+                style={{ padding:"0.35rem 0.75rem", borderRadius:"20px", border:"1px solid", borderColor:catFilter===c?"var(--wine)":"var(--border)", background:catFilter===c?"var(--wine)":"var(--surface)", color:catFilter===c?"#fff":"var(--text)", fontSize:"0.75rem", fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" }}>
                 {c==="all"?"All":CATEGORY_ICONS[c]+" "+CATEGORY_LABELS[c]}
               </button>
             ))}
@@ -254,7 +254,7 @@ export default function BarPage() {
                             </div>
                           </div>
                           <div style={{ display:"flex", alignItems:"center", gap:"0.5rem", flexShrink:0 }}>
-                            <div style={{ fontWeight:700, color:"var(--amber-dark)" }}>{fmtPrice(p?.price||0)}</div>
+                            <div style={{ fontWeight:700, color:"var(--wine-dark)" }}>{fmtPrice(p?.price||0)}</div>
                             {canDelete && (
                               <button onClick={() => removeFromTab(t.id)}
                                 style={{ background:"none", border:"1px solid var(--border)", borderRadius:"8px", padding:"0.25rem 0.5rem", fontSize:"0.72rem", color:"var(--text-dim)", cursor:"pointer" }}>
@@ -275,18 +275,18 @@ export default function BarPage() {
               {/* Outstanding unpaid periods — tap to expand itemised breakdown */}
               {outstanding.length > 0 && (
                 <div style={{ marginBottom:"1.25rem" }}>
-                  <div style={{ fontWeight:700, fontSize:"0.8rem", color:"var(--amber-dark)", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:"0.5rem" }}>⚠ Balance Due</div>
+                  <div style={{ fontWeight:700, fontSize:"0.8rem", color:"var(--wine-dark)", textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:"0.5rem" }}>⚠ Balance Due</div>
                   <div style={{ display:"flex", flexDirection:"column", gap:"0.5rem" }}>
                     {outstanding.map(o => {
                       const open = expandedPeriod === o.reconciliation_id
                       return (
-                        <div key={o.reconciliation_id} style={{ borderRadius:"12px", border:"1px solid var(--amber)", overflow:"hidden" }}>
+                        <div key={o.reconciliation_id} style={{ borderRadius:"12px", border:"1px solid var(--wine)", overflow:"hidden" }}>
                           {/* Invoice header — always visible, tappable */}
                           <div
                             onClick={() => setExpandedPeriod(open ? null : o.reconciliation_id)}
                             style={{ background:"rgba(217,119,6,0.07)", padding:"0.75rem 1rem", display:"flex", justifyContent:"space-between", alignItems:"center", cursor:"pointer" }}>
                             <div>
-                              <div style={{ fontWeight:700, fontSize:"0.88rem", color:"var(--amber-dark)" }}>Unpaid Balance</div>
+                              <div style={{ fontWeight:700, fontSize:"0.88rem", color:"var(--wine-dark)" }}>Unpaid Balance</div>
                               <div style={{ fontSize:"0.75rem", color:"var(--text-dim)" }}>
                                 {o.period_start && o.period_end
                                   ? `${fmtDate(o.period_start)} – ${fmtDate(o.period_end)}`
@@ -295,8 +295,8 @@ export default function BarPage() {
                               </div>
                             </div>
                             <div style={{ display:"flex", alignItems:"center", gap:"0.6rem" }}>
-                              <div style={{ fontWeight:800, fontSize:"1.05rem", color:"var(--amber-dark)" }}>{fmtPrice(o.total)}</div>
-                              <span style={{ color:"var(--amber)", fontSize:"0.85rem", transition:"transform 0.2s", display:"inline-block", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>›</span>
+                              <div style={{ fontWeight:800, fontSize:"1.05rem", color:"var(--wine-dark)" }}>{fmtPrice(o.total)}</div>
+                              <span style={{ color:"var(--wine)", fontSize:"0.85rem", transition:"transform 0.2s", display:"inline-block", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>›</span>
                             </div>
                           </div>
                           {/* Itemised breakdown */}
@@ -311,12 +311,12 @@ export default function BarPage() {
                                       {fmtPrice(item.unit_price)} × {item.quantity}
                                     </div>
                                   </div>
-                                  <div style={{ fontWeight:700, color:"var(--amber-dark)", flexShrink:0 }}>{fmtPrice(item.line_total)}</div>
+                                  <div style={{ fontWeight:700, color:"var(--wine-dark)", flexShrink:0 }}>{fmtPrice(item.line_total)}</div>
                                 </div>
                               ))}
                               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"0.65rem 0", borderTop:"1px solid var(--border)", marginTop:"0" }}>
                                 <span style={{ fontWeight:700, fontSize:"0.85rem" }}>Total</span>
-                                <span style={{ fontWeight:800, fontSize:"1rem", color:"var(--amber-dark)" }}>{fmtPrice(o.total)}</span>
+                                <span style={{ fontWeight:800, fontSize:"1rem", color:"var(--wine-dark)" }}>{fmtPrice(o.total)}</span>
                               </div>
                               <div style={{ fontSize:"0.78rem", color:"var(--text-dim)", textAlign:"center", paddingBottom:"0.65rem" }}>
                                 Please see admin to settle this account.

@@ -282,7 +282,7 @@ function BarProductForm({ product, onSave, onClose }) {
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'0.4rem' }}>
           {BAR_CATS.map(c => (
             <button key={c.value} onClick={() => { set('category', c.value); set('icon', DEFAULT_ICONS[c.value]) }}
-              style={{ padding:'0.5rem 0.25rem', borderRadius:'10px', border:'2px solid', borderColor:form.category===c.value?'var(--amber)':'var(--border)', background:form.category===c.value?'var(--amber)20':'var(--surface)', cursor:'pointer', fontSize:'0.72rem', fontWeight:600, color:form.category===c.value?'var(--amber-dark)':'var(--text-dim)', textAlign:'center' }}>
+              style={{ padding:'0.5rem 0.25rem', borderRadius:'10px', border:'2px solid', borderColor:form.category===c.value?'var(--wine)':'var(--border)', background:form.category===c.value?'var(--wine)20':'var(--surface)', cursor:'pointer', fontSize:'0.72rem', fontWeight:600, color:form.category===c.value?'var(--wine-dark)':'var(--text-dim)', textAlign:'center' }}>
               {c.icon}<br/>{c.label}
             </button>
           ))}
@@ -301,7 +301,7 @@ function BarProductForm({ product, onSave, onClose }) {
         </label>
       </Field>
       {err && <div style={{ color:'var(--danger)', fontSize:'0.85rem', marginBottom:'0.75rem' }}>{err}</div>}
-      <button onClick={save} disabled={saving} style={btnPrimary('var(--amber)')}>
+      <button onClick={save} disabled={saving} style={btnPrimary('var(--wine)')}>
         {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Product'}
       </button>
     </div>
@@ -334,12 +334,12 @@ function BarProductsTab() {
         <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap' }}>
           {['all',...BAR_CATS.map(c=>c.value)].map(v => (
             <button key={v} onClick={()=>setCat(v)}
-              style={{ padding:'0.3rem 0.65rem', borderRadius:'20px', border:'1px solid', borderColor:catFilter===v?'var(--amber)':'var(--border)', background:catFilter===v?'var(--amber)':'var(--surface)', color:catFilter===v?'#fff':'var(--text)', fontSize:'0.72rem', fontWeight:600, cursor:'pointer' }}>
+              style={{ padding:'0.3rem 0.65rem', borderRadius:'20px', border:'1px solid', borderColor:catFilter===v?'var(--wine)':'var(--border)', background:catFilter===v?'var(--wine)':'var(--surface)', color:catFilter===v?'#fff':'var(--text)', fontSize:'0.72rem', fontWeight:600, cursor:'pointer' }}>
               {v==='all'?'All':BAR_CATS.find(c=>c.value===v)?.icon+' '+BAR_CATS.find(c=>c.value===v)?.label}
             </button>
           ))}
         </div>
-        <button onClick={()=>setSelected({})} style={{ background:'var(--amber)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.5rem 0.9rem', fontSize:'0.82rem', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>+ Add</button>
+        <button onClick={()=>setSelected({})} style={{ background:'var(--wine)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.5rem 0.9rem', fontSize:'0.82rem', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>+ Add</button>
       </div>
       {loading ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)' }}>Loading…</div>
        : filtered.length === 0 ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)', fontSize:'0.9rem' }}>No products yet</div>
@@ -353,7 +353,7 @@ function BarProductsTab() {
                 <div style={{ fontWeight:700, fontSize:'0.9rem' }}>{p.name}</div>
                 {p.description && <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{p.description}</div>}
               </div>
-              <div style={{ fontWeight:800, color:'var(--amber-dark)', marginRight:'0.5rem' }}>${parseFloat(p.price).toFixed(2)}</div>
+              <div style={{ fontWeight:800, color:'var(--wine-dark)', marginRight:'0.5rem' }}>${parseFloat(p.price).toFixed(2)}</div>
               <button onClick={e=>{e.stopPropagation();toggleActive(p)}}
                 style={{ padding:'0.3rem 0.6rem', borderRadius:'8px', border:'1px solid var(--border)', background:p.active?'var(--green)20':'var(--surface2)', fontSize:'0.72rem', fontWeight:700, cursor:'pointer', color:p.active?'var(--green)':'var(--text-dim)', whiteSpace:'nowrap' }}>
                 {p.active ? 'Active' : 'Hidden'}
@@ -456,8 +456,8 @@ function BarTab() {
         {['Products', 'Reconcile'].map(s => (
           <button key={s} onClick={() => setSub(s)}
             style={{ padding:'0.35rem 0.85rem', borderRadius:'20px', border:'1px solid',
-              borderColor: sub===s ? 'var(--amber)' : 'var(--border)',
-              background:  sub===s ? 'var(--amber)' : 'var(--surface)',
+              borderColor: sub===s ? 'var(--wine)' : 'var(--border)',
+              background:  sub===s ? 'var(--wine)' : 'var(--surface)',
               color:       sub===s ? '#fff' : 'var(--text)',
               fontWeight:600, fontSize:'0.8rem', cursor:'pointer' }}>
             {s}
@@ -483,7 +483,7 @@ function MemberBreakdown({ member }) {
       ))}
       <div style={{ borderTop:'1px solid var(--border)', marginTop:'0.4rem', paddingTop:'0.4rem', display:'flex', justifyContent:'space-between', fontWeight:700, fontSize:'0.88rem' }}>
         <span>Total</span>
-        <span style={{ color:'var(--amber-dark)' }}>${member.total.toFixed(2)}</span>
+        <span style={{ color:'var(--wine-dark)' }}>${member.total.toFixed(2)}</span>
       </div>
     </div>
   )
@@ -619,8 +619,8 @@ function ReconcileTab() {
     <div>
       {/* ── PAST OUTSTANDING ── */}
       {!loadingOut && outstanding.length > 0 && (
-        <div style={{ ...card, borderColor:'var(--amber)' }}>
-          <div style={{ ...heading, color:'var(--amber-dark)' }}>⚠ Outstanding Balances</div>
+        <div style={{ ...card, borderColor:'var(--wine)' }}>
+          <div style={{ ...heading, color:'var(--wine-dark)' }}>⚠ Outstanding Balances</div>
           {outstanding.map(period => (
             <div key={period.reconciliation_id} style={{ marginBottom:'0.75rem' }}>
               <div style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.35rem' }}>
@@ -629,9 +629,9 @@ function ReconcileTab() {
               {period.members.map(m => (
                 <div key={m.member_id} style={{ display:'flex', alignItems:'center', gap:'0.5rem', padding:'0.6rem 0.75rem', background:'var(--surface2)', borderRadius:'10px', marginBottom:'0.3rem' }}>
                   <div style={{ flex:1, fontWeight:600, fontSize:'0.88rem' }}>{m.name}</div>
-                  <div style={{ fontWeight:800, color:'var(--amber-dark)', fontSize:'0.88rem' }}>${m.total.toFixed(2)}</div>
+                  <div style={{ fontWeight:800, color:'var(--wine-dark)', fontSize:'0.88rem' }}>${m.total.toFixed(2)}</div>
                   <button onClick={() => markOutstandingPaid(period.reconciliation_id, m)}
-                    style={{ background:'var(--amber)', color:'#fff', border:'none', borderRadius:'8px', padding:'0.35rem 0.7rem', fontSize:'0.78rem', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                    style={{ background:'var(--wine)', color:'#fff', border:'none', borderRadius:'8px', padding:'0.35rem 0.7rem', fontSize:'0.78rem', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
                     Mark Paid
                   </button>
                 </div>
@@ -673,7 +673,7 @@ function ReconcileTab() {
           <>
             <MemberBreakdown member={settlePrev} />
             <button onClick={settleAccount} disabled={settling}
-              style={{ width:'100%', marginTop:'0.75rem', background:'var(--amber)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.75rem', fontWeight:700, fontSize:'0.9rem', cursor:'pointer', opacity:settling?0.7:1 }}>
+              style={{ width:'100%', marginTop:'0.75rem', background:'var(--wine)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.75rem', fontWeight:700, fontSize:'0.9rem', cursor:'pointer', opacity:settling?0.7:1 }}>
               {settling ? 'Settling…' : `Settle & Mark Paid — $${settlePrev.total.toFixed(2)}`}
             </button>
           </>
@@ -701,12 +701,12 @@ function ReconcileTab() {
             <div style={{ fontSize:'0.88rem', color:'var(--text-dim)', marginBottom:'0.85rem' }}>
               <strong style={{ color:'var(--text)' }}>{preview.members.length}</strong> member{preview.members.length !== 1 ? 's' : ''}{'  ·  '}
               <strong style={{ color:'var(--text)' }}>{preview.item_count}</strong> item{preview.item_count !== 1 ? 's' : ''}{'  ·  '}
-              <strong style={{ color:'var(--amber-dark)' }}>${(preview.total_amount||0).toFixed(2)}</strong> outstanding
+              <strong style={{ color:'var(--wine-dark)' }}>${(preview.total_amount||0).toFixed(2)}</strong> outstanding
             </div>
             {preview.members.map(m => (
               <div key={m.member_id} style={{ marginBottom:'0.4rem', padding:'0.5rem 0.75rem', background:'var(--surface2)', borderRadius:'10px', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                 <span style={{ fontWeight:600, fontSize:'0.88rem' }}>{m.name}</span>
-                <span style={{ fontWeight:700, color:'var(--amber-dark)', fontSize:'0.88rem' }}>${m.total.toFixed(2)}</span>
+                <span style={{ fontWeight:700, color:'var(--wine-dark)', fontSize:'0.88rem' }}>${m.total.toFixed(2)}</span>
               </div>
             ))}
             <button onClick={runFullRecon} disabled={running}
@@ -718,7 +718,7 @@ function ReconcileTab() {
           <div>
             <div style={{ fontSize:'0.85rem', color:'var(--text-dim)', marginBottom:'0.75rem' }}>
               Period {recon.period_start} → {recon.period_end}{'  ·  '}
-              <strong style={{ color:'var(--amber-dark)' }}>${recon.total_amount.toFixed(2)}</strong> total
+              <strong style={{ color:'var(--wine-dark)' }}>${recon.total_amount.toFixed(2)}</strong> total
             </div>
             {recon.members.map(m => (
               <div key={m.member_id} style={{ marginBottom:'0.6rem', borderRadius:'12px', border:'1px solid var(--border)', overflow:'hidden' }}>
@@ -729,11 +729,11 @@ function ReconcileTab() {
                       {m.items.map(i => `${i.icon} ${i.product_name} ×${i.quantity}`).join(' · ')}
                     </div>
                   </div>
-                  <div style={{ fontWeight:800, color:'var(--amber-dark)', marginRight:'0.5rem' }}>${m.total.toFixed(2)}</div>
+                  <div style={{ fontWeight:800, color:'var(--wine-dark)', marginRight:'0.5rem' }}>${m.total.toFixed(2)}</div>
                   {m.paid
                     ? <span style={{ fontSize:'0.8rem', fontWeight:700, color:'var(--green)', background:'var(--green)20', padding:'0.3rem 0.6rem', borderRadius:'8px', whiteSpace:'nowrap' }}>✓ Paid</span>
                     : <button onClick={() => markPaid(recon.reconciliation_id, m)}
-                        style={{ background:'var(--amber)', color:'#fff', border:'none', borderRadius:'8px', padding:'0.35rem 0.7rem', fontSize:'0.8rem', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                        style={{ background:'var(--wine)', color:'#fff', border:'none', borderRadius:'8px', padding:'0.35rem 0.7rem', fontSize:'0.8rem', fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
                         Mark Paid
                       </button>
                   }

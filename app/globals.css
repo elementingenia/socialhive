@@ -20,6 +20,9 @@
   --terracotta: #c2410c; /* Social Events */
   --green: #15803d;      /* Outings */
   --green-light: #dcfce7;
+  --wine: #7f2561;       /* Bar */
+  --wine-dark: #661d4d;
+  --wine-light: #f3e0ea;
 
   /* Utility */
   --danger: #dc2626;

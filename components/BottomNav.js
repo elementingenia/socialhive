@@ -117,9 +117,10 @@ export default function BottomNav() {
     <nav style={navBase}>
       {defaultItems.map(({ path, label, Icon }) => {
         const active = pathname === path
+        const colour = path === "/bar" ? "var(--wine)" : undefined
         return (
           <button key={path} onClick={() => handleDefaultNav(path)}
-            style={btn(active)} aria-current={active ? "page" : undefined}>
+            style={btn(active, colour)} aria-current={active ? "page" : undefined}>
             <Icon size={26} />
             {label}
           </button>
