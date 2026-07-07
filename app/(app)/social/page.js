@@ -6,6 +6,7 @@ import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import { bbToHtml } from "@/components/RichEditor"
 import { BusIcon } from "@/components/NavIcons"
+import { FormattedText } from "@/lib/textFormatter"
 
 const COLOUR = "var(--terracotta)"
 
@@ -54,7 +55,10 @@ function WelcomeBanner({ text }) {
       position: "relative",
     }}>
       <div style={{ fontSize: "0.88rem", lineHeight: 1.55, color: "#fff", paddingRight: "1.5rem" }}>
-        {text}
+        {/<[a-z][\s\S]*>/i.test(text)
+          ? <span dangerouslySetInnerHTML={{ __html: text }} />
+          : <FormattedText text={text} c1Colour="var(--terracotta)" c2Colour="rgba(255,255,255,0.85)" />
+        }
       </div>
       <button onClick={() => {
         setDismissed(true)
