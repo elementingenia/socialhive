@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
+import { isAwaitingPayment } from "@/lib/payments"
 
 const HUB_COLOURS = {
   movie:    "var(--teal)",
@@ -21,12 +22,20 @@ const FILTERS = [
   { key: "social",   label: "Social" },
 ]
 
-// Derive display status from booking record
+// Derive display status from booking record.
+// NOTE: not currently called — BookingCard groups bookings down to seat
+// COUNTS per event (grouped[event_id].confirmed/.waitlist are numbers, see
+// the grouping logic further down), which loses the individual
+// payment_status needed here. Left correct and routed through the shared
+// lib/payments convention so that whenever this page grows a real
+// paid/unpaid indicator (it currently has none), it starts from the right
+// logic instead of a fresh copy that can drift, like the other 5 copies of
+// this exact check did before 2026-07-07.
 function getStatus(booking, event) {
   if (booking.status === "waitlist") {
     return { label: "Waitlisted", bg: "#f1f5f9", color: "#64748b" }
   }
-  if (event?.payment_required && booking.payment_status !== "confirmed") {
+  if (isAwaitingPayment(booking, event)) {
     return { label: "Pending Payment", bg: "#fef3c7", color: "#92400e" }
   }
   return { label: "Confirmed", bg: "#dcfce7", color: "#166534" }

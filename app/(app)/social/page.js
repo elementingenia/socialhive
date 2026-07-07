@@ -7,6 +7,7 @@ import EventSlideOut from "@/components/EventSlideOut"
 import { bbToHtml } from "@/components/RichEditor"
 import { BusIcon } from "@/components/NavIcons"
 import { FormattedText } from "@/lib/textFormatter"
+import { isAwaitingPayment, seatsCost } from "@/lib/payments"
 
 const COLOUR = "var(--terracotta)"
 
@@ -118,7 +119,7 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
   const daysLabel = daysUntil === 0 ? "Today!" : daysUntil === 1 ? "Tomorrow" : `In ${daysUntil} days`
 
   const isConfirmed = myBooking?.status === "confirmed"
-  const isPending   = isConfirmed && event.payment_required && myBooking?.payment_status !== "confirmed"
+  const isPending   = isConfirmed && isAwaitingPayment(myBooking, event)
   const isWaitlist  = myBooking?.status === "waitlist"
   const ecNames     = coordinators.map(c => c.name || c.username).filter(Boolean)
 
@@ -188,7 +189,7 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
         <div style={{ marginTop: "0.6rem" }}>
           {isConfirmed ? (() => {
             const seats = myBooking?.seats || 1
-            const total = event.cost ? `$${(parseFloat(event.cost) * seats).toFixed(2)}` : null
+            const total = seatsCost(event, seats)
             const label = isPending
               ? `${seats} seat${seats !== 1 ? "s" : ""} booked · Unpaid${total ? " " + total : ""}`
               : `✓ ${seats} seat${seats !== 1 ? "s" : ""} confirmed${total ? " · Paid " + total : ""}`
@@ -255,7 +256,7 @@ function MyBookingsCard({ bookings, onViewAll }) {
       ) : (
         <div style={{ display: "flex", flexDirection: "column" }}>
           {sorted.slice(0, 3).map(({ events: ev, status, seats, payment_status }, i) => {
-            const isPending = status === "confirmed" && ev?.payment_required && payment_status !== "confirmed"
+            const isPending = isAwaitingPayment({ status, payment_status }, ev)
             const isWait    = status === "waitlist"
             const n         = seats || 1
             return (
@@ -279,7 +280,7 @@ function MyBookingsCard({ bookings, onViewAll }) {
                     </span>
                   ) : isPending ? (
                     <span style={{ background: "#fef3c7", color: "#92400e", borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
-                      {n} seat{n !== 1 ? "s" : ""} · Unpaid{ev?.cost ? ` $${(parseFloat(ev.cost) * n).toFixed(2)}` : ""}
+                      {n} seat{n !== 1 ? "s" : ""} · Unpaid{seatsCost(ev, n) ? ` ${seatsCost(ev, n)}` : ""}
                     </span>
                   ) : (
                     <span style={{ background: "#dcfce7", color: "#15803d", borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>

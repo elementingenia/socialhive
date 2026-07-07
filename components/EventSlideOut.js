@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
+import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, sumUnpaidSeats, seatsCost } from "@/lib/payments"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -360,7 +361,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
       {cancelTarget && (
         <ConfirmDialog
           message={`Cancel booking for ${cancelTarget.members?.name || cancelTarget.members?.username}?`}
-          paymentNote={paymentRequired && cancelTarget.payment_status === "confirmed" ? "Mark refund as due after cancelling if payment was received." : null}
+          paymentNote={paymentRequired && computeIsPaid(cancelTarget) ? "Mark refund as due after cancelling if payment was received." : null}
           onConfirm={() => cancelBooking(cancelTarget.id)}
           onCancel={() => setCancelTarget(null)}
         />
@@ -452,7 +453,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
       {/* Attendee list */}
       {(() => {
         const totalSeats = confirmed.reduce((s, b) => s + (b.seats || 1), 0)
-        const unpaidSeats = confirmed.filter(b => paymentRequired && b.payment_status !== "confirmed" && b.payment_status !== "refunded").reduce((s, b) => s + (b.seats || 1), 0)
+        const unpaidSeats = sumUnpaidSeats(confirmed, { payment_required: paymentRequired })
         return (
           <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
             Attendees — {totalSeats} seat{totalSeats !== 1 ? "s" : ""} taken
@@ -494,8 +495,8 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
               const borderCol      = isOwnBooking ? colour : (waitlistOnly ? "var(--amber)" : "var(--border)")
               // Payment info from first confirmed row (if any)
               const firstConf = confRows[0]
-              const isPaid     = firstConf?.payment_status === "confirmed"
-              const isRefunded = firstConf?.payment_status === "refunded"
+              const isPaid     = computeIsPaid(firstConf)
+              const isRefunded = computeIsRefunded(firstConf)
               // All booking IDs for this member (for bulk cancel)
               const allIds = [...confRows, ...waitRows].map(b => b.id)
               // Book Club: has_book / name_hidden live on the booking row itself —
@@ -843,8 +844,8 @@ function BookingSection({ event, onRefresh }) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
             {myConfirmed && (() => {
               const seats = myConfirmed.seats || 1
-              const isPaid = myConfirmed.payment_status === "confirmed"
-              const totalCost = event.cost ? `$${(parseFloat(event.cost) * seats).toFixed(2)}` : null
+              const isPaid = computeIsPaid(myConfirmed)
+              const totalCost = seatsCost(event, seats)
               const label = event.payment_required
                 ? (isPaid
                     ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} confirmed · Paid${totalCost ? " " + totalCost : ""}`
