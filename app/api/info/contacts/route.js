@@ -23,6 +23,7 @@ export async function POST(req) {
 
   const { name, title, phone, email, house_number, category_ids } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 })
+  if (!category_ids?.length) return NextResponse.json({ error: 'At least one category required' }, { status: 400 })
 
   const { data: contact, error } = await supabaseAdmin.from('contacts').insert({
     name: name.trim(),
@@ -56,12 +57,11 @@ export async function PATCH(req) {
   }
 
   if (category_ids !== undefined) {
+    if (!category_ids.length) return NextResponse.json({ error: 'At least one category required' }, { status: 400 })
     await supabaseAdmin.from('contact_category_members').delete().eq('contact_id', id)
-    if (category_ids.length) {
-      await supabaseAdmin.from('contact_category_members').insert(
-        category_ids.map(cid => ({ contact_id: id, category_id: cid }))
-      )
-    }
+    await supabaseAdmin.from('contact_category_members').insert(
+      category_ids.map(cid => ({ contact_id: id, category_id: cid }))
+    )
   }
   return NextResponse.json({ ok: true })
 }
