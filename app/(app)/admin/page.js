@@ -386,7 +386,7 @@ function BookClubTab() {
     setLoading(true)
     const { data } = await supabase
       .from('bookings')
-      .select('id, status, has_book, book_given_at, name_hidden, members(name, username, hide_name), events(id, title, book_id, book_snapshot, books(title))')
+      .select('id, status, has_book, book_given_at, name_hidden, members(name, username, hide_name), events(id, title, book_id, book_return_date, book_snapshot, books(title))')
       .eq('has_book', true)
       .order('book_given_at', { ascending: true })
     setRows(data || [])
@@ -432,7 +432,10 @@ function BookClubTab() {
                     {r.status === 'cancelled' && <span style={{ color:'var(--danger)', fontWeight:600, fontSize:'0.72rem' }}> · Cancelled</span>}
                   </div>
                   <div style={{ fontSize:'0.78rem', color:'var(--text-dim)', marginTop:'0.15rem' }}>{bookTitle}</div>
-                  <div style={{ fontSize:'0.72rem', color:'var(--purple)', fontWeight:600, marginTop:'0.2rem' }}>{daysOut(r.book_given_at)}</div>
+                  <div style={{ fontSize:'0.72rem', color:'var(--purple)', fontWeight:600, marginTop:'0.2rem' }}>
+                    {daysOut(r.book_given_at)}
+                    {r.events?.book_return_date && ` · Due back ${fmtDate(r.events.book_return_date)}`}
+                  </div>
                 </div>
                 <button onClick={() => markReturned(r.id)} disabled={clearing === r.id}
                   style={{ fontSize:'0.78rem', fontWeight:700, padding:'0.4rem 0.8rem', borderRadius:'8px', border:'1px solid var(--purple)',

@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
+import { getToken } from "@/components/ResidentEditPanel"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -31,14 +32,21 @@ function Toast({ msg }) {
 }
 
 // ── Booking Strip ────────────────────────────────────────────────────────────
-function BookingStrip({ isJoined }) {
+function BookingStrip({ isJoined, hasBook, bookReturnDate }) {
   const base = { display: "flex", alignItems: "center", justifyContent: "space-between",
     padding: "0.55rem 1rem", fontSize: "0.82rem", fontWeight: 600, gap: "0.5rem" }
   if (isJoined) {
     return (
-      <div style={{ ...base, background: "#f0fdf4", borderTop: "1px solid #bbf7d0" }}>
-        <span style={{ color: "#15803d" }}>✓ You're attending</span>
-        <span style={{ color: "#15803d", fontSize: "0.75rem" }}>Tap to manage →</span>
+      <div style={{ background: "#f0fdf4", borderTop: "1px solid #bbf7d0" }}>
+        <div style={base}>
+          <span style={{ color: "#15803d" }}>✓ You're attending</span>
+          <span style={{ color: "#15803d", fontSize: "0.75rem" }}>Tap to manage →</span>
+        </div>
+        {hasBook && bookReturnDate && (
+          <div style={{ padding: "0 1rem 0.55rem", fontSize: "0.78rem", fontWeight: 600, color: "#15803d" }}>
+            Return Book By - {fmtDate(bookReturnDate)}
+          </div>
+        )}
       </div>
     )
   }
@@ -52,35 +60,57 @@ function BookingStrip({ isJoined }) {
 
 // ── Book Club Event Card ─────────────────────────────────────────────────────
 function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) {
+  const { member, isAdmin } = useUser()
   const [summaryOpen,     setSummaryOpen]     = useState(false)
   const [attendeesOpen,   setAttendeesOpen]   = useState(false)
   const [attendees,       setAttendees]       = useState(null)
   const [attendeesLoading,setAttendeesLoading]= useState(false)
+  const [togglingId,      setTogglingId]      = useState(null)
   const book          = event.books || event.book_snapshot
   const bookLink      = book?.rating_link || null
   const communityScore = book?.avg_score ? parseFloat(book.avg_score).toFixed(1) : null
   const voteCount      = book?.vote_count || 0
 
-  async function toggleAttendees() {
-    if (attendeesOpen) { setAttendeesOpen(false); return }
-    if (attendees !== null) { setAttendeesOpen(true); return }
-    setAttendeesLoading(true)
+  const activeEC  = (event.event_coordinators || []).find(ec => !ec.replaced_at)
+  const coordinator = activeEC?.members?.name || activeEC?.members?.username || null
+  const isEC = !!(member && activeEC && activeEC.member_id === member.id)
+  const canManageBooks = isAdmin || isEC
+
+  async function loadAttendees() {
     const { data } = await supabase
       .from("bookings")
-      .select("seats, members(name, username, hide_name)")
+      .select("id, seats, has_book, name_hidden, members(id, name, username, hide_name)")
       .eq("event_id", event.id)
       .eq("status", "confirmed")
     setAttendees((data || []).map(b => ({
-      name: b.members?.hide_name ? "Anonymous" : (b.members?.name || b.members?.username || "Member"),
+      id: b.id,
+      name: (b.members?.hide_name || b.name_hidden) ? "Resident" : (b.members?.name || b.members?.username || "Member"),
       seats: b.seats || 1,
+      hasBook: !!b.has_book,
     })))
+  }
+
+  async function toggleAttendees() {
+    if (attendeesOpen) { setAttendeesOpen(false); return }
+    setAttendeesLoading(true)
+    await loadAttendees()
     setAttendeesLoading(false)
     setAttendeesOpen(true)
   }
 
+  async function toggleHasBook(bookingId, current) {
+    setTogglingId(bookingId)
+    const token = await getToken()
+    await fetch("/api/coordinator", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ event_id: event.id, action: "set_has_book", booking_id: bookingId, has_book: !current }),
+    })
+    await loadAttendees()
+    setTogglingId(null)
+  }
+
   const isJoined = booking?.status === "confirmed"
-  const activeEC  = (event.event_coordinators || []).find(ec => !ec.replaced_at)
-  const coordinator = activeEC?.members?.name || activeEC?.members?.username || null
 
   return (
     <div onClick={onOpen}
@@ -180,9 +210,21 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) 
           <div style={{ marginTop: 6, background: "var(--surface2)", borderRadius: 10, padding: "0.4rem 0.8rem 0.5rem" }}>
             {attendees && attendees.length > 0 ? (
               attendees.map((a, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0",
+                <div key={a.id || i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", padding: "0.3rem 0",
                   borderBottom: i < attendees.length - 1 ? "1px solid var(--border)" : "none" }}>
                   <span>{a.name}</span>
+                  {canManageBooks && (
+                    <div onClick={e => { e.stopPropagation(); toggleHasBook(a.id, a.hasBook) }} role="switch" aria-checked={a.hasBook}
+                      title={a.hasBook ? "Mark as returned" : "Mark book as given out"}
+                      style={{ display: "flex", alignItems: "center", gap: 6, cursor: togglingId === a.id ? "wait" : "pointer", opacity: togglingId === a.id ? 0.6 : 1 }}>
+                      <span style={{ fontSize: "0.72rem", fontWeight: 700, color: a.hasBook ? colour : "var(--text-dim)" }}>{a.hasBook ? "Has Book" : "No Book"}</span>
+                      <div style={{ position: "relative", width: 36, height: 20, borderRadius: 10,
+                        background: a.hasBook ? colour : "var(--border)", transition: "background 0.2s", flexShrink: 0 }}>
+                        <span style={{ position: "absolute", top: 2, left: a.hasBook ? 18 : 2, width: 16, height: 16,
+                          borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,.25)" }} />
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))
             ) : (
@@ -193,7 +235,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) 
       </div>
 
       {/* Booking status strip */}
-      <BookingStrip isJoined={isJoined} />
+      <BookingStrip isJoined={isJoined} hasBook={!!booking?.has_book} bookReturnDate={event?.book_return_date} />
     </div>
   )
 }
@@ -480,6 +522,7 @@ function AdminEventForm({ event, members, onSave, onClose }) {
   const activeEC = event ? (event.event_coordinators || []).find(ec => !ec.replaced_at) : null
   const [form,   setForm]   = useState({
     event_date:   event?.event_date || "",
+    kit_return_date: event?.kit_return_date || "",
     book_return_date: event?.book_return_date || "",
     description:  event?.description || "",
     welcome_message: event?.welcome_message || "",
@@ -537,6 +580,7 @@ function AdminEventForm({ event, members, onSave, onClose }) {
       description:     form.description,
       welcome_message: form.welcome_message,
       book_id:         bookId,
+      kit_return_date: form.kit_return_date || null,
       book_return_date: form.book_return_date || null,
       archived:        false,
       book_snapshot:   selectedBook ? {
@@ -593,8 +637,16 @@ function AdminEventForm({ event, members, onSave, onClose }) {
 
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Kit Return Date</label>
+        <input type="date" value={form.kit_return_date} onChange={e => set("kit_return_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
+          style={inputStyle} />
+        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 4 }}>When the whole kit goes back to the library.</div>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Book Return Date</label>
         <input type="date" value={form.book_return_date} onChange={e => set("book_return_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
           style={inputStyle} />
+        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 4 }}>When attendees must return their copy to you — allow time before the kit return date.</div>
       </div>
 
       <div style={{ marginBottom: 12 }}>
@@ -722,7 +774,7 @@ export default function BookClubHome() {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, description, welcome_message, book_id, book_return_date, book_snapshot, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, description, welcome_message, book_id, kit_return_date, book_return_date, book_snapshot, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("hub_type", "bookclub")
       .eq("archived", false)
       .order("event_date", { ascending: true })
