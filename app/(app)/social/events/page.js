@@ -807,6 +807,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 
 // ── Event Card ────────────────────────────────────────────────────────────────
 function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) {
+  const { member } = useUser()
   const [showAttendees, setShowAttendees] = useState(false)
   const today     = new Date(); today.setHours(0, 0, 0, 0)
   const evDate    = localDate(event.event_date)
@@ -942,12 +943,23 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
               {confirmedBookings.length > 0 ? (
                 <>
                   {isAdmin && <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--green)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.15rem" }}>Confirmed</div>}
-                  {confirmedBookings.map((b, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
-                      <span>{showNames ? (b.member?.name || b.member?.username || "Member") : "Guest"}</span>
-                      <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
-                    </div>
-                  ))}
+                  {confirmedBookings.map((b, i) => {
+                    const isOwn     = b.member_id === member?.id
+                    const isPrivate = !!b.member?.hide_name
+                    const label = isOwn ? "You"
+                      : !showNames ? "Guest"
+                      : (isPrivate && !isAdmin) ? "Resident"
+                      : (b.member?.name || b.member?.username || "Member")
+                    return (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
+                        <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--terracotta)" : "var(--text)" }}>
+                          {label}
+                          {isPrivate && isAdmin && !isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
+                        </span>
+                        <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
+                      </div>
+                    )
+                  })}
                 </>
               ) : (
                 <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", fontStyle: "italic" }}>No bookings yet</div>
@@ -955,12 +967,22 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
               {isAdmin && waitlistBookings.length > 0 && (
                 <>
                   <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--amber-dark)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "0.5rem", marginBottom: "0.15rem" }}>Waitlist</div>
-                  {waitlistBookings.map((b, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
-                      <span>{b.member?.name || b.member?.username || "Member"}</span>
-                      <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
-                    </div>
-                  ))}
+                  {waitlistBookings.map((b, i) => {
+                    const isOwn     = b.member_id === member?.id
+                    const isPrivate = !!b.member?.hide_name
+                    // Waitlist rows are always admin-visible only (this whole block is
+                    // {isAdmin && ...} gated below), so real name + (P) marker, no masking.
+                    const label = isOwn ? "You" : (b.member?.name || b.member?.username || "Member")
+                    return (
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
+                        <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--terracotta)" : "var(--text)" }}>
+                          {label}
+                          {isPrivate && !isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
+                        </span>
+                        <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
+                      </div>
+                    )
+                  })}
                 </>
               )}
             </div>
@@ -997,7 +1019,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, booked_at, member:members!member_id(name, username))")
+      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, booked_at, member:members!member_id(id, name, username, hide_name))")
       .eq("hub_type", "social")
       .eq("archived", false)
       .order("event_date", { ascending: true })

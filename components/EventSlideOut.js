@@ -481,13 +481,17 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
             {attendeeGroups.map(({ member, confirmed: confRows, waitlist: waitRows }) => {
-              const name = member?.hide_name ? "Resident" : (member?.name || member?.username || "—")
+              const isOwnBooking   = member?.id === currentMember?.id
+              // This whole panel is already admin/EC-only (showCoordinatorPanel) - show the
+              // real name rather than masking to "Resident", but flag Private members with
+              // a (P) marker so admins/ECs still know at a glance. Own row always reads "You".
+              const isPrivate = !!member?.hide_name
+              const name = isOwnBooking ? "You" : (member?.name || member?.username || "—")
               const confirmedSeats = confRows.reduce((s, b) => s + (b.seats || 1), 0)
               const waitlistSeats  = waitRows.reduce((s, b) => s + (b.seats || 1), 0)
-              const isOwnBooking   = member?.id === currentMember?.id
               const hasSplit       = confirmedSeats > 0 && waitlistSeats > 0
               const waitlistOnly   = confirmedSeats === 0 && waitlistSeats > 0
-              const borderCol      = waitlistOnly ? "var(--amber)" : "var(--border)"
+              const borderCol      = isOwnBooking ? colour : (waitlistOnly ? "var(--amber)" : "var(--border)")
               // Payment info from first confirmed row (if any)
               const firstConf = confRows[0]
               const isPaid     = firstConf?.payment_status === "confirmed"
@@ -500,11 +504,14 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
               const hasBook    = !!primaryRow?.has_book
               const isHidden   = !!primaryRow?.name_hidden
               return (
-                <div key={member?.id || name} style={{ background: "var(--surface2)", borderRadius: 10, padding: "10px 12px",
-                  border: `1px solid ${borderCol}` }}>
+                <div key={member?.id || name} style={{ background: isOwnBooking ? colour + "10" : "var(--surface2)", borderRadius: 10, padding: "10px 12px",
+                  border: `${isOwnBooking ? 2 : 1}px solid ${borderCol}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>{name}</div>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: isOwnBooking ? colour : "var(--text)" }}>
+                        {name}
+                        {isPrivate && !isOwnBooking && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", marginLeft: 5 }}>(P)</span>}
+                      </div>
                       <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2, display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {confirmedSeats > 0 && (
                           <span>{confirmedSeats} seat{confirmedSeats !== 1 ? "s" : ""}</span>
@@ -583,12 +590,17 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {data.cancelled_book_out.map(b => {
-              const bname = b.members?.hide_name || b.name_hidden ? "Resident" : (b.members?.name || b.members?.username || "—")
+              const isOwn     = b.members?.id === currentMember?.id
+              const isPrivate = !!(b.members?.hide_name || b.name_hidden)
+              const bname = isOwn ? "You" : (b.members?.name || b.members?.username || "—")
               return (
-                <div key={b.id} style={{ background: "var(--surface2)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--amber)" }}>
+                <div key={b.id} style={{ background: isOwn ? colour + "10" : "var(--surface2)", borderRadius: 10, padding: "10px 12px", border: `${isOwn ? 2 : 1}px solid ${isOwn ? colour : "var(--amber)"}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                     <div>
-                      <span style={{ fontWeight: 600, fontSize: 14 }}>{bname}</span>
+                      <span style={{ fontWeight: 700, fontSize: 14, color: isOwn ? colour : "var(--text)" }}>
+                        {bname}
+                        {isPrivate && !isOwn && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", marginLeft: 5 }}>(P)</span>}
+                      </span>
                       <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 6 }}>· Cancelled, book still out</span>
                     </div>
                     <button onClick={() => toggleHasBook(b)}
@@ -609,13 +621,18 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
           <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 8 }}>⚠️ Refunds Due ({refundPending.length})</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {refundPending.map(b => {
-              const name = b.members?.hide_name ? "Resident" : (b.members?.name || b.members?.username || "—")
+              const isOwn     = b.members?.id === currentMember?.id
+              const isPrivate = !!b.members?.hide_name
+              const name = isOwn ? "You" : (b.members?.name || b.members?.username || "—")
               const seats = b.seats || 1
               const total = eventCost ? `$${(eventCost * seats).toFixed(2)}` : null
               return (
                 <div key={b.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                   <div>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: "#92400e" }}>{name}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#92400e" }}>
+                      {name}
+                      {isPrivate && !isOwn && <span style={{ fontSize: 11, fontWeight: 700, color: "#92400e", opacity: 0.7, marginLeft: 5 }}>(P)</span>}
+                    </span>
                     <span style={{ fontSize: 11, color: "#d97706", marginLeft: 6 }}>{seats} seat{seats !== 1 ? "s" : ""}{total ? ` · ${total}` : ""}</span>
                   </div>
                   <button onClick={() => toggleRefund(b)}
@@ -635,13 +652,18 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
           <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", marginBottom: 8 }}>✓ Refunds Issued ({refundIssued.length})</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {refundIssued.map(b => {
-              const name = b.members?.hide_name ? "Resident" : (b.members?.name || b.members?.username || "—")
+              const isOwn     = b.members?.id === currentMember?.id
+              const isPrivate = !!b.members?.hide_name
+              const name = isOwn ? "You" : (b.members?.name || b.members?.username || "—")
               const seats = b.seats || 1
               const total = eventCost ? `$${(eventCost * seats).toFixed(2)}` : null
               return (
                 <div key={b.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                   <div>
-                    <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{name}</span>
+                    <span style={{ fontSize: 12, color: "var(--text-dim)", fontWeight: isOwn ? 700 : 400 }}>
+                      {name}
+                      {isPrivate && !isOwn && <span style={{ fontWeight: 700, marginLeft: 5 }}>(P)</span>}
+                    </span>
                     <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 6 }}>{seats} seat{seats !== 1 ? "s" : ""}{total ? ` · ${total}` : ""}</span>
                   </div>
                   <button onClick={() => toggleRefund(b)}

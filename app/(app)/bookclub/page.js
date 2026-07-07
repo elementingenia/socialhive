@@ -82,12 +82,18 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) 
       .select("id, seats, has_book, name_hidden, members(id, name, username, hide_name)")
       .eq("event_id", event.id)
       .eq("status", "confirmed")
-    setAttendees((data || []).map(b => ({
-      id: b.id,
-      name: (b.members?.hide_name || b.name_hidden) ? "Resident" : (b.members?.name || b.members?.username || "Member"),
-      seats: b.seats || 1,
-      hasBook: !!b.has_book,
-    })))
+    setAttendees((data || []).map(b => {
+      const isOwn     = b.members?.id === member?.id
+      const isPrivate = !!(b.members?.hide_name || b.name_hidden)
+      return {
+        id: b.id,
+        name: isOwn ? "You" : (isPrivate && !canManageBooks) ? "Resident" : (b.members?.name || b.members?.username || "Member"),
+        isOwn,
+        isPrivate,
+        seats: b.seats || 1,
+        hasBook: !!b.has_book,
+      }
+    }))
   }
 
   async function toggleAttendees() {
@@ -212,7 +218,10 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) 
               attendees.map((a, i) => (
                 <div key={a.id || i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", padding: "0.3rem 0",
                   borderBottom: i < attendees.length - 1 ? "1px solid var(--border)" : "none" }}>
-                  <span>{a.name}</span>
+                  <span style={{ fontWeight: a.isOwn ? 700 : 400, color: a.isOwn ? colour : "var(--text)" }}>
+                    {a.name}
+                    {a.isPrivate && canManageBooks && !a.isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
+                  </span>
                   {canManageBooks && (
                     <div onClick={e => { e.stopPropagation(); toggleHasBook(a.id, a.hasBook) }} role="switch" aria-checked={a.hasBook}
                       title={a.hasBook ? "Mark as returned" : "Mark book as given out"}
