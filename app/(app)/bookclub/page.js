@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
-import { bbToHtml } from "@/components/RichEditor"
+import RichEditor, { bbToHtml } from "@/components/RichEditor"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -614,9 +614,12 @@ function AdminEventForm({ event, members, onSave, onClose }) {
 
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Event Details</label>
-        <textarea rows={3} value={form.description} onChange={e => set("description", e.target.value)}
+        <RichEditor
+          initialValue={form.description}
+          hubColour="var(--purple)"
+          onChange={html => set("description", html)}
           placeholder="Any extra details about this meeting…"
-          style={{ ...inputStyle, resize: "vertical", minHeight: 72 }} />
+        />
       </div>
 
 
