@@ -24,3 +24,23 @@ export async function POST(req) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
 }
+
+// DELETE — only allowed when no documents reference this category
+export async function DELETE(req) {
+  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+  const member = await getAdminMember(token)
+  if (!member) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+
+  const { id } = await req.json()
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const { count } = await supabaseAdmin
+    .from('documents').select('*', { count: 'exact', head: true }).eq('category_id', id)
+  if ((count || 0) > 0) {
+    return NextResponse.json({ error: `Category has ${count} document${count === 1 ? '' : 's'} assigned — remove them first` }, { status: 409 })
+  }
+
+  const { error } = await supabaseAdmin.from('document_categories').delete().eq('id', id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}

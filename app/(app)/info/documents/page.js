@@ -2,14 +2,12 @@
 import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
+import { Sheet, COLOUR, inputStyle, labelStyle, getToken } from "@/components/ResidentEditPanel"
 
-const COLOUR = "#4e7aab"
-
-const inputStyle = {
-  width: "100%", padding: "0.75rem 1rem", borderRadius: 10,
-  border: "1px solid var(--border)", background: "var(--surface)",
-  color: "var(--text)", fontSize: "0.95rem", boxSizing: "border-box",
-  fontFamily: "inherit", appearance: "none", WebkitAppearance: "none",
+const secondaryButtonStyle = {
+  padding: "0.5rem 0.9rem", borderRadius: 10, border: "1px solid var(--border)",
+  background: "var(--surface)", color: "var(--text)", fontWeight: 700,
+  fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit",
 }
 
 function FileTypeBadge({ fileName }) {
@@ -31,77 +29,101 @@ function FileTypeBadge({ fileName }) {
   )
 }
 
-function DocumentCard({ doc }) {
+// ── Document card — primary content (open) always front and centre;         │
+// Status/Delete are small, secondary, admin-only actions below a divider ────
+function DocumentCard({ doc, isAdmin, badge, onToggleActive, onDelete }) {
   return (
-    <a href={doc.file_url} target="_blank" rel="noreferrer" style={{
-      display: "block", textDecoration: "none",
+    <div style={{
       background: "var(--surface)", borderRadius: 12,
       border: "1px solid var(--border)", padding: "0.9rem 1rem",
       marginBottom: "0.6rem", boxShadow: "var(--shadow)",
     }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.2rem" }}>
-            <FileTypeBadge fileName={doc.file_name} />
-            <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text)" }}>
-              {doc.title}
-            </span>
-          </div>
-          {doc.description && (
-            <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.45 }}>
-              {doc.description}
-            </p>
+      <a href={doc.file_url} target="_blank" rel="noreferrer" style={{ display: "block", textDecoration: "none" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.2rem", flexWrap: "wrap" }}>
+          <FileTypeBadge fileName={doc.file_name} />
+          <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text)" }}>{doc.title}</span>
+          {badge && (
+            <span style={{
+              fontSize: "0.65rem", fontWeight: 700, padding: "0.1rem 0.45rem",
+              borderRadius: 10, background: "var(--surface2)", color: "var(--text-dim)",
+            }}>{badge}</span>
           )}
-          <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: COLOUR, fontWeight: 600 }}>
-            Open ↗
-          </div>
         </div>
-      </div>
-    </a>
+        {doc.description && (
+          <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.45 }}>
+            {doc.description}
+          </p>
+        )}
+        <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: COLOUR, fontWeight: 600 }}>
+          Open ↗
+        </div>
+      </a>
+      {isAdmin && (
+        <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.6rem", paddingTop: "0.6rem", borderTop: "1px solid var(--border)" }}>
+          <button onClick={onToggleActive} style={{
+            fontSize: "0.75rem", padding: "0.25rem 0.6rem", borderRadius: 6, border: "1px solid var(--border)",
+            cursor: "pointer", fontFamily: "inherit",
+            background: doc.active ? "#dcfce7" : "#fee2e2", color: doc.active ? "#166534" : "#991b1b",
+          }}>{doc.active ? "Active" : "Hidden"}</button>
+          <button onClick={onDelete} style={{
+            fontSize: "0.75rem", padding: "0.25rem 0.6rem", borderRadius: 6, border: "1px solid #fca5a5",
+            cursor: "pointer", fontFamily: "inherit", background: "#fee2e2", color: "#991b1b",
+          }}>Delete</button>
+        </div>
+      )}
+    </div>
   )
 }
 
-// ── Admin panel ───────────────────────────────────────────────────────────────
-function AdminPanel({ categories, onUploaded }) {
+// ── Category single-select — existing categories only, no inline create ──────
+function CategorySelect({ categories, value, onChange, placeholder = "No category" }) {
+  const [open, setOpen] = useState(false)
+  const selected = categories.find(c => c.id === value)
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button type="button"
+        onClick={() => setOpen(o => !o)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        style={{
+          ...inputStyle, textAlign: "left", display: "flex", justifyContent: "space-between",
+          alignItems: "center", cursor: "pointer",
+        }}>
+        <span style={{ color: selected ? "var(--text)" : "var(--text-dim)" }}>{selected ? selected.name : placeholder}</span>
+        <span style={{ color: "var(--text-dim)", fontSize: "0.7rem" }}>▼</span>
+      </button>
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20,
+          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
+          boxShadow: "var(--shadow)", maxHeight: 220, overflowY: "auto",
+        }}>
+          <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => { onChange(""); setOpen(false) }} style={{
+            display: "block", width: "100%", textAlign: "left", padding: "0.6rem 0.85rem",
+            background: "none", border: "none", cursor: "pointer", fontFamily: "inherit",
+            fontSize: "0.88rem", color: "var(--text-dim)",
+          }}>{placeholder}</button>
+          {categories.map(c => (
+            <button key={c.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => { onChange(c.id); setOpen(false) }} style={{
+              display: "block", width: "100%", textAlign: "left", padding: "0.6rem 0.85rem",
+              background: "none", border: "none", borderTop: "1px solid var(--border)", cursor: "pointer",
+              fontFamily: "inherit", fontSize: "0.88rem", color: "var(--text)",
+            }}>{c.name}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Add Document ───────────────────────────────────────────────────────────────
+function AddDocumentForm({ categories, onUploaded, onClose }) {
   const [form, setForm]     = useState({ title: "", description: "", category_id: "" })
   const [file, setFile]     = useState(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError]   = useState("")
-  const [docs, setDocs]     = useState([])
-  const [catForm, setCatForm] = useState("")
-  const [catSaving, setCatSaving] = useState(false)
-
-  const loadDocs = useCallback(async () => {
-    const { data } = await supabase
-      .from("documents")
-      .select("id, title, file_name, active, category:document_categories(name)")
-      .order("created_at", { ascending: false })
-    setDocs(data || [])
-  }, [])
-
-  useEffect(() => { loadDocs() }, [loadDocs])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
-
-  async function getToken() {
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.access_token
-  }
-
-  async function addCategory() {
-    if (!catForm.trim()) return
-    setCatSaving(true)
-    // Categories are low-risk — but still need service role. Use API pattern:
-    const token = await getToken()
-    await fetch("/api/info/doc-categories", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body: JSON.stringify({ name: catForm.trim() }),
-    })
-    setCatForm("")
-    setCatSaving(false)
-    onUploaded()
-  }
 
   async function handleUpload() {
     setError("")
@@ -122,124 +144,114 @@ function AdminPanel({ categories, onUploaded }) {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Upload failed")
-      setForm({ title: "", description: "", category_id: "" })
-      setFile(null)
-      document.getElementById("doc-file-input").value = ""
-      loadDocs()
       onUploaded()
+      onClose()
     } catch (e) {
       setError(e.message)
     }
     setUploading(false)
   }
 
-  async function toggleActive(doc) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      <div>
+        <label style={labelStyle}>Title <span style={{ color: "var(--danger)" }}>*</span></label>
+        <input value={form.title} onChange={e => set("title", e.target.value)}
+          style={{ ...inputStyle, border: `1.5px solid ${form.title.trim() ? "var(--green)" : "var(--danger)"}` }} />
+      </div>
+      <div>
+        <label style={labelStyle}>Description</label>
+        <textarea value={form.description} onChange={e => set("description", e.target.value)} rows={2}
+          style={{ ...inputStyle, resize: "vertical" }} />
+      </div>
+      <div>
+        <label style={labelStyle}>Category</label>
+        <CategorySelect categories={categories} value={form.category_id} onChange={v => set("category_id", v)} />
+      </div>
+      <div>
+        <label style={labelStyle}>File <span style={{ color: "var(--danger)" }}>*</span></label>
+        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.3rem" }}>
+          PDF, Word, or image — max 10MB
+        </div>
+        <input id="doc-file-input" type="file"
+          accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
+          onChange={e => setFile(e.target.files[0] || null)}
+          style={{ fontSize: "0.88rem", color: "var(--text)" }} />
+      </div>
+      {error && <div style={{ color: "#b91c1c", fontSize: "0.83rem" }}>{error}</div>}
+      <button onClick={handleUpload} disabled={uploading} style={{
+        background: COLOUR, color: "#fff", border: "none", borderRadius: 10,
+        padding: "0.75rem", fontWeight: 700, fontSize: "0.95rem",
+        cursor: uploading ? "not-allowed" : "pointer", fontFamily: "inherit",
+        opacity: uploading ? 0.7 : 1,
+      }}>{uploading ? "Uploading…" : "Upload Document"}</button>
+    </div>
+  )
+}
+
+// ── Category management ───────────────────────────────────────────────────────
+function DocCategoryManager({ categories, setCategories, onSaved }) {
+  const [catForm, setCatForm]     = useState("")
+  const [catSaving, setCatSaving] = useState(false)
+  const [catError, setCatError]   = useState("")
+
+  async function addCategory() {
+    if (!catForm.trim()) return
+    setCatSaving(true); setCatError("")
     const token = await getToken()
-    await fetch("/api/info/documents", {
-      method: "PATCH",
+    const res = await fetch("/api/info/doc-categories", {
+      method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body: JSON.stringify({ id: doc.id, active: !doc.active }),
+      body: JSON.stringify({ name: catForm.trim() }),
     })
-    loadDocs()
+    const data = await res.json()
+    setCatSaving(false)
+    if (!res.ok) { setCatError(data.error || "Add failed"); return }
+    setCatForm("")
+    setCategories(prev => [...prev, data])
+    onSaved()
   }
 
-  async function deleteDoc(doc) {
-    if (!confirm(`Delete "${doc.title}"? This cannot be undone.`)) return
+  async function deleteCategory(cat) {
+    setCatError("")
+    if (!confirm(`Delete category "${cat.name}"?`)) return
     const token = await getToken()
-    await fetch("/api/info/documents", {
+    const res = await fetch("/api/info/doc-categories", {
       method: "DELETE",
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-      body: JSON.stringify({ id: doc.id }),
+      body: JSON.stringify({ id: cat.id }),
     })
-    loadDocs()
-    onUploaded()
+    const data = await res.json()
+    if (!res.ok) { setCatError(data.error || "Delete failed"); return }
+    setCategories(prev => prev.filter(c => c.id !== cat.id))
+    onSaved()
   }
 
   return (
-    <div style={{ marginTop: "1.5rem", borderTop: "1px solid var(--border)", paddingTop: "1.25rem" }}>
-      <div style={{ fontWeight: 700, fontSize: "0.9rem", color: COLOUR, marginBottom: "1rem" }}>
-        Admin — Upload Document
-      </div>
-
-      {/* Category management */}
-      <div style={{ marginBottom: "1rem" }}>
-        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.4rem", fontWeight: 600 }}>
-          Add category
-        </div>
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <input value={catForm} onChange={e => setCatForm(e.target.value)}
-            placeholder="Category name" style={{ ...inputStyle, flex: 1 }} />
-          <button onClick={addCategory} disabled={catSaving || !catForm.trim()} style={{
-            background: COLOUR, color: "#fff", border: "none", borderRadius: 10,
-            padding: "0 1rem", fontWeight: 700, cursor: "pointer", fontSize: "0.88rem", fontFamily: "inherit",
-          }}>Add</button>
-        </div>
-      </div>
-
-      {/* Upload form */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.65rem" }}>
-        <input value={form.title} onChange={e => set("title", e.target.value)}
-          placeholder="Document title *" style={inputStyle} />
-        <textarea value={form.description} onChange={e => set("description", e.target.value)}
-          placeholder="Description (optional)" rows={2}
-          style={{ ...inputStyle, resize: "vertical" }} />
-        <select value={form.category_id} onChange={e => set("category_id", e.target.value)} style={inputStyle}>
-          <option value="">No category</option>
-          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <div>
-          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.3rem" }}>
-            Select file (PDF, Word, image — max 10MB)
-          </div>
-          <input id="doc-file-input" type="file"
-            accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-            onChange={e => setFile(e.target.files[0] || null)}
-            style={{ fontSize: "0.88rem", color: "var(--text)" }} />
-        </div>
-        {error && <div style={{ color: "#b91c1c", fontSize: "0.83rem" }}>{error}</div>}
-        <button onClick={handleUpload} disabled={uploading} style={{
+    <div>
+      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.75rem" }}>
+        <input value={catForm} onChange={e => setCatForm(e.target.value)}
+          placeholder="New category name" style={{ ...inputStyle, flex: 1 }} />
+        <button onClick={addCategory} disabled={catSaving || !catForm.trim()} style={{
           background: COLOUR, color: "#fff", border: "none", borderRadius: 10,
-          padding: "0.75rem", fontWeight: 700, fontSize: "0.95rem",
-          cursor: uploading ? "not-allowed" : "pointer", fontFamily: "inherit",
-          opacity: uploading ? 0.7 : 1,
-        }}>{uploading ? "Uploading…" : "Upload Document"}</button>
+          padding: "0 1rem", fontWeight: 700, cursor: "pointer", fontSize: "0.88rem", fontFamily: "inherit",
+        }}>Add</button>
       </div>
-
-      {/* Existing docs list */}
-      {docs.length > 0 && (
-        <div style={{ marginTop: "1.25rem" }}>
-          <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-dim)", marginBottom: "0.5rem" }}>
-            All documents
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+        {categories.map(c => (
+          <div key={c.id} style={{
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "0.5rem 0.7rem", background: "var(--surface2)", borderRadius: 8,
+          }}>
+            <span style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--text)" }}>{c.name}</span>
+            <button onClick={() => deleteCategory(c)} style={{
+              background: "none", border: "none", color: "#991b1b", cursor: "pointer",
+              fontSize: "0.78rem", fontWeight: 600, fontFamily: "inherit",
+            }}>Delete</button>
           </div>
-          {docs.map(doc => (
-            <div key={doc.id} style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "0.6rem 0.75rem", background: "var(--surface2)", borderRadius: 8,
-              marginBottom: "0.4rem", gap: "0.5rem",
-            }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text)" }}>{doc.title}</div>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>
-                  {doc.category?.name || "No category"} · {doc.file_name}
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: "0.4rem", flexShrink: 0 }}>
-                <button onClick={() => toggleActive(doc)} style={{
-                  fontSize: "0.75rem", padding: "0.25rem 0.6rem", borderRadius: 6,
-                  border: "1px solid var(--border)", cursor: "pointer", fontFamily: "inherit",
-                  background: doc.active ? "#dcfce7" : "#fee2e2",
-                  color: doc.active ? "#166534" : "#991b1b",
-                }}>{doc.active ? "Active" : "Hidden"}</button>
-                <button onClick={() => deleteDoc(doc)} style={{
-                  fontSize: "0.75rem", padding: "0.25rem 0.6rem", borderRadius: 6,
-                  border: "1px solid #fca5a5", cursor: "pointer", fontFamily: "inherit",
-                  background: "#fee2e2", color: "#991b1b",
-                }}>Delete</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+        ))}
+      </div>
+      {catError && <div style={{ color: "#b91c1c", fontSize: "0.8rem", marginTop: "0.5rem" }}>{catError}</div>}
     </div>
   )
 }
@@ -251,11 +263,14 @@ export default function DocumentsPage() {
   const [documents, setDocuments]   = useState([])
   const [activeFilter, setFilter]   = useState("all")
   const [loading, setLoading]       = useState(true)
+  const [sheet, setSheet]           = useState(null) // null | "add" | "categories"
 
   const load = useCallback(async () => {
     const [catRes, docRes] = await Promise.all([
       supabase.from("document_categories").select("id, name, display_order").eq("active", true).order("display_order"),
-      supabase.from("documents").select("id, title, description, file_url, file_name, file_type, category:document_categories(id, name)").eq("active", true).order("created_at", { ascending: false }),
+      supabase.from("documents")
+        .select("id, title, description, file_url, file_name, file_type, active, category:document_categories(id, name)")
+        .order("created_at", { ascending: false }),
     ])
     setCategories(catRes.data || [])
     setDocuments(docRes.data || [])
@@ -264,9 +279,31 @@ export default function DocumentsPage() {
 
   useEffect(() => { load() }, [load])
 
-  const filtered = activeFilter === "all"
-    ? documents
-    : documents.filter(d => d.category?.id === activeFilter)
+  async function toggleActive(doc) {
+    const token = await getToken()
+    await fetch("/api/info/documents", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ id: doc.id, active: !doc.active }),
+    })
+    load()
+  }
+
+  async function deleteDoc(doc) {
+    if (!confirm(`Delete "${doc.title}"? This cannot be undone.`)) return
+    const token = await getToken()
+    await fetch("/api/info/documents", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ id: doc.id }),
+    })
+    load()
+  }
+
+  // Admins see hidden documents too (flagged), so nothing admin-manageable
+  // silently disappears — everyone else only ever sees active ones.
+  const visible = documents.filter(d => d.active || isAdmin)
+  const filtered = activeFilter === "all" ? visible : visible.filter(d => d.category?.id === activeFilter)
 
   if (loading) return (
     <div style={{ padding: "1.25rem 1rem" }}>
@@ -289,16 +326,34 @@ export default function DocumentsPage() {
         </div>
       )}
 
+      {isAdmin && (
+        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+          <button onClick={() => setSheet("add")} style={secondaryButtonStyle}>+ Add Document</button>
+          <button onClick={() => setSheet("categories")} style={secondaryButtonStyle}>Manage Categories</button>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--text-dim)", fontSize: "0.9rem" }}>
           <div style={{ fontSize: "1.8rem", marginBottom: "0.5rem" }}>📄</div>
           No documents yet
         </div>
       ) : (
-        filtered.map(doc => <DocumentCard key={doc.id} doc={doc} />)
+        filtered.map(doc => (
+          <DocumentCard key={doc.id} doc={doc} isAdmin={isAdmin}
+            badge={isAdmin && !doc.active ? "Hidden" : null}
+            onToggleActive={() => toggleActive(doc)}
+            onDelete={() => deleteDoc(doc)} />
+        ))
       )}
 
-      {isAdmin && <AdminPanel categories={categories} onUploaded={load} />}
+      <Sheet open={sheet === "add"} onClose={() => setSheet(null)} title="Add Document">
+        <AddDocumentForm categories={categories} onUploaded={load} onClose={() => setSheet(null)} />
+      </Sheet>
+
+      <Sheet open={sheet === "categories"} onClose={() => setSheet(null)} title="Manage Categories">
+        <DocCategoryManager categories={categories} setCategories={setCategories} onSaved={load} />
+      </Sheet>
     </div>
   )
 }

@@ -289,7 +289,6 @@ export default function ContactsPage() {
     if (activeFilter === null && residentsId) setFilter(residentsId)
   }, [residentsId, activeFilter])
 
-  const displayMembers  = useMemo(() => isAdmin ? members : members.filter(m => !m.hide_name), [members, isAdmin])
   const displayContacts = useMemo(() => contacts.filter(c => !c.member_id && (c.active || isAdmin)), [contacts, isAdmin])
   const contactByMemberId = useMemo(() => {
     const map = {}
@@ -297,12 +296,21 @@ export default function ContactsPage() {
     return map
   }, [contacts])
 
+  // Every active resident appears in the list for everyone — Private (hide_name)
+  // residents are never excluded, but non-admins see "Resident" with no
+  // contact details instead of their real name/email/house#/phone/title.
+  // Admins always see the real name and details regardless of Private.
   const entries = useMemo(() => {
-    const memberEntries = displayMembers.map(m => {
+    const memberEntries = members.map(m => {
       const linked = contactByMemberId[m.id]
+      const maskedForViewer = m.hide_name && !isAdmin
       return {
-        key: `m-${m.id}`, name: m.name, email: m.email, house_number: m.house_number,
-        phone: linked?.phone || null, title: linked?.title || null,
+        key: `m-${m.id}`,
+        name: maskedForViewer ? "Resident" : m.name,
+        email: maskedForViewer ? null : m.email,
+        house_number: maskedForViewer ? null : m.house_number,
+        phone: maskedForViewer ? null : (linked?.phone || null),
+        title: maskedForViewer ? null : (linked?.title || null),
         categoryIds: [residentsId, ...((linked?.contact_category_members) || []).map(x => x.category_id)].filter(Boolean),
         isMember: true, member: m,
         badge: isAdmin && m.hide_name ? "Private" : null,
@@ -316,7 +324,7 @@ export default function ContactsPage() {
       badge: isAdmin && !c.active ? "Hidden" : null,
     }))
     return [...memberEntries, ...contactEntries].sort((a, b) => a.name.localeCompare(b.name))
-  }, [displayMembers, displayContacts, contactByMemberId, residentsId, isAdmin])
+  }, [members, displayContacts, contactByMemberId, residentsId, isAdmin])
 
   const filtered = activeFilter === "all"
     ? entries
