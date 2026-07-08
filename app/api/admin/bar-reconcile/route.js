@@ -6,6 +6,17 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
+// Write a notification — fails silently if table doesn't exist yet
+async function createNotification(member_id, message) {
+  try {
+    await supabaseAdmin.from('notifications').insert({ member_id, type: 'bar_reconciled', message })
+  } catch (_) {}
+}
+
+function monthLabel(dateStr) {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
+}
+
 async function getAdmin(req) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
   if (!token) return null
@@ -181,7 +192,8 @@ export async function POST(req) {
   // Build member breakdown
   const members = groupByMember(tabs)
 
-  // If single-member settle: auto-mark as paid immediately
+  // If single-member settle: auto-mark as paid immediately (resident is being
+  // settled on the spot — no need to notify them of a balance they just paid)
   if (memberId && members.length === 1) {
     const m = members[0]
     await supabaseAdmin.from('bar_member_payments').insert({
@@ -194,6 +206,11 @@ export async function POST(req) {
     members[0].paid_at = new Date().toISOString()
   } else {
     members.forEach(m => { m.paid = false; m.paid_at = null })
+    // Bulk reconciliation — notify every resident left with an outstanding balance
+    const month = monthLabel(periodEnd)
+    for (const m of members) {
+      await createNotification(m.member_id, `Your Community Bar tab for ${month}: $${m.total.toFixed(2)} — tap to view`)
+    }
   }
 
   return NextResponse.json({

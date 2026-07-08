@@ -601,8 +601,17 @@ function AdminEventForm({ event, members, onSave, onClose }) {
 
     let eventId = event?.id
     if (eventId) {
+      const dateChanged = event?.event_date !== payload.event_date
       const { error: evErr } = await supabase.from("events").update(payload).eq("id", eventId)
       if (evErr) { setSaveError("Could not update event: " + evErr.message); setSaving(false); return }
+      if (dateChanged) {
+        const { data: { session } } = await supabase.auth.getSession()
+        fetch("/api/bookclub/notify-updated", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ event_id: eventId, title: payload.title }),
+        }).catch(() => {})
+      }
     } else {
       const { data, error: evErr } = await supabase.from("events").insert(payload).select("id").single()
       if (evErr) { setSaveError("Could not create event: " + evErr.message); setSaving(false); return }

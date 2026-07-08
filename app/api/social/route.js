@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -103,6 +104,9 @@ export async function PATCH(req) {
   if (!body.coordinator_ids?.length)
     return NextResponse.json({ error: 'At least one Event Coordinator is required' }, { status: 400 })
 
+  const { data: before } = await supabaseAdmin
+    .from('events').select('event_date, event_time, location').eq('id', body.id).single()
+
   const { error } = await supabaseAdmin
     .from('events')
     .update(buildEventPayload(body))
@@ -111,5 +115,16 @@ export async function PATCH(req) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   await writeCoordinators(body.id, body.coordinator_ids, member.id)
+
+  const dateChanged = before && (
+    before.event_date !== body.event_date ||
+    before.event_time !== (body.event_time || null) ||
+    before.location !== (body.location || null)
+  )
+  if (dateChanged) {
+    await notifyEventAttendees(supabaseAdmin, body.id, 'event_updated',
+      `${body.title} has been updated — check the new date, time or location.`)
+  }
+
   return NextResponse.json({ ok: true })
 }

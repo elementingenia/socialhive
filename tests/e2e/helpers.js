@@ -91,10 +91,36 @@ async function getTestbotMovieBooking() {
   return { ...first.events, seats: first.seats }
 }
 
+// Creates a fresh unread notification for testbot and returns its distinctive
+// message text, so the E2E notifications spec can assert on exactly this row
+// regardless of whatever else is in the table. Self-contained per run —
+// doesn't rely on a persistent fixture row staying unread across CI runs
+// (opening the drawer marks things read, which would make a static fixture
+// a one-shot test).
+async function createTestbotNotification() {
+  const members = await supaGet(`members?username=ilike.testbot&select=id`, SUPABASE_SERVICE_KEY)
+  if (!members[0]) throw new Error('testbot member not found')
+  const marker = `[e2e-check-${Date.now()}]`
+  const message = `Test notification ${marker}`
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify({ member_id: members[0].id, type: 'event_updated', message }),
+  })
+  if (!res.ok) throw new Error(`Failed to create test notification (${res.status}): ${await res.text()}`)
+  return message
+}
+
 module.exports = {
   getNextScreening,
   getUpcomingBookclubEvent,
   getTestbotMovieBooking,
+  createTestbotNotification,
   fmtDate,
   fmtTime,
   fmtDateLong,

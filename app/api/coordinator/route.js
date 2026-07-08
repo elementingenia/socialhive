@@ -6,6 +6,13 @@ const supa = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
+// Write a notification — fails silently if table doesn't exist yet
+async function createNotification(member_id, event_id, type, message) {
+  try {
+    await supa.from("notifications").insert({ member_id, event_id, type, message })
+  } catch (_) {}
+}
+
 // Helper: resolve calling member and verify they are an active EC for the event
 async function resolveEC(req, eventId) {
   const auth = req.headers.get("authorization") || ""
@@ -111,19 +118,24 @@ export async function GET(req) {
 
 // Promote waitlisted members when confirmed seats become available
 async function promoteWaitlist(event_id, freedSeats) {
-  const { data: event } = await supa.from("events").select("max_seats").eq("id", event_id).single()
+  const { data: event } = await supa.from("events").select("max_seats, title").eq("id", event_id).single()
   const { data: confirmedRows } = await supa
     .from("bookings").select("seats").eq("event_id", event_id).eq("status", "confirmed")
   let available = (event?.max_seats || 0) -
     (confirmedRows || []).reduce((s, b) => s + (b.seats || 1), 0)
   const { data: waitlisted } = await supa
-    .from("bookings").select("id, seats")
+    .from("bookings").select("id, seats, member_id")
     .eq("event_id", event_id).eq("status", "waitlist").order("booked_at")
   for (const waiter of (waitlisted || [])) {
     if (available <= 0) break
     if ((waiter.seats || 1) <= available) {
       await supa.from("bookings").update({ status: "confirmed" }).eq("id", waiter.id)
       available -= (waiter.seats || 1)
+      const seats = waiter.seats || 1
+      const msg = seats === 1
+        ? `Great news — 1 seat has been confirmed for ${event?.title || "the event"}!`
+        : `Great news — ${seats} seats have been confirmed for ${event?.title || "the event"}!`
+      await createNotification(waiter.member_id, event_id, "waitlist_promoted", msg)
     }
   }
 }
@@ -149,12 +161,20 @@ export async function PATCH(req) {
     if (!["not_required", "pending", "confirmed", "refunded"].includes(payment_status)) {
       return NextResponse.json({ error: "Invalid payment_status" }, { status: 400 })
     }
+    // Fetch previous state first so we only notify on an actual Pending -> Confirmed
+    // transition, not every toggle (e.g. Confirmed -> Pending if corrected by mistake)
+    const { data: prevBk } = await supa
+      .from("bookings").select("payment_status, member_id").eq("id", booking_id).maybeSingle()
     const { error: pe } = await supa
       .from("bookings")
       .update({ payment_status })
       .eq("id", booking_id)
       .eq("event_id", event_id)
     if (pe) return NextResponse.json({ error: pe.message }, { status: 500 })
+    if (payment_status === "confirmed" && prevBk?.payment_status !== "confirmed" && prevBk?.member_id) {
+      const { data: ev } = await supa.from("events").select("title").eq("id", event_id).single()
+      await createNotification(prevBk.member_id, event_id, "payment_confirmed", `Your payment for ${ev?.title || "this event"} has been confirmed.`)
+    }
     return NextResponse.json({ ok: true })
   }
 
@@ -197,9 +217,9 @@ export async function PATCH(req) {
 
   // ── Cancel a booking on behalf of a user ──────────────────────────────────
   if (action === "cancel_booking" && booking_id) {
-    // Fetch booking first so we know seats freed (for waitlist promotion)
+    // Fetch booking first so we know seats freed (for waitlist promotion) and who to notify
     const { data: bk } = await supa
-      .from("bookings").select("status, seats").eq("id", booking_id).maybeSingle()
+      .from("bookings").select("status, seats, member_id").eq("id", booking_id).maybeSingle()
     const { error: ce } = await supa
       .from("bookings")
       .update({ status: "cancelled" })
@@ -209,6 +229,10 @@ export async function PATCH(req) {
     // Promote waitlisted members if a confirmed seat was freed
     if (bk?.status === "confirmed") {
       await promoteWaitlist(event_id, bk.seats || 1)
+    }
+    if (bk?.member_id) {
+      const { data: ev } = await supa.from("events").select("title").eq("id", event_id).single()
+      await createNotification(bk.member_id, event_id, "booking_cancelled", `Your booking for ${ev?.title || "this event"} was cancelled.`)
     }
     return NextResponse.json({ ok: true })
   }

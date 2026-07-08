@@ -270,5 +270,8 @@ export async function DELETE(req) {
   const hadConfirmed = myBookings.some(b => b.status === 'confirmed')
   if (hadConfirmed) await promoteWaitlist(event_id)
 
+  const { data: ev } = await supabaseAdmin.from('events').select('title').eq('id', event_id).single()
+  await createNotification(member.id, event_id, 'booking_cancelled', `Your booking for ${ev?.title || 'this event'} was cancelled.`)
+
   return NextResponse.json({ success: true })
 }

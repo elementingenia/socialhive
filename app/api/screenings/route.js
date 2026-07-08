@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -199,6 +200,9 @@ export async function PATCH(req) {
     }
   }
 
+  const { data: before } = await supabaseAdmin
+    .from('events').select('event_date, event_time').eq('id', event_id).single()
+
   const { error } = await supabaseAdmin
     .from('events')
     .update({ movie_id: movie_id || null, title, event_date, event_time, max_seats: max_seats || 20, notes: notes || null, movie_snapshot: movieSnapshot })
@@ -210,6 +214,12 @@ export async function PATCH(req) {
   await supabaseAdmin.from('event_coordinators').delete().eq('event_id', event_id)
   if (coordinator_id) {
     await supabaseAdmin.from('event_coordinators').insert({ event_id, member_id: coordinator_id, assigned_by: member.id })
+  }
+
+  const dateChanged = before && (before.event_date !== event_date || before.event_time !== event_time)
+  if (dateChanged) {
+    await notifyEventAttendees(supabaseAdmin, event_id, 'event_updated',
+      `${title} has been rescheduled — check the new date and time.`)
   }
 
   return NextResponse.json({ ok: true })

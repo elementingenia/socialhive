@@ -19,7 +19,10 @@ function typeIcon(type) {
     case "waitlist_promoted": return "🎉"
     case "event_updated":     return "📅"
     case "event_cancelled":   return "❌"
+    case "booking_cancelled": return "🚫"
+    case "payment_confirmed": return "✅"
     case "payment_reminder":  return "💳"
+    case "bar_reconciled":    return "🧾"
     default:                  return "🔔"
   }
 }
@@ -29,6 +32,9 @@ function typeColour(type) {
     case "waitlist_promoted": return "var(--teal)"
     case "event_updated":     return "var(--amber-dark)"
     case "event_cancelled":   return "#e53e3e"
+    case "booking_cancelled": return "#e53e3e"
+    case "payment_confirmed": return "var(--teal)"
+    case "bar_reconciled":    return "var(--amber-dark)"
     default:                  return "var(--text-dim)"
   }
 }
