@@ -7,7 +7,7 @@ import { BusIcon } from "@/components/NavIcons"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import EventImagePicker from "@/components/EventImagePicker"
 import ExpandableText from "@/components/ExpandableText"
-import { sumUnpaidSeats, bookingStatusBadge } from "@/lib/payments"
+import { sumUnpaidSeats, bookingStatusBadge, seatsCost } from "@/lib/payments"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -92,11 +92,16 @@ function BookingStrip({ myBooking, event, isFull }) {
     // different answers to the same question. Route through the shared
     // helper like every other status display now does.
     const badge = bookingStatusBadge(myBooking, event)
+    const total = seatsCost(event, seats)
+    const statusWord = badge.label.toLowerCase() // "booked" or "confirmed" — canonical, see lib/payments.js
+    const label = badge.label === "Confirmed"
+      ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Paid " + total : ""}`
+      : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Unpaid " + total : ""}`
     const bg = badge.label === "Confirmed" ? "#f0fdf4" : "#fffbeb"
     const border = badge.label === "Confirmed" ? "#bbf7d0" : "#fde68a"
     return (
       <div style={{ ...base, background: bg, borderTop: `1px solid ${border}` }}>
-        <span style={{ color: badge.color }}>{badge.label === "Confirmed" ? "✓ " : ""}{seats} seat{seats !== 1 ? "s" : ""} {badge.label.toLowerCase()}</span>
+        <span style={{ color: badge.color }}>{label}</span>
         <span style={{ color: badge.color, fontSize: "0.75rem" }}>Tap to modify or cancel →</span>
       </div>
     )
