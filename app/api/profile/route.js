@@ -16,7 +16,7 @@ async function getMember(req) {
   // Try full select (post-migration); fall back to base columns if not yet migrated
   let { data, error } = await supabase
     .from("members")
-    .select("id, name, username, house_number, email, avatar_url, bar_opt_in, hide_name, is_admin")
+    .select("id, name, username, house_number, email, phone, avatar_url, bar_opt_in, hide_name, is_admin")
     .eq("auth_id", user.id).single()
 
   if (error) {
@@ -40,7 +40,7 @@ export async function PATCH(req) {
   if (!member) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const body    = await req.json()
-  const allowed = ["name", "house_number", "email", "bar_opt_in", "hide_name", "avatar_url"]
+  const allowed = ["name", "house_number", "email", "phone", "bar_opt_in", "hide_name", "avatar_url"]
   const updates = Object.fromEntries(Object.entries(body).filter(([k]) => allowed.includes(k)))
   if (Object.keys(updates).length === 0)
     return NextResponse.json({ error: "No valid fields" }, { status: 400 })
@@ -48,7 +48,7 @@ export async function PATCH(req) {
   // Try full update; if new columns don't exist yet, retry with only base columns
   let { data, error } = await supabase
     .from("members").update(updates).eq("id", member.id)
-    .select("id, name, username, house_number, email, avatar_url, bar_opt_in, hide_name").single()
+    .select("id, name, username, house_number, email, phone, avatar_url, bar_opt_in, hide_name").single()
 
   if (error) {
     const baseOnly = ["name", "house_number", "avatar_url", "bar_opt_in"]

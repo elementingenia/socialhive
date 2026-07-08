@@ -73,6 +73,10 @@ export async function PATCH(req) {
     }
   }
 
+  // For member-linked residents, phone is self-service via Profile (members.phone)
+  // — never write it into the contacts row here, even if an older client sends it.
+  if (member_id) delete updates.phone
+
   if (Object.keys(updates).length) {
     const { error } = await supabaseAdmin.from('contacts').update(updates).eq('id', targetId)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

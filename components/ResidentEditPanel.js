@@ -152,9 +152,8 @@ export function CategoryPicker({ categories, selectedIds, onChange, onCategoryCr
 // Single shared editor used from BOTH the Info > Contacts page and Admin >
 // Members tab, so there is exactly one implementation and one API call path
 // for "everything about this person" — not two copies that can drift apart.
-export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitle, linkedPhone, categories, residentsId, isSelf, onSaved, onClose }) {
+export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitle, categories, residentsId, isSelf, onSaved, onClose }) {
   const [title, setTitle]     = useState(linkedTitle || "")
-  const [phone, setPhone]     = useState(linkedPhone || "")
   const [categoryIds, setCategoryIds] = useState(linkedCategoryIds)
   const [isAdminFlag, setIsAdminFlag] = useState(member.is_admin)
   const [hideName, setHideName]       = useState(member.hide_name)
@@ -172,7 +171,6 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
       body: JSON.stringify({
         member_id: member.id,
         title: title.trim() || null,
-        phone: phone.trim() || null,
         category_ids: [residentsId, ...categoryIds.filter(id => id !== residentsId)],
         ...(isSelf ? {} : { is_admin: isAdminFlag }),
         hide_name: hideName,
@@ -201,6 +199,11 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
         <div style={readOnlyStyle}>{member.house_number || "—"}</div>
       </div>
       <div>
+        <label style={labelStyle}>Phone</label>
+        <div style={readOnlyStyle}>{member.phone || "—"}</div>
+        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>Set from their profile — not editable here</div>
+      </div>
+      <div>
         <label style={labelStyle}>Category</label>
         <div style={{ marginBottom: "0.4rem" }}>
           <span style={{
@@ -216,11 +219,6 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
         <label style={labelStyle}>Title / Role</label>
         <input value={title} onChange={e => setTitle(e.target.value)} style={inputStyle} />
       </div>
-      <div>
-        <label style={labelStyle}>Phone</label>
-        <input value={phone} onChange={e => setPhone(e.target.value)} type="tel" style={inputStyle} />
-      </div>
-
       <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.85rem", marginTop: "0.25rem" }}>
         <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.6rem" }}>
           Account (admin only)

@@ -50,6 +50,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
   const [name,     setName]     = useState("")
   const [email,    setEmail]    = useState("")
   const [house,    setHouse]    = useState("")
+  const [phone,    setPhone]    = useState("")
   const [hideName, setHideName] = useState(false)
   const [barOptIn, setBarOptIn] = useState(false)
   const [avatar,   setAvatar]   = useState(null)
@@ -78,6 +79,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
         setName(d.name || "")
         setEmail(d.email || "")
         setHouse(d.house_number || "")
+        setPhone(d.phone || "")
         setHideName(!!d.hide_name)
         setBarOptIn(!!d.bar_opt_in)
         setAvatar(d.avatar_url || null)
@@ -98,7 +100,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
     const res = await fetch("/api/profile", {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ name: name.trim(), email: email.trim(), house_number: house.trim(), hide_name: hideName, bar_opt_in: barOptIn, avatar_url: avatar }),
+      body: JSON.stringify({ name: name.trim(), email: email.trim(), house_number: house.trim(), phone: phone.trim(), hide_name: hideName, bar_opt_in: barOptIn, avatar_url: avatar }),
     })
     setSaving(false)
     if (res.ok) {
@@ -179,6 +181,10 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
                 <div>
                   <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.3rem" }}>House number <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>(optional)</span></label>
                   <input value={house} onChange={e => setHouse(e.target.value)} style={inputStyle} placeholder="e.g. 14" />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.3rem" }}>Phone <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>(optional)</span></label>
+                  <input value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} placeholder="e.g. 0400 000 000" type="tel" />
                 </div>
               </div>
 

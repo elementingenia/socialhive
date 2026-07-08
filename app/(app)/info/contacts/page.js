@@ -270,7 +270,7 @@ export default function ContactsPage() {
   const load = useCallback(async () => {
     const [catRes, memberRes, contactRes] = await Promise.all([
       supabase.from("contact_categories").select("id, name, display_order").eq("active", true).order("display_order"),
-      supabase.from("members").select("id, name, email, house_number, hide_name, is_admin").eq("status", "active"),
+      supabase.from("members").select("id, name, email, house_number, phone, hide_name, is_admin").eq("status", "active"),
       supabase.from("contacts")
         .select("id, name, title, phone, email, house_number, member_id, active, contact_category_members(category_id)")
         .order("display_order"),
@@ -309,7 +309,7 @@ export default function ContactsPage() {
         name: maskedForViewer ? "Resident" : m.name,
         email: maskedForViewer ? null : m.email,
         house_number: maskedForViewer ? null : m.house_number,
-        phone: maskedForViewer ? null : (linked?.phone || null),
+        phone: maskedForViewer ? null : (m.phone || null),
         title: maskedForViewer ? null : (linked?.title || null),
         categoryIds: [residentsId, ...((linked?.contact_category_members) || []).map(x => x.category_id)].filter(Boolean),
         isMember: true, member: m,
@@ -392,7 +392,6 @@ export default function ContactsPage() {
             member={sheet.member}
             linkedCategoryIds={(contactByMemberId[sheet.member.id]?.contact_category_members || []).map(x => x.category_id)}
             linkedTitle={contactByMemberId[sheet.member.id]?.title}
-            linkedPhone={contactByMemberId[sheet.member.id]?.phone}
             categories={categories}
             residentsId={residentsId}
             isSelf={sheet.member.id === me?.id}

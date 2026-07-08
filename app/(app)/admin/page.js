@@ -151,7 +151,7 @@ function MembersTab() {
 
   const load = useCallback(() => {
     Promise.all([
-      supabase.from('members').select('id, name, username, status, is_admin, hide_name, email, house_number, joined_date').order('name'),
+      supabase.from('members').select('id, name, username, status, is_admin, hide_name, email, house_number, phone, joined_date').order('name'),
       supabase.from('contact_categories').select('id, name, display_order').eq('active', true).order('display_order'),
       supabase.from('contacts').select('id, member_id, title, phone, contact_category_members(category_id)').not('member_id', 'is', null),
       supabase.from('settings').select('value').eq('key', 'invite_token').single(),
@@ -228,7 +228,6 @@ function MembersTab() {
             member={editing}
             linkedCategoryIds={(contactByMemberId[editing.id]?.contact_category_members || []).map(x => x.category_id)}
             linkedTitle={contactByMemberId[editing.id]?.title}
-            linkedPhone={contactByMemberId[editing.id]?.phone}
             categories={categories}
             residentsId={residentsId}
             isSelf={editing.id === me?.id}
