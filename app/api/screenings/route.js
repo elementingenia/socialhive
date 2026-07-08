@@ -99,13 +99,24 @@ export async function GET(req) {
       waitlist_position,
     } : null
 
-    const nameOf = b => b.members?.hide_name ? 'Resident' : (b.members?.name || 'Resident')
+    // Same privacy convention as Book Club/Social/EventSlideOut: non-admin,
+    // non-coordinator viewers see "Resident" for anyone with hide_name set;
+    // admins and this screening's own coordinator see the real name (frontend
+    // adds a "(P)" marker); the viewer's own row always reads "You".
+    const isCoordinator = coordMap[ev.id]?.id === member.id
+    const canManageBooks = member.is_admin || isCoordinator
+    const attendeeOf = b => {
+      const isOwn     = b.member_id === member.id
+      const isPrivate = !!b.members?.hide_name
+      const name = isOwn ? 'You' : (isPrivate && !canManageBooks) ? 'Resident' : (b.members?.name || 'Resident')
+      return { name, seats: b.seats || 1, isOwn, isPrivate }
+    }
     const attendees = member.is_admin
       ? [
-          ...confirmedBookings.map(b => ({ name: nameOf(b), seats: b.seats || 1, status: 'confirmed' })),
-          ...waitlistBookings.map(b => ({ name: nameOf(b), seats: b.seats || 1, status: 'waitlist' })),
+          ...confirmedBookings.map(b => ({ ...attendeeOf(b), status: 'confirmed' })),
+          ...waitlistBookings.map(b => ({ ...attendeeOf(b), status: 'waitlist' })),
         ]
-      : confirmedBookings.map(b => ({ name: nameOf(b), seats: b.seats || 1, status: 'confirmed' }))
+      : confirmedBookings.map(b => ({ ...attendeeOf(b), status: 'confirmed' }))
 
     return {
       ...ev,

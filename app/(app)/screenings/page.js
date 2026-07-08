@@ -421,7 +421,11 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit }) {
                 {isAdmin && <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.15rem' }}>Confirmed</div>}
                 {confirmedAttendees.map((a, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', padding: '0.2rem 0', borderBottom: '1px solid var(--border)' }}>
-                    <span>{a.name}</span><span style={{ color: 'var(--text-dim)' }}>{a.seats} seat{a.seats > 1 ? 's' : ''}</span>
+                    <span style={{ fontWeight: a.isOwn ? 700 : 400, color: a.isOwn ? 'var(--teal)' : 'var(--text)' }}>
+                      {a.name}
+                      {a.isPrivate && !a.isOwn && a.name !== 'Resident' && <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-dim)', marginLeft: 4 }}>(P)</span>}
+                    </span>
+                    <span style={{ color: 'var(--text-dim)' }}>{a.seats} seat{a.seats > 1 ? 's' : ''}</span>
                   </div>
                 ))}
               </>
@@ -433,7 +437,11 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit }) {
                 <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--amber-dark)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: '0.5rem', marginBottom: '0.15rem' }}>Waitlist</div>
                 {waitlistAttendees.map((a, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', padding: '0.2rem 0', borderBottom: '1px solid var(--border)' }}>
-                    <span>{a.name}</span><span style={{ color: 'var(--text-dim)' }}>{a.seats} seat{a.seats > 1 ? 's' : ''}</span>
+                    <span style={{ fontWeight: a.isOwn ? 700 : 400, color: a.isOwn ? 'var(--teal)' : 'var(--text)' }}>
+                      {a.name}
+                      {a.isPrivate && !a.isOwn && a.name !== 'Resident' && <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-dim)', marginLeft: 4 }}>(P)</span>}
+                    </span>
+                    <span style={{ color: 'var(--text-dim)' }}>{a.seats} seat{a.seats > 1 ? 's' : ''}</span>
                   </div>
                 ))}
               </>
