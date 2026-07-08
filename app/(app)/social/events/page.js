@@ -79,17 +79,25 @@ function CapacityBar({ booked, max, waitlist }) {
 
 // ── Booking Status Strip ───────────────────────────────────────────────────────
 // Always-visible bottom strip — shows booking state and tells the user what tapping does
-function BookingStrip({ myBooking, isFull }) {
+function BookingStrip({ myBooking, event, isFull }) {
   const isConfirmed = myBooking?.status === "confirmed"
   const isWaitlist  = myBooking?.status === "waitlist"
   const seats       = myBooking?.seats || 1
   const base = { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.55rem 1rem", fontSize: "0.82rem", fontWeight: 600, gap: "0.5rem" }
 
   if (isConfirmed) {
+    // Bug fixed 2026-07-08: this hardcoded "confirmed" regardless of
+    // payment, so this strip could (and did) contradict the "Booked"/
+    // "Confirmed" badge shown higher up on the same card — same card, two
+    // different answers to the same question. Route through the shared
+    // helper like every other status display now does.
+    const badge = bookingStatusBadge(myBooking, event)
+    const bg = badge.label === "Confirmed" ? "#f0fdf4" : "#fffbeb"
+    const border = badge.label === "Confirmed" ? "#bbf7d0" : "#fde68a"
     return (
-      <div style={{ ...base, background: "#f0fdf4", borderTop: "1px solid #bbf7d0" }}>
-        <span style={{ color: "#15803d" }}>✓ {seats} seat{seats !== 1 ? "s" : ""} confirmed</span>
-        <span style={{ color: "#15803d", fontSize: "0.75rem" }}>Tap to modify or cancel →</span>
+      <div style={{ ...base, background: bg, borderTop: `1px solid ${border}` }}>
+        <span style={{ color: badge.color }}>{badge.label === "Confirmed" ? "✓ " : ""}{seats} seat{seats !== 1 ? "s" : ""} {badge.label.toLowerCase()}</span>
+        <span style={{ color: badge.color, fontSize: "0.75rem" }}>Tap to modify or cancel →</span>
       </div>
     )
   }
@@ -925,7 +933,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
         <CapacityBar booked={booked} max={event.max_seats} waitlist={waiting} />
       </div>
       {/* Booking status strip — always visible */}
-      <BookingStrip myBooking={myBooking} isFull={booked >= event.max_seats && event.max_seats > 0} />
+      <BookingStrip myBooking={myBooking} event={event} isFull={booked >= event.max_seats && event.max_seats > 0} />
 
       {/* Attendees accordion */}
       {event.max_seats > 0 && (
