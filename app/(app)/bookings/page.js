@@ -186,7 +186,13 @@ export default function BookingsPage() {
       .eq("id", booking.event_id)
       .single()
     setLoadingEvent(false)
-    if (data) setSelectedEvent(data)
+    if (!data) return
+    // Bug fixed 2026-07-08: same gap as social/page.js's Next Social Event
+    // tile — never derived my_bookings, so EventSlideOut always showed the
+    // "no booking yet" view even from the Scheduled tab, where by
+    // definition every event tapped IS one you've booked.
+    const my_bookings = (data.bookings || []).filter(b => b.member_id === member?.id)
+    setSelectedEvent({ ...data, my_bookings })
   }
 
   const today = new Date(); today.setHours(0, 0, 0, 0)

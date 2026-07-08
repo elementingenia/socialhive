@@ -370,7 +370,16 @@ export default function SocialHome() {
       .from("events")
       .select("*, bookings(id, status, seats, payment_status, member_id, members(name, username))")
       .eq("id", event.id).single()
-    if (data) setFullEvent(data)
+    if (!data) return
+    // Bug fixed 2026-07-08: this query never derived my_bookings, so
+    // EventSlideOut always fell back to its "no booking yet" view here —
+    // Book Now + seat selector — even when the viewer already had a
+    // confirmed booking, because it only ever checks event.my_bookings.
+    // social/events/page.js, bookclub/page.js and movies/page.js already
+    // derive this correctly; this entry point (Home's Next Social Event
+    // tile) never did.
+    const my_bookings = (data.bookings || []).filter(b => b.member_id === member?.id)
+    setFullEvent({ ...data, my_bookings })
   }
 
   if (loading) {
