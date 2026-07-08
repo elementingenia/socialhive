@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test')
+const { getNextScreening, getTestbotMovieBooking, fmtDate, fmtDateLong, fmtTime24 } = require('./helpers')
 
 // ── Movies Home ───────────────────────────────────────────────────────────────
 test.describe('Movies Home', () => {
@@ -8,29 +9,44 @@ test.describe('Movies Home', () => {
   })
 
   test('Next Screening card renders with movie title and poster', async ({ page }) => {
+    const next = await getNextScreening()
+    expect(next, 'No upcoming movie screening found in the database').not.toBeNull()
+
     await expect(page.getByText('Next Screening', { exact: true })).toBeVisible()
-    await expect(page.getByText('The Shawshank Redemption').first()).toBeVisible()
-    const poster = page.locator('img[alt="The Shawshank Redemption"]').first()
+    await expect(page.getByText(next.title).first()).toBeVisible()
+    const poster = page.locator(`img[alt="${next.title}"]`).first()
     await expect(poster).toBeVisible()
   })
 
   test('Next Screening shows date and IMDB chip', async ({ page }) => {
+    const next = await getNextScreening()
+    expect(next).not.toBeNull()
+
     await expect(page.getByText(/IMDb/i).first()).toBeVisible()
-    await expect(page.getByText(/28 June/i).first()).toBeVisible()
+    // Match on "12 July" rather than the full "Sunday, 12 July" string — robust
+    // to any weekday-label formatting differences, still proves the real date renders.
+    const dayMonth = fmtDate(next.event_date).replace(/^[A-Za-z]+,?\s*/, '')
+    await expect(page.getByText(new RegExp(dayMonth, 'i')).first()).toBeVisible()
   })
 
   test('My Bookings card visible with no duplicate movie rows', async ({ page }) => {
+    const myBooking = await getTestbotMovieBooking()
+    expect(myBooking, 'testbot has no confirmed movie booking — fixture missing').not.toBeNull()
+
     await expect(page.getByText('My Bookings').first()).toBeVisible()
     // Should appear at most twice (Next Screening + 1 booking row) not 3+ (which would mean duplicate rows)
-    const count = await page.getByText('The Shawshank Redemption').count()
+    const count = await page.getByText(myBooking.title).count()
     expect(count).toBeLessThanOrEqual(2)
   })
 
   test('My Bookings sheet opens, shows grouped card and Cancel button', async ({ page }) => {
+    const myBooking = await getTestbotMovieBooking()
+    expect(myBooking).not.toBeNull()
+
     await page.getByText('My Bookings').first().click()
     await expect(page.getByText('My Movie Bookings')).toBeVisible()
-    // One movie title in the sheet
-    await expect(page.getByText('The Shawshank Redemption').first()).toBeVisible()
+    // The booked movie's title appears in the sheet
+    await expect(page.getByText(myBooking.title).first()).toBeVisible()
     // Confirmed badge
     await expect(page.getByText(/✓ Confirmed/i)).toBeVisible()
     // Cancel button
@@ -56,11 +72,19 @@ test.describe('Scheduled page', () => {
     await expect(page.getByText('Upcoming Screenings')).toBeVisible()
   })
 
-  test('Shawshank event card with poster and uppercase date', async ({ page }) => {
-    await expect(page.getByText('The Shawshank Redemption').first()).toBeVisible()
-    await expect(page.getByText(/SUNDAY/).first()).toBeVisible()
-    await expect(page.getByText(/18:00/).first()).toBeVisible()
-    const poster = page.locator('img[alt="The Shawshank Redemption"]').first()
+  test('Next screening card with poster and uppercase date', async ({ page }) => {
+    const next = await getNextScreening()
+    expect(next).not.toBeNull()
+
+    await expect(page.getByText(next.title).first()).toBeVisible()
+    // fmtDateLong() renders e.g. "SUNDAY, 12 JULY 2026" — match on the uppercase weekday only,
+    // which proves the uppercase-date convention without depending on a fixed calendar date.
+    const weekday = fmtDateLong(next.event_date).match(/^[A-Z]+/)[0]
+    await expect(page.getByText(new RegExp(weekday)).first()).toBeVisible()
+    if (next.event_time) {
+      await expect(page.getByText(fmtTime24(next.event_time)).first()).toBeVisible()
+    }
+    const poster = page.locator(`img[alt="${next.title}"]`).first()
     await expect(poster).toBeVisible()
   })
 
@@ -73,7 +97,11 @@ test.describe('Scheduled page', () => {
   })
 
   test('Booking badge shown for confirmed user (testbot)', async ({ page }) => {
-    await expect(page.getByText(/Seat.*Booked/i).first()).toBeVisible()
+    const myBooking = await getTestbotMovieBooking()
+    expect(myBooking, 'testbot has no confirmed movie booking — fixture missing').not.toBeNull()
+    // Current wording (screenings.js BookingStrip): "✓ N seat(s) confirmed" — free events
+    // (payment_required=false) are always "confirmed" once booked, never "Booked" awaiting payment.
+    await expect(page.getByText(/seat.*confirmed/i).first()).toBeVisible()
   })
 })
 
@@ -136,22 +164,27 @@ test.describe('Admin panel', () => {
   })
 })
 
-// ── Waitlist confirmation dialog ──────────────────────────────────────────────
+// ── Waitlist / split-offer confirmation dialog ────────────────────────────────
+// Note: the app's actual API contract is { accept_split } request / { status:
+// "split_offer", confirmed, waitlisted } response, handled by SplitDialog in
+// components/EventSlideOut.js ("No seats available" / "Join waitlist" / "No
+// thanks") — the previous version of these tests mocked an older
+// { accept_waitlist } / "waitlist_offer" / "This event is full" contract that
+// no longer exists anywhere in the codebase.
 test.describe('Waitlist confirmation', () => {
-  test('shows waitlist dialog when event is full, dismiss works', async ({ page }) => {
+  test('shows split-offer dialog when server reports no seats, dismiss works', async ({ page }) => {
     await page.goto('/movies')
     await page.waitForLoadState('networkidle')
 
-    // Intercept bookings POST to simulate a full event returning waitlist_offer
     await page.route('/api/bookings', async (route) => {
       if (route.request().method() === 'POST') {
         const body = JSON.parse(route.request().postData() || '{}')
-        if (!body.accept_waitlist) {
+        if (!body.accept_split) {
           await route.fulfill({ status: 200, contentType: 'application/json',
-            body: JSON.stringify({ status: 'waitlist_offer', seats: body.seats || 1 }) })
+            body: JSON.stringify({ status: 'split_offer', confirmed: 0, waitlisted: body.seats || 1 }) })
         } else {
           await route.fulfill({ status: 200, contentType: 'application/json',
-            body: JSON.stringify({ status: 'waitlist', seats: body.seats || 1 }) })
+            body: JSON.stringify({ status: 'split_confirmed', confirmed: 0, waitlisted: body.seats || 1 }) })
         }
       } else {
         await route.continue()
@@ -167,14 +200,14 @@ test.describe('Waitlist confirmation', () => {
     await expect(bookBtn).toBeVisible({ timeout: 5000 })
     await bookBtn.click()
 
-    // Waitlist dialog must appear
-    await expect(page.getByText('This event is full')).toBeVisible({ timeout: 3000 })
+    // Split-offer dialog must appear
+    await expect(page.getByText('No seats available')).toBeVisible({ timeout: 3000 })
     await expect(page.getByRole('button', { name: 'Join waitlist' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'No thanks' })).toBeVisible()
 
     // Dismiss — dialog should disappear, no booking made
     await page.getByRole('button', { name: 'No thanks' }).click()
-    await expect(page.getByText('This event is full')).not.toBeVisible()
+    await expect(page.getByText('No seats available')).not.toBeVisible()
   })
 
   test('confirms waitlist placement when user accepts', async ({ page }) => {
@@ -184,12 +217,12 @@ test.describe('Waitlist confirmation', () => {
     await page.route('/api/bookings', async (route) => {
       if (route.request().method() === 'POST') {
         const body = JSON.parse(route.request().postData() || '{}')
-        if (!body.accept_waitlist) {
+        if (!body.accept_split) {
           await route.fulfill({ status: 200, contentType: 'application/json',
-            body: JSON.stringify({ status: 'waitlist_offer', seats: body.seats || 1 }) })
+            body: JSON.stringify({ status: 'split_offer', confirmed: 0, waitlisted: body.seats || 1 }) })
         } else {
           await route.fulfill({ status: 200, contentType: 'application/json',
-            body: JSON.stringify({ status: 'waitlist', seats: body.seats || 1 }) })
+            body: JSON.stringify({ status: 'split_confirmed', confirmed: 0, waitlisted: body.seats || 1 }) })
         }
       } else {
         await route.continue()
@@ -204,7 +237,7 @@ test.describe('Waitlist confirmation', () => {
     await bookBtn.click()
 
     // Dialog appears
-    await expect(page.getByText('This event is full')).toBeVisible({ timeout: 3000 })
+    await expect(page.getByText('No seats available')).toBeVisible({ timeout: 3000 })
 
     // Accept waitlist
     await page.getByRole('button', { name: 'Join waitlist' }).click()
