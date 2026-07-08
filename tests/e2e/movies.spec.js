@@ -39,21 +39,18 @@ test.describe('Movies Home', () => {
     expect(count).toBeLessThanOrEqual(2)
   })
 
-  test('My Bookings sheet opens, shows grouped card and Cancel button', async ({ page }) => {
+  test('My Bookings card links through to Scheduled page with the booking visible', async ({ page }) => {
+    // The Home "My Bookings" card navigates straight to /screenings (Scheduled) —
+    // it does NOT open an inline sheet. MyMovieBookingsSheet is defined in this
+    // file but never rendered/invoked anywhere; the old test was asserting
+    // behavior from before that navigation change.
     const myBooking = await getTestbotMovieBooking()
-    expect(myBooking).not.toBeNull()
+    expect(myBooking, 'testbot has no confirmed movie booking — fixture missing').not.toBeNull()
 
     await page.getByText('My Bookings').first().click()
-    await expect(page.getByText('My Movie Bookings')).toBeVisible()
-    // The booked movie's title appears in the sheet
+    await page.waitForURL('**/screenings')
     await expect(page.getByText(myBooking.title).first()).toBeVisible()
-    // Confirmed badge
-    await expect(page.getByText(/✓ Confirmed/i)).toBeVisible()
-    // Cancel button
-    await expect(page.getByRole('button', { name: /cancel booking/i })).toBeVisible()
-    // Close
-    await page.getByText('‹ Movies').click()
-    await expect(page.getByText('My Movie Bookings')).not.toBeVisible()
+    await expect(page.getByText(/seat.*confirmed/i).first()).toBeVisible()
   })
 
   test('Rate a Film swiper renders', async ({ page }) => {

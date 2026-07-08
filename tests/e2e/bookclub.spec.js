@@ -40,16 +40,21 @@ test.describe('Book Club Home', () => {
     await expect(page.getByText('Show attendees ▼').first()).toBeVisible()
   })
 
-  test('Attendees list shows names and seat counts', async ({ page }) => {
+  test('Attendees list shows attendee names when expanded', async ({ page }) => {
+    // Book Club bookings are always exactly 1 seat (no seat selector in this hub —
+    // see the hardcoded `seats: 1` in the join API call), and the attendee row only
+    // renders a name, never a seat count. So the correct check is "the list is
+    // populated", not "seat text appears" — that text never exists here by design.
     await page.getByText('Show attendees ▼').first().click()
-    // At least testbot's booking shows. Each row should have seat info
-    await expect(page.getByText(/seat/i).first()).toBeVisible({ timeout: 8000 })
+    await expect(page.getByText('Hide attendees ▲').first()).toBeVisible({ timeout: 8000 })
+    await expect(page.getByText('No attendees yet')).not.toBeVisible()
   })
 
-  test('Join button visible for non-joined event', async ({ page }) => {
-    // There should be at least one Join or Leave button
-    const joinOrLeave = page.getByRole('button', { name: /Participate|Leave/i }).first()
-    await expect(joinOrLeave).toBeVisible()
+  test('Join prompt visible for non-joined event', async ({ page }) => {
+    // Book Club uses a tap-anywhere BookingStrip ("Join this session" / "You're
+    // attending"), the same convention as Movies/Social — not a dedicated
+    // Join/Leave <button>, which doesn't exist in this component.
+    await expect(page.getByText(/Join this session|You're attending/i).first()).toBeVisible()
   })
 })
 
