@@ -478,7 +478,10 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
           if (b.status === "waitlist") grouped[mid].waitlist.push(b)
           else grouped[mid].confirmed.push(b)
         }
+        // Own row always pinned to the top — consistent with every other attendee
+        // list (Movies/Social inline lists, Book Club's own attendees list).
         const attendeeGroups = Object.values(grouped)
+          .sort((a, b) => (b.member?.id === currentMember?.id) - (a.member?.id === currentMember?.id))
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
             {attendeeGroups.map(({ member, confirmed: confRows, waitlist: waitRows }) => {

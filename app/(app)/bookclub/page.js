@@ -82,6 +82,8 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) 
       .select("id, seats, has_book, name_hidden, members(id, name, username, hide_name)")
       .eq("event_id", event.id)
       .eq("status", "confirmed")
+    // Own row always pinned to the top — consistent with every other attendee
+    // list (Movies/Social inline lists, EventSlideOut's Coordinator View).
     setAttendees((data || []).map(b => {
       const isOwn     = b.members?.id === member?.id
       const isPrivate = !!(b.members?.hide_name || b.name_hidden)
@@ -93,7 +95,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) 
         seats: b.seats || 1,
         hasBook: !!b.has_book,
       }
-    }))
+    }).sort((a, b) => (b.isOwn === true) - (a.isOwn === true)))
   }
 
   async function toggleAttendees() {

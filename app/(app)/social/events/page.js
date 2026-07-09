@@ -832,8 +832,11 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
   const isConfirmed = myBooking?.status === "confirmed"
   const isWaitlist  = myBooking?.status === "waitlist"
 
-  const confirmedBookings = event.bookings?.filter(b => b.status === "confirmed") || []
-  const waitlistBookings  = event.bookings?.filter(b => b.status === "waitlist") || []
+  // Own row always pinned to the top — consistent with the Coordinator View panel
+  // and every other attendee list (Movies, Book Club).
+  const bySelfFirst = (a, b) => (b.member_id === member?.id) - (a.member_id === member?.id)
+  const confirmedBookings = (event.bookings?.filter(b => b.status === "confirmed") || []).sort(bySelfFirst)
+  const waitlistBookings  = (event.bookings?.filter(b => b.status === "waitlist") || []).sort(bySelfFirst)
   const booked  = confirmedBookings.reduce((s, b) => s + (b.seats || 1), 0)
   const waiting = waitlistBookings.length
   const showNames = event.show_attendee_names !== false

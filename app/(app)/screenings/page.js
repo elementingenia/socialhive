@@ -313,8 +313,11 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit }) {
   const [showAttendees, setShowAttendees] = useState(false)
   const movie              = ev.movies
   const isFull             = ev.seats_remaining === 0
-  const confirmedAttendees = (ev.attendees || []).filter(a => a.status === 'confirmed')
-  const waitlistAttendees  = (ev.attendees || []).filter(a => a.status === 'waitlist')
+  // Own row always pinned to the top of the list, ahead of everyone else —
+  // consistent with the Coordinator View panel and every other attendee list.
+  const bySelfFirst = (a, b) => (b.isOwn === true) - (a.isOwn === true)
+  const confirmedAttendees = (ev.attendees || []).filter(a => a.status === 'confirmed').sort(bySelfFirst)
+  const waitlistAttendees  = (ev.attendees || []).filter(a => a.status === 'waitlist').sort(bySelfFirst)
 
   return (
     <div onClick={onOpen}
