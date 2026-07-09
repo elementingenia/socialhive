@@ -2,7 +2,7 @@ const { chromium } = require('@playwright/test')
 const path = require('path')
 const fs = require('fs')
 
-const BASE = 'https://socialhive-lew3.vercel.app'
+const BASE = 'https://www.thesocialhive.com.au'
 const OUT  = path.join(__dirname, '../public/help')
 const AUTH = path.join(__dirname, 'e2e/.auth/testbot.json')
 
@@ -50,8 +50,13 @@ async function shot(page, name, url, waitFor, action) {
 
   await shot(p, '04-home',            '/home',              'text=Welcome')
   await shot(p, '05-profile',         '/home',              null, async pg => {
-    await pg.getByText('Iain').click()
-    await pg.waitForTimeout(600)
+    // Header's account pill opens a dropdown (Update Profile / Change PIN / Sign
+    // Out) — the profile screenshot needs the actual ProfileSlideOver panel, not
+    // just that dropdown, so click through both steps.
+    await pg.getByLabel('Account menu').click()
+    await pg.getByText('Update Profile').click()
+    await pg.waitForSelector('text=My Profile', { timeout: 5000 }).catch(() => {})
+    await pg.waitForTimeout(400)
   })
 
   // Movies
