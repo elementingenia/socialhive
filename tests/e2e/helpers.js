@@ -73,9 +73,21 @@ async function getUpcomingBookclubEvent() {
 
 // ── Service-role reads — needed for anything tied to testbot's own booking
 // state, since RLS blocks reading another member's bookings via the anon key.
-// Deliberately NOT assumed to be the "next" screening — the fixture booking
-// may sit on a later screening precisely so it doesn't interfere with tests
-// that need the *next* screening to still be unbooked (Waitlist flow).
+//
+// testbot's confirmed movie booking lives on a DEDICATED fixture event
+// (id 9e63e42c-192f-46da-8ade-d5c74a4c0158, "[QA Fixture] Automated Test
+// Booking — Not A Real Screening", event_date 2099-12-31) rather than a real
+// screening. It used to sit on a real one, deliberately chosen to not be the
+// chronologically-next screening so it wouldn't interfere with Waitlist tests
+// — but once the app went live to real residents, a test account occupying a
+// real seat was distorting real, strictly-limited capacity (every seat/
+// capacity calculation in the app is scoped per event_id, so sharing an
+// event_id with real bookings meant sharing their seat pool too). Moving the
+// booking onto its own dedicated event fixes that structurally: it can never
+// share a seat pool with a real screening again, and this query needed no
+// changes since it already just looks up whatever confirmed, non-archived,
+// future-dated movie booking testbot has. If this booking goes missing,
+// re-create it on the fixture event above — never on a real screening.
 
 async function getTestbotMovieBooking() {
   const members = await supaGet(`members?username=ilike.testbot&select=id`, SUPABASE_SERVICE_KEY)
