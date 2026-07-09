@@ -267,26 +267,26 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   async function togglePayment(booking) {
     const next = booking.payment_status === "confirmed" ? "pending" : "confirmed"
     const ok = await patchAction({ action: "set_payment", booking_id: booking.id, payment_status: next })
-    if (ok) { showToast(next === "confirmed" ? "Marked as paid" : "Marked as unpaid"); load() }
+    if (ok) { showToast(next === "confirmed" ? "Marked as paid" : "Marked as unpaid"); load(); onRefresh() }
     else showToast("Failed to update", "error")
   }
 
   async function toggleRefund(booking) {
     const isRefunded = booking.payment_status === "refunded"
     const ok = await patchAction({ action: "set_refund", booking_id: booking.id, refunded: !isRefunded })
-    if (ok) { showToast(isRefunded ? "Refund mark removed" : "Refund marked"); load() }
+    if (ok) { showToast(isRefunded ? "Refund mark removed" : "Refund marked"); load(); onRefresh() }
     else showToast("Failed", "error")
   }
 
   async function toggleHasBook(booking) {
     const ok = await patchAction({ action: "set_has_book", booking_id: booking.id, has_book: !booking.has_book })
-    if (ok) { showToast(booking.has_book ? "Marked as returned" : "Book marked as given out"); load() }
+    if (ok) { showToast(booking.has_book ? "Marked as returned" : "Book marked as given out"); load(); onRefresh() }
     else showToast("Failed to update", "error")
   }
 
   async function toggleNameHidden(booking) {
     const ok = await patchAction({ action: "set_name_hidden", booking_id: booking.id, name_hidden: !booking.name_hidden })
-    if (ok) { showToast(booking.name_hidden ? "Name shown again" : "Name hidden"); load() }
+    if (ok) { showToast(booking.name_hidden ? "Name shown again" : "Name hidden"); load(); onRefresh() }
     else showToast("Failed to update", "error")
   }
 
@@ -317,6 +317,9 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
       if (field === "description") setEditDesc(false)
       if (field === "welcome_message") setEditWelcome(false)
       load()
+      // description/welcome_message are shown outside this panel too (EventCard,
+      // BookingSection) — refresh the parent's copy, not just this panel's own.
+      onRefresh()
     } else showToast("Failed to save", "error")
   }
 
