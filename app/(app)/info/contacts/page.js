@@ -13,10 +13,11 @@ const secondaryButtonStyle = {
 // ── Contact card ─────────────────────────────────────────────────────────────
 // Compact by design (Iain, 2026-07-12) -- this list is headed toward 200+
 // entries as the community scales, so each tile is a single scan-able line
-// (name + house #) by default. Admins get an Edit button (their path to see
-// everything -- phone/email/title -- is opening the sheet, not a second
-// inline expansion). Standard users get a "More" toggle, and only when
-// there's actually something to reveal.
+// (name + house #) by default. A "More" toggle appears for EVERYONE
+// whenever a contact actually has title/phone/email beyond what's already
+// on the compact line -- admins additionally get "Edit" alongside it, since
+// viewing details and editing them are different actions (2026-07-12,
+// clarified same day: Edit alone isn't a substitute for a quick "More").
 function ContactCard({ contact, badge, onEdit }) {
   const [expanded, setExpanded] = useState(false)
   const isAdminView = !!onEdit
@@ -41,20 +42,23 @@ function ContactCard({ contact, badge, onEdit }) {
             }}>{badge}</span>
           )}
         </div>
-        {isAdminView ? (
-          <button onClick={onEdit} style={{
-            flexShrink: 0, fontSize: "0.7rem", fontWeight: 700, padding: "0.2rem 0.55rem", borderRadius: 6,
-            border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)",
-            cursor: "pointer", fontFamily: "inherit",
-          }}>Edit</button>
-        ) : hasMore ? (
-          <button onClick={() => setExpanded(v => !v)} style={{
-            flexShrink: 0, fontSize: "0.7rem", fontWeight: 700, color: COLOUR,
-            background: "none", border: "none", cursor: "pointer", fontFamily: "inherit",
-          }}>{expanded ? "Less ▲" : "More ▼"}</button>
-        ) : null}
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
+          {hasMore && (
+            <button onClick={() => setExpanded(v => !v)} style={{
+              flexShrink: 0, fontSize: "0.7rem", fontWeight: 700, color: COLOUR,
+              background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0,
+            }}>{expanded ? "Less ▲" : "More ▼"}</button>
+          )}
+          {isAdminView && (
+            <button onClick={onEdit} style={{
+              flexShrink: 0, fontSize: "0.7rem", fontWeight: 700, padding: "0.2rem 0.55rem", borderRadius: 6,
+              border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)",
+              cursor: "pointer", fontFamily: "inherit",
+            }}>Edit</button>
+          )}
+        </div>
       </div>
-      {!isAdminView && expanded && (
+      {expanded && (
         <div style={{ marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
           {contact.title && (
             <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>{contact.title}</div>
