@@ -916,8 +916,8 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
 
         {/* Bus driver */}
         {event.has_bus && event.bus_driver && (
-          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.2rem" }}>
-            <BusIcon size={14} /> {event.bus_driver.name || event.bus_driver.username}
+          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 5 }}>
+            <BusIcon size={14} /> <span>{event.bus_driver.name || event.bus_driver.username}</span>
           </div>
         )}
 
