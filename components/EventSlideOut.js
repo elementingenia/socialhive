@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
-import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, sumUnpaidSeats, seatsCost, bookingStatusBadge } from "@/lib/payments"
+import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, sumUnpaidSeats, seatsCost, bookingStatusBadge } from "@/lib/payments"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -680,6 +680,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
 function BookingSection({ event, onRefresh }) {
   const [seats, setSeats] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState(null)
   const [confirm, setConfirm] = useState(false)
   const [splitOffer, setSplitOffer] = useState(null)
@@ -782,6 +783,25 @@ function BookingSection({ event, onRefresh }) {
     } finally { setLoading(false) }
   }
 
+  // Idea 2 of the EC payment model (2026-07-12): resident self-flags they've
+  // paid. Badge stays "Booked" -- this only adds secondary text/notification,
+  // the EC still does the final confirm via the Paid/Unpaid toggle.
+  async function handleMarkSubmitted() {
+    setSubmitting(true)
+    try {
+      const token = await getToken()
+      const res = await fetch("/api/bookings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ event_id: event.id, action: "mark_payment_submitted" }),
+      })
+      const data = await res.json()
+      if (!res.ok) { showToast(data.error || "Failed to mark as submitted", "error"); return }
+      showToast("Marked as submitted — your Event Coordinator will confirm")
+      onRefresh()
+    } finally { setSubmitting(false) }
+  }
+
   const isBookclubEvent = event.hub_type === "bookclub"
 
   return (
@@ -854,6 +874,18 @@ function BookingSection({ event, onRefresh }) {
             })()}
             {myWaitlist && <StatusPill label={`⏳ ${myWaitlist.seats} on waitlist${waitlistPos ? ` (#${waitlistPos})` : ""}`} colour="var(--amber-dark)" />}
           </div>
+          {myConfirmed && event.payment_required && !computeIsPaid(myConfirmed) && (
+            computeIsSubmitted(myConfirmed) ? (
+              <div style={{ fontSize: 12, color: "var(--teal)", lineHeight: 1.4 }}>
+                🧾 Payment submitted — your Event Coordinator will confirm it shortly.
+              </div>
+            ) : (
+              <button onClick={handleMarkSubmitted} disabled={submitting}
+                style={{ width: "100%", padding: "12px 0", background: "transparent", border: "1px solid var(--teal)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", color: "var(--teal)", opacity: submitting ? 0.7 : 1 }}>
+                {submitting ? "Marking…" : "I've Paid — Mark as Submitted"}
+              </button>
+            )
+          )}
           {myConfirmed && !isBookclubEvent && (
             <button onClick={() => { setModifySeats((myConfirmed.seats || 1) + (myWaitlist?.seats || 0)); setModifying(true) }}
               style={{ width: "100%", padding: "12px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>

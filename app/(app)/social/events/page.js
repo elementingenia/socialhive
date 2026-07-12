@@ -7,7 +7,7 @@ import { BusIcon } from "@/components/NavIcons"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import EventImagePicker from "@/components/EventImagePicker"
 import ExpandableText from "@/components/ExpandableText"
-import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, paymentSummary } from "@/lib/payments"
+import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, paymentSummary } from "@/lib/payments"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -104,15 +104,19 @@ function BookingStrip({ myBooking, event, isFull }) {
     const badge = bookingStatusBadge(myBooking, event)
     const total = seatsCost(event, seats)
     const statusWord = badge.label.toLowerCase() // "booked" or "confirmed" — canonical, see lib/payments.js
+    const submitted = badge.label !== "Confirmed" && computeIsSubmitted(myBooking)
     const label = badge.label === "Confirmed"
       ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Paid " + total : ""}`
-      : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Unpaid " + total : ""}`
-    const bg = badge.label === "Confirmed" ? "#f0fdf4" : "#fffbeb"
-    const border = badge.label === "Confirmed" ? "#bbf7d0" : "#fde68a"
+      : submitted
+        ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${total ? " " + total : ""}`
+        : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Unpaid " + total : ""}`
+    const bg = badge.label === "Confirmed" ? "#f0fdf4" : submitted ? "#f0fdfa" : "#fffbeb"
+    const border = badge.label === "Confirmed" ? "#bbf7d0" : submitted ? "#99f6e4" : "#fde68a"
+    const textColour = badge.label === "Confirmed" ? badge.color : submitted ? "#0f766e" : badge.color
     return (
       <div style={{ ...base, background: bg, borderTop: `1px solid ${border}` }}>
-        <span style={{ color: badge.color }}>{label}</span>
-        <span style={{ color: badge.color, fontSize: "0.75rem" }}>Tap to modify or cancel →</span>
+        <span style={{ color: textColour }}>{label}</span>
+        <span style={{ color: textColour, fontSize: "0.75rem" }}>Tap to modify or cancel →</span>
       </div>
     )
   }
@@ -998,6 +1002,11 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                       {event.reconciled_by_member && ` by ${event.reconciled_by_member.name || event.reconciled_by_member.username}`}
                     </div>
                   )}
+                  {summary.submittedCount > 0 && (
+                    <div style={{ fontSize: "0.68rem", color: "#0f766e", marginBottom: "0.5rem" }}>
+                      🧾 {summary.submittedCount} of these marked payment submitted — check and confirm below
+                    </div>
+                  )}
                   {summary.unpaidCount > 0 && (
                     <button
                       disabled={closingOut}
@@ -1021,6 +1030,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                       : (isPrivate && !isAdmin) ? "Resident"
                       : (b.member?.name || b.member?.username || "Member")
                     const paid = computeIsPaid(b)
+                    const submitted = !paid && computeIsSubmitted(b)
                     return (
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", padding: "0.2rem 0", borderBottom: "1px solid var(--border)", gap: "0.5rem" }}>
                         <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--terracotta)" : "var(--text)", minWidth: 0 }}>
@@ -1028,6 +1038,9 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                           {isPrivate && isAdmin && !isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
                         </span>
                         <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
+                          {canManagePayments && submitted && (
+                            <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#0f766e", background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 8, padding: "0.05rem 0.35rem" }}>🧾 Submitted</span>
+                          )}
                           <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
                           {canManagePayments && isPaidEvent && (() => {
                             const pending = togglingId === b.id

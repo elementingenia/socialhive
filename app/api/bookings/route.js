@@ -142,10 +142,49 @@ export async function PATCH(req) {
   if (!member) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   const body = await req.json()
-  const { event_id } = body
-  const newSeats = Math.min(4, Math.max(1, parseInt(body.seats) || 1))
+  const { event_id, action } = body
 
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
+
+  // Self-service: resident flags their own booking as paid, pending EC
+  // confirmation (idea 2 of the EC payment model, 2026-07-12). Does not
+  // touch seats -- separate branch, returns early.
+  if (action === 'mark_payment_submitted') {
+    const { data: booking } = await supabaseAdmin
+      .from('bookings').select('id, payment_status, seats')
+      .eq('event_id', event_id).eq('member_id', member.id).eq('status', 'confirmed')
+      .maybeSingle()
+
+    if (!booking) return NextResponse.json({ error: 'No confirmed booking found' }, { status: 404 })
+    if (booking.payment_status !== 'pending') {
+      return NextResponse.json({ error: 'Payment is not awaiting submission' }, { status: 400 })
+    }
+
+    const { error: markErr } = await supabaseAdmin
+      .from('bookings').update({ payment_status: 'submitted' }).eq('id', booking.id)
+    if (markErr) return NextResponse.json({ error: markErr.message }, { status: 500 })
+
+    const { data: event } = await supabaseAdmin
+      .from('events').select('title, cost').eq('id', event_id).single()
+    const owed = event?.cost ? (parseFloat(event.cost) * (booking.seats || 1)).toFixed(2) : null
+
+    // Notify this event's active coordinators + all admins so someone
+    // knows to check and confirm -- mirrors resolveEC's authority set in
+    // app/api/coordinator/route.js.
+    const { data: ecRows } = await supabaseAdmin
+      .from('event_coordinators').select('member_id').eq('event_id', event_id).is('replaced_at', null)
+    const { data: admins } = await supabaseAdmin.from('members').select('id').eq('is_admin', true)
+    const notifyIds = new Set([...(ecRows || []).map(r => r.member_id), ...(admins || []).map(a => a.id)])
+
+    const msg = `${member.name || 'A resident'} marked payment${owed ? ` ($${owed})` : ''} as submitted for ${event?.title || 'this event'} — please confirm.`
+    for (const id of notifyIds) {
+      await createNotification(id, event_id, 'payment_submitted', msg)
+    }
+
+    return NextResponse.json({ ok: true })
+  }
+
+  const newSeats = Math.min(4, Math.max(1, parseInt(body.seats) || 1))
 
   const { data: allMine } = await supabaseAdmin
     .from('bookings').select('id, status, seats')

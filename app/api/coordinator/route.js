@@ -143,7 +143,7 @@ export async function PATCH(req) {
 
   // ── Toggle payment status on a booking ──────────────────────────────────────
   if (action === "set_payment" && booking_id) {
-    if (!["not_required", "pending", "confirmed", "refunded"].includes(payment_status)) {
+    if (!["not_required", "pending", "submitted", "confirmed", "refunded"].includes(payment_status)) {
       return NextResponse.json({ error: "Invalid payment_status" }, { status: 400 })
     }
     // Fetch previous state first so we only notify on an actual Pending -> Confirmed
