@@ -199,6 +199,35 @@ export async function PATCH(req) {
     return NextResponse.json({ ok: true, reminded: unpaid.length })
   }
 
+  // ── Remind a single unpaid attendee (2026-07-12) ─────────────────────────────
+  // Idea 3 of Social_Hive_Event_Payments_Discussion.docx -- a per-attendee
+  // one-tap nudge, distinct from Close Out's bulk "remind everyone unpaid".
+  // Same payment_reminder notification type and message format as Close
+  // Out for consistency, just scoped to one booking and not tied to the
+  // event's reconciled stamp.
+  if (action === "remind_payment" && booking_id) {
+    const { data: ev } = await supa
+      .from("events").select("title, cost, payment_required").eq("id", event_id).single()
+    if (!ev?.payment_required) {
+      return NextResponse.json({ error: "This event doesn't require payment" }, { status: 400 })
+    }
+    const { data: bk } = await supa
+      .from("bookings").select("id, member_id, seats, status, payment_status")
+      .eq("id", booking_id).eq("event_id", event_id).maybeSingle()
+    if (!bk || bk.status !== "confirmed") {
+      return NextResponse.json({ error: "Booking not found" }, { status: 404 })
+    }
+    if (bk.payment_status === "confirmed" || bk.payment_status === "refunded") {
+      return NextResponse.json({ error: "This booking isn't awaiting payment" }, { status: 400 })
+    }
+    const cost = parseFloat(ev.cost) || 0
+    const owed = (cost * (bk.seats || 1)).toFixed(2)
+    await createNotification(bk.member_id, event_id, "payment_reminder",
+      `Reminder: $${owed} is still owing for ${ev.title || "this event"}.`)
+
+    return NextResponse.json({ ok: true })
+  }
+
   // ── Mark refund given on a cancelled booking ─────────────────────────────────
   if (action === "set_refund" && booking_id) {
     const { error: re } = await supa

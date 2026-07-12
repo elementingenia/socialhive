@@ -838,7 +838,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 }
 
 // ── Event Card ────────────────────────────────────────────────────────────────
-function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, onTogglePayment, togglingId, onCloseOutPayments, closingOut }) {
+function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, onTogglePayment, togglingId, onCloseOutPayments, closingOut, onRemindPayment, remindingId }) {
   const { member } = useUser()
   const [showAttendees, setShowAttendees] = useState(false)
   const today     = new Date(); today.setHours(0, 0, 0, 0)
@@ -1042,6 +1042,24 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                             <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#0f766e", background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 8, padding: "0.05rem 0.35rem" }}>🧾 Submitted</span>
                           )}
                           <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
+                          {canManagePayments && isPaidEvent && !paid && (() => {
+                            const reminding = remindingId === b.id
+                            return (
+                              <button
+                                disabled={reminding}
+                                onClick={e => { e.stopPropagation(); e.preventDefault(); onRemindPayment(event.id, b, label) }}
+                                aria-label={`Remind ${label} to pay`}
+                                title="Send payment reminder"
+                                style={{
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  border: "none", background: "none", padding: "0.1rem 0.15rem",
+                                  cursor: reminding ? "default" : "pointer", fontFamily: "inherit",
+                                  flexShrink: 0, opacity: reminding ? 0.35 : 1, fontSize: "0.85rem", lineHeight: 1,
+                                }}>
+                                🔔
+                              </button>
+                            )
+                          })()}
                           {canManagePayments && isPaidEvent && (() => {
                             const pending = togglingId === b.id
                             return (
@@ -1127,6 +1145,7 @@ export default function SocialEvents() {
   const [toast,           setToast]          = useState(null)
   const [togglingId,      setTogglingId]     = useState(null)
   const [closingOutId,    setClosingOutId]   = useState(null)
+  const [remindingId,     setRemindingId]    = useState(null)
 
   function showToast(msg, type = "success") {
     setToast({ msg, type })
@@ -1239,6 +1258,33 @@ export default function SocialEvents() {
     }
   }
 
+  // Remind a single unpaid attendee (2026-07-12) -- idea 3 of Social_Hive_
+  // Event_Payments_Discussion.docx, a per-attendee one-tap nudge distinct
+  // from Close Out's bulk "remind everyone unpaid" above. Same toast/
+  // loading-state pattern as the other two payment actions.
+  async function handleRemindPayment(eventId, booking, label) {
+    if (remindingId) return
+    if (!session) { showToast("Session expired -- please refresh the page", "error"); return }
+    setRemindingId(booking.id)
+    try {
+      const res = await fetch("/api/coordinator", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+        body: JSON.stringify({ event_id: eventId, action: "remind_payment", booking_id: booking.id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        showToast(`Reminder sent to ${label}`)
+      } else {
+        showToast(data.error || "Reminder failed", "error")
+      }
+    } catch (err) {
+      showToast("Network error -- reminder failed", "error")
+    } finally {
+      setRemindingId(null)
+    }
+  }
+
   async function openEventSlideOut(event) {
     const { data } = await supabase
       .from("events")
@@ -1301,7 +1347,8 @@ export default function SocialEvents() {
               onOpen={() => openEventSlideOut(e)}
               onEdit={() => { setEditEvent(e); setShowForm(true) }}
               onTogglePayment={handleTogglePayment} togglingId={togglingId}
-              onCloseOutPayments={handleCloseOutPayments} closingOut={closingOutId === e.id} />
+              onCloseOutPayments={handleCloseOutPayments} closingOut={closingOutId === e.id}
+              onRemindPayment={handleRemindPayment} remindingId={remindingId} />
           ))}
         </div>
       )}
@@ -1328,7 +1375,8 @@ export default function SocialEvents() {
                     onOpen={() => openEventSlideOut(e)}
                     onEdit={() => { setEditEvent(e); setShowForm(true) }}
                     onTogglePayment={handleTogglePayment} togglingId={togglingId}
-                    onCloseOutPayments={handleCloseOutPayments} closingOut={closingOutId === e.id} />
+                    onCloseOutPayments={handleCloseOutPayments} closingOut={closingOutId === e.id}
+                    onRemindPayment={handleRemindPayment} remindingId={remindingId} />
                 </div>
               ))}
             </div>
