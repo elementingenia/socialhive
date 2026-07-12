@@ -23,6 +23,16 @@ const LABEL = {
 }
 const FIELD = { marginBottom: "1rem" }
 
+function Toast({ msg, type }) {
+  if (!msg) return null
+  const bg = type === "error" ? "var(--danger)" : type === "warn" ? "var(--amber-dark)" : "#15803d"
+  return (
+    <div style={{ position: "fixed", top: 70, left: "50%", transform: "translateX(-50%)", zIndex: 9999,
+      background: bg, color: "#fff", padding: "10px 20px", borderRadius: 12, fontSize: 14, fontWeight: 600,
+      boxShadow: "0 4px 20px rgba(0,0,0,0.2)", whiteSpace: "nowrap" }}>{msg}</div>
+  )
+}
+
 const ONSITE_LOCATIONS = [
   "Community Hall",
   "Community Sports Bar",
@@ -824,7 +834,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 }
 
 // ── Event Card ────────────────────────────────────────────────────────────────
-function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, onTogglePayment }) {
+function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, onTogglePayment, togglingId }) {
   const { member } = useUser()
   const [showAttendees, setShowAttendees] = useState(false)
   const today     = new Date(); today.setHours(0, 0, 0, 0)
@@ -992,14 +1002,16 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                           <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
                           {canManagePayments && isPaidEvent && (
                             <button
-                              onClick={e => { e.stopPropagation(); onTogglePayment(event.id, b) }}
+                              disabled={togglingId === b.id}
+                              onClick={e => { e.stopPropagation(); e.preventDefault(); onTogglePayment(event.id, b) }}
                               style={{
                                 border: "1px solid", borderColor: paid ? "var(--green)" : "var(--amber)",
                                 background: paid ? "var(--green)15" : "var(--amber)15",
                                 color: paid ? "var(--green)" : "var(--amber-dark)",
                                 borderRadius: "10px", padding: "0.1rem 0.5rem", fontSize: "0.7rem", fontWeight: 700,
-                                cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
-                              }}>{paid ? "Paid" : "Unpaid"}</button>
+                                cursor: togglingId === b.id ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0,
+                                opacity: togglingId === b.id ? 0.6 : 1,
+                              }}>{togglingId === b.id ? "…" : (paid ? "Paid" : "Unpaid")}</button>
                           )}
                         </span>
                       </div>
@@ -1051,6 +1063,13 @@ export default function SocialEvents() {
   const [editEvent,       setEditEvent]      = useState(null)
   const [session,         setSession]        = useState(null)
   const [allMembers,      setAllMembers]     = useState([])
+  const [toast,           setToast]          = useState(null)
+  const [togglingId,      setTogglingId]     = useState(null)
+
+  function showToast(msg, type = "success") {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
 
   const load = useCallback(async () => {
     if (!member?.id) return
@@ -1105,14 +1124,29 @@ export default function SocialEvents() {
   // mark payment without opening the full modal, which is now read-only
   // status there. Same /api/coordinator set_payment action underneath.
   async function handleTogglePayment(eventId, booking) {
-    if (!session) return
+    if (togglingId) return // ignore taps while one is already in flight
+    if (!session) { showToast("Session expired -- please refresh the page", "error"); return }
     const next = booking.payment_status === "confirmed" ? "pending" : "confirmed"
-    const res = await fetch("/api/coordinator", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
-      body: JSON.stringify({ event_id: eventId, action: "set_payment", booking_id: booking.id, payment_status: next }),
-    })
-    if (res.ok) load()
+    setTogglingId(booking.id)
+    try {
+      const res = await fetch("/api/coordinator", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+        body: JSON.stringify({ event_id: eventId, action: "set_payment", booking_id: booking.id, payment_status: next }),
+      })
+      if (res.ok) {
+        showToast(next === "confirmed" ? "Marked as paid" : "Marked as unpaid")
+        await load()
+      } else {
+        let msg = "Update failed"
+        try { const data = await res.json(); if (data?.error) msg = data.error } catch {}
+        showToast(msg, "error")
+      }
+    } catch (err) {
+      showToast("Network error -- update failed", "error")
+    } finally {
+      setTogglingId(null)
+    }
   }
 
   async function openEventSlideOut(event) {
@@ -1148,6 +1182,7 @@ export default function SocialEvents() {
 
   return (
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
+      {toast && <Toast msg={toast.msg} type={toast.type} />}
 
       {member?.is_admin && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "1rem" }}>
@@ -1175,7 +1210,7 @@ export default function SocialEvents() {
               myBooking={bookings[e.id]} isAdmin={member?.is_admin}
               onOpen={() => openEventSlideOut(e)}
               onEdit={() => { setEditEvent(e); setShowForm(true) }}
-              onTogglePayment={handleTogglePayment} />
+              onTogglePayment={handleTogglePayment} togglingId={togglingId} />
           ))}
         </div>
       )}
@@ -1201,7 +1236,7 @@ export default function SocialEvents() {
                     myBooking={bookings[e.id]} isAdmin={member?.is_admin}
                     onOpen={() => openEventSlideOut(e)}
                     onEdit={() => { setEditEvent(e); setShowForm(true) }}
-                    onTogglePayment={handleTogglePayment} />
+                    onTogglePayment={handleTogglePayment} togglingId={togglingId} />
                 </div>
               ))}
             </div>
