@@ -10,6 +10,21 @@ const secondaryButtonStyle = {
   fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit",
 }
 
+// Admin toolbar row (2026-07-12) -- three actions on one compact line rather
+// than two full-size buttons plus a third wrapping onto its own row. Invite
+// Code is visually distinct (solid fill, key icon) since it's a fundamentally
+// different kind of action -- a secret residents need for registration, not
+// a list-management action like the other two.
+const toolbarButtonStyle = {
+  flex: 1, padding: "0.5rem 0.4rem", borderRadius: 8, border: "1px solid var(--border)",
+  background: "var(--surface)", color: "var(--text)", fontWeight: 700,
+  fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit",
+  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textAlign: "center",
+}
+const inviteButtonStyle = {
+  ...toolbarButtonStyle, border: "none", background: COLOUR, color: "#fff",
+}
+
 // ── Contact card ─────────────────────────────────────────────────────────────
 // Compact by design (Iain, 2026-07-12) -- this list is headed toward 200+
 // entries as the community scales, so each tile is a single scan-able line
@@ -463,10 +478,10 @@ export default function ContactsPage() {
       </div>
 
       {isAdmin && (
-        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
-          <button onClick={() => setSheet("add")} style={secondaryButtonStyle}>+ Add Contact</button>
-          <button onClick={() => setSheet("categories")} style={secondaryButtonStyle}>Manage Categories</button>
-          <button onClick={() => setSheet("invite")} style={secondaryButtonStyle}>Invite Code</button>
+        <div style={{ display: "flex", gap: "0.4rem", marginBottom: "1rem" }}>
+          <button onClick={() => setSheet("add")} style={toolbarButtonStyle}>+ Add</button>
+          <button onClick={() => setSheet("categories")} style={toolbarButtonStyle}>Categories</button>
+          <button onClick={() => setSheet("invite")} style={inviteButtonStyle}>🔑 Invite Code</button>
         </div>
       )}
 

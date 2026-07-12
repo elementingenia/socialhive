@@ -168,9 +168,12 @@ test.describe('Info > Contacts', () => {
     // ever surfaces the friendly name field, "Test Bot").
     await expect(page.getByText('Test Bot').first()).toBeVisible({ timeout: 10000 })
     // Admin-only controls, including the Invite Code moved from Admin > Members
-    await expect(page.getByRole('button', { name: '+ Add Contact' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Manage Categories' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Invite Code' })).toBeVisible()
+    // Toolbar shortened to fit on one compact line (2026-07-12): "+ Add",
+    // "Categories", "🔑 Invite Code" (Invite Code kept its full label since
+    // it's visually distinct/solid-filled rather than needing extra brevity).
+    await expect(page.getByRole('button', { name: '+ Add' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Categories' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /Invite Code/i })).toBeVisible()
   })
 
   test('Search filters the resident/contact list by name', async ({ page }) => {
