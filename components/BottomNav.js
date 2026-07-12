@@ -37,8 +37,8 @@ const HUB_CONFIG = {
   info: {
     colour: "#4e7aab",
     items: [
-      { path: "/info/documents", label: "Documents", Icon: DocumentsIcon },
       { path: "/info/contacts",  label: "Contacts",  Icon: ContactsIcon  },
+      { path: "/info/documents", label: "Documents", Icon: DocumentsIcon },
     ],
   },
 }

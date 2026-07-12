@@ -376,11 +376,15 @@ export default function ContactsPage() {
   // Every active resident appears in the list for everyone — Private (hide_name)
   // residents are never excluded, but non-admins see "Resident" with no
   // contact details instead of their real name/email/house#/phone/title.
-  // Admins always see the real name and details regardless of Private.
+  // Admins always see the real name and details regardless of Private, and
+  // every viewer always sees their OWN name regardless of their own Private
+  // flag -- Private only hides you from other (non-admin) residents, not
+  // from yourself (Iain, 2026-07-12).
   const entries = useMemo(() => {
     const memberEntries = members.map(m => {
       const linked = contactByMemberId[m.id]
-      const maskedForViewer = m.hide_name && !isAdmin
+      const isSelf = m.id === me?.id
+      const maskedForViewer = m.hide_name && !isAdmin && !isSelf
       return {
         key: `m-${m.id}`,
         name: maskedForViewer ? "Resident" : m.name,
