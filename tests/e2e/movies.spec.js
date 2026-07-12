@@ -142,7 +142,8 @@ test.describe('Admin panel', () => {
   test('Admin card grid loads with expected sections', async ({ page }) => {
     await expect(page.getByRole('button', { name: /Members/i }).first()).toBeVisible()
     await expect(page.getByRole('button', { name: /Movies/i }).first()).toBeVisible()
-    await expect(page.getByRole('button', { name: /Bar/i }).first()).toBeVisible()
+    // Bar section is parked behind BAR_ENABLED (see lib/features.js) — not rendered while disabled.
+    await expect(page.getByRole('button', { name: /^Bar$/i })).toHaveCount(0)
   })
 
   test('Members section opens and lists members', async ({ page }) => {
