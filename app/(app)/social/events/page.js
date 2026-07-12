@@ -7,7 +7,7 @@ import { BusIcon } from "@/components/NavIcons"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import EventImagePicker from "@/components/EventImagePicker"
 import ExpandableText from "@/components/ExpandableText"
-import { sumUnpaidSeats, bookingStatusBadge, seatsCost } from "@/lib/payments"
+import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid } from "@/lib/payments"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -824,7 +824,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 }
 
 // ── Event Card ────────────────────────────────────────────────────────────────
-function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) {
+function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, onTogglePayment }) {
   const { member } = useUser()
   const [showAttendees, setShowAttendees] = useState(false)
   const today     = new Date(); today.setHours(0, 0, 0, 0)
@@ -846,6 +846,12 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
   const showNames = event.show_attendee_names !== false
   const unpaidSeats = sumUnpaidSeats(confirmedBookings, event)
   const ecNames = coordinators.map(c => c.members?.name || c.members?.username).filter(Boolean)
+  // Matches the canManageBooks convention used everywhere else (Book Club,
+  // Movies, EventSlideOut's own privacy gating) -- admin OR this event's
+  // own coordinator, not admin-only.
+  const isEC = coordinators.some(c => c.member_id === member?.id)
+  const canManagePayments = isAdmin || isEC
+  const isPaidEvent = !!(event.payment_required && event.cost > 0)
 
   return (
     <div onClick={onOpen} style={{
@@ -975,13 +981,27 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
                       : !showNames ? "Guest"
                       : (isPrivate && !isAdmin) ? "Resident"
                       : (b.member?.name || b.member?.username || "Member")
+                    const paid = computeIsPaid(b)
                     return (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
-                        <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--terracotta)" : "var(--text)" }}>
+                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", padding: "0.2rem 0", borderBottom: "1px solid var(--border)", gap: "0.5rem" }}>
+                        <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--terracotta)" : "var(--text)", minWidth: 0 }}>
                           {label}
                           {isPrivate && isAdmin && !isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
                         </span>
-                        <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
+                        <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
+                          <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
+                          {canManagePayments && isPaidEvent && (
+                            <button
+                              onClick={e => { e.stopPropagation(); onTogglePayment(event.id, b) }}
+                              style={{
+                                border: "1px solid", borderColor: paid ? "var(--green)" : "var(--amber)",
+                                background: paid ? "var(--green)15" : "var(--amber)15",
+                                color: paid ? "var(--green)" : "var(--amber-dark)",
+                                borderRadius: "10px", padding: "0.1rem 0.5rem", fontSize: "0.7rem", fontWeight: 700,
+                                cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
+                              }}>{paid ? "Paid" : "Unpaid"}</button>
+                          )}
+                        </span>
                       </div>
                     )
                   })}
@@ -1080,6 +1100,21 @@ export default function SocialEvents() {
 
   useEffect(() => { load() }, [load])
 
+  // Inline Paid/Unpaid toggle on the tile's Attendees accordion (2026-07-12,
+  // Iain) -- moved here from EventSlideOut's Coordinator View so an EC can
+  // mark payment without opening the full modal, which is now read-only
+  // status there. Same /api/coordinator set_payment action underneath.
+  async function handleTogglePayment(eventId, booking) {
+    if (!session) return
+    const next = booking.payment_status === "confirmed" ? "pending" : "confirmed"
+    const res = await fetch("/api/coordinator", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+      body: JSON.stringify({ event_id: eventId, action: "set_payment", booking_id: booking.id, payment_status: next }),
+    })
+    if (res.ok) load()
+  }
+
   async function openEventSlideOut(event) {
     const { data } = await supabase
       .from("events")
@@ -1139,7 +1174,8 @@ export default function SocialEvents() {
             <EventCard key={e.id} event={e} coordinators={coordinatorMap[e.id] || []}
               myBooking={bookings[e.id]} isAdmin={member?.is_admin}
               onOpen={() => openEventSlideOut(e)}
-              onEdit={() => { setEditEvent(e); setShowForm(true) }} />
+              onEdit={() => { setEditEvent(e); setShowForm(true) }}
+              onTogglePayment={handleTogglePayment} />
           ))}
         </div>
       )}
@@ -1164,7 +1200,8 @@ export default function SocialEvents() {
                   <EventCard event={e} coordinators={coordinatorMap[e.id] || []}
                     myBooking={bookings[e.id]} isAdmin={member?.is_admin}
                     onOpen={() => openEventSlideOut(e)}
-                    onEdit={() => { setEditEvent(e); setShowForm(true) }} />
+                    onEdit={() => { setEditEvent(e); setShowForm(true) }}
+                    onTogglePayment={handleTogglePayment} />
                 </div>
               ))}
             </div>
