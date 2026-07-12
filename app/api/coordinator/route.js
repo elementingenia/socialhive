@@ -265,6 +265,80 @@ export async function PATCH(req) {
     return NextResponse.json({ ok: true })
   }
 
+  // ── Add a walk-up booking on behalf of a resident (2026-07-13) ──────────────
+  // For residents who don't use the app and turn up in person (often with
+  // cash) asking to join. EC/admin picks the resident via live search in the
+  // shared CoordinatorPanel (components/EventSlideOut.js) rather than the
+  // resident going through /api/bookings themselves. Mirrors the self-book
+  // capacity check in app/api/bookings/route.js POST, but does NOT auto-split
+  // seats across confirmed/waitlist -- if requested seats don't fit, this
+  // returns `insufficient_capacity` and the caller must explicitly resubmit
+  // with force_status: "waitlist" (simpler and more predictable for a manual
+  // admin action than mirroring the resident-facing split-offer dialog).
+  if (action === "add_booking") {
+    const { member_id, seats: rawSeats, mark_paid, force_status } = body
+    if (!member_id) return NextResponse.json({ error: "member_id required" }, { status: 400 })
+    const seats = Math.min(4, Math.max(1, parseInt(rawSeats) || 1))
+
+    const { data: targetMember } = await supa
+      .from("members").select("id, name").eq("id", member_id).maybeSingle()
+    if (!targetMember) return NextResponse.json({ error: "Resident not found" }, { status: 404 })
+
+    const { data: ev } = await supa
+      .from("events").select("id, max_seats, hub_type, book_id, payment_required, title")
+      .eq("id", event_id).single()
+    if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
+
+    // Same "still has a Book Club kit checked out" guard as self-book.
+    if (ev.hub_type === "bookclub" && ev.book_id) {
+      const { data: outstandingRows } = await supa
+        .from("bookings")
+        .select("id, book_given_at, events(book_id, title, books(title))")
+        .eq("member_id", member_id).eq("has_book", true)
+        .order("book_given_at", { ascending: false }).limit(1)
+      const outstanding = outstandingRows?.[0]
+      if (outstanding?.events?.book_id && outstanding.events.book_id !== ev.book_id) {
+        const title = outstanding.events.books?.title || outstanding.events.title || "a book"
+        return NextResponse.json({
+          error: `${targetMember.name} still has "${title}" checked out — return it before joining a different book.`,
+        }, { status: 409 })
+      }
+    }
+
+    const { data: existingActive } = await supa
+      .from("bookings").select("id")
+      .eq("event_id", event_id).eq("member_id", member_id).neq("status", "cancelled").maybeSingle()
+    if (existingActive) {
+      return NextResponse.json({ error: `${targetMember.name} already has a booking for this event` }, { status: 409 })
+    }
+
+    const { data: allBookings } = await supa
+      .from("bookings").select("seats, status").eq("event_id", event_id).neq("status", "cancelled")
+    const confirmedSeats = (allBookings || [])
+      .filter(b => b.status === "confirmed").reduce((s, b) => s + (b.seats || 1), 0)
+    const available = Math.max(0, (ev.max_seats || 0) - confirmedSeats)
+
+    let bookingStatus
+    if (force_status === "waitlist") bookingStatus = "waitlist"
+    else if (seats <= available) bookingStatus = "confirmed"
+    else return NextResponse.json({ status: "insufficient_capacity", available })
+
+    const payment_status = !ev.payment_required ? "not_required"
+      : bookingStatus === "confirmed" ? (mark_paid ? "confirmed" : "pending")
+      : "pending"
+
+    const { error: insErr } = await supa.from("bookings").insert({
+      event_id, member_id, seats, status: bookingStatus,
+      booked_at: new Date().toISOString(), payment_status,
+    })
+    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
+
+    await createNotification(member_id, event_id, "booking_added",
+      `You were added to ${ev.title || "an event"} (${seats} seat${seats !== 1 ? "s" : ""}) by an Event Coordinator.`)
+
+    return NextResponse.json({ ok: true, status: bookingStatus })
+  }
+
   // ── Cancel a booking on behalf of a user ──────────────────────────────────
   if (action === "cancel_booking" && booking_id) {
     // Fetch booking first so we know seats freed (for waitlist promotion) and who to notify

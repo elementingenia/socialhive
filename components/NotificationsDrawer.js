@@ -17,6 +17,7 @@ function timeAgo(dateStr) {
 function typeIcon(type) {
   switch (type) {
     case "waitlist_promoted": return "🎉"
+    case "booking_added":     return "🙋"
     case "event_updated":     return "📅"
     case "event_cancelled":   return "❌"
     case "booking_cancelled": return "🚫"
@@ -31,6 +32,7 @@ function typeIcon(type) {
 function typeColour(type) {
   switch (type) {
     case "waitlist_promoted": return "var(--teal)"
+    case "booking_added":     return "var(--teal)"
     case "event_updated":     return "var(--amber-dark)"
     case "event_cancelled":   return "#e53e3e"
     case "booking_cancelled": return "#e53e3e"

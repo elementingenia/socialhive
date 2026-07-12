@@ -211,6 +211,16 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   const [welcome,     setWelcome]     = useState("")
   const [saving,        setSaving]        = useState(false)
   const [cancelTarget,  setCancelTarget]  = useState(null)
+  // Add Walk-up Booking (2026-07-13) — for residents who don't use the app
+  const [showAddBooking,      setShowAddBooking]      = useState(false)
+  const [allMembers,          setAllMembers]          = useState([])
+  const [residentQuery,       setResidentQuery]       = useState("")
+  const [residentResults,     setResidentResults]     = useState([])
+  const [selectedResident,    setSelectedResident]    = useState(null)
+  const [addSeats,            setAddSeats]            = useState(1)
+  const [addMarkPaid,         setAddMarkPaid]         = useState(true)
+  const [addSubmitting,       setAddSubmitting]       = useState(false)
+  const [insufficientCapacity, setInsufficientCapacity] = useState(null)
   const isMovie  = event.hub_type === "movie"
   const isBook   = event.hub_type === "bookclub"
   const isSocial = event.hub_type === "social"
@@ -253,6 +263,15 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   }
 
   useEffect(() => { load() }, [event.id])
+
+  useEffect(() => {
+    if (showAddBooking && allMembers.length === 0) {
+      supabase.from("members").select("id, name, username").eq("status", "active").order("name")
+        .then(({ data: d }) => setAllMembers(d || []))
+    }
+  }, [showAddBooking])
+
+  useEffect(() => { setInsufficientCapacity(null) }, [addSeats, selectedResident])
 
   async function patchAction(body) {
     const token = await getToken()
@@ -300,6 +319,30 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
     else showToast("Failed to cancel", "error")
   }
 
+  async function submitAddBooking(forceWaitlist = false) {
+    if (!selectedResident) return
+    setAddSubmitting(true)
+    try {
+      const token = await getToken()
+      const res = await fetch("/api/coordinator", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          event_id: event.id, action: "add_booking",
+          member_id: selectedResident.id, seats: addSeats, mark_paid: addMarkPaid,
+          ...(forceWaitlist ? { force_status: "waitlist" } : {}),
+        }),
+      })
+      const d = await res.json()
+      if (!res.ok) { showToast(d.error || "Failed to add booking", "error"); return }
+      if (d.status === "insufficient_capacity") { setInsufficientCapacity({ available: d.available }); return }
+      showToast(`${selectedResident.name} added${d.status === "waitlist" ? " to waitlist" : ""}`)
+      setSelectedResident(null); setResidentQuery(""); setResidentResults([])
+      setAddSeats(1); setInsufficientCapacity(null); setShowAddBooking(false)
+      load(); onRefresh()
+    } finally { setAddSubmitting(false) }
+  }
+
   async function saveField(field, value) {
     setSaving(true)
     const ok = await patchAction({ action: "update_event", [field]: value })
@@ -332,6 +375,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   )
 
   const bookings     = data?.bookings || []
+  const bookedMemberIds = new Set(bookings.map(b => b.members?.id).filter(Boolean))
   const refundPending = data?.refund_pending || []
   const refundIssued  = data?.refund_issued || []
   const confirmed = bookings.filter(b => b.status === "confirmed")
@@ -462,6 +506,100 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
           </div>
         )
       })()}
+
+      {/* Add walk-up booking — for residents who don't use the app (2026-07-13) */}
+      <div style={{ marginBottom: 12 }}>
+        {!showAddBooking ? (
+          <button onClick={() => setShowAddBooking(true)}
+            style={{ fontSize: 13, fontWeight: 600, color: colour, background: "none", border: `1px dashed ${colour}`,
+              borderRadius: 10, padding: "8px 12px", cursor: "pointer", width: "100%" }}>
+            + Add Walk-up Booking
+          </button>
+        ) : (
+          <div style={{ background: colour + "0d", border: `1px solid ${colour}40`, borderRadius: 10, padding: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: colour, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Add Walk-up Booking
+              </div>
+              <button onClick={() => {
+                  setShowAddBooking(false); setSelectedResident(null)
+                  setResidentQuery(""); setResidentResults([]); setInsufficientCapacity(null)
+                }}
+                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--text-dim)" }}>✕</button>
+            </div>
+
+            {!selectedResident ? (
+              <div style={{ position: "relative" }}>
+                <input value={residentQuery}
+                  onChange={e => {
+                    const q = e.target.value
+                    setResidentQuery(q)
+                    const norm = q.trim().toLowerCase()
+                    setResidentResults(norm.length < 2 ? [] : allMembers.filter(m =>
+                      (m.name?.toLowerCase().includes(norm) || m.username?.toLowerCase().includes(norm)) && !bookedMemberIds.has(m.id)
+                    ))
+                  }}
+                  placeholder="Search resident name (2+ letters)…"
+                  style={inputStyle} />
+                {residentResults.length > 0 && (
+                  <div style={{ marginTop: 6, border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", maxHeight: 180, overflowY: "auto" }}>
+                    {residentResults.slice(0, 8).map(m => (
+                      <div key={m.id}
+                        onClick={() => { setSelectedResident(m); setResidentResults([]); setResidentQuery("") }}
+                        style={{ padding: "8px 10px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>
+                        {m.name}{m.username && m.username !== m.name ? ` (${m.username})` : ""}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {residentQuery.trim().length >= 2 && residentResults.length === 0 && (
+                  <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 6 }}>No match, or already booked on this event</div>
+                )}
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--surface)", borderRadius: 8, padding: "8px 10px", marginBottom: 10 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600 }}>{selectedResident.name}</span>
+                  <button onClick={() => setSelectedResident(null)}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--text-dim)", textDecoration: "underline" }}>Change</button>
+                </div>
+
+                {!isBook && <SeatSelector value={addSeats} min={1} max={4} onChange={setAddSeats} />}
+
+                {paymentRequired && (
+                  <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                    {[{ v: true, label: "Paid (cash)" }, { v: false, label: "Unpaid" }].map(opt => (
+                      <button key={String(opt.v)} onClick={() => setAddMarkPaid(opt.v)}
+                        style={{ flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
+                          border: `1px solid ${addMarkPaid === opt.v ? colour : "var(--border)"}`,
+                          background: addMarkPaid === opt.v ? colour : "var(--surface)",
+                          color: addMarkPaid === opt.v ? "#fff" : "var(--text)" }}>
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {insufficientCapacity && (
+                  <div style={{ fontSize: 12, color: "var(--amber-dark)", background: "var(--amber-light)", borderRadius: 8, padding: "8px 10px", marginBottom: 10, lineHeight: 1.5 }}>
+                    Only {insufficientCapacity.available} seat{insufficientCapacity.available !== 1 ? "s" : ""} left.
+                    <button onClick={() => submitAddBooking(true)} disabled={addSubmitting}
+                      style={{ display: "block", marginTop: 6, background: "none", border: "none", textDecoration: "underline", cursor: "pointer", fontSize: 12, color: "var(--amber-dark)", fontWeight: 700 }}>
+                      Add to waitlist instead
+                    </button>
+                  </div>
+                )}
+
+                <button onClick={() => submitAddBooking(false)} disabled={addSubmitting}
+                  style={{ width: "100%", padding: "10px 0", background: colour, color: "#fff", border: "none", borderRadius: 8,
+                    fontSize: 14, fontWeight: 700, cursor: addSubmitting ? "not-allowed" : "pointer", opacity: addSubmitting ? 0.7 : 1 }}>
+                  {addSubmitting ? "Adding…" : "Add Booking"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {bookings.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--text-dim)", fontStyle: "italic", marginBottom: 12 }}>No bookings yet</div>
