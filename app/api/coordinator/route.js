@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
+import { promoteWaitlist } from "@/lib/promoteWaitlist"
 
 const supa = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -116,29 +117,13 @@ export async function GET(req) {
   })
 }
 
-// Promote waitlisted members when confirmed seats become available
-async function promoteWaitlist(event_id, freedSeats) {
-  const { data: event } = await supa.from("events").select("max_seats, title").eq("id", event_id).single()
-  const { data: confirmedRows } = await supa
-    .from("bookings").select("seats").eq("event_id", event_id).eq("status", "confirmed")
-  let available = (event?.max_seats || 0) -
-    (confirmedRows || []).reduce((s, b) => s + (b.seats || 1), 0)
-  const { data: waitlisted } = await supa
-    .from("bookings").select("id, seats, member_id")
-    .eq("event_id", event_id).eq("status", "waitlist").order("booked_at")
-  for (const waiter of (waitlisted || [])) {
-    if (available <= 0) break
-    if ((waiter.seats || 1) <= available) {
-      await supa.from("bookings").update({ status: "confirmed" }).eq("id", waiter.id)
-      available -= (waiter.seats || 1)
-      const seats = waiter.seats || 1
-      const msg = seats === 1
-        ? `Great news — 1 seat has been confirmed for ${event?.title || "the event"}!`
-        : `Great news — ${seats} seats have been confirmed for ${event?.title || "the event"}!`
-      await createNotification(waiter.member_id, event_id, "waitlist_promoted", msg)
-    }
-  }
-}
+// Seat-level FIFO waitlist promotion now lives in lib/promoteWaitlist.js,
+// shared with app/api/bookings/route.js (2026-07-12). This file's copy used
+// to only promote a waiter if their *entire* seat count fit in the freed
+// capacity (no partial/split promotion), unlike the self-cancel path -- an
+// EC cancelling a booking could leave seats unfilled that a resident
+// cancelling their own booking would have filled. Unified so both behave
+// the same.
 
 // ─── PATCH /api/coordinator ───────────────────────────────────────────────────
 // Multi-purpose: update payment, refund, EC notes, event description/welcome, cancel booking
@@ -228,7 +213,7 @@ export async function PATCH(req) {
     if (ce) return NextResponse.json({ error: ce.message }, { status: 500 })
     // Promote waitlisted members if a confirmed seat was freed
     if (bk?.status === "confirmed") {
-      await promoteWaitlist(event_id, bk.seats || 1)
+      await promoteWaitlist(event_id)
     }
     if (bk?.member_id) {
       const { data: ev } = await supa.from("events").select("title").eq("id", event_id).single()
