@@ -133,10 +133,12 @@ export async function GET(req) {
   })
 
   // Test/fixture screenings (events.is_test, migration 036) are hidden from
-  // browse/discovery — admins can still see and manage them, and whoever
-  // actually holds a booking on one (e.g. the testbot E2E fixture) still
-  // sees it on their own Home/Scheduled view. Everyone else never does.
-  const visible = result.filter(ev => !ev.is_test || member.is_admin || ev.my_booking)
+  // browse/discovery for EVERYONE, admins included (confirmed by Iain
+  // 2026-07-12 — seeing it as admin on live Scheduled was not acceptable,
+  // even though the row is easy to find/manage). The one exception is
+  // whoever actually holds a booking on it (the testbot E2E fixture),
+  // which still needs to see its own booking for the E2E suite to pass.
+  const visible = result.filter(ev => !ev.is_test || ev.my_booking)
 
   return NextResponse.json(visible)
 }
