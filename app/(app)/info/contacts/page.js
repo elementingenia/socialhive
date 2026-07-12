@@ -257,6 +257,79 @@ function CategoryManager({ categories, setCategories, onSaved }) {
   )
 }
 
+// ── Invite Code control ───────────────────────────────────────────────────────
+// Moved here from Admin > Members (2026-07-12) as part of folding that section
+// into Contacts -- new residents need this code to register. Stored in the
+// settings table (key 'invite_token'); RLS restricts writes to admins.
+function InviteCodeControl({ code, onSaved }) {
+  const controlLabelStyle = { fontSize:'0.78rem', fontWeight:700, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:4, display:'block' }
+  const [revealed, setRevealed] = useState(false)
+  const [editing,  setEditing]  = useState(false)
+  const [draft,    setDraft]    = useState(code)
+  const [saving,   setSaving]   = useState(false)
+  const [error,    setError]    = useState('')
+
+  useEffect(() => { setDraft(code) }, [code])
+
+  async function save() {
+    const trimmed = draft.trim()
+    if (!trimmed) { setError('Invite code cannot be empty'); return }
+    setSaving(true)
+    setError('')
+    const { error: err } = await supabase.from('settings')
+      .update({ value: trimmed, updated_at: new Date().toISOString() })
+      .eq('key', 'invite_token')
+    setSaving(false)
+    if (err) { setError('Could not save — try again'); return }
+    onSaved(trimmed)
+    setEditing(false)
+    setRevealed(true)
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize:'0.85rem', color:'var(--text-dim)', lineHeight:1.5, marginBottom:'1rem' }}>
+        New residents enter this code to register. Change it any time — existing members are unaffected.
+      </div>
+
+      {editing ? (
+        <div>
+          <label style={controlLabelStyle}>New Invite Code</label>
+          <input style={inputStyle} value={draft} onChange={e => setDraft(e.target.value)} autoFocus />
+          {error && <div style={{ color:'var(--danger)', fontSize:'0.8rem', marginTop:'0.4rem' }}>{error}</div>}
+          <div style={{ display:'flex', gap:'0.5rem', marginTop:'0.85rem' }}>
+            <button onClick={() => { setEditing(false); setDraft(code); setError('') }}
+              style={{ flex:1, padding:'0.7rem', borderRadius:'10px', border:'1px solid var(--border)', background:'var(--surface2)', cursor:'pointer', fontSize:'0.85rem', fontWeight:600 }}>
+              Cancel
+            </button>
+            <button onClick={save} disabled={saving}
+              style={{ flex:1, padding:'0.7rem', borderRadius:'10px', border:'none', background:COLOUR, color:'#fff', cursor: saving ? 'wait' : 'pointer', fontSize:'0.85rem', fontWeight:700 }}>
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.6rem',
+            background:'var(--surface2)', borderRadius:'10px', border:'1px solid var(--border)', padding:'0.85rem 1rem', marginBottom:'0.85rem' }}>
+            <span style={{ fontFamily:'monospace', fontSize:'1.1rem', fontWeight:700, letterSpacing: revealed ? '0.03em' : '0.2em' }}>
+              {revealed ? code : '•'.repeat(Math.max(code.length, 6))}
+            </span>
+            <button onClick={() => setRevealed(r => !r)}
+              style={{ background:'none', border:'none', cursor:'pointer', fontSize:'0.78rem', fontWeight:700, color:COLOUR, whiteSpace:'nowrap' }}>
+              {revealed ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          <button onClick={() => { setEditing(true); setDraft(code) }}
+            style={{ width:'100%', padding:'0.7rem', borderRadius:'10px', border:`1px solid ${COLOUR}`, background:'none', color:COLOUR, cursor:'pointer', fontSize:'0.85rem', fontWeight:700 }}>
+            Change Code
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ContactsPage() {
   const { isAdmin, member: me }     = useUser()
@@ -265,19 +338,23 @@ export default function ContactsPage() {
   const [contacts, setContacts]     = useState([])
   const [activeFilter, setFilter]   = useState(null)
   const [loading, setLoading]       = useState(true)
-  const [sheet, setSheet]           = useState(null) // null | "add" | "categories" | {type,member|contact}
+  const [sheet, setSheet]           = useState(null) // null | "add" | "categories" | "invite" | {type,member|contact}
+  const [search, setSearch]         = useState("")
+  const [inviteCode, setInviteCode] = useState("")
 
   const load = useCallback(async () => {
-    const [catRes, memberRes, contactRes] = await Promise.all([
+    const [catRes, memberRes, contactRes, inviteRes] = await Promise.all([
       supabase.from("contact_categories").select("id, name, display_order").eq("active", true).order("display_order"),
       supabase.from("members").select("id, name, email, house_number, phone, hide_name, is_admin").eq("status", "active"),
       supabase.from("contacts")
         .select("id, name, title, phone, email, house_number, member_id, active, contact_category_members(category_id)")
         .order("display_order"),
+      supabase.from("settings").select("value").eq("key", "invite_token").single(),
     ])
     setCategories(catRes.data || [])
     setMembers(memberRes.data || [])
     setContacts(contactRes.data || [])
+    setInviteCode(inviteRes.data?.value || "")
     setLoading(false)
   }, [])
 
@@ -326,9 +403,12 @@ export default function ContactsPage() {
     return [...memberEntries, ...contactEntries].sort((a, b) => a.name.localeCompare(b.name))
   }, [members, displayContacts, contactByMemberId, residentsId, isAdmin])
 
-  const filtered = activeFilter === "all"
+  const categoryFiltered = activeFilter === "all"
     ? entries
     : entries.filter(e => e.categoryIds.includes(activeFilter))
+  const filtered = search.trim()
+    ? categoryFiltered.filter(e => e.name?.toLowerCase().includes(search.trim().toLowerCase()))
+    : categoryFiltered
 
   const initializing = loading || activeFilter === null
 
@@ -353,10 +433,17 @@ export default function ContactsPage() {
         </div>
       )}
 
+      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "1rem" }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name…"
+          style={{ ...inputStyle, flex: 1 }} />
+        <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", whiteSpace: "nowrap" }}>{filtered.length}</span>
+      </div>
+
       {isAdmin && (
-        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+        <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
           <button onClick={() => setSheet("add")} style={secondaryButtonStyle}>+ Add Contact</button>
           <button onClick={() => setSheet("categories")} style={secondaryButtonStyle}>Manage Categories</button>
+          <button onClick={() => setSheet("invite")} style={secondaryButtonStyle}>Invite Code</button>
         </div>
       )}
 
@@ -378,6 +465,10 @@ export default function ContactsPage() {
 
       <Sheet open={sheet === "categories"} onClose={() => setSheet(null)} title="Manage Categories">
         <CategoryManager categories={categories} setCategories={setCategories} onSaved={load} />
+      </Sheet>
+
+      <Sheet open={sheet === "invite"} onClose={() => setSheet(null)} title="Invite Code">
+        <InviteCodeControl code={inviteCode} onSaved={code => setInviteCode(code)} />
       </Sheet>
 
       <Sheet open={sheet?.type === "contact"} onClose={() => setSheet(null)} title="Edit Contact">

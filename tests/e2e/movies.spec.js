@@ -140,25 +140,40 @@ test.describe('Admin panel', () => {
   })
 
   test('Admin card grid loads with expected sections', async ({ page }) => {
-    await expect(page.getByRole('button', { name: /Members/i }).first()).toBeVisible()
     await expect(page.getByRole('button', { name: /Movies/i }).first()).toBeVisible()
     // Bar section is parked behind BAR_ENABLED (see lib/features.js) — not rendered while disabled.
     await expect(page.getByRole('button', { name: /^Bar$/i })).toHaveCount(0)
-  })
-
-  test('Members section opens and lists members', async ({ page }) => {
-    await page.getByRole('button', { name: /Members/i }).first().click()
-    await page.waitForLoadState('networkidle')
-    // Back nav should appear
-    await expect(page.getByText('← Admin')).toBeVisible()
-    // At least testbot should appear in member list
-    await expect(page.getByText(/testbot/i).first()).toBeVisible({ timeout: 10000 })
+    // Members section folded into Info > Contacts (2026-07-12) — no longer a
+    // separate Admin card, so it should not appear here.
+    await expect(page.getByRole('button', { name: /^Members$/i })).toHaveCount(0)
   })
 
   test('Movies section shows Suggested Movies', async ({ page }) => {
     await page.getByRole('button', { name: /Movies/i }).first().click()
     await page.waitForLoadState('networkidle')
     await expect(page.getByText('← Admin')).toBeVisible()
+  })
+})
+
+// ── Info > Contacts (folds in what used to be Admin > Members, 2026-07-12) ────
+test.describe('Info > Contacts', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/info/contacts')
+    await page.waitForLoadState('networkidle')
+  })
+
+  test('Member management lives here now, not in Admin', async ({ page }) => {
+    // At least testbot should appear in the resident list
+    await expect(page.getByText(/testbot/i).first()).toBeVisible({ timeout: 10000 })
+    // Admin-only controls, including the Invite Code moved from Admin > Members
+    await expect(page.getByRole('button', { name: '+ Add Contact' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Manage Categories' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Invite Code' })).toBeVisible()
+  })
+
+  test('Search filters the resident/contact list by name', async ({ page }) => {
+    await page.getByPlaceholder('Search by name…').fill('testbot')
+    await expect(page.getByText(/testbot/i).first()).toBeVisible()
   })
 })
 

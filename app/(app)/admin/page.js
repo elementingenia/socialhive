@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MembersIcon, MoviesIcon, BarIcon, ToolsIcon, BookClubIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MoviesIcon, BarIcon, ToolsIcon, BookClubIcon } from '@/components/NavIcons'
 import RichEditor, { bbToHtml } from '@/components/RichEditor'
 import ResidentEditForm, { Sheet } from '@/components/ResidentEditPanel'
 import { BAR_ENABLED } from '@/lib/features'
@@ -18,7 +18,6 @@ const HUB_TYPES = [
 const HUB_COLOUR = { movie:'var(--teal)', social:'var(--terracotta)', bookclub:'var(--purple)' }
 const SECTIONS = [
   { key: 'PageTexts', label: 'Page Texts', Icon: PageTextsIcon },
-  { key: 'Members',   label: 'Members',    Icon: MembersIcon },
   { key: 'Movies',    label: 'Movies',     Icon: MoviesIcon },
   { key: 'BookClub',  label: 'Book Club',  Icon: BookClubIcon },
   // Bar section parked (feature not in scope) — see lib/features.js
@@ -135,189 +134,6 @@ function NoticesTab() {
           </div>
         </div>
       ))}
-    </div>
-  )
-}
-
-// ── MEMBERS TAB ───────────────────────────────────────────────────────────────
-function MembersTab() {
-  const [members, setMembers]     = useState([])
-  const [categories, setCategories] = useState([])
-  const [contacts, setContacts]   = useState([])
-  const [loading, setLoading]     = useState(true)
-  const [search,  setSearch]      = useState('')
-  const [editing, setEditing]     = useState(null) // member being edited, or null
-  const [inviteCode, setInviteCode] = useState('')
-  const [inviteOpen, setInviteOpen] = useState(false)
-  const { member: me } = useUser()
-
-  const load = useCallback(() => {
-    Promise.all([
-      supabase.from('members').select('id, name, username, status, is_admin, hide_name, email, house_number, phone, joined_date').order('name'),
-      supabase.from('contact_categories').select('id, name, display_order').eq('active', true).order('display_order'),
-      supabase.from('contacts').select('id, member_id, title, phone, contact_category_members(category_id)').not('member_id', 'is', null),
-      supabase.from('settings').select('value').eq('key', 'invite_token').single(),
-    ]).then(([mRes, cRes, ctRes, sRes]) => {
-      setMembers(mRes.data || [])
-      setCategories(cRes.data || [])
-      setContacts(ctRes.data || [])
-      setInviteCode(sRes.data?.value || '')
-      setLoading(false)
-    })
-  }, [])
-
-  useEffect(() => { load() }, [load])
-
-  const residentsId = categories.find(c => c.name.toLowerCase() === 'residents')?.id
-  const contactByMemberId = {}
-  for (const c of contacts) if (c.member_id) contactByMemberId[c.member_id] = c
-
-  async function toggle(id, field, val) {
-    await supabase.from('members').update({ [field]: val }).eq('id', id)
-    setMembers(ms => ms.map(m => m.id===id ? {...m, [field]:val} : m))
-  }
-
-  const filtered = members.filter(m =>
-    !search || m.name?.toLowerCase().includes(search.toLowerCase()) || m.username?.toLowerCase().includes(search.toLowerCase())
-  )
-
-  return (
-    <div>
-      <div style={{ marginBottom:'0.85rem', display:'flex', gap:'0.5rem', alignItems:'center' }}>
-        <input style={{ ...inputStyle, flex:1 }} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search members…" />
-        <span style={{ fontSize:'0.82rem', color:'var(--text-dim)', whiteSpace:'nowrap' }}>{filtered.length} members</span>
-        <button onClick={() => setInviteOpen(true)} title="Invite Code"
-          style={{ padding:'0.55rem 0.65rem', borderRadius:'8px', border:'1px solid var(--border)', background:'var(--surface)', fontSize:'0.9rem', cursor:'pointer', color:'var(--text)', flexShrink:0, lineHeight:1 }}>
-          🔑
-        </button>
-      </div>
-      {loading ? <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)' }}>Loading…</div> : (
-        <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
-          {filtered.map(m => (
-            <div key={m.id} style={{ background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.85rem 1rem' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'0.5rem' }}>
-                <div>
-                  <div style={{ fontWeight:700, fontSize:'0.9rem' }}>{m.name} {m.id===me?.id && <span style={{ fontSize:'0.7rem', color:'var(--text-dim)' }}>(you)</span>}</div>
-                  <div style={{ fontSize:'0.78rem', color:'var(--text-dim)' }}>@{m.username}</div>
-                </div>
-                <div style={{ display:'flex', gap:'0.4rem', alignItems:'center', flexWrap:'wrap', justifyContent:'flex-end' }}>
-                  <button
-                    onClick={()=> m.id!==me?.id && toggle(m.id,'is_admin',!m.is_admin)}
-                    style={{ padding:'0.3rem 0.6rem', borderRadius:'8px', border:'1px solid', borderColor:m.is_admin?'var(--amber)':'var(--border)', background:m.is_admin?'var(--amber)20':'var(--surface)', fontSize:'0.72rem', fontWeight:700, cursor:m.id===me?.id?'default':'pointer', color:m.is_admin?'var(--amber-dark)':'var(--text-dim)', opacity:m.id===me?.id?0.5:1 }}>
-                    {m.is_admin ? '⚙️ Admin' : 'Admin'}
-                  </button>
-                  <button
-                    onClick={()=> toggle(m.id,'hide_name',!m.hide_name)}
-                    title="Hidden members are not shown in attendee lists"
-                    style={{ padding:'0.3rem 0.6rem', borderRadius:'8px', border:'1px solid', borderColor:m.hide_name?'var(--purple)':'var(--border)', background:m.hide_name?'var(--purple)20':'var(--surface)', fontSize:'0.72rem', fontWeight:700, cursor:'pointer', color:m.hide_name?'var(--purple)':'var(--text-dim)' }}>
-                    {m.hide_name ? '🔒 Private' : 'Private'}
-                  </button>
-                  <button
-                    onClick={()=> setEditing(m)}
-                    style={{ padding:'0.3rem 0.6rem', borderRadius:'8px', border:'1px solid var(--border)', background:'var(--surface)', fontSize:'0.72rem', fontWeight:700, cursor:'pointer', color:'var(--text)' }}>
-                    Edit
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <Sheet open={!!editing} onClose={() => setEditing(null)} title="Edit Resident">
-        {editing && (
-          <ResidentEditForm
-            member={editing}
-            linkedCategoryIds={(contactByMemberId[editing.id]?.contact_category_members || []).map(x => x.category_id)}
-            linkedTitle={contactByMemberId[editing.id]?.title}
-            categories={categories}
-            residentsId={residentsId}
-            isSelf={editing.id === me?.id}
-            onSaved={load}
-            onClose={() => setEditing(null)}
-          />
-        )}
-      </Sheet>
-
-      <Sheet open={inviteOpen} onClose={() => setInviteOpen(false)} title="Invite Code">
-        <InviteCodeControl
-          code={inviteCode}
-          onSaved={code => { setInviteCode(code); }}
-        />
-      </Sheet>
-    </div>
-  )
-}
-
-// ── Invite Code control (Admin > Members) ──────────────────────────────────
-// New residents need this code to register. Stored in the settings table
-// (key 'invite_token') - RLS already restricts writes to admins, matching
-// the existing our_streaming_services pattern in this file.
-function InviteCodeControl({ code, onSaved }) {
-  const labelStyle = { fontSize:'0.78rem', fontWeight:700, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:4, display:'block' }
-  const [revealed, setRevealed] = useState(false)
-  const [editing,  setEditing]  = useState(false)
-  const [draft,    setDraft]    = useState(code)
-  const [saving,   setSaving]   = useState(false)
-  const [error,    setError]    = useState('')
-
-  useEffect(() => { setDraft(code) }, [code])
-
-  async function save() {
-    const trimmed = draft.trim()
-    if (!trimmed) { setError('Invite code cannot be empty'); return }
-    setSaving(true)
-    setError('')
-    const { error: err } = await supabase.from('settings')
-      .update({ value: trimmed, updated_at: new Date().toISOString() })
-      .eq('key', 'invite_token')
-    setSaving(false)
-    if (err) { setError('Could not save — try again'); return }
-    onSaved(trimmed)
-    setEditing(false)
-    setRevealed(true)
-  }
-
-  return (
-    <div>
-      <div style={{ fontSize:'0.85rem', color:'var(--text-dim)', lineHeight:1.5, marginBottom:'1rem' }}>
-        New residents enter this code to register. Change it any time — existing members are unaffected.
-      </div>
-
-      {editing ? (
-        <div>
-          <label style={labelStyle}>New Invite Code</label>
-          <input style={inputStyle} value={draft} onChange={e => setDraft(e.target.value)} autoFocus />
-          {error && <div style={{ color:'var(--danger)', fontSize:'0.8rem', marginTop:'0.4rem' }}>{error}</div>}
-          <div style={{ display:'flex', gap:'0.5rem', marginTop:'0.85rem' }}>
-            <button onClick={() => { setEditing(false); setDraft(code); setError('') }}
-              style={{ flex:1, padding:'0.7rem', borderRadius:'10px', border:'1px solid var(--border)', background:'var(--surface2)', cursor:'pointer', fontSize:'0.85rem', fontWeight:600 }}>
-              Cancel
-            </button>
-            <button onClick={save} disabled={saving}
-              style={{ flex:1, padding:'0.7rem', borderRadius:'10px', border:'none', background:'var(--amber)', color:'#fff', cursor: saving ? 'wait' : 'pointer', fontSize:'0.85rem', fontWeight:700 }}>
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.6rem',
-            background:'var(--surface2)', borderRadius:'10px', border:'1px solid var(--border)', padding:'0.85rem 1rem', marginBottom:'0.85rem' }}>
-            <span style={{ fontFamily:'monospace', fontSize:'1.1rem', fontWeight:700, letterSpacing: revealed ? '0.03em' : '0.2em' }}>
-              {revealed ? code : '•'.repeat(Math.max(code.length, 6))}
-            </span>
-            <button onClick={() => setRevealed(r => !r)}
-              style={{ background:'none', border:'none', cursor:'pointer', fontSize:'0.78rem', fontWeight:700, color:'var(--amber-dark)', whiteSpace:'nowrap' }}>
-              {revealed ? 'Hide' : 'Show'}
-            </button>
-          </div>
-          <button onClick={() => { setEditing(true); setDraft(code) }}
-            style={{ width:'100%', padding:'0.7rem', borderRadius:'10px', border:'1px solid var(--amber)', background:'none', color:'var(--amber-dark)', cursor:'pointer', fontSize:'0.85rem', fontWeight:700 }}>
-            Change Code
-          </button>
-        </div>
-      )}
     </div>
   )
 }
@@ -1751,7 +1567,6 @@ export default function AdminPage() {
           ← Admin
         </button>
         {tab === 'PageTexts' && <PageTextsTab />}
-        {tab === 'Members'   && <MembersTab />}
         {tab === 'Movies'    && <MoviesTab />}
         {tab === 'BookClub'  && <BookClubTab />}
         {BAR_ENABLED && tab === 'Bar' && <BarTab />}
