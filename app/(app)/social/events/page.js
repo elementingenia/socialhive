@@ -1000,19 +1000,38 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                         </span>
                         <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
                           <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
-                          {canManagePayments && isPaidEvent && (
-                            <button
-                              disabled={togglingId === b.id}
-                              onClick={e => { e.stopPropagation(); e.preventDefault(); onTogglePayment(event.id, b) }}
-                              style={{
-                                border: "1px solid", borderColor: paid ? "var(--green)" : "var(--amber)",
-                                background: paid ? "var(--green)15" : "var(--amber)15",
-                                color: paid ? "var(--green)" : "var(--amber-dark)",
-                                borderRadius: "10px", padding: "0.1rem 0.5rem", fontSize: "0.7rem", fontWeight: 700,
-                                cursor: togglingId === b.id ? "default" : "pointer", fontFamily: "inherit", flexShrink: 0,
-                                opacity: togglingId === b.id ? 0.6 : 1,
-                              }}>{togglingId === b.id ? "…" : (paid ? "Paid" : "Unpaid")}</button>
-                          )}
+                          {canManagePayments && isPaidEvent && (() => {
+                            const pending = togglingId === b.id
+                            return (
+                              <button
+                                disabled={pending}
+                                onClick={e => { e.stopPropagation(); e.preventDefault(); onTogglePayment(event.id, b) }}
+                                role="switch" aria-checked={paid} aria-label={paid ? "Mark as unpaid" : "Mark as paid"}
+                                style={{
+                                  display: "flex", alignItems: "center", gap: 5,
+                                  border: "none", background: "none", padding: "0.15rem 0.1rem",
+                                  cursor: pending ? "default" : "pointer", fontFamily: "inherit",
+                                  flexShrink: 0, opacity: pending ? 0.55 : 1,
+                                }}>
+                                {/* Toggle graphic with Unpaid/Paid labels flanking it, so it
+                                    reads as an actionable switch rather than a status badge
+                                    (Iain, 2026-07-12 -- the plain colour pill wasn't clearly
+                                    tappable). */}
+                                <span style={{ fontSize: "0.62rem", fontWeight: 700, color: !paid ? "var(--amber-dark)" : "var(--text-dim)" }}>Unpaid</span>
+                                <span style={{
+                                  width: 32, height: 18, borderRadius: 9, position: "relative", flexShrink: 0,
+                                  background: paid ? "var(--green)" : "var(--amber)", transition: "background 0.15s",
+                                }}>
+                                  <span style={{
+                                    position: "absolute", top: 2, left: paid ? 16 : 2,
+                                    width: 14, height: 14, borderRadius: "50%", background: "#fff",
+                                    transition: "left 0.15s", boxShadow: "0 1px 2px rgba(0,0,0,.25)",
+                                  }} />
+                                </span>
+                                <span style={{ fontSize: "0.62rem", fontWeight: 700, color: paid ? "var(--green)" : "var(--text-dim)" }}>Paid</span>
+                              </button>
+                            )
+                          })()}
                         </span>
                       </div>
                     )
