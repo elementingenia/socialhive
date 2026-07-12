@@ -187,7 +187,7 @@ function ECNames({ coordinators, colour }) {
   return (
     <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
       <span>👤</span>
-      <span>Co-ordinator{coordinators.length > 1 ? "s" : ""}:</span>
+      <span>Coordinator{coordinators.length > 1 ? "s" : ""}:</span>
       {coordinators.map((ec, i) => (
         <span key={ec.member_id} style={{ fontWeight: 600, color: "var(--text)" }}>
           {ec.members?.name || ec.members?.username}{i < coordinators.length - 1 ? "," : ""}
@@ -1023,6 +1023,13 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
           {/* EC names — on one line under location */}
           {!isPrivate && <ECNames coordinators={coordinators} colour={colour} />}
 
+          {/* Bus driver — sits directly with Coordinator, social offsite only */}
+          {!isPrivate && event.has_bus && event.bus_driver && (
+            <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+              <BusIcon size={14} /> <span>{event.bus_driver.name || event.bus_driver.username}</span>
+            </div>
+          )}
+
           {isPrivate && (
             <div style={{ background: "#f5f5f5", borderRadius: 10, padding: 14, fontSize: 13, color: "#888", lineHeight: 1.5, marginBottom: 12 }}>
               This is a residents-only event. Login to see full details and book your place.
@@ -1105,13 +1112,6 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
 
               {showMenu && (
                 <MenuModal event={event} colour={colour} onClose={() => setShowMenu(false)} />
-              )}
-
-              {/* Bus driver — social offsite only */}
-              {event.has_bus && event.bus_driver && (
-                <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>
-                  <BusIcon size={14} /> {event.bus_driver.name || event.bus_driver.username}
-                </div>
               )}
 
               {/* Welcome message */}
