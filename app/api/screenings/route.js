@@ -132,7 +132,13 @@ export async function GET(req) {
     }
   })
 
-  return NextResponse.json(result)
+  // Test/fixture screenings (events.is_test, migration 036) are hidden from
+  // browse/discovery — admins can still see and manage them, and whoever
+  // actually holds a booking on one (e.g. the testbot E2E fixture) still
+  // sees it on their own Home/Scheduled view. Everyone else never does.
+  const visible = result.filter(ev => !ev.is_test || member.is_admin || ev.my_booking)
+
+  return NextResponse.json(visible)
 }
 
 export async function POST(req) {
