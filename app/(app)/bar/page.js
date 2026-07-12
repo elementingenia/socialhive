@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import { useRouter } from "next/navigation"
+import { BAR_ENABLED } from "@/lib/features"
 
 const CATEGORY_ICONS  = { beer:"🍺", wine:"🍷", spirits:"🥃", soft:"🥤" }
 const CATEGORY_LABELS = { beer:"Beer", wine:"Wine", spirits:"Spirits", soft:"Soft Drinks" }
@@ -115,6 +116,10 @@ export default function BarPage() {
   }, [member?.id])
 
   useEffect(() => {
+    // Bar feature parked (not in scope) — see lib/features.js. Redirect
+    // even on direct URL entry so the page can't be reached once the nav
+    // entry point is hidden.
+    if (!BAR_ENABLED) { router.replace("/home"); return }
     if (!member) return
     if (!member.bar_opt_in) { router.replace("/home"); return }
     async function load() {

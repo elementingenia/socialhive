@@ -1,5 +1,6 @@
 "use client"
 import { useState } from "react"
+import { BAR_ENABLED } from "@/lib/features"
 
 const BASE = "https://tzzxwvbqszzrruxjrpcs.supabase.co/storage/v1/object/public/help-screenshots"
 const IMG = (name) => `${BASE}/${name}`
@@ -38,7 +39,7 @@ const EC_BADGE = (
   }}>EC only</span>
 )
 
-const SECTIONS = [
+const RAW_SECTIONS = [
   {
     id: "header", num: "—", title: "Getting Around — The App Header",
     subs: [
@@ -112,6 +113,17 @@ const SECTIONS = [
     ],
   },
 ]
+
+// Bar section parked (feature not in scope) — see lib/features.js. Filtered
+// out and the remaining sections renumbered so the guide has no gaps; flip
+// BAR_ENABLED back on to restore it with correct numbering automatically.
+const SECTIONS = (() => {
+  let n = 0
+  return RAW_SECTIONS
+    .filter(s => BAR_ENABLED || s.id !== "bar")
+    .map(s => (s.num === "—" ? s : { ...s, num: ++n }))
+})()
+const secNum = (id) => SECTIONS.find(s => s.id === id)?.num
 
 function Section({ id, num, title, children }) {
   return (
@@ -259,9 +271,9 @@ export default function HelpGuidePage() {
 
           <p style={{ fontSize: "0.9rem", lineHeight: 1.65, opacity: 0.92, margin: 0, maxWidth: 560 }}>
             Welcome to The Social Hive — the community app for Fullerton Cove residents. This guide
-            covers everything from signing in for the first time, to booking events, browsing movies,
-            tracking your bar tab, and more. Sections marked <strong>EC only</strong> are for Element
-            Communities coordinators.
+            covers everything from signing in for the first time, to booking events, browsing
+            movies{BAR_ENABLED ? ", tracking your bar tab," : ","} and more. Sections marked{" "}
+            <strong>EC only</strong> are for Element Communities coordinators.
           </p>
         </header>
 
@@ -373,8 +385,8 @@ export default function HelpGuidePage() {
                 name.
               </Step>
               <Step>
-                <strong>Change PIN</strong> — set or update the 4-digit PIN used to confirm bar
-                purchases. You will need this any time you add a drink to your tab.
+                <strong>Change PIN</strong> — set or update your 4-digit PIN, used to sign in and
+                confirm account actions.
               </Step>
               <Step>
                 <strong>Sign Out</strong> — signs you out of the app completely. Tap <strong>Sign
@@ -388,7 +400,7 @@ export default function HelpGuidePage() {
           </Section>
 
           {/* ── 1. SIGN IN & REGISTER ── */}
-          <Section id="access" num={1} title="Signing In, Registering & Changing Your Password">
+          <Section id="access" num={secNum("access")} title="Signing In, Registering & Changing Your Password">
             <Subsection id="sub-signin" title="Sign In">
               <Step img={IMG("01-login.png")} alt="Sign In screen">
                 When you open The Social Hive you will see the sign-in screen. Enter your{" "}
@@ -419,7 +431,7 @@ export default function HelpGuidePage() {
           </Section>
 
           {/* ── 2. PROFILE ── */}
-          <Section id="profile" num={2} title="Your Profile & PIN">
+          <Section id="profile" num={secNum("profile")} title="Your Profile & PIN">
             <Subsection id="sub-profile-update" title="Updating your profile">
               <Step img={IMG("05-profile.png")} alt="Profile screen">
                 Tap your name or photo in the top-right corner of any page to open the account menu,
@@ -432,9 +444,7 @@ export default function HelpGuidePage() {
             <Subsection id="sub-profile-pin" title="Changing your PIN">
               <Step>
                 From the same account menu (top-right), tap <strong>Change PIN</strong>. Enter your
-                current 4-digit PIN, then enter and confirm your new PIN. Your PIN is required every
-                time you add a purchase to your bar tab — if you have not set one yet, do this before
-                visiting the bar.
+                current 4-digit PIN, then enter and confirm your new PIN.
               </Step>
               <InfoBox>
                 💡 If you forget your PIN, contact your coordinator — they can reset it for you.
@@ -443,7 +453,7 @@ export default function HelpGuidePage() {
           </Section>
 
           {/* ── 3. MOVIES ── */}
-          <Section id="movies" num={3} title="Movies — Screenings, Booking & Library">
+          <Section id="movies" num={secNum("movies")} title="Movies — Screenings, Booking & Library">
             <Subsection id="sub-movies-home" title="Movies Home layout">
               <Step img={IMG("06-movies.png")} alt="Movies Home screen">
                 The Movies Home screen is your central hub for everything related to community
@@ -579,7 +589,7 @@ export default function HelpGuidePage() {
           </Section>
 
           {/* ── 4. SOCIAL ── */}
-          <Section id="social" num={4} title="Social Events — Community Activities & Trips">
+          <Section id="social" num={secNum("social")} title="Social Events — Community Activities & Trips">
             <Subsection id="sub-social-home" title="Social hub home">
               <Step img={IMG("11-social.png")} alt="Social hub home">
                 The Social hub is your home for community activities — dinners, day trips, outings,
@@ -627,7 +637,7 @@ export default function HelpGuidePage() {
           </Section>
 
           {/* ── 5. BOOK CLUB ── */}
-          <Section id="bookclub" num={5} title="Book Club">
+          <Section id="bookclub" num={secNum("bookclub")} title="Book Club">
             <Subsection id="sub-bookclub-home" title="Book Club home">
               <Step img={IMG("14-bookclub.png")} alt="Book Club home">
                 The Book Club section shows the current book pick, upcoming meeting dates, and recent
@@ -650,8 +660,9 @@ export default function HelpGuidePage() {
             </Subsection>
           </Section>
 
-          {/* ── 6. BAR ── */}
-          <Section id="bar" num={6} title="My Bar — Honour Bar & Tab">
+          {/* ── BAR (parked, feature not in scope — see lib/features.js) ── */}
+          {BAR_ENABLED && (
+          <Section id="bar" num={secNum("bar")} title="My Bar — Honour Bar & Tab">
             <Subsection id="sub-bar-menu" title="The bar menu">
               <Step img={IMG("16-bar.png")} alt="Bar home">
                 The community bar operates on an honour system — you record what you take and settle
@@ -690,9 +701,10 @@ export default function HelpGuidePage() {
               </Step>
             </Subsection>
           </Section>
+          )}
 
-          {/* ── 7. CALENDAR ── */}
-          <Section id="calendar" num={7} title="Community Calendar">
+          {/* ── CALENDAR ── */}
+          <Section id="calendar" num={secNum("calendar")} title="Community Calendar">
             <Step img={IMG("17-calendar.png")} alt="Community calendar">
               The Calendar brings every upcoming community event together in one view — Movies, Social
               Events, and Book Club meetings all appear here without switching between sections.
@@ -705,7 +717,7 @@ export default function HelpGuidePage() {
           </Section>
 
           {/* ── 8. MY BOOKINGS ── */}
-          <Section id="bookings" num={8} title="My Bookings">
+          <Section id="bookings" num={secNum("bookings")} title="My Bookings">
             <Step img={IMG("18-bookings.png")} alt="My Bookings screen">
               My Bookings shows all your current reservations across every section of the app —
               Movies, Social Events, and Book Club — in one place. Use the filter tabs at the top

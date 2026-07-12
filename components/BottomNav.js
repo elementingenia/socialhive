@@ -3,6 +3,7 @@ import React from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
 import { getActiveHub } from "@/lib/navUtils"
+import { BAR_ENABLED } from "@/lib/features"
 import {
   HomeIcon, MoviesIcon, CalendarIcon, SuggestionsIcon, DVDIcon,
   BookClubIcon, SocialIcon, AdminIcon, BookingsIcon, BarIcon,
@@ -101,7 +102,7 @@ export default function BottomNav() {
     { path: "/home",     label: "Home",     Icon: HomeIcon },
     { path: "/calendar", label: "Calendar", Icon: CalendarIcon },
     { path: "/bookings", label: "Bookings", Icon: BookingsIcon },
-    ...(barOptIn && !isAdmin ? [{ path: "/bar",   label: "Bar",   Icon: BarIcon   }] : []),
+    ...(BAR_ENABLED && barOptIn && !isAdmin ? [{ path: "/bar",   label: "Bar",   Icon: BarIcon   }] : []),
     ...(isAdmin              ? [{ path: "/admin", label: "Admin", Icon: AdminIcon }] : []),
   ]
 

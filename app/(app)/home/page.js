@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon } from "@/components/NavIcons"
+import { BAR_ENABLED } from "@/lib/features"
 
 const HUBS = [
   { key: "movies",   label: "Movies",    Icon: MoviesIcon,   path: "/movies",   colour: "var(--teal)" },
@@ -190,8 +191,8 @@ export default function HomePage() {
           {/* Sub notices */}
           {subTexts.map((t, i) => <SubNoticeCard key={i} text={t} />)}
 
-          {/* Bar tab — only for opted-in members */}
-          {barOptIn && memberId && <BarTabCard memberId={memberId} />}
+          {/* Bar tab — only for opted-in members (feature parked, see lib/features.js) */}
+          {BAR_ENABLED && barOptIn && memberId && <BarTabCard memberId={memberId} />}
         </>
       )}
     </div>

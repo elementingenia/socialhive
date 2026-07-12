@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
+import { BAR_ENABLED } from "@/lib/features"
 
 // Clearance below the sticky header so the avatar pill stays visible
 const TOP_OFFSET = 72 // px — covers both home (~68px) and sub-page (~43px) headers
@@ -191,8 +192,13 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
               {/* Toggles */}
               <div style={{ borderTop: "1px solid var(--border)", marginTop: "0.75rem" }}>
                 <Toggle value={hideName} onChange={setHideName} label="Hide my name" description="Show me as 'Resident' in event attendee lists" />
-                <div style={{ borderTop: "1px solid var(--border)" }} />
-                <Toggle value={barOptIn} onChange={setBarOptIn} label="Bar access" description="Enable the Community Bar tab for your account" />
+                {/* Bar access toggle parked (feature not in scope) — see lib/features.js */}
+                {BAR_ENABLED && (
+                  <>
+                    <div style={{ borderTop: "1px solid var(--border)" }} />
+                    <Toggle value={barOptIn} onChange={setBarOptIn} label="Bar access" description="Enable the Community Bar tab for your account" />
+                  </>
+                )}
               </div>
 
               {/* Save button sits immediately below content — no empty space */}

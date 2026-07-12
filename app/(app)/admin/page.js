@@ -7,6 +7,7 @@ import { computeFreeCost, normaliseService } from '@/lib/freeCost'
 import { PageTextsIcon, MembersIcon, MoviesIcon, BarIcon, ToolsIcon, BookClubIcon } from '@/components/NavIcons'
 import RichEditor, { bbToHtml } from '@/components/RichEditor'
 import ResidentEditForm, { Sheet } from '@/components/ResidentEditPanel'
+import { BAR_ENABLED } from '@/lib/features'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const HUB_TYPES = [
@@ -20,7 +21,8 @@ const SECTIONS = [
   { key: 'Members',   label: 'Members',    Icon: MembersIcon },
   { key: 'Movies',    label: 'Movies',     Icon: MoviesIcon },
   { key: 'BookClub',  label: 'Book Club',  Icon: BookClubIcon },
-  { key: 'Bar',       label: 'Bar',        Icon: BarIcon },
+  // Bar section parked (feature not in scope) — see lib/features.js
+  ...(BAR_ENABLED ? [{ key: 'Bar', label: 'Bar', Icon: BarIcon }] : []),
   { key: 'Tools',     label: 'Tools',      Icon: ToolsIcon },
 ]
 
@@ -1752,7 +1754,7 @@ export default function AdminPage() {
         {tab === 'Members'   && <MembersTab />}
         {tab === 'Movies'    && <MoviesTab />}
         {tab === 'BookClub'  && <BookClubTab />}
-        {tab === 'Bar'       && <BarTab />}
+        {BAR_ENABLED && tab === 'Bar' && <BarTab />}
         {tab === 'Tools'     && <ToolsTab />}
       </div>
     )
