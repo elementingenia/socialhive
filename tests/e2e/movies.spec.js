@@ -163,8 +163,10 @@ test.describe('Info > Contacts', () => {
   })
 
   test('Member management lives here now, not in Admin', async ({ page }) => {
-    // At least testbot should appear in the resident list
-    await expect(page.getByText(/testbot/i).first()).toBeVisible({ timeout: 10000 })
+    // Contacts shows a resident's real name, not their @username (the old
+    // Admin > Members list showed "@testbot" -- Contacts intentionally only
+    // ever surfaces the friendly name field, "Test Bot").
+    await expect(page.getByText('Test Bot').first()).toBeVisible({ timeout: 10000 })
     // Admin-only controls, including the Invite Code moved from Admin > Members
     await expect(page.getByRole('button', { name: '+ Add Contact' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Manage Categories' })).toBeVisible()
@@ -172,8 +174,8 @@ test.describe('Info > Contacts', () => {
   })
 
   test('Search filters the resident/contact list by name', async ({ page }) => {
-    await page.getByPlaceholder('Search by name…').fill('testbot')
-    await expect(page.getByText(/testbot/i).first()).toBeVisible()
+    await page.getByPlaceholder('Search by name…').fill('Test Bot')
+    await expect(page.getByText('Test Bot').first()).toBeVisible()
   })
 })
 
