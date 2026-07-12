@@ -182,7 +182,7 @@ export default function BookingsPage() {
     setLoadingEvent(true)
     const { data } = await supabase
       .from("events")
-      .select("*, bookings(id, status, seats, payment_status, member_id, members(name, username))")
+      .select("*, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, members(name, username))")
       .eq("id", booking.event_id)
       .single()
     setLoadingEvent(false)

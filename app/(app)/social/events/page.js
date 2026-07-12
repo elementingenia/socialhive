@@ -766,12 +766,14 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
             <div>
               <label style={LABEL}>Total Seats</label>
               <input type="number" min={1} max={500} value={form.max_seats}
-                onChange={e => set("max_seats", e.target.value)} style={INPUT} />
+                onChange={e => set("max_seats", e.target.value)}
+                onWheel={e => e.currentTarget.blur()} style={INPUT} />
             </div>
             <div>
               <label style={LABEL}>Max per Booking</label>
               <input type="number" min={1} max={10} value={form.max_seats_per_booking}
-                onChange={e => set("max_seats_per_booking", e.target.value)} style={INPUT} />
+                onChange={e => set("max_seats_per_booking", e.target.value)}
+                onWheel={e => e.currentTarget.blur()} style={INPUT} />
             </div>
           </div>
 
@@ -783,7 +785,9 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
             <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
               <label style={LABEL}>Cost per person ($)</label>
               <input type="number" min={0} step={1} value={form.cost}
-                onChange={e => set("cost", e.target.value)} placeholder="e.g. 25" style={INPUT} />
+                onChange={e => set("cost", e.target.value)}
+                onWheel={e => e.currentTarget.blur()}
+                placeholder="e.g. 25" style={INPUT} />
             </div>
           )}
 
@@ -860,30 +864,33 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit }) 
         {/* Title + badges */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.35rem" }}>
           <div style={{ fontWeight: 700, fontSize: "1rem", lineHeight: 1.2, flex: 1 }}>{event.title}</div>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.3rem", flexShrink: 0 }}>
-            {isAdmin && (
-              <button onClick={e => { e.stopPropagation(); onEdit() }} style={{
-                background: "var(--surface2)", border: "1px solid var(--border)",
-                borderRadius: "8px", padding: "0.2rem 0.6rem",
-                fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
-                color: "var(--text-dim)", fontFamily: "inherit",
-              }}>Edit</button>
-            )}
+          <div style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: "0.4rem", flexShrink: 0 }}>
+            {/* Status pill sits to the left of Edit on the same row (or alone,
+                right-aligned, when Edit isn't shown) — it used to stack in its
+                own column below Edit, wasting a line on every card. */}
             {isConfirmed && (() => {
               const badge = bookingStatusBadge(myBooking, event)
               return (
                 <span style={{
                   background: badge.bg, color: badge.color,
                   borderRadius: "20px", padding: "0.2rem 0.55rem",
-                  fontSize: "0.7rem", fontWeight: 700,
+                  fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap",
                 }}>{badge.label === "Confirmed" ? `✓ ${badge.label}` : badge.label}</span>
               )
             })()}
             {isWaitlist && (
-              <span style={{ background: "#f1f5f9", color: "#64748b", borderRadius: "20px", padding: "0.2rem 0.55rem", fontSize: "0.7rem", fontWeight: 700 }}>Waitlisted</span>
+              <span style={{ background: "#f1f5f9", color: "#64748b", borderRadius: "20px", padding: "0.2rem 0.55rem", fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap" }}>Waitlisted</span>
             )}
             {daysLabel && !isConfirmed && !isWaitlist && (
-              <span style={{ background: "var(--terracotta)18", color: "var(--terracotta)", borderRadius: "20px", padding: "0.2rem 0.55rem", fontSize: "0.7rem", fontWeight: 700 }}>{daysLabel}</span>
+              <span style={{ background: "var(--terracotta)18", color: "var(--terracotta)", borderRadius: "20px", padding: "0.2rem 0.55rem", fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap" }}>{daysLabel}</span>
+            )}
+            {isAdmin && (
+              <button onClick={e => { e.stopPropagation(); onEdit() }} style={{
+                background: "var(--surface2)", border: "1px solid var(--border)",
+                borderRadius: "8px", padding: "0.2rem 0.6rem",
+                fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
+                color: "var(--text-dim)", fontFamily: "inherit", flexShrink: 0,
+              }}>Edit</button>
             )}
           </div>
         </div>
@@ -1076,7 +1083,7 @@ export default function SocialEvents() {
   async function openEventSlideOut(event) {
     const { data } = await supabase
       .from("events")
-      .select("*, bookings(id, status, seats, payment_status, member_id, booked_at, members(name, username))")
+      .select("*, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, booked_at, members(name, username))")
       .eq("id", event.id).single()
     if (data) {
       const allBookings = (data.bookings || []).filter(b => b.status !== "cancelled")

@@ -368,7 +368,7 @@ export default function SocialHome() {
   async function openEventSlideOut(event) {
     const { data } = await supabase
       .from("events")
-      .select("*, bookings(id, status, seats, payment_status, member_id, members(name, username))")
+      .select("*, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, members(name, username))")
       .eq("id", event.id).single()
     if (!data) return
     // Bug fixed 2026-07-08: this query never derived my_bookings, so
