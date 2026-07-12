@@ -11,51 +11,66 @@ const secondaryButtonStyle = {
 }
 
 // ── Contact card ─────────────────────────────────────────────────────────────
+// Compact by design (Iain, 2026-07-12) -- this list is headed toward 200+
+// entries as the community scales, so each tile is a single scan-able line
+// (name + house #) by default. Admins get an Edit button (their path to see
+// everything -- phone/email/title -- is opening the sheet, not a second
+// inline expansion). Standard users get a "More" toggle, and only when
+// there's actually something to reveal.
 function ContactCard({ contact, badge, onEdit }) {
+  const [expanded, setExpanded] = useState(false)
+  const isAdminView = !!onEdit
+  const hasMore = !!(contact.title || contact.phone || contact.email)
+
   return (
     <div style={{
-      background: "var(--surface)", borderRadius: 12,
-      border: "1px solid var(--border)", padding: "0.9rem 1rem",
-      marginBottom: "0.6rem", boxShadow: "var(--shadow)",
+      background: "var(--surface)", borderRadius: 10,
+      border: "1px solid var(--border)", padding: "0.55rem 0.8rem",
+      marginBottom: "0.4rem",
     }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text)" }}>
-            {contact.name}
-            {badge && (
-              <span style={{
-                marginLeft: "0.5rem", fontSize: "0.65rem", fontWeight: 700, padding: "0.1rem 0.45rem",
-                borderRadius: 10, background: "var(--surface2)", color: "var(--text-dim)", verticalAlign: "middle",
-              }}>{badge}</span>
-            )}
-          </div>
-          {contact.title && (
-            <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginTop: "0.1rem" }}>{contact.title}</div>
-          )}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
+        <div style={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: "0.4rem", flexWrap: "wrap" }}>
+          <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text)" }}>{contact.name}</span>
           {contact.house_number && (
-            <div style={{ fontSize: "0.82rem", color: "var(--text-dim)" }}>House #{contact.house_number}</div>
+            <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>· #{contact.house_number}</span>
+          )}
+          {badge && (
+            <span style={{
+              fontSize: "0.6rem", fontWeight: 700, padding: "0.05rem 0.4rem",
+              borderRadius: 10, background: "var(--surface2)", color: "var(--text-dim)",
+            }}>{badge}</span>
           )}
         </div>
-        {onEdit && (
+        {isAdminView ? (
           <button onClick={onEdit} style={{
-            flexShrink: 0, fontSize: "0.75rem", padding: "0.25rem 0.6rem", borderRadius: 6,
+            flexShrink: 0, fontSize: "0.7rem", fontWeight: 700, padding: "0.2rem 0.55rem", borderRadius: 6,
             border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)",
             cursor: "pointer", fontFamily: "inherit",
           }}>Edit</button>
-        )}
+        ) : hasMore ? (
+          <button onClick={() => setExpanded(v => !v)} style={{
+            flexShrink: 0, fontSize: "0.7rem", fontWeight: 700, color: COLOUR,
+            background: "none", border: "none", cursor: "pointer", fontFamily: "inherit",
+          }}>{expanded ? "Less ▲" : "More ▼"}</button>
+        ) : null}
       </div>
-      <div style={{ marginTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-        {contact.phone && (
-          <a href={`tel:${contact.phone}`} style={{ fontSize: "0.88rem", color: COLOUR, textDecoration: "none", fontWeight: 600 }}>
-            📞 {contact.phone}
-          </a>
-        )}
-        {contact.email && (
-          <a href={`mailto:${contact.email}`} style={{ fontSize: "0.88rem", color: COLOUR, textDecoration: "none", fontWeight: 600 }}>
-            ✉ {contact.email}
-          </a>
-        )}
-      </div>
+      {!isAdminView && expanded && (
+        <div style={{ marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+          {contact.title && (
+            <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>{contact.title}</div>
+          )}
+          {contact.phone && (
+            <a href={`tel:${contact.phone}`} style={{ fontSize: "0.85rem", color: COLOUR, textDecoration: "none", fontWeight: 600 }}>
+              📞 {contact.phone}
+            </a>
+          )}
+          {contact.email && (
+            <a href={`mailto:${contact.email}`} style={{ fontSize: "0.85rem", color: COLOUR, textDecoration: "none", fontWeight: 600 }}>
+              ✉ {contact.email}
+            </a>
+          )}
+        </div>
+      )}
     </div>
   )
 }
