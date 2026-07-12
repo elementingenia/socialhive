@@ -163,6 +163,42 @@ export async function PATCH(req) {
     return NextResponse.json({ ok: true })
   }
 
+  // ── Close Out payments for an event (2026-07-12) ──────────────────────────────
+  // Idea 1 of Social_Hive_Event_Payments_Discussion.docx -- reconciles the
+  // event's payments (stamps who/when) and sends a payment_reminder
+  // notification to every confirmed booking still unpaid at this moment.
+  // Re-runnable: if new unpaid bookings appear later (e.g. a waitlist
+  // promotion after the first close-out), running it again just reminds
+  // whoever is still outstanding then and updates the stamp -- it is not a
+  // one-shot lock on the event.
+  if (action === "close_out_payments") {
+    const { data: ev } = await supa
+      .from("events").select("title, cost, payment_required").eq("id", event_id).single()
+    if (!ev?.payment_required) {
+      return NextResponse.json({ error: "This event doesn't require payment" }, { status: 400 })
+    }
+    const { data: confirmedRows } = await supa
+      .from("bookings")
+      .select("id, member_id, seats, payment_status")
+      .eq("event_id", event_id).eq("status", "confirmed")
+
+    const unpaid = (confirmedRows || []).filter(b => b.payment_status !== "confirmed" && b.payment_status !== "refunded")
+    const cost = parseFloat(ev.cost) || 0
+
+    for (const b of unpaid) {
+      const owed = (cost * (b.seats || 1)).toFixed(2)
+      await createNotification(b.member_id, event_id, "payment_reminder",
+        `Reminder: $${owed} is still owing for ${ev.title || "this event"}.`)
+    }
+
+    await supa.from("events").update({
+      payments_reconciled_at: new Date().toISOString(),
+      payments_reconciled_by: member.id,
+    }).eq("id", event_id)
+
+    return NextResponse.json({ ok: true, reminded: unpaid.length })
+  }
+
   // ── Mark refund given on a cancelled booking ─────────────────────────────────
   if (action === "set_refund" && booking_id) {
     const { error: re } = await supa

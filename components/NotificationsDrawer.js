@@ -34,6 +34,7 @@ function typeColour(type) {
     case "event_cancelled":   return "#e53e3e"
     case "booking_cancelled": return "#e53e3e"
     case "payment_confirmed": return "var(--teal)"
+    case "payment_reminder":  return "var(--amber-dark)"
     case "bar_reconciled":    return "var(--amber-dark)"
     default:                  return "var(--text-dim)"
   }

@@ -7,7 +7,7 @@ import { BusIcon } from "@/components/NavIcons"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import EventImagePicker from "@/components/EventImagePicker"
 import ExpandableText from "@/components/ExpandableText"
-import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid } from "@/lib/payments"
+import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, paymentSummary } from "@/lib/payments"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -834,7 +834,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 }
 
 // ── Event Card ────────────────────────────────────────────────────────────────
-function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, onTogglePayment, togglingId }) {
+function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, onTogglePayment, togglingId, onCloseOutPayments, closingOut }) {
   const { member } = useUser()
   const [showAttendees, setShowAttendees] = useState(false)
   const today     = new Date(); today.setHours(0, 0, 0, 0)
@@ -862,6 +862,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
   const isEC = coordinators.some(c => c.member_id === member?.id)
   const canManagePayments = isAdmin || isEC
   const isPaidEvent = !!(event.payment_required && event.cost > 0)
+  const summary = canManagePayments && isPaidEvent ? paymentSummary(confirmedBookings, event) : null
 
   return (
     <div onClick={onOpen} style={{
@@ -981,6 +982,34 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
           </button>
           {showAttendees && (
             <div style={{ padding: "0 1rem 0.75rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+              {summary && (
+                <div onClick={e => e.stopPropagation()} style={{
+                  background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
+                  padding: "0.6rem 0.7rem", marginBottom: "0.6rem", fontSize: "0.75rem",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "0.4rem", marginBottom: event.payments_reconciled_at || summary.unpaidCount > 0 ? "0.5rem" : 0 }}>
+                    <span style={{ color: "var(--text-dim)" }}>Expected <strong style={{ color: "var(--text)" }}>${summary.expectedTotal.toFixed(2)}</strong></span>
+                    <span style={{ color: "var(--text-dim)" }}>Collected <strong style={{ color: "var(--green)" }}>${summary.collectedTotal.toFixed(2)}</strong></span>
+                    <span style={{ color: "var(--text-dim)" }}>Outstanding <strong style={{ color: summary.outstandingTotal > 0 ? "var(--amber-dark)" : "var(--text)" }}>${summary.outstandingTotal.toFixed(2)}</strong></span>
+                  </div>
+                  {event.payments_reconciled_at && (
+                    <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginBottom: summary.unpaidCount > 0 ? "0.5rem" : 0 }}>
+                      Reconciled {fmtDate(event.payments_reconciled_at.slice(0, 10))}
+                      {event.reconciled_by_member && ` by ${event.reconciled_by_member.name || event.reconciled_by_member.username}`}
+                    </div>
+                  )}
+                  {summary.unpaidCount > 0 && (
+                    <button
+                      disabled={closingOut}
+                      onClick={() => onCloseOutPayments(event.id)}
+                      style={{
+                        width: "100%", padding: "0.4rem", borderRadius: 8, border: "1px solid var(--amber)",
+                        background: "var(--amber)15", color: "var(--amber-dark)", fontSize: "0.72rem", fontWeight: 700,
+                        cursor: closingOut ? "default" : "pointer", fontFamily: "inherit", opacity: closingOut ? 0.6 : 1,
+                      }}>{closingOut ? "Closing out…" : `Close Out — remind ${summary.unpaidCount} unpaid`}</button>
+                  )}
+                </div>
+              )}
               {confirmedBookings.length > 0 ? (
                 <>
                   {isAdmin && <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--green)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.15rem" }}>Confirmed</div>}
@@ -1084,6 +1113,7 @@ export default function SocialEvents() {
   const [allMembers,      setAllMembers]     = useState([])
   const [toast,           setToast]          = useState(null)
   const [togglingId,      setTogglingId]     = useState(null)
+  const [closingOutId,    setClosingOutId]   = useState(null)
 
   function showToast(msg, type = "success") {
     setToast({ msg, type })
@@ -1102,7 +1132,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, booked_at, member:members!member_id(id, name, username, hide_name))")
+      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, booked_at, member:members!member_id(id, name, username, hide_name))")
       .eq("hub_type", "social")
       .eq("archived", false)
       .order("event_date", { ascending: true })
@@ -1168,6 +1198,34 @@ export default function SocialEvents() {
     }
   }
 
+  // Close Out payments (2026-07-12) -- idea 1 of Social_Hive_Event_Payments_
+  // Discussion.docx. Reminds everyone still unpaid on this event and stamps
+  // the event as reconciled. Re-runnable, same toast/loading-state pattern
+  // as handleTogglePayment.
+  async function handleCloseOutPayments(eventId) {
+    if (closingOutId) return
+    if (!session) { showToast("Session expired -- please refresh the page", "error"); return }
+    setClosingOutId(eventId)
+    try {
+      const res = await fetch("/api/coordinator", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+        body: JSON.stringify({ event_id: eventId, action: "close_out_payments" }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        showToast(data.reminded > 0 ? `Reminded ${data.reminded} unpaid attendee${data.reminded !== 1 ? "s" : ""}` : "All paid up -- nothing to remind")
+        await load()
+      } else {
+        showToast(data.error || "Close Out failed", "error")
+      }
+    } catch (err) {
+      showToast("Network error -- close out failed", "error")
+    } finally {
+      setClosingOutId(null)
+    }
+  }
+
   async function openEventSlideOut(event) {
     const { data } = await supabase
       .from("events")
@@ -1229,7 +1287,8 @@ export default function SocialEvents() {
               myBooking={bookings[e.id]} isAdmin={member?.is_admin}
               onOpen={() => openEventSlideOut(e)}
               onEdit={() => { setEditEvent(e); setShowForm(true) }}
-              onTogglePayment={handleTogglePayment} togglingId={togglingId} />
+              onTogglePayment={handleTogglePayment} togglingId={togglingId}
+              onCloseOutPayments={handleCloseOutPayments} closingOut={closingOutId === e.id} />
           ))}
         </div>
       )}
@@ -1255,7 +1314,8 @@ export default function SocialEvents() {
                     myBooking={bookings[e.id]} isAdmin={member?.is_admin}
                     onOpen={() => openEventSlideOut(e)}
                     onEdit={() => { setEditEvent(e); setShowForm(true) }}
-                    onTogglePayment={handleTogglePayment} togglingId={togglingId} />
+                    onTogglePayment={handleTogglePayment} togglingId={togglingId}
+                    onCloseOutPayments={handleCloseOutPayments} closingOut={closingOutId === e.id} />
                 </div>
               ))}
             </div>
