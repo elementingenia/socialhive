@@ -101,10 +101,16 @@ function Toast({ msg, type }) {
   )
 }
 
-function ConfirmDialog({ message, onConfirm, onCancel, paymentNote }) {
+function ConfirmDialog({ message, onConfirm, onCancel, paymentNote, confirming }) {
+  // confirming: true while the cancel request is in flight. Without this,
+  // the "Yes, cancel" button gave zero feedback on tap -- on a slow request
+  // (cold serverless start, or an event with several waitlisted attendees
+  // to promote) it looked unresponsive, which is exactly what prompted
+  // multiple taps (Iain, 2026-07-14). Both buttons now disable and the
+  // confirm button relabels to make the wait visible instead of silent.
   return (
     <Portal>
-      <div onClick={onCancel} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500,
+      <div onClick={() => { if (!confirming) onCancel() }} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500,
         display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
         <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 320 }}>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Are you sure?</div>
@@ -115,8 +121,8 @@ function ConfirmDialog({ message, onConfirm, onCancel, paymentNote }) {
             </div>
           )}
           <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={onCancel} style={{ flex: 1, padding: "11px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>Keep it</button>
-            <button onClick={onConfirm} style={{ flex: 1, padding: "11px 0", background: "var(--danger)", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff" }}>Yes, cancel</button>
+            <button onClick={onCancel} disabled={confirming} style={{ flex: 1, padding: "11px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: confirming ? "default" : "pointer", color: "var(--text)", opacity: confirming ? 0.5 : 1 }}>Keep it</button>
+            <button onClick={onConfirm} disabled={confirming} style={{ flex: 1, padding: "11px 0", background: "var(--danger)", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: confirming ? "default" : "pointer", color: "#fff", opacity: confirming ? 0.7 : 1 }}>{confirming ? "Cancelling…" : "Yes, cancel"}</button>
           </div>
         </div>
       </div>
@@ -237,6 +243,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   const [welcome,     setWelcome]     = useState("")
   const [saving,        setSaving]        = useState(false)
   const [cancelTarget,  setCancelTarget]  = useState(null)
+  const [cancelling,    setCancelling]    = useState(false)
   // Add Walk-up Booking (2026-07-13) — for residents who don't use the app
   const [showAddBooking,      setShowAddBooking]      = useState(false)
   const [allMembers,          setAllMembers]          = useState([])
@@ -328,22 +335,28 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   }
 
   async function cancelBooking(bookingId) {
-    const ok = await patchAction({ action: "cancel_booking", booking_id: bookingId })
-    if (ok) {
-      // If member had a split booking, cancel remaining rows too. This used
-      // to reference an undefined `token` here (patchAction() fetches its
-      // own token internally and never exposed it to this scope) -- would
-      // throw and abort before the toast/refresh below ever ran, but only
-      // for a split (confirmed+waitlist) booking, so it went unnoticed
-      // until one actually occurred. Fixed to reuse patchAction() like
-      // every other action in this panel, instead of a bare fetch.
-      const extraIds = cancelTarget._allIds?.slice(1) || []
-      for (const extraId of extraIds) {
-        await patchAction({ action: "cancel_booking", booking_id: extraId })
+    if (cancelling) return // ignore repeat taps while a request is already in flight
+    setCancelling(true)
+    try {
+      const ok = await patchAction({ action: "cancel_booking", booking_id: bookingId })
+      if (ok) {
+        // If member had a split booking, cancel remaining rows too. This used
+        // to reference an undefined `token` here (patchAction() fetches its
+        // own token internally and never exposed it to this scope) -- would
+        // throw and abort before the toast/refresh below ever ran, but only
+        // for a split (confirmed+waitlist) booking, so it went unnoticed
+        // until one actually occurred. Fixed to reuse patchAction() like
+        // every other action in this panel, instead of a bare fetch.
+        const extraIds = cancelTarget._allIds?.slice(1) || []
+        for (const extraId of extraIds) {
+          await patchAction({ action: "cancel_booking", booking_id: extraId })
+        }
+        showToast("Booking cancelled"); setCancelTarget(null); load(); onRefresh()
       }
-      showToast("Booking cancelled"); setCancelTarget(null); load(); onRefresh()
+      else showToast("Failed to cancel", "error")
+    } finally {
+      setCancelling(false)
     }
-    else showToast("Failed to cancel", "error")
   }
 
   async function submitAddBooking(forceWaitlist = false) {
@@ -430,7 +443,8 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
           message={`Cancel booking for ${cancelTarget.members?.name || cancelTarget.members?.username}?`}
           paymentNote={paymentRequired && computeIsPaid(cancelTarget) ? "Mark refund as due after cancelling if payment was received." : null}
           onConfirm={() => cancelBooking(cancelTarget.id)}
-          onCancel={() => setCancelTarget(null)}
+          onCancel={() => { if (!cancelling) setCancelTarget(null) }}
+          confirming={cancelling}
         />
       )}
 
@@ -932,6 +946,7 @@ function BookingSection({ event, onRefresh }) {
   }
 
   async function handleCancel() {
+    if (loading) return
     setLoading(true)
     try {
       const token = await getToken()
@@ -977,7 +992,8 @@ function BookingSection({ event, onRefresh }) {
           message="This will cancel your booking for this event."
           paymentNote={event.payment_required ? "If you paid, please contact the Event Coordinator to arrange a refund." : null}
           onConfirm={handleCancel}
-          onCancel={() => setConfirm(false)}
+          onCancel={() => { if (!loading) setConfirm(false) }}
+          confirming={loading}
         />
       )}
       {splitOffer && (
