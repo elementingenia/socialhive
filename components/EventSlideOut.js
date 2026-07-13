@@ -4,6 +4,7 @@ import { createPortal } from "react-dom"
 import { HUB_COLOURS } from "@/lib/navUtils"
 import { BusIcon, CalendarIcon } from "@/components/NavIcons"
 import { supabase } from "@/lib/supabase"
+import { getAuthToken } from "@/lib/getAuthToken"
 import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
@@ -259,8 +260,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   }
 
   async function getToken() {
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.access_token
+    return getAuthToken()
   }
 
   async function load() {
@@ -884,8 +884,7 @@ function BookingSection({ event, onRefresh }) {
   }
 
   async function getToken() {
-    const { data: { session } } = await supabase.auth.getSession()
-    return session?.access_token
+    return getAuthToken()
   }
 
   async function handleBook(acceptSplit = false) {
