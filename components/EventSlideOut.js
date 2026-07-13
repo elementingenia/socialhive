@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect, useRef } from "react"
+import { createPortal } from "react-dom"
 import { HUB_COLOURS } from "@/lib/navUtils"
 import { BusIcon, CalendarIcon } from "@/components/NavIcons"
 import { supabase } from "@/lib/supabase"
@@ -9,6 +10,22 @@ import ExpandableText from "@/components/ExpandableText"
 import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, sumUnpaidSeats, seatsCost, bookingStatusBadge } from "@/lib/payments"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// Renders children into document.body instead of in place. Needed for any
+// full-screen overlay (Toast, ConfirmDialog, MenuModal, SplitDialog) used
+// inside EventSlideOut's sliding panel: that panel animates with
+// `transform: translateX(...)`, and a CSS transform on an ancestor makes it
+// the containing block for any descendant `position: fixed` element (this
+// is standard CSS behaviour, not a bug in the browser) -- so without a
+// portal, these overlays end up positioned relative to the (scrollable,
+// often-scrolled) panel content instead of the actual viewport, which is
+// what caused Cancel Booking's confirm dialog to render off-screen instead
+// of over the tapped row (reported by Iain, 2026-07-14, reproduced on an
+// attendee list long enough to need scrolling).
+function Portal({ children }) {
+  if (typeof document === "undefined") return null
+  return createPortal(children, document.body)
+}
 
 function fmtDate(dateStr) {
   if (!dateStr) return ""
@@ -75,30 +92,34 @@ function Toast({ msg, type }) {
   if (!msg) return null
   const bg = type === "error" ? "var(--danger)" : type === "warn" ? "var(--amber-dark)" : "#15803d"
   return (
-    <div style={{ position: "fixed", top: 70, left: "50%", transform: "translateX(-50%)", zIndex: 9999,
-      background: bg, color: "#fff", padding: "10px 20px", borderRadius: 12, fontSize: 14, fontWeight: 600,
-      boxShadow: "0 4px 20px rgba(0,0,0,0.2)", whiteSpace: "nowrap" }}>{msg}</div>
+    <Portal>
+      <div style={{ position: "fixed", top: 70, left: "50%", transform: "translateX(-50%)", zIndex: 9999,
+        background: bg, color: "#fff", padding: "10px 20px", borderRadius: 12, fontSize: 14, fontWeight: 600,
+        boxShadow: "0 4px 20px rgba(0,0,0,0.2)", whiteSpace: "nowrap" }}>{msg}</div>
+    </Portal>
   )
 }
 
 function ConfirmDialog({ message, onConfirm, onCancel, paymentNote }) {
   return (
-    <div onClick={onCancel} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500,
-      display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 320 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Are you sure?</div>
-        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: paymentNote ? 8 : 20, lineHeight: 1.5 }}>{message}</div>
-        {paymentNote && (
-          <div style={{ fontSize: 12, color: "var(--amber-dark)", background: "var(--amber-light)", padding: "8px 12px", borderRadius: 8, marginBottom: 16, lineHeight: 1.5 }}>
-            ⚠️ {paymentNote}
+    <Portal>
+      <div onClick={onCancel} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500,
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 320 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>Are you sure?</div>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: paymentNote ? 8 : 20, lineHeight: 1.5 }}>{message}</div>
+          {paymentNote && (
+            <div style={{ fontSize: 12, color: "var(--amber-dark)", background: "var(--amber-light)", padding: "8px 12px", borderRadius: 8, marginBottom: 16, lineHeight: 1.5 }}>
+              ⚠️ {paymentNote}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={onCancel} style={{ flex: 1, padding: "11px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>Keep it</button>
+            <button onClick={onConfirm} style={{ flex: 1, padding: "11px 0", background: "var(--danger)", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff" }}>Yes, cancel</button>
           </div>
-        )}
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onCancel} style={{ flex: 1, padding: "11px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>Keep it</button>
-          <button onClick={onConfirm} style={{ flex: 1, padding: "11px 0", background: "var(--danger)", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff" }}>Yes, cancel</button>
         </div>
       </div>
-    </div>
+    </Portal>
   )
 }
 
@@ -107,41 +128,43 @@ function MenuModal({ event, colour, onClose }) {
   const isImageFile = event.menu_type === "file" && !isPdf
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 600,
-      display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-      <div onClick={e => e.stopPropagation()} style={{
-        background: "var(--surface)", borderRadius: 16, width: "100%", maxWidth: 480,
-        maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden",
-      }}>
-        <div style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center",
-          padding: "14px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0,
+    <Portal>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 600,
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+        <div onClick={e => e.stopPropagation()} style={{
+          background: "var(--surface)", borderRadius: 16, width: "100%", maxWidth: 480,
+          maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden",
         }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>Menu</div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, lineHeight: 1, color: "var(--text-dim)" }}>×</button>
-        </div>
-        <div style={{ padding: 16, overflowY: "auto", flex: 1 }}>
-          {event.menu_type === "text" && (
-            <div style={{ fontSize: 14, color: "var(--text)", lineHeight: 1.6 }}
-              dangerouslySetInnerHTML={{ __html: bbToHtml(event.menu_text, colour) }} />
-          )}
-          {isPdf && (
-            <iframe src={event.menu_url} title="Menu" style={{ width: "100%", height: "60vh", border: "none", borderRadius: 8 }} />
-          )}
-          {isImageFile && (
-            <img src={event.menu_url} alt="Menu" style={{ width: "100%", borderRadius: 8, display: "block" }} />
-          )}
-        </div>
-        {event.menu_type === "file" && event.menu_url && (
-          <div style={{ padding: "10px 16px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
-            <a href={event.menu_url} download={event.menu_file_name || "menu"} target="_blank" rel="noreferrer"
-              style={{ display: "block", textAlign: "center", padding: "10px", borderRadius: 10, background: colour, color: "#fff", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
-              Download
-            </a>
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "14px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0,
+          }}>
+            <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>Menu</div>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, lineHeight: 1, color: "var(--text-dim)" }}>×</button>
           </div>
-        )}
+          <div style={{ padding: 16, overflowY: "auto", flex: 1 }}>
+            {event.menu_type === "text" && (
+              <div style={{ fontSize: 14, color: "var(--text)", lineHeight: 1.6 }}
+                dangerouslySetInnerHTML={{ __html: bbToHtml(event.menu_text, colour) }} />
+            )}
+            {isPdf && (
+              <iframe src={event.menu_url} title="Menu" style={{ width: "100%", height: "60vh", border: "none", borderRadius: 8 }} />
+            )}
+            {isImageFile && (
+              <img src={event.menu_url} alt="Menu" style={{ width: "100%", borderRadius: 8, display: "block" }} />
+            )}
+          </div>
+          {event.menu_type === "file" && event.menu_url && (
+            <div style={{ padding: "10px 16px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+              <a href={event.menu_url} download={event.menu_file_name || "menu"} target="_blank" rel="noreferrer"
+                style={{ display: "block", textAlign: "center", padding: "10px", borderRadius: 10, background: colour, color: "#fff", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
+                Download
+              </a>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </Portal>
   )
 }
 
@@ -167,17 +190,19 @@ function SplitDialog({ offer, onAccept, onDecline }) {
   }
 
   return (
-    <div onClick={onDecline} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500,
-      display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 340 }}>
-        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>{title}</div>
-        <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 16, lineHeight: 1.5 }}>{body}</div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onDecline} style={{ flex: 1, padding: "11px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>No thanks</button>
-          <button onClick={onAccept} style={{ flex: 1, padding: "11px 0", background: "var(--amber)", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff" }}>{acceptLabel}</button>
+    <Portal>
+      <div onClick={onDecline} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500,
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+        <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 340 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>{title}</div>
+          <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 16, lineHeight: 1.5 }}>{body}</div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={onDecline} style={{ flex: 1, padding: "11px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>No thanks</button>
+            <button onClick={onAccept} style={{ flex: 1, padding: "11px 0", background: "var(--amber)", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff" }}>{acceptLabel}</button>
+          </div>
         </div>
       </div>
-    </div>
+    </Portal>
   )
 }
 
@@ -305,14 +330,16 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   async function cancelBooking(bookingId) {
     const ok = await patchAction({ action: "cancel_booking", booking_id: bookingId })
     if (ok) {
-      // If member had a split booking, cancel remaining rows too
+      // If member had a split booking, cancel remaining rows too. This used
+      // to reference an undefined `token` here (patchAction() fetches its
+      // own token internally and never exposed it to this scope) -- would
+      // throw and abort before the toast/refresh below ever ran, but only
+      // for a split (confirmed+waitlist) booking, so it went unnoticed
+      // until one actually occurred. Fixed to reuse patchAction() like
+      // every other action in this panel, instead of a bare fetch.
       const extraIds = cancelTarget._allIds?.slice(1) || []
       for (const extraId of extraIds) {
-        await fetch("/api/coordinator", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ action: "cancel_booking", booking_id: extraId }),
-        })
+        await patchAction({ action: "cancel_booking", booking_id: extraId })
       }
       showToast("Booking cancelled"); setCancelTarget(null); load(); onRefresh()
     }
