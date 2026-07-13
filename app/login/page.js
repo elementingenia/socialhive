@@ -7,8 +7,11 @@ import { supabase } from '@/lib/supabase'
 function InactivityNotice({ onNotice }) {
   const searchParams = useSearchParams()
   useEffect(() => {
-    if (searchParams.get('reason') === 'inactive') {
+    const reason = searchParams.get('reason')
+    if (reason === 'inactive') {
       onNotice('You have been signed out after 14 days of inactivity.')
+    } else if (reason === 'expired') {
+      onNotice('Your session expired -- please sign in again.')
     }
   }, [searchParams, onNotice])
   return null
