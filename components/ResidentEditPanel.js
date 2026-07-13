@@ -1,6 +1,7 @@
 "use client"
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
+import { getAuthToken } from "@/lib/getAuthToken"
 
 export const COLOUR = "#4e7aab"
 
@@ -19,8 +20,12 @@ export const labelStyle = {
 export const readOnlyStyle = { ...inputStyle, background: "var(--surface2)", color: "var(--text-dim)" }
 
 export async function getToken() {
-  const { data: { session } } = await supabase.auth.getSession()
-  return session?.access_token
+  // Delegates to the shared helper (2026-07-14) -- this used to be a plain
+  // getSession() with no expiry check, same as the bug found and fixed in
+  // EventSlideOut.js's Coordinator View and the Screenings list. Imported by
+  // Admin, Info>Contacts, Info>Documents, and Book Club, so fixing it once
+  // here closes the gap for all four instead of patching each call site.
+  return getAuthToken()
 }
 
 // ── Bottom sheet ────────────────────────────────────────────────────────────

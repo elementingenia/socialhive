@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
@@ -417,8 +418,7 @@ function ReconcileTab() {
   const [loadingOut,     setLoadingOut]     = useState(true)
 
   async function authHeader() {
-    const { data: { session } } = await supabase.auth.getSession()
-    return { Authorization: `Bearer ${session.access_token}` }
+    return { Authorization: `Bearer ${await getAuthToken()}` }
   }
 
   async function loadPreview() {
@@ -693,8 +693,7 @@ function ToolsTab() {
     while (!stopRef.current) {
       try {
         // Server-side writes — route uses service role, no RLS issues
-        const { data:{ session } } = await supabase.auth.getSession()
-        const res  = await fetch('/api/admin/enrich-dvd?limit=20', { headers:{ Authorization:`Bearer ${session.access_token}` } })
+        const res  = await fetch('/api/admin/enrich-dvd?limit=20', { headers:{ Authorization:`Bearer ${await getAuthToken()}` } })
         const data = await res.json()
         if (data.error) { setStatus('error'); return }
         batches++
@@ -733,8 +732,7 @@ function ToolsTab() {
 
   async function loadCatalogue() {
     setLoadingCat(true)
-    const { data:{ session } } = await supabase.auth.getSession()
-    const res = await fetch('/api/admin/enrich-dvd?catalogue=true', { headers:{ Authorization:`Bearer ${session.access_token}` } })
+    const res = await fetch('/api/admin/enrich-dvd?catalogue=true', { headers:{ Authorization:`Bearer ${await getAuthToken()}` } })
     const data = await res.json()
     setCatalogue(data.failures || [])
     setShowCatalogue(true)
@@ -1156,8 +1154,7 @@ function StreamingServicesTab({ addToast }) {
 
     while (!refreshStopRef.current) {
       try {
-        const { data: { session } } = await supabase.auth.getSession()
-        const res = await fetch('/api/admin/refresh-streaming?limit=15', { headers: { Authorization: `Bearer ${session.access_token}` } })
+        const res = await fetch('/api/admin/refresh-streaming?limit=15', { headers: { Authorization: `Bearer ${await getAuthToken()}` } })
         const data = await res.json()
         if (data.error) { addToast(data.error, 'error'); setRefreshing(false); return }
         if (data.processed === 0) break

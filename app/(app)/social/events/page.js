@@ -1,6 +1,7 @@
 "use client"
 import { useEffect, useState, useCallback, useRef } from "react"
 import { supabase } from "@/lib/supabase"
+import { getAuthToken } from "@/lib/getAuthToken"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import { BusIcon } from "@/components/NavIcons"
@@ -536,7 +537,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 
     const res = await fetch("/api/social", {
       method:  activeId ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + session.access_token },
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (await getAuthToken()) },
       body: JSON.stringify(payload),
     })
     const data = await res.json()
@@ -562,7 +563,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     fd.append("file", file)
     const res = await fetch("/api/events/menu", {
       method: "POST",
-      headers: { Authorization: "Bearer " + session.access_token },
+      headers: { Authorization: "Bearer " + (await getAuthToken()) },
       body: fd,
     })
     const d = await res.json()
@@ -575,7 +576,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     setUploadingMenu(true)
     const res = await fetch("/api/events/menu", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await getAuthToken()) },
       body: JSON.stringify({ event_id: activeId }),
     })
     setUploadingMenu(false)
@@ -1212,7 +1213,7 @@ export default function SocialEvents() {
     try {
       const res = await fetch("/api/coordinator", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await getAuthToken()) },
         body: JSON.stringify({ event_id: eventId, action: "set_payment", booking_id: booking.id, payment_status: next }),
       })
       if (res.ok) {
@@ -1241,7 +1242,7 @@ export default function SocialEvents() {
     try {
       const res = await fetch("/api/coordinator", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await getAuthToken()) },
         body: JSON.stringify({ event_id: eventId, action: "close_out_payments" }),
       })
       const data = await res.json().catch(() => ({}))
@@ -1269,7 +1270,7 @@ export default function SocialEvents() {
     try {
       const res = await fetch("/api/coordinator", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + session.access_token },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await getAuthToken()) },
         body: JSON.stringify({ event_id: eventId, action: "remind_payment", booking_id: booking.id }),
       })
       const data = await res.json().catch(() => ({}))

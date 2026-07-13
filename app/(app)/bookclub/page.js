@@ -607,10 +607,10 @@ function AdminEventForm({ event, members, onSave, onClose }) {
       const { error: evErr } = await supabase.from("events").update(payload).eq("id", eventId)
       if (evErr) { setSaveError("Could not update event: " + evErr.message); setSaving(false); return }
       if (dateChanged) {
-        const { data: { session } } = await supabase.auth.getSession()
+        const token = await getToken()
         fetch("/api/bookclub/notify-updated", {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ event_id: eventId, title: payload.title }),
         }).catch(() => {})
       }
@@ -870,8 +870,7 @@ export default function BookClubHome() {
   useEffect(() => { if (member?.id !== undefined) load() }, [member?.id, isAdmin])
 
   async function signUp(event) {
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
+    const token = await getToken()
     const res = await fetch("/api/bookings", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -884,8 +883,7 @@ export default function BookClubHome() {
   }
 
   async function leave(event) {
-    const { data: { session } } = await supabase.auth.getSession()
-    const token = session?.access_token
+    const token = await getToken()
     const res = await fetch("/api/bookings", {
       method: "DELETE",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
