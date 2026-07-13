@@ -8,7 +8,7 @@ import { BusIcon } from "@/components/NavIcons"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import EventImagePicker from "@/components/EventImagePicker"
 import ExpandableText from "@/components/ExpandableText"
-import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, paymentSummary } from "@/lib/payments"
+import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, paymentSummary, reconciliationIsStale } from "@/lib/payments"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -839,7 +839,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 }
 
 // ── Event Card ────────────────────────────────────────────────────────────────
-function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, onTogglePayment, togglingId, onCloseOutPayments, closingOut, onRemindPayment, remindingId }) {
+function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, onTogglePayment, togglingId, onCloseOutPayments, closingOut, onRemindPayment, remindingId, onToggleRefund, togglingRefundId }) {
   const { member } = useUser()
   const [showAttendees, setShowAttendees] = useState(false)
   const today     = new Date(); today.setHours(0, 0, 0, 0)
@@ -856,6 +856,13 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
   const bySelfFirst = (a, b) => (b.member_id === member?.id) - (a.member_id === member?.id)
   const confirmedBookings = (event.bookings?.filter(b => b.status === "confirmed") || []).sort(bySelfFirst)
   const waitlistBookings  = (event.bookings?.filter(b => b.status === "waitlist") || []).sort(bySelfFirst)
+  // Cancelled-but-was-paid bookings, split by whether the refund's been
+  // issued yet (2026-07-14) -- ported from Movies/Book Club's Coordinator
+  // panel, which had this and Social never did. event.bookings already
+  // includes cancelled rows (the nested select has no status filter);
+  // confirmedBookings/waitlistBookings above just never looked at them.
+  const refundPendingBookings = (event.bookings?.filter(b => b.status === "cancelled" && b.payment_status === "confirmed") || []).sort(bySelfFirst)
+  const refundIssuedBookings  = (event.bookings?.filter(b => b.status === "cancelled" && b.payment_status === "refunded") || []).sort(bySelfFirst)
   const booked  = confirmedBookings.reduce((s, b) => s + (b.seats || 1), 0)
   const waiting = waitlistBookings.length
   const showNames = event.show_attendee_names !== false
@@ -867,7 +874,15 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
   const isEC = coordinators.some(c => c.member_id === member?.id)
   const canManagePayments = isAdmin || isEC
   const isPaidEvent = !!(event.payment_required && event.cost > 0)
-  const summary = canManagePayments && isPaidEvent ? paymentSummary(confirmedBookings, event) : null
+  const summary = canManagePayments && isPaidEvent ? paymentSummary(confirmedBookings, event, refundPendingBookings) : null
+  // Has anything happened since the last "Reconciled"/"Last reviewed" pass?
+  // (2026-07-14, Iain) -- today this only catches new bookings added after
+  // that stamp (bookings.updated_at doesn't exist yet -- migration 040 --
+  // so this falls back to booked_at, which can't see a plain cancellation
+  // that happened after reconciliation). Will automatically start catching
+  // cancellations/payment changes too once that migration lands and the
+  // select picks up updated_at -- no further code change needed here then.
+  const isStale = canManagePayments && isPaidEvent && reconciliationIsStale(event, event.bookings)
 
   return (
     <div onClick={onOpen} style={{
@@ -992,15 +1007,27 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                   background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
                   padding: "0.6rem 0.7rem", marginBottom: "0.6rem", fontSize: "0.75rem",
                 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "0.4rem", marginBottom: event.payments_reconciled_at || summary.unpaidCount > 0 ? "0.5rem" : 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "0.4rem", marginBottom: event.payments_reconciled_at || summary.unpaidCount > 0 || summary.refundsDueCount > 0 ? "0.5rem" : 0 }}>
                     <span style={{ color: "var(--text-dim)" }}>Expected <strong style={{ color: "var(--text)" }}>${summary.expectedTotal.toFixed(2)}</strong></span>
                     <span style={{ color: "var(--text-dim)" }}>Collected <strong style={{ color: "var(--green)" }}>${summary.collectedTotal.toFixed(2)}</strong></span>
                     <span style={{ color: "var(--text-dim)" }}>Outstanding <strong style={{ color: summary.outstandingTotal > 0 ? "var(--amber-dark)" : "var(--text)" }}>${summary.outstandingTotal.toFixed(2)}</strong></span>
+                    {summary.refundsDueCount > 0 && (
+                      <span style={{ color: "var(--text-dim)" }}>Refunds due <strong style={{ color: "#92400e" }}>${summary.refundsDueTotal.toFixed(2)}</strong></span>
+                    )}
                   </div>
                   {event.payments_reconciled_at && (
-                    <div style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginBottom: summary.unpaidCount > 0 ? "0.5rem" : 0 }}>
-                      Reconciled {fmtDate(event.payments_reconciled_at.slice(0, 10))}
+                    // Renamed from "Reconciled" (2026-07-14, Iain) -- Close Out
+                    // is explicitly re-runnable, never a lock (see migration 037's
+                    // own comment), so "Reconciled" implied a finality this
+                    // never had. Turns amber + adds a plain-language flag when
+                    // isStale (new bookings/cancellations since this stamp) so
+                    // the same line that used to read as "all done" now reads
+                    // as "here's when you last checked, and whether that's
+                    // still current" instead.
+                    <div style={{ fontSize: "0.68rem", color: isStale ? "var(--amber-dark)" : "var(--text-dim)", marginBottom: summary.unpaidCount > 0 ? "0.5rem" : 0 }}>
+                      Last reviewed {fmtDate(event.payments_reconciled_at.slice(0, 10))}
                       {event.reconciled_by_member && ` by ${event.reconciled_by_member.name || event.reconciled_by_member.username}`}
+                      {isStale && <strong> — new activity since, worth another look</strong>}
                     </div>
                   )}
                   {summary.submittedCount > 0 && (
@@ -1131,6 +1158,73 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                   })}
                 </>
               )}
+              {/* Refunds Due / Refunds Issued (2026-07-14) -- same set_refund
+                  action and Refunds Due/Issued pattern Movies and Book Club
+                  already have via EventSlideOut.js, ported here since Social
+                  had no refund tracking at all. Gated the same as the rest
+                  of the reconciliation UI (canManagePayments). */}
+              {canManagePayments && isPaidEvent && refundPendingBookings.length > 0 && (
+                <div style={{ background: "#fef3c7", borderRadius: 10, padding: "0.6rem 0.7rem", border: "1px solid #d97706", marginTop: "0.6rem" }}>
+                  <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#92400e", marginBottom: "0.4rem" }}>⚠️ Refunds Due ({refundPendingBookings.length})</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                    {refundPendingBookings.map(b => {
+                      const isOwn     = b.member_id === member?.id
+                      const isPrivate = !!b.member?.hide_name
+                      const label = isOwn ? "You" : (b.member?.name || b.member?.username || "Member")
+                      const total = seatsCost(event, b.seats || 1)
+                      const pending = togglingRefundId === b.id
+                      return (
+                        <div key={b.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                          <div>
+                            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#92400e" }}>
+                              {label}
+                              {isPrivate && !isOwn && <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "#92400e", opacity: 0.7, marginLeft: 4 }}>(P)</span>}
+                            </span>
+                            <span style={{ fontSize: "0.68rem", color: "#d97706", marginLeft: 6 }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}{total ? ` · ${total}` : ""}</span>
+                          </div>
+                          <button
+                            disabled={pending}
+                            onClick={e => { e.stopPropagation(); e.preventDefault(); onToggleRefund(event.id, b, label, false) }}
+                            style={{ fontSize: "0.68rem", fontWeight: 700, padding: "0.2rem 0.55rem", borderRadius: 8, border: "1px solid #d97706", background: "none", color: "#d97706", cursor: pending ? "default" : "pointer", whiteSpace: "nowrap", fontFamily: "inherit", opacity: pending ? 0.6 : 1 }}>
+                            {pending ? "…" : "Mark Refunded"}
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+              {canManagePayments && isPaidEvent && refundIssuedBookings.length > 0 && (
+                <div style={{ background: "var(--surface2)", borderRadius: 10, padding: "0.6rem 0.7rem", border: "1px solid var(--border)", marginTop: "0.6rem" }}>
+                  <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-dim)", marginBottom: "0.4rem" }}>✓ Refunds Issued ({refundIssuedBookings.length})</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                    {refundIssuedBookings.map(b => {
+                      const isOwn     = b.member_id === member?.id
+                      const isPrivate = !!b.member?.hide_name
+                      const label = isOwn ? "You" : (b.member?.name || b.member?.username || "Member")
+                      const total = seatsCost(event, b.seats || 1)
+                      const pending = togglingRefundId === b.id
+                      return (
+                        <div key={b.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                          <div>
+                            <span style={{ fontSize: "0.76rem", color: "var(--text-dim)", fontWeight: isOwn ? 700 : 400 }}>
+                              {label}
+                              {isPrivate && !isOwn && <span style={{ fontWeight: 700, marginLeft: 4 }}>(P)</span>}
+                            </span>
+                            <span style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginLeft: 6 }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}{total ? ` · ${total}` : ""}</span>
+                          </div>
+                          <button
+                            disabled={pending}
+                            onClick={e => { e.stopPropagation(); e.preventDefault(); onToggleRefund(event.id, b, label, true) }}
+                            style={{ fontSize: "0.65rem", color: "var(--text-dim)", background: "none", border: "none", cursor: pending ? "default" : "pointer", textDecoration: "underline", fontFamily: "inherit" }}>
+                            {pending ? "…" : "Unmark"}
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1156,6 +1250,7 @@ export default function SocialEvents() {
   const [togglingId,      setTogglingId]     = useState(null)
   const [closingOutId,    setClosingOutId]   = useState(null)
   const [remindingId,     setRemindingId]    = useState(null)
+  const [togglingRefundId, setTogglingRefundId] = useState(null)
 
   function showToast(msg, type = "success") {
     setToast({ msg, type })
@@ -1295,6 +1390,35 @@ export default function SocialEvents() {
     }
   }
 
+  // Mark / unmark a refund as issued on a cancelled-but-paid booking
+  // (2026-07-14) -- Social never had this at all before; Movies and Book
+  // Club's Coordinator panel (components/EventSlideOut.js) already had it
+  // via the same set_refund action, just never wired up on this hub. Same
+  // toast/loading-state pattern as the other payment actions on this page.
+  async function handleToggleRefund(eventId, booking, label, currentlyRefunded) {
+    if (togglingRefundId) return
+    if (!session) { showToast("Session expired -- please refresh the page", "error"); return }
+    setTogglingRefundId(booking.id)
+    try {
+      const res = await fetch("/api/coordinator", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await getAuthToken()) },
+        body: JSON.stringify({ event_id: eventId, action: "set_refund", booking_id: booking.id, refunded: !currentlyRefunded }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        showToast(currentlyRefunded ? `Refund unmarked for ${label}` : `Refund marked for ${label}`)
+        await load()
+      } else {
+        showToast(data.error || "Failed to update refund", "error")
+      }
+    } catch (err) {
+      showToast("Network error -- refund update failed", "error")
+    } finally {
+      setTogglingRefundId(null)
+    }
+  }
+
   async function openEventSlideOut(event) {
     const { data } = await supabase
       .from("events")
@@ -1358,7 +1482,8 @@ export default function SocialEvents() {
               onEdit={() => { setEditEvent(e); setShowForm(true) }}
               onTogglePayment={handleTogglePayment} togglingId={togglingId}
               onCloseOutPayments={handleCloseOutPayments} closingOut={closingOutId === e.id}
-              onRemindPayment={handleRemindPayment} remindingId={remindingId} />
+              onRemindPayment={handleRemindPayment} remindingId={remindingId}
+                    onToggleRefund={handleToggleRefund} togglingRefundId={togglingRefundId} />
           ))}
         </div>
       )}
@@ -1386,7 +1511,8 @@ export default function SocialEvents() {
                     onEdit={() => { setEditEvent(e); setShowForm(true) }}
                     onTogglePayment={handleTogglePayment} togglingId={togglingId}
                     onCloseOutPayments={handleCloseOutPayments} closingOut={closingOutId === e.id}
-                    onRemindPayment={handleRemindPayment} remindingId={remindingId} />
+                    onRemindPayment={handleRemindPayment} remindingId={remindingId}
+                    onToggleRefund={handleToggleRefund} togglingRefundId={togglingRefundId} />
                 </div>
               ))}
             </div>
