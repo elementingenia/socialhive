@@ -4,7 +4,7 @@ import { createPortal } from "react-dom"
 import { HUB_COLOURS } from "@/lib/navUtils"
 import { BusIcon, CalendarIcon } from "@/components/NavIcons"
 import { supabase } from "@/lib/supabase"
-import { getAuthToken } from "@/lib/getAuthToken"
+import { authedFetch } from "@/lib/getAuthToken"
 import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
@@ -266,18 +266,11 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
     setTimeout(() => setToast(null), 3000)
   }
 
-  async function getToken() {
-    return getAuthToken()
-  }
-
   async function load() {
     setLoading(true)
     setApiError(null)
     try {
-      const token = await getToken()
-      const res = await fetch(`/api/coordinator?event_id=${event.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await authedFetch(`/api/coordinator?event_id=${event.id}`)
       const d = await res.json()
       if (!res.ok) {
         setApiError(d.error || `Error ${res.status}`)
@@ -306,10 +299,9 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   useEffect(() => { setInsufficientCapacity(null) }, [addSeats, selectedResident])
 
   async function patchAction(body) {
-    const token = await getToken()
-    const res = await fetch("/api/coordinator", {
+    const res = await authedFetch("/api/coordinator", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event_id: event.id, ...body }),
     })
     return res.ok
@@ -363,10 +355,9 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
     if (!selectedResident) return
     setAddSubmitting(true)
     try {
-      const token = await getToken()
-      const res = await fetch("/api/coordinator", {
+      const res = await authedFetch("/api/coordinator", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           event_id: event.id, action: "add_booking",
           member_id: selectedResident.id, seats: addSeats, mark_paid: addMarkPaid,
@@ -897,17 +888,12 @@ function BookingSection({ event, onRefresh }) {
     setTimeout(() => setToast(null), 3000)
   }
 
-  async function getToken() {
-    return getAuthToken()
-  }
-
   async function handleBook(acceptSplit = false) {
     setLoading(true)
     try {
-      const token = await getToken()
-      const res = await fetch("/api/bookings", {
+      const res = await authedFetch("/api/bookings", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ event_id: event.id, seats, accept_split: acceptSplit }),
       })
       const data = await res.json()
@@ -931,10 +917,9 @@ function BookingSection({ event, onRefresh }) {
   async function handleModify() {
     setLoading(true)
     try {
-      const token = await getToken()
-      const res = await fetch("/api/bookings", {
+      const res = await authedFetch("/api/bookings", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ event_id: event.id, seats: modifySeats }),
       })
       const data = await res.json()
@@ -949,10 +934,9 @@ function BookingSection({ event, onRefresh }) {
     if (loading) return
     setLoading(true)
     try {
-      const token = await getToken()
-      const res = await fetch("/api/bookings", {
+      const res = await authedFetch("/api/bookings", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ event_id: event.id }),
       })
       const data = await res.json()
@@ -969,10 +953,9 @@ function BookingSection({ event, onRefresh }) {
   async function handleMarkSubmitted() {
     setSubmitting(true)
     try {
-      const token = await getToken()
-      const res = await fetch("/api/bookings", {
+      const res = await authedFetch("/api/bookings", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ event_id: event.id, action: "mark_payment_submitted" }),
       })
       const data = await res.json()

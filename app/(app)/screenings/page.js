@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { computeFreeCost } from '@/lib/freeCost'
 import EventSlideOut from '@/components/EventSlideOut'
 import { BusIcon } from '@/components/NavIcons'
-import { getAuthToken } from '@/lib/getAuthToken'
+import { authedFetch } from '@/lib/getAuthToken'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -160,9 +160,9 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     setSaving(true); setErr(null)
     const body = { movie_id: pickedMovie?.id || null, event_date: date, event_time: time, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null }
     if (isEdit) body.event_id = event.id
-    const res = await fetch('/api/screenings', {
+    const res = await authedFetch('/api/screenings', {
       method: isEdit ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (await getAuthToken()) },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     })
     const data = await res.json()
@@ -516,7 +516,7 @@ export default function Screenings() {
     if (!session) return
     setLoading(true)
     const [screeningsRes, { data: dvdData }, settingsRes, { data: ownData }] = await Promise.all([
-      fetch('/api/screenings', { headers: { 'Authorization': 'Bearer ' + (await getAuthToken()) } }),
+      authedFetch('/api/screenings'),
       supabase.from('movies').select('tmdb_id, imdb_id').eq('we_own', true),
       supabase.from('settings').select('value').eq('key', 'our_streaming_services').single(),
       supabase.from('movie_ownership').select('movie_id, ownership_type, members(name)'),
@@ -542,7 +542,7 @@ export default function Screenings() {
   async function handleSlideOutRefresh() {
     if (!session || !slideOutEvent) return
     const currentId = slideOutEvent.id
-    const res = await fetch('/api/screenings', { headers: { 'Authorization': 'Bearer ' + (await getAuthToken()) } })
+    const res = await authedFetch('/api/screenings')
     const data = await res.json()
     if (!Array.isArray(data)) return
     setScreenings(data)
