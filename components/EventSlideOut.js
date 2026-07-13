@@ -218,7 +218,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   const [residentResults,     setResidentResults]     = useState([])
   const [selectedResident,    setSelectedResident]    = useState(null)
   const [addSeats,            setAddSeats]            = useState(1)
-  const [addMarkPaid,         setAddMarkPaid]         = useState(true)
+  const [addMarkPaid,         setAddMarkPaid]         = useState(false)
   const [addSubmitting,       setAddSubmitting]       = useState(false)
   const [insufficientCapacity, setInsufficientCapacity] = useState(null)
   const isMovie  = event.hub_type === "movie"
@@ -568,12 +568,13 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
 
                 {paymentRequired && (
                   <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                    {[{ v: true, label: "Paid (cash)" }, { v: false, label: "Unpaid" }].map(opt => (
+                    {[{ v: false, label: "Unpaid", colour: "var(--amber-dark)", fill: "var(--amber)" },
+                      { v: true, label: "Paid (cash)", colour: "var(--green)", fill: "var(--green)" }].map(opt => (
                       <button key={String(opt.v)} onClick={() => setAddMarkPaid(opt.v)}
                         style={{ flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer",
-                          border: `1px solid ${addMarkPaid === opt.v ? colour : "var(--border)"}`,
-                          background: addMarkPaid === opt.v ? colour : "var(--surface)",
-                          color: addMarkPaid === opt.v ? "#fff" : "var(--text)" }}>
+                          border: `1px solid ${addMarkPaid === opt.v ? opt.fill : "var(--border)"}`,
+                          background: addMarkPaid === opt.v ? opt.fill : "var(--surface)",
+                          color: addMarkPaid === opt.v ? "#fff" : opt.colour }}>
                         {opt.label}
                       </button>
                     ))}
