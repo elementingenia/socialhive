@@ -1022,7 +1022,16 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
               )}
               {confirmedBookings.length > 0 ? (
                 <>
-                  {isAdmin && <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--green)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.15rem" }}>Confirmed</div>}
+                  {/* No "Confirmed" section header here (removed 2026-07-14,
+                      Iain) -- it implied every row below had actually been
+                      paid, which isn't true until payment is separately
+                      collected, and green as a header colour reads as a
+                      status/pass signal rather than a label. The list
+                      below already carries its own per-row Paid/Unpaid
+                      state, so a blanket "Confirmed" heading was actively
+                      misleading, not just redundant. Waitlist still gets a
+                      header (below) since it's the rarer, worth-flagging
+                      case. */}
                   {confirmedBookings.map((b, i) => {
                     const isOwn     = b.member_id === member?.id
                     const isPrivate = !!b.member?.hide_name
