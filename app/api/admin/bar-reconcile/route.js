@@ -1,17 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { notify } from '@/lib/notify'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
-
-// Write a notification — fails silently if table doesn't exist yet
-async function createNotification(member_id, message) {
-  try {
-    await supabaseAdmin.from('notifications').insert({ member_id, type: 'bar_reconciled', message })
-  } catch (_) {}
-}
 
 function monthLabel(dateStr) {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-AU', { month: 'long', year: 'numeric' })
@@ -209,7 +203,7 @@ export async function POST(req) {
     // Bulk reconciliation — notify every resident left with an outstanding balance
     const month = monthLabel(periodEnd)
     for (const m of members) {
-      await createNotification(m.member_id, `Your Community Bar tab for ${month}: $${m.total.toFixed(2)} — tap to view`)
+      await notify(m.member_id, null, 'bar_reconciled', `Your Community Bar tab for ${month}: $${m.total.toFixed(2)} — tap to view`)
     }
   }
 

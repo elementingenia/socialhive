@@ -1,18 +1,12 @@
 import { createClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
 import { promoteWaitlist } from "@/lib/promoteWaitlist"
+import { notify } from "@/lib/notify"
 
 const supa = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 )
-
-// Write a notification — fails silently if table doesn't exist yet
-async function createNotification(member_id, event_id, type, message) {
-  try {
-    await supa.from("notifications").insert({ member_id, event_id, type, message })
-  } catch (_) {}
-}
 
 // Helper: resolve calling member and verify they are an active EC for the event
 async function resolveEC(req, eventId) {
@@ -158,7 +152,7 @@ export async function PATCH(req) {
     if (pe) return NextResponse.json({ error: pe.message }, { status: 500 })
     if (payment_status === "confirmed" && prevBk?.payment_status !== "confirmed" && prevBk?.member_id) {
       const { data: ev } = await supa.from("events").select("title").eq("id", event_id).single()
-      await createNotification(prevBk.member_id, event_id, "payment_confirmed", `Your payment for ${ev?.title || "this event"} has been confirmed.`)
+      await notify(prevBk.member_id, event_id, "payment_confirmed", `Your payment for ${ev?.title || "this event"} has been confirmed.`)
     }
     return NextResponse.json({ ok: true })
   }
@@ -187,7 +181,7 @@ export async function PATCH(req) {
 
     for (const b of unpaid) {
       const owed = (cost * (b.seats || 1)).toFixed(2)
-      await createNotification(b.member_id, event_id, "payment_reminder",
+      await notify(b.member_id, event_id, "payment_reminder",
         `Reminder: $${owed} is still owing for ${ev.title || "this event"}.`)
     }
 
@@ -222,7 +216,7 @@ export async function PATCH(req) {
     }
     const cost = parseFloat(ev.cost) || 0
     const owed = (cost * (bk.seats || 1)).toFixed(2)
-    await createNotification(bk.member_id, event_id, "payment_reminder",
+    await notify(bk.member_id, event_id, "payment_reminder",
       `Reminder: $${owed} is still owing for ${ev.title || "this event"}.`)
 
     return NextResponse.json({ ok: true })
@@ -333,7 +327,7 @@ export async function PATCH(req) {
     })
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
 
-    await createNotification(member_id, event_id, "booking_added",
+    await notify(member_id, event_id, "booking_added",
       `You were added to ${ev.title || "an event"} (${seats} seat${seats !== 1 ? "s" : ""}) by an Event Coordinator.`)
 
     return NextResponse.json({ ok: true, status: bookingStatus })
@@ -356,7 +350,7 @@ export async function PATCH(req) {
     }
     if (bk?.member_id) {
       const { data: ev } = await supa.from("events").select("title").eq("id", event_id).single()
-      await createNotification(bk.member_id, event_id, "booking_cancelled", `Your booking for ${ev?.title || "this event"} was cancelled.`)
+      await notify(bk.member_id, event_id, "booking_cancelled", `Your booking for ${ev?.title || "this event"} was cancelled.`)
     }
     return NextResponse.json({ ok: true })
   }

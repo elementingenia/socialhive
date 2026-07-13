@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import { BAR_ENABLED } from "@/lib/features"
+import { isPushSupported, isIOS, isStandalone, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from "@/lib/pushClient"
 
 // Clearance below the sticky header so the avatar pill stays visible
 const TOP_OFFSET = 72 // px — covers both home (~68px) and sub-page (~43px) headers
@@ -26,6 +27,97 @@ function Toggle({ value, onChange, label, description }) {
         <span style={{ position: "absolute", top: 3, left: value ? 20 : 3, width: 20, height: 20, borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,.2)" }} />
       </button>
     </div>
+  )
+}
+
+// Push notifications opt-in (2026-07-14) — deliberately separate from the
+// rest of the profile fields: (un)subscribing is an immediate browser/OS
+// action (permission prompt, service worker registration), not something
+// that waits for the Save button. Only ever renders a working toggle once
+// we've confirmed the platform actually supports it; otherwise shows the
+// specific reason instead of a control that would just silently fail.
+function NotificationsToggle() {
+  const [status, setStatus] = useState("checking") // checking | unsupported | ios-not-installed | denied | off | on | working
+  const [error,  setError]  = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function check() {
+      if (!isPushSupported()) {
+        setStatus(isIOS() && !isStandalone() ? "ios-not-installed" : "unsupported")
+        return
+      }
+      if (typeof Notification !== "undefined" && Notification.permission === "denied") {
+        setStatus("denied")
+        return
+      }
+      const sub = await getExistingSubscription()
+      if (!cancelled) setStatus(sub ? "on" : "off")
+    }
+    check()
+    return () => { cancelled = true }
+  }, [])
+
+  async function toggle() {
+    setError(null)
+    setStatus("working")
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (status === "on") {
+        await unsubscribeFromPush(session.access_token)
+        setStatus("off")
+      } else {
+        await subscribeToPush(session.access_token)
+        setStatus("on")
+      }
+    } catch (e) {
+      setError(e.message || "Something went wrong")
+      const sub = await getExistingSubscription()
+      setStatus(sub ? "on" : "off")
+    }
+  }
+
+  if (status === "checking" || status === "unsupported") return null
+
+  if (status === "ios-not-installed") {
+    return (
+      <>
+        <div style={{ padding: "0.55rem 0" }}>
+          <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "var(--text)" }}>Phone alerts</div>
+          <div style={{ fontSize: "0.74rem", color: "var(--text-dim)", marginTop: "0.15rem", lineHeight: 1.4 }}>
+            Add Social Hive to your Home Screen first (Share → Add to Home Screen), then come back here to turn this on.
+          </div>
+        </div>
+        <div style={{ borderTop: "1px solid var(--border)" }} />
+      </>
+    )
+  }
+
+  if (status === "denied") {
+    return (
+      <>
+        <div style={{ padding: "0.55rem 0" }}>
+          <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "var(--text)" }}>Phone alerts</div>
+          <div style={{ fontSize: "0.74rem", color: "var(--text-dim)", marginTop: "0.15rem", lineHeight: 1.4 }}>
+            Notifications are blocked for Social Hive — enable them in your phone's Settings to turn this on.
+          </div>
+        </div>
+        <div style={{ borderTop: "1px solid var(--border)" }} />
+      </>
+    )
+  }
+
+  return (
+    <>
+      <Toggle
+        value={status === "on"}
+        onChange={toggle}
+        label="Phone alerts"
+        description="Get a notification on this device for bookings, payments and event updates"
+      />
+      {error && <div style={{ fontSize: "0.74rem", color: "#e53e3e", marginTop: "-0.3rem", marginBottom: "0.3rem" }}>{error}</div>}
+      <div style={{ borderTop: "1px solid var(--border)" }} />
+    </>
   )
 }
 
@@ -191,6 +283,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
 
               {/* Toggles */}
               <div style={{ borderTop: "1px solid var(--border)", marginTop: "0.75rem" }}>
+                <NotificationsToggle />
                 <Toggle value={hideName} onChange={setHideName} label="Hide my name" description="Show me as 'Resident' in event attendee lists" />
                 {/* Bar access toggle parked (feature not in scope) — see lib/features.js */}
                 {BAR_ENABLED && (

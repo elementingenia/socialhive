@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { promoteWaitlist } from '@/lib/promoteWaitlist'
+import { notify } from '@/lib/notify'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -13,13 +14,6 @@ async function getMember(token) {
   const { data: member } = await supabaseAdmin
     .from('members').select('id, name').eq('auth_id', user.id).single()
   return member
-}
-
-// Write a notification — fails silently if table doesn't exist yet
-async function createNotification(member_id, event_id, type, message) {
-  try {
-    await supabaseAdmin.from('notifications').insert({ member_id, event_id, type, message })
-  } catch (_) {}
 }
 
 // Seat-level FIFO waitlist promotion now lives in lib/promoteWaitlist.js,
@@ -178,7 +172,7 @@ export async function PATCH(req) {
 
     const msg = `${member.name || 'A resident'} marked payment${owed ? ` ($${owed})` : ''} as submitted for ${event?.title || 'this event'} — please confirm.`
     for (const id of notifyIds) {
-      await createNotification(id, event_id, 'payment_submitted', msg)
+      await notify(id, event_id, 'payment_submitted', msg)
     }
 
     return NextResponse.json({ ok: true })
@@ -262,7 +256,7 @@ export async function DELETE(req) {
   if (hadConfirmed) await promoteWaitlist(event_id)
 
   const { data: ev } = await supabaseAdmin.from('events').select('title').eq('id', event_id).single()
-  await createNotification(member.id, event_id, 'booking_cancelled', `Your booking for ${ev?.title || 'this event'} was cancelled.`)
+  await notify(member.id, event_id, 'booking_cancelled', `Your booking for ${ev?.title || 'this event'} was cancelled.`)
 
   return NextResponse.json({ success: true })
 }
