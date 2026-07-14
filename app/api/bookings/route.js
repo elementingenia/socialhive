@@ -155,7 +155,7 @@ export async function PATCH(req) {
     }
 
     const { error: markErr } = await supabaseAdmin
-      .from('bookings').update({ payment_status: 'submitted' }).eq('id', booking.id)
+      .from('bookings').update({ payment_status: 'submitted', updated_at: new Date().toISOString() }).eq('id', booking.id)
     if (markErr) return NextResponse.json({ error: markErr.message }, { status: 500 })
 
     const { data: event } = await supabaseAdmin
@@ -204,11 +204,11 @@ export async function PATCH(req) {
   const newWaitlisted = newSeats - newConfirmed
 
   if (myWaitlist) {
-    await supabaseAdmin.from('bookings').update({ status: 'cancelled' }).eq('id', myWaitlist.id)
+    await supabaseAdmin.from('bookings').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', myWaitlist.id)
   }
 
   const { error: updateErr } = await supabaseAdmin
-    .from('bookings').update({ seats: newConfirmed }).eq('id', myConfirmed.id)
+    .from('bookings').update({ seats: newConfirmed, updated_at: new Date().toISOString() }).eq('id', myConfirmed.id)
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
 
   if (newConfirmed < oldConfirmed) {
@@ -250,7 +250,7 @@ export async function DELETE(req) {
     return NextResponse.json({ error: 'No active booking found' }, { status: 404 })
   }
 
-  await supabaseAdmin.from('bookings').update({ status: 'cancelled' }).in('id', myBookings.map(b => b.id))
+  await supabaseAdmin.from('bookings').update({ status: 'cancelled', updated_at: new Date().toISOString() }).in('id', myBookings.map(b => b.id))
 
   const hadConfirmed = myBookings.some(b => b.status === 'confirmed')
   if (hadConfirmed) await promoteWaitlist(event_id)

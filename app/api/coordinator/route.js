@@ -146,7 +146,7 @@ export async function PATCH(req) {
       .from("bookings").select("payment_status, member_id").eq("id", booking_id).maybeSingle()
     const { error: pe } = await supa
       .from("bookings")
-      .update({ payment_status })
+      .update({ payment_status, updated_at: new Date().toISOString() })
       .eq("id", booking_id)
       .eq("event_id", event_id)
     if (pe) return NextResponse.json({ error: pe.message }, { status: 500 })
@@ -226,7 +226,7 @@ export async function PATCH(req) {
   if (action === "set_refund" && booking_id) {
     const { error: re } = await supa
       .from("bookings")
-      .update({ payment_status: refunded ? "refunded" : "pending" })
+      .update({ payment_status: refunded ? "refunded" : "pending", updated_at: new Date().toISOString() })
       .eq("id", booking_id)
       .eq("event_id", event_id)
     if (re) return NextResponse.json({ error: re.message }, { status: 500 })
@@ -340,7 +340,7 @@ export async function PATCH(req) {
       .from("bookings").select("status, seats, member_id").eq("id", booking_id).maybeSingle()
     const { error: ce } = await supa
       .from("bookings")
-      .update({ status: "cancelled" })
+      .update({ status: "cancelled", updated_at: new Date().toISOString() })
       .eq("id", booking_id)
       .eq("event_id", event_id)
     if (ce) return NextResponse.json({ error: ce.message }, { status: 500 })
