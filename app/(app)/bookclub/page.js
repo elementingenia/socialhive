@@ -66,6 +66,8 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) 
   const [attendees,       setAttendees]       = useState(null)
   const [attendeesLoading,setAttendeesLoading]= useState(false)
   const [togglingId,      setTogglingId]      = useState(null)
+  const [remindingId,     setRemindingId]     = useState(null)
+  const [remindedId,      setRemindedId]      = useState(null)
   const book          = event.books || event.book_snapshot
   const bookLink      = book?.rating_link || null
   const communityScore = book?.avg_score ? parseFloat(book.avg_score).toFixed(1) : null
@@ -79,7 +81,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) 
   async function loadAttendees() {
     const { data } = await supabase
       .from("bookings")
-      .select("id, seats, has_book, name_hidden, members(id, name, username, hide_name)")
+      .select("id, seats, has_book, book_given_at, name_hidden, members(id, name, username, hide_name)")
       .eq("event_id", event.id)
       .eq("status", "confirmed")
     // Own row always pinned to the top — consistent with every other attendee
@@ -94,6 +96,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) 
         isPrivate,
         seats: b.seats || 1,
         hasBook: !!b.has_book,
+        bookGivenAt: b.book_given_at,
       }
     }).sort((a, b) => (b.isOwn === true) - (a.isOwn === true)))
   }
@@ -116,6 +119,28 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) 
     })
     await loadAttendees()
     setTogglingId(null)
+  }
+
+  // Manual "remind to return" nudge (2026-07-15) -- catch-all auto reminder
+  // lives in the daily cron (app/api/cron/book-return-check/route.js), this
+  // is the proactive one-tap version an EC/admin can send anytime someone
+  // still has_book. Kept local to this card (no toast plumbing) -- the bell
+  // itself flips to a brief "Sent ✓" confirmation, same lightweight pattern
+  // as the Has Book/Returned toggle already uses.
+  async function remindBookReturn(bookingId) {
+    if (remindingId) return
+    setRemindingId(bookingId)
+    const token = await getToken()
+    const res = await fetch("/api/coordinator", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ event_id: event.id, action: "remind_book_return", booking_id: bookingId }),
+    })
+    setRemindingId(null)
+    if (res.ok) {
+      setRemindedId(bookingId)
+      setTimeout(() => setRemindedId(null), 2500)
+    }
   }
 
   const isJoined = booking?.status === "confirmed"
@@ -225,14 +250,28 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) 
                     {a.isPrivate && canManageBooks && !a.isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
                   </span>
                   {canManageBooks && (
-                    <div onClick={e => { e.stopPropagation(); toggleHasBook(a.id, a.hasBook) }} role="switch" aria-checked={a.hasBook}
-                      title={a.hasBook ? "Mark as returned" : "Mark book as given out"}
-                      style={{ display: "flex", alignItems: "center", gap: 6, cursor: togglingId === a.id ? "wait" : "pointer", opacity: togglingId === a.id ? 0.6 : 1 }}>
-                      <span style={{ fontSize: "0.72rem", fontWeight: 700, color: a.hasBook ? colour : "var(--text-dim)" }}>{a.hasBook ? "Has Book" : "No Book"}</span>
-                      <div style={{ position: "relative", width: 36, height: 20, borderRadius: 10,
-                        background: a.hasBook ? colour : "var(--border)", transition: "background 0.2s", flexShrink: 0 }}>
-                        <span style={{ position: "absolute", top: 2, left: a.hasBook ? 18 : 2, width: 16, height: 16,
-                          borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,.25)" }} />
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      {a.hasBook && (
+                        <button
+                          onClick={e => { e.stopPropagation(); remindBookReturn(a.id) }}
+                          disabled={remindingId === a.id}
+                          title="Remind to return book"
+                          aria-label={`Remind ${a.name} to return their book`}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "none",
+                            padding: "0.1rem 0.15rem", cursor: remindingId === a.id ? "default" : "pointer", fontFamily: "inherit",
+                            flexShrink: 0, opacity: remindingId === a.id ? 0.35 : 1, fontSize: "0.85rem", lineHeight: 1 }}>
+                          {remindedId === a.id ? "✅" : "🔔"}
+                        </button>
+                      )}
+                      <div onClick={e => { e.stopPropagation(); toggleHasBook(a.id, a.hasBook) }} role="switch" aria-checked={a.hasBook}
+                        title={a.hasBook ? "Mark as returned" : "Mark book as given out"}
+                        style={{ display: "flex", alignItems: "center", gap: 6, cursor: togglingId === a.id ? "wait" : "pointer", opacity: togglingId === a.id ? 0.6 : 1 }}>
+                        <span style={{ fontSize: "0.72rem", fontWeight: 700, color: a.hasBook ? colour : "var(--text-dim)" }}>{a.hasBook ? "Has Book" : a.bookGivenAt ? "Returned" : "No Book"}</span>
+                        <div style={{ position: "relative", width: 36, height: 20, borderRadius: 10,
+                          background: a.hasBook ? colour : "var(--border)", transition: "background 0.2s", flexShrink: 0 }}>
+                          <span style={{ position: "absolute", top: 2, left: a.hasBook ? 18 : 2, width: 16, height: 16,
+                            borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,.25)" }} />
+                        </div>
                       </div>
                     </div>
                   )}

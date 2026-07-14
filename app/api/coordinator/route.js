@@ -222,6 +222,36 @@ export async function PATCH(req) {
     return NextResponse.json({ ok: true })
   }
 
+  // ── Remind a single attendee to return their Book Club copy (2026-07-15) ────
+  // Manual counterpart to the automatic overdue cron
+  // (app/api/cron/book-return-check/route.js) -- an EC/admin can nudge
+  // anyone currently holding a copy (has_book = true) at any time, not just
+  // once it's overdue. Stamps book_return_reminded_at so the cron doesn't
+  // immediately re-fire the same day right after a manual nudge.
+  if (action === "remind_book_return" && booking_id) {
+    const { data: bk } = await supa
+      .from("bookings").select("id, member_id, has_book")
+      .eq("id", booking_id).eq("event_id", event_id).maybeSingle()
+    if (!bk) return NextResponse.json({ error: "Booking not found" }, { status: 404 })
+    if (!bk.has_book) return NextResponse.json({ error: "This attendee doesn't currently have a book out" }, { status: 400 })
+
+    const { data: ev } = await supa
+      .from("events").select("title, book_return_date, book_id, book_snapshot, books(title)")
+      .eq("id", event_id).maybeSingle()
+    const bookTitle = ev?.books?.title || ev?.book_snapshot?.title || ev?.title || "this book"
+    let dueText = ""
+    if (ev?.book_return_date) {
+      const [y, m, d] = ev.book_return_date.split("-").map(Number)
+      dueText = ` (due back ${new Date(y, m - 1, d).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })})`
+    }
+
+    await notify(bk.member_id, event_id, "book_return_reminder",
+      `Reminder: please return your copy of "${bookTitle}" to the coordinator${dueText}.`)
+    await supa.from("bookings").update({ book_return_reminded_at: new Date().toISOString() }).eq("id", booking_id)
+
+    return NextResponse.json({ ok: true })
+  }
+
   // ── Mark refund given on a cancelled booking ─────────────────────────────────
   if (action === "set_refund" && booking_id) {
     const { error: re } = await supa
