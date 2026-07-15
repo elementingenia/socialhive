@@ -976,7 +976,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
               html
               fontSize={13}
               lineHeight={1.5}
-              maxLines={4}
+              maxLines={2}
               colour="var(--terracotta)"
             />
           </div>

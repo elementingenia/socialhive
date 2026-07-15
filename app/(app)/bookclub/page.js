@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
+import ExpandableText from "@/components/ExpandableText"
 import { getToken } from "@/components/ResidentEditPanel"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -202,8 +203,16 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
       <div style={{ padding: "0.9rem 1rem 0.6rem" }}>
         {/* Event notes */}
         {event.description && (
-          <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 10 }}
-            dangerouslySetInnerHTML={{ __html: bbToHtml(event.description, "var(--purple)") }} />
+          <div style={{ marginBottom: 10 }}>
+            <ExpandableText
+              text={bbToHtml(event.description, "var(--purple)")}
+              html
+              fontSize={13.6}
+              lineHeight={1.5}
+              maxLines={2}
+              colour="var(--purple)"
+            />
+          </div>
         )}
 
         {/* Book summary */}
