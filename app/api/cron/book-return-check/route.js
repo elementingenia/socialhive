@@ -40,15 +40,26 @@ export async function GET(req) {
 
   const todayStr = new Date().toISOString().slice(0, 10) // YYYY-MM-DD, matches events.book_return_date's date type
 
+  // Filtering on the joined event's date via a dotted-path PostgREST filter
+  // (.lt("events.book_return_date", ...)) turned out not to be reliable from
+  // this route in practice -- confirmed live 2026-07-15: the identical query
+  // returned the correct row every time when run directly against Supabase
+  // (curl and a local supabase-js script), but consistently returned zero
+  // rows when executed from this deployed route. Rather than chase that
+  // discrepancy further, this fetches every current loan (has_book = true --
+  // always a small number for a community this size) and does the date
+  // comparison in plain JS instead, which is easy to reason about and not
+  // dependent on any embedded-resource filter behaviour.
   const { data: outstanding, error } = await supa
     .from("bookings")
-    .select("id, member_id, has_book, book_given_at, book_return_reminded_at, event_id, events!inner(id, title, book_return_date, book_snapshot, books(title))")
+    .select("id, member_id, has_book, book_given_at, book_return_reminded_at, event_id, events(id, title, book_return_date, book_snapshot, books(title))")
     .eq("has_book", true)
-    .lt("events.book_return_date", todayStr)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   const due = (outstanding || []).filter(b => {
+    const returnDate = b.events?.book_return_date
+    if (!returnDate || returnDate >= todayStr) return false // not due yet, or no due date set
     if (!b.book_return_reminded_at) return true
     if (!b.book_given_at) return true
     return new Date(b.book_return_reminded_at).getTime() < new Date(b.book_given_at).getTime()
