@@ -59,7 +59,7 @@ function BookingStrip({ isJoined, hasBook, bookReturnDate }) {
 }
 
 // ── Book Club Event Card ─────────────────────────────────────────────────────
-function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) {
+function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", showToast }) {
   const { member, isAdmin } = useUser()
   const [summaryOpen,     setSummaryOpen]     = useState(false)
   const [attendeesOpen,   setAttendeesOpen]   = useState(false)
@@ -127,7 +127,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) 
   // still has_book. Kept local to this card (no toast plumbing) -- the bell
   // itself flips to a brief "Sent ✓" confirmation, same lightweight pattern
   // as the Has Book/Returned toggle already uses.
-  async function remindBookReturn(bookingId) {
+  async function remindBookReturn(bookingId, name) {
     if (remindingId) return
     setRemindingId(bookingId)
     const token = await getToken()
@@ -140,6 +140,10 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) 
     if (res.ok) {
       setRemindedId(bookingId)
       setTimeout(() => setRemindedId(null), 2500)
+      showToast?.(`Reminder sent to ${name}`)
+    } else {
+      const data = await res.json().catch(() => ({}))
+      showToast?.(data.error || "Could not send reminder")
     }
   }
 
@@ -253,7 +257,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)" }) 
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       {a.hasBook && (
                         <button
-                          onClick={e => { e.stopPropagation(); remindBookReturn(a.id) }}
+                          onClick={e => { e.stopPropagation(); remindBookReturn(a.id, a.name) }}
                           disabled={remindingId === a.id}
                           title="Remind to return book"
                           aria-label={`Remind ${a.name} to return their book`}
@@ -1017,6 +1021,7 @@ export default function BookClubHome() {
           label={upcoming[0] ? "Current Meeting" : "Current Reading"}
           booking={myBookings[activeEvent.id]}
           onOpen={() => openSlideOut(activeEvent)}
+          showToast={showToast}
         />
       ) : (
         <div style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",
@@ -1034,6 +1039,7 @@ export default function BookClubHome() {
           booking={myBookings[nextEvent.id]}
           onOpen={() => openSlideOut(nextEvent)}
           colour="#7c3aed"
+          showToast={showToast}
         />
       )}
 
