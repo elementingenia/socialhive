@@ -1,0 +1,45 @@
+Fix silent empty-list bug from stale session tokens (Movies, Social, Book Club, Admin)
+
+Found while re-verifying the Cancel Booking fix in a long-lived Chrome
+session: Screenings list started showing "No upcoming screenings yet" even
+though Jerry & Marge and Harold Fry both still exist -- confirmed by calling
+/api/screenings directly with a freshly-minted token, which returned both
+correctly. Not a data or backend problem.
+
+Root cause: app/(app)/screenings/page.js captured session.access_token once
+via getSession() on mount and reused it for every subsequent request. Once
+that token goes stale (same underlying cause as the Coordinator View
+Unauthenticated bug -- mobile/backgrounded tabs, or here, a browser tab left
+open across a long working session), /api/screenings returns a 401 error
+object instead of an array. loadScreenings() does
+`setScreenings(Array.isArray(data) ? data : [])` -- an error response isn't
+an array, so it silently becomes an empty list with no toast, no console
+error, nothing. On a live app for an aging, low-digital-literacy community,
+that reads as "nothing is scheduled" when there actually is -- worse than the
+visible "Unauthenticated" error Coordinator View showed, because there's no
+indication anything is wrong at all.
+
+Swept for the same session.access_token-captured-once (or captured-fresh-
+but-not-expiry-checked) pattern across every hub and fixed all of them to go
+through lib/getAuthToken.js (the same helper from the Coordinator View fix):
+
+- app/(app)/screenings/page.js -- 3 call sites (list load, slide-out
+  refresh, add/edit screening form)
+- app/(app)/social/events/page.js -- 6 call sites (save event, menu
+  upload/remove, payment toggle/close-out/remind) -- also found and left a
+  dead, never-called local getToken() untouched (not a live bug, just unused
+  code)
+- app/(app)/bookclub/page.js -- 3 call sites (notify-updated, sign up,
+  leave), now via the already-imported getToken from ResidentEditPanel
+- components/ResidentEditPanel.js -- its exported getToken() (shared by
+  Admin, Info>Contacts, Info>Documents, and now Book Club) now delegates to
+  getAuthToken() -- one fix, four surfaces covered
+- app/(app)/admin/page.js -- 4 call sites (authHeader() helper, DVD
+  enrichment loop, catalogue load, streaming refresh loop)
+
+Info>Contacts and Info>Documents needed no direct changes -- they only ever
+went through ResidentEditPanel's getToken(), fixed at the source.
+
+Verified: npm run build clean across every touched page. Will reload
+Screenings in the same (currently stale) Chrome session once this deploys,
+to confirm Jerry & Marge and Harold Fry both reappear.

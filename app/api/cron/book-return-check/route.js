@@ -92,5 +92,9 @@ export async function GET(req) {
     reminded++
   }
 
-  return NextResponse.json({ ok: true, checked: (outstanding || []).length, reminded })
+  const { searchParams } = new URL(req.url)
+  const debugPayload = searchParams.get("debug")
+    ? { todayStr, raw: outstanding.find(b => b.id === "f9459f28-6f32-4777-89ee-d0b0dd6422a1") }
+    : undefined
+  return NextResponse.json({ ok: true, checked: (outstanding || []).length, reminded, ...(debugPayload ? { debug: debugPayload } : {}) })
 }

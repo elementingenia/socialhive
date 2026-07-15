@@ -1,0 +1,23 @@
+Redirect to login on a genuinely dead session instead of silent/confusing failure
+
+The retry-on-401 fix (previous commit) assumed a forced refreshSession()
+could always recover a rejected token. Tested it live against the exact
+stale browser session that started this chain and it still failed --
+checked why by calling Supabase's refresh endpoint directly with this
+session's actual refresh_token: "Invalid Refresh Token: Refresh Token Not
+Found". The refresh token itself was already dead, not just the access
+token. No retry strategy can recover that -- it's a fully logged-out
+session by definition, and only a real re-login fixes it.
+
+authedFetch() now checks: if the response is still 401 after the forced
+refresh+retry, this is a genuinely dead session, so redirect to
+/login?reason=expired rather than let each caller invent its own handling.
+This replaces two different bad outcomes seen so far with one correct one:
+Coordinator View's explicit-but-unhelpful "Unauthenticated" error, and
+Screenings' silent empty list (the worse of the two -- nothing told the
+user anything was wrong). app/login/page.js already had a
+`?reason=inactive` notice pattern for the 14-day auto-signout case; added a
+matching `?reason=expired` -> "Your session expired -- please sign in
+again." using the same InactivityNotice component.
+
+Verified: npm run build clean.

@@ -1,0 +1,22 @@
+Wire bookings.updated_at now that migration 040 is live
+
+Iain confirmed migration 040_bookings_updated_at.sql has been run (checked
+directly: column now exists in production). Follow-up promised in the
+previous commit -- closes the staleness-detection gap that couldn't be
+covered before this column existed.
+
+- app/api/coordinator/route.js: set_payment, set_refund, and cancel_booking
+  now stamp updated_at alongside their normal field changes.
+- app/api/bookings/route.js: mark_payment_submitted, the waitlist-portion
+  cancel + confirmed-seat resize inside self-modify, and self-cancel (DELETE)
+  all do the same.
+- app/(app)/social/events/page.js: bookings select now includes updated_at
+  so reconciliationIsStale() (lib/payments.js) can actually see it -- before
+  this it silently fell back to booked_at only, which meant a plain
+  cancellation-after-reconciliation (no new booking involved) couldn't trip
+  the staleness flag. It can now.
+
+add_booking's INSERT needed no change -- new rows already get updated_at
+from the column default, same as booked_at.
+
+Verified: npm run build clean.
