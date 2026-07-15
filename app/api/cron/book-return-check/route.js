@@ -14,9 +14,19 @@ import { notify } from "@/lib/notify"
 // every time -- needed explicitly.
 export const dynamic = "force-dynamic"
 
+// Explicit no-store fetch override (2026-07-15): `export const dynamic =
+// "force-dynamic"` above was not enough on its own -- live-fire testing
+// still showed a booking's just-written book_return_reminded_at reading
+// back as null on the very next invocation, confirmed via a temporary
+// debug param that this route's own query result (not just Supabase's
+// REST API queried directly) was stale. Passing a custom fetch straight to
+// supabase-js forces cache: "no-store" at the exact point requests leave
+// this client, rather than relying on Next.js's route-level cache
+// directive to propagate down into a library's internal fetch calls.
 const supa = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { global: { fetch: (url, options) => fetch(url, { ...options, cache: "no-store" }) } }
 )
 
 // Daily catch-all for Book Club kit copies still out past their due date
