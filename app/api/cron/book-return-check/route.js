@@ -80,5 +80,10 @@ export async function GET(req) {
     reminded++
   }
 
-  return NextResponse.json({ ok: true, checked: (outstanding || []).length, reminded })
+  const { searchParams } = new URL(req.url)
+  const debugPayload = searchParams.get("debug")
+    ? { todayStr, outstanding, due: due.map(b => ({ id: b.id, book_given_at: b.book_given_at, book_return_reminded_at: b.book_return_reminded_at, return_date: b.events?.book_return_date })) }
+    : undefined
+
+  return NextResponse.json({ ok: true, checked: (outstanding || []).length, reminded, ...(debugPayload ? { debug: debugPayload } : {}) })
 }
