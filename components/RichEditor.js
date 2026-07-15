@@ -1,15 +1,41 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
 
+// ── Hub CSS custom properties → literal hex ──────────────────────────────────
+// document.execCommand('foreColor', ...) and the "colour + alpha suffix" string
+// trick (e.g. hex + '22') both require a literal colour value — neither
+// understands a `var(--x)` reference. Callers pass hub theme colour as
+// `var(--teal|--purple|--terracotta)` (see lib/navUtils.js), so resolve it to
+// the real hex here, once, for every caller.
+const HUB_HEX = {
+  '--teal': '#0d9488',
+  '--purple': '#7c3aed',
+  '--terracotta': '#c2410c',
+}
+
+function resolveColour(c) {
+  if (!c) return '#0d9488'
+  const trimmed = String(c).trim()
+  const match = /^var\((--[\w-]+)\)$/.exec(trimmed)
+  if (!match) return trimmed // already a literal colour (hex/rgb/named)
+  if (HUB_HEX[match[1]]) return HUB_HEX[match[1]]
+  if (typeof window !== 'undefined') {
+    const resolved = getComputedStyle(document.documentElement).getPropertyValue(match[1]).trim()
+    if (resolved) return resolved
+  }
+  return '#0d9488'
+}
+
 // ── BBCode/plain-text → HTML (also handles legacy plain strings already in the DB) ──
 export function bbToHtml(text, hubColour) {
   if (!text) return ''
   if (/<[a-z][\s\S]*>/i.test(text)) return text  // already HTML
+  const hex = resolveColour(hubColour)
   return text
     .replace(/\[b\]([\s\S]*?)\[\/b\]/g, '<strong>$1</strong>')
     .replace(/\[i\]([\s\S]*?)\[\/i\]/g, '<em>$1</em>')
     .replace(/\[u\]([\s\S]*?)\[\/u\]/g, '<u>$1</u>')
-    .replace(/\[c1\]([\s\S]*?)\[\/c1\]/g, `<span style="color:${hubColour || '#0d9488'}">$1</span>`)
+    .replace(/\[c1\]([\s\S]*?)\[\/c1\]/g, `<span style="color:${hex}">$1</span>`)
     .replace(/\[c2\]([\s\S]*?)\[\/c2\]/g, '<span style="color:#888">$1</span>')
     .replace(/\n/g, '<br>')
 }
@@ -25,6 +51,7 @@ export default function RichEditor({
   const ref = useRef(null)
   const initDone = useRef(false)
   const [focused, setFocused] = useState(false)
+  const hex = resolveColour(hubColour)
 
   const compactHeight = minHeight ?? (subOnly ? 56 : 80)
   const expandedHeight = expandedMinHeight ?? (subOnly ? 140 : 220)
@@ -32,7 +59,7 @@ export default function RichEditor({
   useEffect(() => {
     if (ref.current && !initDone.current) {
       initDone.current = true
-      ref.current.innerHTML = bbToHtml(initialValue, hubColour)
+      ref.current.innerHTML = bbToHtml(initialValue, hex)
     }
   }, []) // mount only — do not re-sync; browser owns the content after mount
 
@@ -61,8 +88,8 @@ export default function RichEditor({
           style={{ ...btnBase, textDecoration: 'underline' }}>U</button>
         {!subOnly && (
           <>
-            <button type="button" onMouseDown={e => { e.preventDefault(); exec('foreColor', hubColour) }}
-              style={{ ...btnBase, background: hubColour + '22', color: hubColour, border: '1px solid ' + hubColour, fontWeight: 700 }}>
+            <button type="button" onMouseDown={e => { e.preventDefault(); exec('foreColor', hex) }}
+              style={{ ...btnBase, background: hex + '22', color: hex, border: '1px solid ' + hex, fontWeight: 700 }}>
               Colour
             </button>
             <button type="button" onMouseDown={e => { e.preventDefault(); exec('foreColor', '#000000') }}

@@ -972,7 +972,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
         {event.description && (
           <div style={{ marginBottom: "0.5rem" }}>
             <ExpandableText
-              text={bbToHtml(event.description)}
+              text={bbToHtml(event.description, "var(--terracotta)")}
               html
               fontSize={13}
               lineHeight={1.5}

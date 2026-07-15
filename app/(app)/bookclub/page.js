@@ -203,7 +203,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
         {/* Event notes */}
         {event.description && (
           <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 10 }}
-            dangerouslySetInnerHTML={{ __html: bbToHtml(event.description) }} />
+            dangerouslySetInnerHTML={{ __html: bbToHtml(event.description, "var(--purple)") }} />
         )}
 
         {/* Book summary */}
