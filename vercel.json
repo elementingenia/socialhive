@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/book-return-check",
       "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/payment-due-check",
+      "schedule": "0 22 * * *"
     }
   ]
 }

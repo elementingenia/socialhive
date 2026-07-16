@@ -486,6 +486,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     menu_type:             event?.menu_type           || null,
     menu_text:             event?.menu_text           || "",
     reservation_cutoff:    cutoffToInputValue(event?.reservation_cutoff),
+    payment_due_by:        event?.payment_due_by || "",
   })
 
   const [coordinators, setCoordinators] = useState([])
@@ -535,6 +536,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
       menu_type:             form.has_dining ? form.menu_type : null,
       menu_text:             form.has_dining && form.menu_type === "text" ? form.menu_text : null,
       reservation_cutoff:    cutoffFromInputValue(form.reservation_cutoff),
+      payment_due_by:        form.payment_required ? (form.payment_due_by || null) : null,
     }
     if (activeId) payload.id = activeId
 
@@ -810,6 +812,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
             <Toggle value={form.payment_required} onChange={v => set("payment_required", v)} label="Paid event" />
           </div>
           {form.payment_required && (
+            <>
             <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
               <label style={LABEL}>Cost per person ($)</label>
               <input type="number" min={0} step={1} value={form.cost}
@@ -817,6 +820,15 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
                 onWheel={e => e.currentTarget.blur()}
                 placeholder="e.g. 25" style={INPUT} />
             </div>
+            <div style={FIELD}>
+              <label style={LABEL}>Payment due by <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", fontWeight: 400 }}>(optional)</span></label>
+              <input type="date" value={form.payment_due_by}
+                onChange={e => set("payment_due_by", e.target.value)} style={INPUT} />
+              <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>
+                Residents see this at booking. Anyone still unpaid on this day gets an automatic reminder. Their seat is kept either way.
+              </div>
+            </div>
+            </>
           )}
 
           {/* Public */}
