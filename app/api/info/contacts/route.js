@@ -51,7 +51,7 @@ export async function PATCH(req) {
   const admin = await getAdminMember(token)
   if (!admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const { id, member_id, category_ids, is_admin, hide_name, ...updates } = await req.json()
+  const { id, member_id, name, category_ids, is_admin, hide_name, ...updates } = await req.json()
   if (!id && !member_id) return NextResponse.json({ error: 'id or member_id required' }, { status: 400 })
 
   let targetId = id
@@ -73,8 +73,10 @@ export async function PATCH(req) {
     }
   }
 
-  // For member-linked residents, phone is self-service via Profile (members.phone)
-  // — never write it into the contacts row here, even if an older client sends it.
+  // Standalone contact: name is a real contacts-row field. Member-linked
+  // resident: name belongs to members.name (routed below), and phone is
+  // self-service via Profile — never write either onto the contacts row.
+  if (!member_id && name !== undefined) updates.name = name
   if (member_id) delete updates.phone
 
   if (Object.keys(updates).length) {
@@ -90,10 +92,16 @@ export async function PATCH(req) {
     )
   }
 
-  if (member_id && (is_admin !== undefined || hide_name !== undefined)) {
+  // Members-table fields. name is admin-editable here (2026-07-16) to fill the
+  // gap where a self-registered resident's name still defaults to their
+  // username, or an admin-created account needs its real name corrected — the
+  // resident can still edit it themselves in Profile (same members.name column,
+  // so no divergent copies).
+  if (member_id && (is_admin !== undefined || hide_name !== undefined || (name !== undefined && name.trim()))) {
     const memberUpdates = {}
     if (is_admin !== undefined) memberUpdates.is_admin = is_admin
     if (hide_name !== undefined) memberUpdates.hide_name = hide_name
+    if (name !== undefined && name.trim()) memberUpdates.name = name.trim()
     const { error } = await supabaseAdmin.from('members').update(memberUpdates).eq('id', member_id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
