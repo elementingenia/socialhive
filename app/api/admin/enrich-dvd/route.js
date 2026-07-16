@@ -4,11 +4,26 @@ import { createClient } from '@supabase/supabase-js'
 const TMDB_KEY = process.env.TMDB_API_KEY || '0e0ec3c6d62df378f31f7ddb78a83b49'
 const OMDB_KEY = process.env.OMDB_API_KEY || 'ed1ed939'
 
+// Root cause (found 2026-07-16, same bug class as app/api/cron/book-return-check/route.js
+// fixed 2026-07-15): this is a GET route hit with an identical URL/params on every
+// re-run (the admin re-triggers it repeatedly to page through the backlog). Next.js's
+// App Router silently caches the fetch() calls supabase-js makes under the hood, so a
+// movie enriched one call was still coming back with poster_url/enrichment_status = null
+// on the very next call -- the SELECT was being served from cache instead of hitting
+// Supabase, so the same 20 rows got reprocessed forever and the backlog never advanced.
+// force-dynamic disables Next's route-level cache; the explicit no-store fetch override
+// is required in addition because force-dynamic alone does not propagate down into
+// supabase-js's internal fetch calls (confirmed via live-fire testing on the cron route).
+export const dynamic = 'force-dynamic'
+
 function makeAdminClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { autoRefreshToken: false, persistSession: false } }
+    {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { fetch: (url, options) => fetch(url, { ...options, cache: 'no-store' }) }
+    }
   )
 }
 
