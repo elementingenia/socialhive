@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
-import ResidentEditForm, { Sheet, CategoryPicker, COLOUR, inputStyle, labelStyle, getToken } from "@/components/ResidentEditPanel"
+import ResidentEditForm, { Sheet, CategoryPicker, COLOUR, inputStyle, labelStyle, getToken, CreateLoginForm } from "@/components/ResidentEditPanel"
 
 const secondaryButtonStyle = {
   padding: "0.5rem 0.9rem", borderRadius: 10, border: "1px solid var(--border)",
@@ -218,6 +218,13 @@ function ContactForm({ contact, categories, setCategories, members, onSaved, onC
           }}>Delete</button>
         </div>
       )}
+      {isEdit && !contact.member_id && (
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.85rem", marginTop: "0.25rem" }}>
+          <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.4rem" }}>Give this person a login</div>
+          <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", marginBottom: "0.6rem" }}>Creates an app account so they can sign in — and be picked as a resident when someone books multiple seats.</div>
+          <CreateLoginForm defaultName={contact.name} contactId={contact.id} onCreated={() => { onSaved(); onClose() }} />
+        </div>
+      )}
     </div>
   )
 }
@@ -379,7 +386,7 @@ export default function ContactsPage() {
   const load = useCallback(async () => {
     const [catRes, memberRes, contactRes, inviteRes] = await Promise.all([
       supabase.from("contact_categories").select("id, name, display_order").eq("active", true).order("display_order"),
-      supabase.from("members").select("id, name, email, house_number, phone, hide_name, is_admin").eq("status", "active"),
+      supabase.from("members").select("id, name, username, email, house_number, phone, hide_name, is_admin").eq("status", "active"),
       supabase.from("contacts")
         .select("id, name, title, phone, email, house_number, member_id, active, contact_category_members(category_id)")
         .order("display_order"),
@@ -480,6 +487,7 @@ export default function ContactsPage() {
       {isAdmin && (
         <div style={{ display: "flex", gap: "0.4rem", marginBottom: "1rem" }}>
           <button onClick={() => setSheet("add")} style={toolbarButtonStyle}>+ Add</button>
+          <button onClick={() => setSheet("addResident")} style={toolbarButtonStyle}>👤 Add Resident</button>
           <button onClick={() => setSheet("categories")} style={toolbarButtonStyle}>Categories</button>
           <button onClick={() => setSheet("invite")} style={inviteButtonStyle}>🔑 Invite Code</button>
         </div>
@@ -499,6 +507,13 @@ export default function ContactsPage() {
 
       <Sheet open={sheet === "add"} onClose={() => setSheet(null)} title="Add Contact">
         <ContactForm categories={categories} setCategories={setCategories} members={members} onSaved={load} onClose={() => setSheet(null)} />
+      </Sheet>
+
+      <Sheet open={sheet === "addResident"} onClose={() => setSheet(null)} title="Add Resident Login">
+        <div style={{ fontSize: "0.83rem", color: "var(--text-dim)", marginBottom: "0.75rem" }}>
+          Creates an app account for a resident who hasn\'t registered themselves. They\'ll appear in the Residents list and can be added to bookings.
+        </div>
+        <CreateLoginForm onCreated={() => { load(); setSheet(null) }} />
       </Sheet>
 
       <Sheet open={sheet === "categories"} onClose={() => setSheet(null)} title="Manage Categories">
