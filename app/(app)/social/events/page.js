@@ -487,6 +487,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     menu_text:             event?.menu_text           || "",
     reservation_cutoff:    cutoffToInputValue(event?.reservation_cutoff),
     payment_due_by:        event?.payment_due_by || "",
+    allow_nonresident_guests: event?.allow_nonresident_guests || false,
   })
 
   const [coordinators, setCoordinators] = useState([])
@@ -537,6 +538,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
       menu_text:             form.has_dining && form.menu_type === "text" ? form.menu_text : null,
       reservation_cutoff:    cutoffFromInputValue(form.reservation_cutoff),
       payment_due_by:        form.payment_required ? (form.payment_due_by || null) : null,
+      allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? form.allow_nonresident_guests : false,
     }
     if (activeId) payload.id = activeId
 
@@ -796,6 +798,15 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
                 onWheel={e => e.currentTarget.blur()} style={INPUT} />
             </div>
           </div>
+
+          {Number(form.max_seats_per_booking) > 1 && (
+            <div style={FIELD}>
+              <Toggle value={form.allow_nonresident_guests} onChange={v => set("allow_nonresident_guests", v)} label="Allow non-resident guests" />
+              <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>
+                When a resident books more than one seat they must name each extra attendee. Off = they must all be residents; on = residents or named guests.
+              </div>
+            </div>
+          )}
 
           {/* Booking cut-off */}
           <div style={FIELD}>

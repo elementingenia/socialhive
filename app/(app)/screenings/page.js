@@ -131,6 +131,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [maxSeats, setMaxSeats]       = useState(event?.max_seats || 20)
   const [notes, setNotes]             = useState(event?.notes || '')
   const [cutoff, setCutoff]           = useState(cutoffToInputValue(event?.reservation_cutoff))
+  const [allowGuests, setAllowGuests] = useState(event?.allow_nonresident_guests || false)
   const [coordinator, setCoordinator] = useState(event?.coordinator?.id || null)
   const [saving, setSaving]           = useState(false)
   const [err, setErr]                 = useState(null)
@@ -160,7 +161,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   async function handleSubmit() {
     if (!date || !time) { setErr('Date and time are required'); return }
     setSaving(true); setErr(null)
-    const body = { movie_id: pickedMovie?.id || null, event_date: date, event_time: time, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff) }
+    const body = { movie_id: pickedMovie?.id || null, event_date: date, event_time: time, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: allowGuests }
     if (isEdit) body.event_id = event.id
     const res = await authedFetch('/api/screenings', {
       method: isEdit ? 'PATCH' : 'POST',
@@ -244,6 +245,20 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
           <div style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Max Seats</label>
             <input type="number" value={maxSeats} onChange={e => setMaxSeats(e.target.value)} min={1} max={200} style={INPUT} />
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={LABEL}>Extra attendees on multi-seat bookings</label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              {[{ v: false, t: 'Residents only' }, { v: true, t: 'Residents + guests' }].map(opt => (
+                <button key={String(opt.v)} type="button" onClick={() => setAllowGuests(opt.v)}
+                  style={{ flex: 1, padding: '0.6rem 0.5rem', borderRadius: '10px', fontSize: '0.88rem', fontFamily: 'inherit', cursor: 'pointer',
+                    border: `1.5px solid ${allowGuests === opt.v ? 'var(--teal, #0d9488)' : 'var(--border)'}`,
+                    background: allowGuests === opt.v ? 'var(--teal, #0d9488)' : 'var(--surface2)',
+                    color: allowGuests === opt.v ? '#fff' : 'var(--text)', fontWeight: allowGuests === opt.v ? 700 : 500 }}>
+                  {opt.t}
+                </button>
+              ))}
+            </div>
           </div>
           <div style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Bookings close (optional)</label>

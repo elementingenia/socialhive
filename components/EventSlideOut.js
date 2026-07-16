@@ -233,6 +233,7 @@ function ECNames({ coordinators, colour }) {
 // ── Coordinator Panel ─────────────────────────────────────────────────────────
 function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   const [data,        setData]        = useState(null)
+  const [partyByOwner, setPartyByOwner] = useState({})
   const [loading,     setLoading]     = useState(true)
   const [apiError,    setApiError]    = useState(null)
   const [toast,       setToast]       = useState(null)
@@ -289,6 +290,26 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   }
 
   useEffect(() => { load() }, [event.id])
+
+  // Named additional attendees (workstream A) for every booking on this event,
+  // grouped by the owner who booked them. RLS allows any authenticated member
+  // to read these; this EC/admin panel shows real names (with a guest tag),
+  // same as it shows real member names rather than masking.
+  useEffect(() => {
+    supabase.from("booking_attendees")
+      .select("owner_id, member_id, guest_name, member:members!member_id(name, username)")
+      .eq("event_id", event.id)
+      .then(({ data: rows }) => {
+        const map = {}
+        for (const r of rows || []) {
+          (map[r.owner_id] = map[r.owner_id] || []).push(
+            r.member_id ? { label: r.member?.name || r.member?.username || "Resident", guest: false }
+                        : { label: r.guest_name, guest: true }
+          )
+        }
+        setPartyByOwner(map)
+      })
+  }, [event.id])
 
   useEffect(() => {
     if (showAddBooking && allMembers.length === 0) {
@@ -694,6 +715,13 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
                           </span>
                         )}
                       </div>
+                      {(partyByOwner[member?.id] || []).length > 0 && (
+                        <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3, lineHeight: 1.5 }}>
+                          With: {partyByOwner[member?.id].map((p, i) => (
+                            <span key={i}>{i > 0 ? ", " : ""}{p.label}{p.guest ? " (guest)" : ""}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                       {paymentRequired && confirmedSeats > 0 && firstConf && !isRefunded && (
@@ -848,6 +876,78 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
   )
 }
 
+// ── Party picker (workstream A) ───────────────────────────────────────────────
+// Collects the (seats - 1) additional attendees for a multi-seat booking. Each
+// is a resident (searchable, 2-char min per UI standards) or, only when the
+// event allows it, a named non-resident guest.
+function PartyRow({ index, row, allowGuests, members, excludeIds, onChange }) {
+  const [query, setQuery] = useState("")
+  const [open, setOpen] = useState(false)
+  const kind = row.kind || "resident"
+  const q = query.trim().toLowerCase()
+  const results = q.length < 2 ? [] : members
+    .filter(m => !excludeIds.includes(m.id) && (m.name || "").toLowerCase().includes(q))
+    .slice(0, 6)
+  const inputStyle = { width: "100%", padding: "9px 11px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 14, boxSizing: "border-box", fontFamily: "inherit" }
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 10 }}>
+      {allowGuests && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+          {[["resident", "Resident"], ["guest", "Guest"]].map(([k, label]) => (
+            <button key={k} type="button" onClick={() => onChange({ kind: k, member_id: null, member_name: "", guest_name: "" })}
+              style={{ flex: 1, padding: "6px 0", borderRadius: 8, fontSize: 13, fontFamily: "inherit", cursor: "pointer",
+                border: `1px solid ${kind === k ? "var(--amber)" : "var(--border)"}`, background: kind === k ? "var(--amber)" : "var(--surface2)",
+                color: kind === k ? "#fff" : "var(--text)", fontWeight: kind === k ? 700 : 500 }}>{label}</button>
+          ))}
+        </div>
+      )}
+      {kind === "resident" ? (
+        row.member_id ? (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 14, color: "var(--text)" }}>{row.member_name}</span>
+            <button type="button" onClick={() => { onChange({ kind: "resident", member_id: null, member_name: "", guest_name: "" }); setQuery("") }}
+              style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>Change</button>
+          </div>
+        ) : (
+          <div style={{ position: "relative" }}>
+            <input value={query} placeholder={`Search resident for seat ${index + 2}…`}
+              onChange={e => { setQuery(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)} style={inputStyle} />
+            {open && results.length > 0 && (
+              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 5, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, marginTop: 4, overflow: "hidden" }}>
+                {results.map(m => (
+                  <button key={m.id} type="button" onClick={() => { onChange({ kind: "resident", member_id: m.id, member_name: m.name, guest_name: "" }); setOpen(false); setQuery("") }}
+                    style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 11px", background: "none", border: "none", borderBottom: "1px solid var(--border)", cursor: "pointer", fontSize: 14, color: "var(--text)", fontFamily: "inherit" }}>{m.name}</button>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      ) : (
+        <input value={row.guest_name} placeholder={`Guest name for seat ${index + 2}…`}
+          onChange={e => onChange({ kind: "guest", member_id: null, member_name: "", guest_name: e.target.value })} style={inputStyle} />
+      )}
+    </div>
+  )
+}
+
+function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange }) {
+  const rows = []
+  for (let i = 0; i < count; i++) rows.push(value[i] || { kind: "resident", member_id: null, member_name: "", guest_name: "" })
+  const chosen = value.filter(v => v?.member_id).map(v => v.member_id)
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10, margin: "8px 0 12px" }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+        Who else is coming? Please name the other {count === 1 ? "attendee" : `${count} attendees`}.
+      </div>
+      {rows.map((row, i) => (
+        <PartyRow key={i} index={i} row={row} allowGuests={allowGuests} members={members}
+          excludeIds={[...excludeIds, ...chosen.filter(id => id !== row.member_id)]}
+          onChange={next => { const copy = value.slice(); copy[i] = next; onChange(copy) }} />
+      ))}
+    </div>
+  )
+}
+
 // ── Booking Form ──────────────────────────────────────────────────────────────
 function BookingSection({ event, onRefresh }) {
   const [seats, setSeats] = useState(1)
@@ -856,6 +956,43 @@ function BookingSection({ event, onRefresh }) {
   const [toast, setToast] = useState(null)
   const [confirm, setConfirm] = useState(false)
   const [splitOffer, setSplitOffer] = useState(null)
+
+  // Multi-attendee (workstream A). Party = the named additional attendees for a
+  // >1-seat booking; sized to seats-1. members powers the resident search;
+  // myAttendees prefills the party when modifying an existing booking.
+  const { member: me } = useUser()
+  const allowGuests = !!event.allow_nonresident_guests
+  const [members, setMembers] = useState([])
+  const [party, setParty] = useState([])
+  const [myAttendees, setMyAttendees] = useState([])
+
+  useEffect(() => {
+    if (event.hub_type !== "bookclub" && (event.max_seats_per_booking || 1) > 1 && members.length === 0) {
+      supabase.from("members").select("id, name").eq("status", "active").order("name")
+        .then(({ data }) => setMembers(data || []))
+    }
+  }, [event.id])
+
+  useEffect(() => {
+    const need = Math.max(0, seats - 1)
+    setParty(prev => {
+      const copy = prev.slice(0, need)
+      while (copy.length < need) copy.push({ kind: "resident", member_id: null, member_name: "", guest_name: "" })
+      return copy
+    })
+  }, [seats])
+
+  useEffect(() => {
+    if (!me?.id) return
+    supabase.from("booking_attendees").select("member_id, guest_name, member:members!member_id(name)")
+      .eq("event_id", event.id).eq("owner_id", me.id)
+      .then(({ data }) => setMyAttendees(data || []))
+  }, [event.id, me?.id])
+
+  const partyNeed = Math.max(0, seats - 1)
+  const partyValid = party.length === partyNeed &&
+    party.every(p => p.member_id || (allowGuests && p.guest_name && p.guest_name.trim()))
+  const partyToAttendees = (arr) => arr.map(p => p.member_id ? { member_id: p.member_id } : { guest_name: (p.guest_name || "").trim() })
 
   const myConfirmed = event.my_bookings?.find(b => b.status === "confirmed")
   const myWaitlist  = event.my_bookings?.find(b => b.status === "waitlist")
@@ -885,6 +1022,22 @@ function BookingSection({ event, onRefresh }) {
   )
   const [modifying, setModifying] = useState(false)
 
+  const [modParty, setModParty] = useState([])
+  useEffect(() => {
+    const need = Math.max(0, modifySeats - 1)
+    setModParty(prev => {
+      const seed = prev.length ? prev : (myAttendees || []).map(a => a.member_id
+        ? { kind: "resident", member_id: a.member_id, member_name: a.member?.name || "Resident", guest_name: "" }
+        : { kind: "guest", member_id: null, member_name: "", guest_name: a.guest_name || "" })
+      const copy = seed.slice(0, need)
+      while (copy.length < need) copy.push({ kind: "resident", member_id: null, member_name: "", guest_name: "" })
+      return copy
+    })
+  }, [modifying, modifySeats, myAttendees])
+  const modNeed = Math.max(0, modifySeats - 1)
+  const modPartyValid = modParty.length === modNeed &&
+    modParty.every(p => p.member_id || (allowGuests && p.guest_name && p.guest_name.trim()))
+
   function showToast(msg, type = "success") {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3000)
@@ -896,7 +1049,7 @@ function BookingSection({ event, onRefresh }) {
       const res = await authedFetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event_id: event.id, seats, accept_split: acceptSplit }),
+        body: JSON.stringify({ event_id: event.id, seats, accept_split: acceptSplit, attendees: partyToAttendees(party) }),
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Booking failed", "error"); return }
@@ -922,7 +1075,7 @@ function BookingSection({ event, onRefresh }) {
       const res = await authedFetch("/api/bookings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event_id: event.id, seats: modifySeats }),
+        body: JSON.stringify({ event_id: event.id, seats: modifySeats, attendees: partyToAttendees(modParty) }),
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Update failed", "error"); return }
@@ -1012,9 +1165,13 @@ function BookingSection({ event, onRefresh }) {
                   )}
                 </>
               )}
-              <button onClick={() => handleBook()} disabled={loading}
+              {!isBookclubEvent && seats > 1 && (
+                <PartyPicker count={seats - 1} allowGuests={allowGuests} members={members}
+                  excludeIds={me?.id ? [me.id] : []} value={party} onChange={setParty} />
+              )}
+              <button onClick={() => handleBook()} disabled={loading || (seats > 1 && !partyValid)}
                 style={{ width: "100%", padding: "14px 0", background: "var(--amber)", color: "#fff", border: "none",
-                  borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
+                  borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: (loading || (seats > 1 && !partyValid)) ? "not-allowed" : "pointer", opacity: (loading || (seats > 1 && !partyValid)) ? 0.7 : 1 }}>
                 {loading ? "Booking…" : isBookclubEvent ? "Sign Up" : availableSeats === 0 ? "Join Waitlist" : "Book Now"}
               </button>
               {event.payment_required && (
@@ -1086,11 +1243,15 @@ function BookingSection({ event, onRefresh }) {
               Can&apos;t increase seats on a split booking — cancel and rebook to request more seats.
             </div>
           )}
+          {modifySeats > 1 && (
+            <PartyPicker count={modifySeats - 1} allowGuests={allowGuests} members={members}
+              excludeIds={me?.id ? [me.id] : []} value={modParty} onChange={setModParty} />
+          )}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={() => setModifying(false)}
               style={{ flex: 1, padding: "12px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>Cancel</button>
-            <button onClick={handleModify} disabled={loading}
-              style={{ flex: 1, padding: "12px 0", background: "var(--amber)", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: loading ? "not-allowed" : "pointer", color: "#fff", opacity: loading ? 0.7 : 1 }}>
+            <button onClick={handleModify} disabled={loading || (modifySeats > 1 && !modPartyValid)}
+              style={{ flex: 1, padding: "12px 0", background: "var(--amber)", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: (loading || (modifySeats > 1 && !modPartyValid)) ? "not-allowed" : "pointer", color: "#fff", opacity: (loading || (modifySeats > 1 && !modPartyValid)) ? 0.7 : 1 }}>
               {loading ? "Saving…" : "Save"}
             </button>
           </div>
