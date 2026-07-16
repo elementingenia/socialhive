@@ -1020,6 +1020,7 @@ function BookingSection({ event, onRefresh }) {
               {event.payment_required && (
                 <div style={{ fontSize: 12, color: "var(--text-dim)", textAlign: "center", marginTop: 8 }}>
                   {event.cost ? `$${parseFloat(event.cost).toFixed(2)} per seat — ` : ""}Payment is collected by your Event Coordinator.
+                  {event.payment_due_by && <><br />Payment due by {fmtDate(event.payment_due_by)}. Your seat is kept either way.</>}
                 </div>
               )}
             </>
@@ -1047,6 +1048,11 @@ function BookingSection({ event, onRefresh }) {
             })()}
             {myWaitlist && <StatusPill label={`⏳ ${myWaitlist.seats} on waitlist${waitlistPos ? ` (#${waitlistPos})` : ""}`} colour="var(--amber-dark)" />}
           </div>
+          {myConfirmed && event.payment_required && event.payment_due_by && !computeIsPaid(myConfirmed) && (
+            <div style={{ fontSize: 12, color: "var(--amber-dark)", lineHeight: 1.4 }}>
+              Payment due by {fmtDate(event.payment_due_by)}.
+            </div>
+          )}
           {myConfirmed && event.payment_required && !computeIsPaid(myConfirmed) && (
             computeIsSubmitted(myConfirmed) ? (
               <div style={{ fontSize: 12, color: "var(--teal)", lineHeight: 1.4 }}>
