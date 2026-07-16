@@ -9,6 +9,7 @@ import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import EventImagePicker from "@/components/EventImagePicker"
 import ExpandableText from "@/components/ExpandableText"
 import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, paymentSummary, reconciliationIsStale } from "@/lib/payments"
+import { cutoffToInputValue, cutoffFromInputValue } from "@/lib/booking"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -484,6 +485,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     has_dining:            event?.has_dining          || false,
     menu_type:             event?.menu_type           || null,
     menu_text:             event?.menu_text           || "",
+    reservation_cutoff:    cutoffToInputValue(event?.reservation_cutoff),
   })
 
   const [coordinators, setCoordinators] = useState([])
@@ -532,6 +534,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
       has_dining:            form.has_dining,
       menu_type:             form.has_dining ? form.menu_type : null,
       menu_text:             form.has_dining && form.menu_type === "text" ? form.menu_text : null,
+      reservation_cutoff:    cutoffFromInputValue(form.reservation_cutoff),
     }
     if (activeId) payload.id = activeId
 
@@ -789,6 +792,16 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
               <input type="number" min={1} max={10} value={form.max_seats_per_booking}
                 onChange={e => set("max_seats_per_booking", e.target.value)}
                 onWheel={e => e.currentTarget.blur()} style={INPUT} />
+            </div>
+          </div>
+
+          {/* Booking cut-off */}
+          <div style={FIELD}>
+            <label style={LABEL}>Bookings close <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", fontWeight: 400 }}>(optional)</span></label>
+            <input type="datetime-local" value={form.reservation_cutoff}
+              onChange={e => set("reservation_cutoff", e.target.value)} style={INPUT} />
+            <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>
+              After this, residents see &ldquo;Bookings Closed&rdquo; instead of the booking button. Leave blank to keep bookings open until the event.
             </div>
           </div>
 

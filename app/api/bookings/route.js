@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { promoteWaitlist } from '@/lib/promoteWaitlist'
 import { notify } from '@/lib/notify'
+import { bookingsClosed } from '@/lib/booking'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -35,8 +36,15 @@ export async function POST(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('id, max_seats, hub_type, book_id, payment_required').eq('id', event_id).single()
+    .from('events').select('id, max_seats, hub_type, book_id, payment_required, reservation_cutoff').eq('id', event_id).single()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+
+  // Reservation cut-off (workstream B). Once past, no new bookings/waitlist
+  // joins -- authoritative gate; the UI's "Bookings Closed" state mirrors it.
+  // Reducing/cancelling is still allowed (handled by PATCH/DELETE).
+  if (bookingsClosed(event)) {
+    return NextResponse.json({ error: 'Bookings for this event have closed.', bookings_closed: true }, { status: 409 })
+  }
 
   // Paid events must start life as 'pending' (awaiting payment), not the
   // DB default of 'not_required' (which means "this event is free"). Without
@@ -192,13 +200,20 @@ export async function PATCH(req) {
   const oldConfirmed = myConfirmed.seats || 1
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('max_seats, payment_required').eq('id', event_id).single()
+    .from('events').select('max_seats, payment_required, reservation_cutoff').eq('id', event_id).single()
   const { data: confirmedRows } = await supabaseAdmin
     .from('bookings').select('seats')
     .eq('event_id', event_id).eq('status', 'confirmed').neq('id', myConfirmed.id)
 
   const othersConfirmed = (confirmedRows || []).reduce((s, b) => s + (b.seats || 1), 0)
   const maxCanConfirm   = (event?.max_seats || 0) - othersConfirmed
+
+  // Reservation cut-off (workstream B): can't grow a booking once closed,
+  // but shrinking it (freeing seats) stays allowed.
+  const currentTotal = oldConfirmed + (myWaitlist?.seats || 0)
+  if (newSeats > currentTotal && bookingsClosed(event)) {
+    return NextResponse.json({ error: 'Bookings for this event have closed — you can no longer add seats.', bookings_closed: true }, { status: 409 })
+  }
 
   const newConfirmed  = Math.min(newSeats, maxCanConfirm)
   const newWaitlisted = newSeats - newConfirmed

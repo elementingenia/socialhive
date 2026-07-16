@@ -39,7 +39,7 @@ function buildEventPayload(body, isInsert = false) {
     title, event_date, event_time, description, welcome_message,
     max_seats, max_seats_per_booking, cost, payment_required,
     show_attendee_names, is_public, has_bus, bus_driver_id,
-    location_type, location, has_dining, menu_type, menu_text,
+    location_type, location, has_dining, menu_type, menu_text, reservation_cutoff,
   } = body
 
   const diningOn = !!has_dining
@@ -56,6 +56,7 @@ function buildEventPayload(body, isInsert = false) {
     max_seats_per_booking: Number(max_seats_per_booking)  || 2,
     cost:                  payment_required ? (Number(cost) || 0) : 0,
     payment_required:      !!payment_required,
+    reservation_cutoff:    reservation_cutoff || null,
     show_attendee_names:   show_attendee_names !== false,
     is_public:             is_public !== false,
     has_bus:               !!has_bus,
