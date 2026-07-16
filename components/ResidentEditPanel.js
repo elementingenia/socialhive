@@ -153,6 +153,120 @@ export function CategoryPicker({ categories, selectedIds, onChange, onCategoryCr
   )
 }
 
+// ── Admin login controls (2026-07-16) ────────────────────────────────────────
+// Shared by the member editor (Reset PIN), the standalone-contact editor
+// (Create login = promote to a real account), and the Add Resident sheet.
+// All call the admin-only /api/admin/accounts route.
+const smallInput = { ...inputStyle, padding: "0.55rem 0.75rem", fontSize: "0.9rem" }
+
+export function ResetPinControl({ memberId, username }) {
+  const [open, setOpen]   = useState(false)
+  const [pin, setPin]     = useState("")
+  const [busy, setBusy]   = useState(false)
+  const [msg, setMsg]     = useState(null)
+  const [err, setErr]     = useState("")
+
+  async function submit() {
+    setBusy(true); setErr(""); setMsg(null)
+    const token = await getToken()
+    const res = await fetch("/api/admin/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: "reset_pin", member_id: memberId, pin }),
+    })
+    const data = await res.json()
+    setBusy(false)
+    if (!res.ok) { setErr(data.error || "Reset failed"); return }
+    setMsg(`PIN reset — tell them their new PIN is “${pin}”.`)
+    setPin(""); setOpen(false)
+  }
+
+  return (
+    <div style={{ marginTop: "0.6rem" }}>
+      {!open ? (
+        <button type="button" onClick={() => { setOpen(true); setMsg(null) }} style={{
+          padding: "0.35rem 0.75rem", borderRadius: 8, border: "1px solid var(--border)",
+          background: "var(--surface)", color: "var(--text-dim)", fontSize: "0.8rem",
+          fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+        }}>🔑 Reset PIN</button>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+          <label style={labelStyle}>New PIN{username ? ` for ${username}` : ""}</label>
+          <input value={pin} onChange={e => setPin(e.target.value)} placeholder="At least 4 characters" style={smallInput} />
+          <div style={{ display: "flex", gap: "0.4rem" }}>
+            <button type="button" onClick={submit} disabled={busy || pin.length < 4} style={{
+              flex: 1, padding: "0.45rem", borderRadius: 8, border: "none", background: COLOUR, color: "#fff",
+              fontWeight: 700, fontSize: "0.85rem", fontFamily: "inherit", cursor: (busy || pin.length < 4) ? "not-allowed" : "pointer", opacity: (busy || pin.length < 4) ? 0.6 : 1,
+            }}>{busy ? "Saving…" : "Set PIN"}</button>
+            <button type="button" onClick={() => { setOpen(false); setPin(""); setErr("") }} style={{
+              padding: "0.45rem 0.75rem", borderRadius: 8, border: "1px solid var(--border)",
+              background: "var(--surface2)", color: "var(--text)", fontSize: "0.85rem", fontFamily: "inherit", cursor: "pointer",
+            }}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {err && <div style={{ color: "#b91c1c", fontSize: "0.8rem", marginTop: "0.3rem" }}>{err}</div>}
+      {msg && <div style={{ color: "var(--green)", fontSize: "0.8rem", marginTop: "0.3rem" }}>{msg}</div>}
+    </div>
+  )
+}
+
+export function CreateLoginForm({ defaultName = "", contactId = null, onCreated }) {
+  const [name, setName]         = useState(defaultName)
+  const [username, setUsername] = useState("")
+  const [pin, setPin]           = useState("")
+  const [busy, setBusy]         = useState(false)
+  const [err, setErr]           = useState("")
+  const [done, setDone]         = useState(null)
+
+  async function submit() {
+    setBusy(true); setErr("")
+    const token = await getToken()
+    const res = await fetch("/api/admin/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: "create_account", name, username, pin, contact_id: contactId }),
+    })
+    const data = await res.json()
+    setBusy(false)
+    if (!res.ok) { setErr(data.error || "Could not create login"); return }
+    setDone({ username, pin })
+    if (onCreated) onCreated(data)
+  }
+
+  if (done) {
+    return (
+      <div style={{ background: "var(--surface2)", borderRadius: 10, padding: "0.85rem", fontSize: "0.88rem", color: "var(--text)" }}>
+        ✓ Login created. Give them these to sign in — they can change the PIN later from their profile.
+        <div style={{ marginTop: "0.5rem" }}><strong>Username:</strong> {done.username}<br /><strong>PIN:</strong> {done.pin}</div>
+      </div>
+    )
+  }
+
+  const valid = name.trim() && username.trim().length >= 3 && pin.length >= 4
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+      <div>
+        <label style={labelStyle}>Name <span style={{ color: "var(--danger)" }}>*</span></label>
+        <input value={name} onChange={e => setName(e.target.value)} style={smallInput} />
+      </div>
+      <div>
+        <label style={labelStyle}>Username <span style={{ color: "var(--danger)" }}>*</span></label>
+        <input value={username} onChange={e => setUsername(e.target.value.replace(/\s/g, ""))} placeholder="What they type to log in" style={smallInput} />
+      </div>
+      <div>
+        <label style={labelStyle}>Starting PIN <span style={{ color: "var(--danger)" }}>*</span></label>
+        <input value={pin} onChange={e => setPin(e.target.value)} placeholder="At least 4 characters" style={smallInput} />
+      </div>
+      {err && <div style={{ color: "#b91c1c", fontSize: "0.83rem" }}>{err}</div>}
+      <button onClick={submit} disabled={busy || !valid} style={{
+        background: COLOUR, color: "#fff", border: "none", borderRadius: 10, padding: "0.7rem",
+        fontWeight: 700, fontSize: "0.92rem", fontFamily: "inherit", cursor: (busy || !valid) ? "not-allowed" : "pointer", opacity: (busy || !valid) ? 0.6 : 1,
+      }}>{busy ? "Creating…" : "Create Login"}</button>
+    </div>
+  )
+}
+
 // ── Edit a resident's contact-card overrides (+ account flags) ────────────────
 // Single shared editor used from BOTH the Info > Contacts page and Admin >
 // Members tab, so there is exactly one implementation and one API call path
@@ -245,6 +359,7 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
             fontSize: "0.8rem", fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
           }}>{hideName ? "🔒 Private" : "Private"}</button>
         </div>
+        <ResetPinControl memberId={member.id} username={member.username} />
       </div>
 
       {error && <div style={{ color: "#b91c1c", fontSize: "0.83rem" }}>{error}</div>}
