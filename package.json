@@ -9,7 +9,8 @@
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
-    "check:invariants": "node scripts/check-invariants.js"
+    "check:invariants": "node scripts/check-invariants.js",
+    "test:unit": "node tests/unit/booking.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2",

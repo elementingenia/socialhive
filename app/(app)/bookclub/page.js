@@ -6,6 +6,7 @@ import EventSlideOut from "@/components/EventSlideOut"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
 import { getToken } from "@/components/ResidentEditPanel"
+import { cutoffToInputValue, cutoffFromInputValue } from "@/lib/booking"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -587,6 +588,7 @@ function AdminEventForm({ event, members, onSave, onClose }) {
     event_date:   event?.event_date || "",
     kit_return_date: event?.kit_return_date || "",
     book_return_date: event?.book_return_date || "",
+    reservation_cutoff: cutoffToInputValue(event?.reservation_cutoff),
     description:  event?.description || "",
     welcome_message: event?.welcome_message || "",
     coordinator_id: activeEC?.member_id || "",
@@ -645,6 +647,7 @@ function AdminEventForm({ event, members, onSave, onClose }) {
       book_id:         bookId,
       kit_return_date: form.kit_return_date || null,
       book_return_date: form.book_return_date || null,
+      reservation_cutoff: cutoffFromInputValue(form.reservation_cutoff),
       archived:        false,
       book_snapshot:   selectedBook ? {
         title:     selectedBook.title,
@@ -719,6 +722,13 @@ function AdminEventForm({ event, members, onSave, onClose }) {
         <input type="date" value={form.book_return_date} onChange={e => set("book_return_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
           style={inputStyle} />
         <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 4 }}>When attendees must return their copy to you — allow time before the kit return date.</div>
+      </div>
+
+      <div style={{ marginBottom: "1rem" }}>
+        <label style={labelStyle}>Bookings Close (optional)</label>
+        <input type="datetime-local" value={form.reservation_cutoff} onChange={e => set("reservation_cutoff", e.target.value)}
+          style={inputStyle} />
+        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>After this, residents see &ldquo;Bookings Closed&rdquo; instead of the sign-up button. Leave blank to keep sign-ups open until the meeting.</div>
       </div>
 
       <div style={{ marginBottom: 12 }}>
@@ -846,7 +856,7 @@ export default function BookClubHome() {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, description, welcome_message, book_id, kit_return_date, book_return_date, book_snapshot, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("hub_type", "bookclub")
       .eq("archived", false)
       .order("event_date", { ascending: true })

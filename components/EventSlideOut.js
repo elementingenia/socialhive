@@ -9,6 +9,7 @@ import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
 import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, sumUnpaidSeats, seatsCost, bookingStatusBadge } from "@/lib/payments"
+import { bookingsClosed, cutoffLabel } from "@/lib/booking"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -877,6 +878,7 @@ function BookingSection({ event, onRefresh }) {
   const maxPerBooking   = event.max_seats_per_booking || 4
   const isMovieEvent    = event.hub_type === "movie"
   const availableSeats = Math.max(0, max - booked)
+  const closed = bookingsClosed(event)
 
   const [modifySeats, setModifySeats] = useState(
     (myConfirmed?.seats || 0) + (myWaitlist?.seats || 0) || 1
@@ -993,6 +995,13 @@ function BookingSection({ event, onRefresh }) {
               You still have <strong>"{event.book_conflict_title}"</strong> checked out — return it to your Event
               Coordinator before joining a different book.
             </div>
+          ) : closed ? (
+            <div style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12, padding: "16px 14px", textAlign: "center" }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)" }}>Bookings Closed</div>
+              {event.reservation_cutoff && (
+                <div style={{ fontSize: 12.5, color: "var(--text-dim)", marginTop: 4 }}>Closed {cutoffLabel(event.reservation_cutoff)}</div>
+              )}
+            </div>
           ) : (
             <>
               {!isBookclubEvent && availableSeats > 0 && (
@@ -1050,7 +1059,7 @@ function BookingSection({ event, onRefresh }) {
               </button>
             )
           )}
-          {myConfirmed && !isBookclubEvent && (
+          {myConfirmed && !isBookclubEvent && !closed && (
             <button onClick={() => { setModifySeats((myConfirmed.seats || 1) + (myWaitlist?.seats || 0)); setModifying(true) }}
               style={{ width: "100%", padding: "12px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>
               Modify Seats

@@ -5,6 +5,7 @@ import { computeFreeCost } from '@/lib/freeCost'
 import EventSlideOut from '@/components/EventSlideOut'
 import { BusIcon } from '@/components/NavIcons'
 import { authedFetch } from '@/lib/getAuthToken'
+import { cutoffToInputValue, cutoffFromInputValue } from '@/lib/booking'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -129,6 +130,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [time, setTime]               = useState(event?.event_time?.slice(0, 5) || '18:00')
   const [maxSeats, setMaxSeats]       = useState(event?.max_seats || 20)
   const [notes, setNotes]             = useState(event?.notes || '')
+  const [cutoff, setCutoff]           = useState(cutoffToInputValue(event?.reservation_cutoff))
   const [coordinator, setCoordinator] = useState(event?.coordinator?.id || null)
   const [saving, setSaving]           = useState(false)
   const [err, setErr]                 = useState(null)
@@ -158,7 +160,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   async function handleSubmit() {
     if (!date || !time) { setErr('Date and time are required'); return }
     setSaving(true); setErr(null)
-    const body = { movie_id: pickedMovie?.id || null, event_date: date, event_time: time, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null }
+    const body = { movie_id: pickedMovie?.id || null, event_date: date, event_time: time, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff) }
     if (isEdit) body.event_id = event.id
     const res = await authedFetch('/api/screenings', {
       method: isEdit ? 'PATCH' : 'POST',
@@ -242,6 +244,11 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
           <div style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Max Seats</label>
             <input type="number" value={maxSeats} onChange={e => setMaxSeats(e.target.value)} min={1} max={200} style={INPUT} />
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={LABEL}>Bookings close (optional)</label>
+            <input type="datetime-local" value={cutoff} onChange={e => setCutoff(e.target.value)} style={INPUT} />
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: '0.35rem' }}>After this, residents see &ldquo;Bookings Closed&rdquo; instead of the booking button. Leave blank to keep bookings open until the screening.</div>
           </div>
           <div style={{ marginBottom: '1.5rem' }}>
             <label style={LABEL}>Notes (optional)</label>
