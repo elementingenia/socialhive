@@ -150,7 +150,7 @@ export async function POST(req) {
   const member = await getMember(token)
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const { movie_id, event_date, event_time, max_seats, notes, coordinator_id, reservation_cutoff } = await req.json()
+  const { movie_id, event_date, event_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests } = await req.json()
   if (!event_date || !event_time) {
     return NextResponse.json({ error: 'Date and time are required' }, { status: 400 })
   }
@@ -172,6 +172,7 @@ export async function POST(req) {
       hub_type: 'movie', title, movie_id: movie_id || null,
       event_date, event_time, max_seats: max_seats || 20,
       reservation_cutoff: reservation_cutoff || null,
+      allow_nonresident_guests: !!allow_nonresident_guests,
       notes: notes || null, created_by: member.id,
       movie_snapshot: movieSnapshot,
     })
@@ -214,7 +215,7 @@ export async function PATCH(req) {
 
   const { error } = await supabaseAdmin
     .from('events')
-    .update({ movie_id: movie_id || null, title, event_date, event_time, max_seats: max_seats || 20, notes: notes || null, movie_snapshot: movieSnapshot, reservation_cutoff: reservation_cutoff || null })
+    .update({ movie_id: movie_id || null, title, event_date, event_time, max_seats: max_seats || 20, notes: notes || null, movie_snapshot: movieSnapshot, reservation_cutoff: reservation_cutoff || null, allow_nonresident_guests: !!allow_nonresident_guests })
     .eq('id', event_id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { promoteWaitlist } from '@/lib/promoteWaitlist'
 import { notify } from '@/lib/notify'
 import { bookingsClosed } from '@/lib/booking'
+import { validateParty } from '@/lib/attendees'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -15,6 +16,18 @@ async function getMember(token) {
   const { data: member } = await supabaseAdmin
     .from('members').select('id, name').eq('auth_id', user.id).single()
   return member
+}
+
+// Keep the owner's named party (booking_attendees) in sync with their seat
+// count for an event. Full replace — simplest correct behaviour against seat
+// changes and waitlist churn, since the set is small (a handful of rows).
+async function syncAttendees(eventId, ownerId, attendees) {
+  await supabaseAdmin.from('booking_attendees').delete().eq('event_id', eventId).eq('owner_id', ownerId)
+  if (attendees && attendees.length) {
+    await supabaseAdmin.from('booking_attendees').insert(
+      attendees.map(a => ({ event_id: eventId, owner_id: ownerId, member_id: a.member_id, guest_name: a.guest_name }))
+    )
+  }
 }
 
 // Seat-level FIFO waitlist promotion now lives in lib/promoteWaitlist.js,
@@ -36,7 +49,7 @@ export async function POST(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('id, max_seats, hub_type, book_id, payment_required, reservation_cutoff').eq('id', event_id).single()
+    .from('events').select('id, max_seats, hub_type, book_id, payment_required, reservation_cutoff, allow_nonresident_guests').eq('id', event_id).single()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
 
   // Reservation cut-off (workstream B). Once past, no new bookings/waitlist
@@ -45,6 +58,16 @@ export async function POST(req) {
   if (bookingsClosed(event)) {
     return NextResponse.json({ error: 'Bookings for this event have closed.', bookings_closed: true }, { status: 409 })
   }
+
+  // Multi-attendee: every extra seat must be named (workstream A). Validated
+  // here authoritatively; the same check runs client-side to gate the button.
+  const party = validateParty({
+    seats: requestedSeats,
+    attendees: body.attendees,
+    allowGuests: !!event.allow_nonresident_guests,
+    ownerId: member.id,
+  })
+  if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
 
   // Paid events must start life as 'pending' (awaiting payment), not the
   // DB default of 'not_required' (which means "this event is free"). Without
@@ -103,6 +126,7 @@ export async function POST(req) {
       payment_status: initialPaymentStatus,
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    await syncAttendees(event_id, member.id, party.attendees)
     return NextResponse.json({ status: 'confirmed', seats: requestedSeats })
   }
 
@@ -127,6 +151,7 @@ export async function POST(req) {
 
   const { error } = await supabaseAdmin.from('bookings').insert(rows)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  await syncAttendees(event_id, member.id, party.attendees)
 
   return NextResponse.json({
     status:     'split_confirmed',
@@ -200,7 +225,7 @@ export async function PATCH(req) {
   const oldConfirmed = myConfirmed.seats || 1
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('max_seats, payment_required, reservation_cutoff').eq('id', event_id).single()
+    .from('events').select('max_seats, payment_required, reservation_cutoff, allow_nonresident_guests').eq('id', event_id).single()
   const { data: confirmedRows } = await supabaseAdmin
     .from('bookings').select('seats')
     .eq('event_id', event_id).eq('status', 'confirmed').neq('id', myConfirmed.id)
@@ -214,6 +239,15 @@ export async function PATCH(req) {
   if (newSeats > currentTotal && bookingsClosed(event)) {
     return NextResponse.json({ error: 'Bookings for this event have closed — you can no longer add seats.', bookings_closed: true }, { status: 409 })
   }
+
+  // Re-validate the named party against the new seat count (workstream A).
+  const party = validateParty({
+    seats: newSeats,
+    attendees: body.attendees,
+    allowGuests: !!event?.allow_nonresident_guests,
+    ownerId: member.id,
+  })
+  if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
 
   const newConfirmed  = Math.min(newSeats, maxCanConfirm)
   const newWaitlisted = newSeats - newConfirmed
@@ -238,6 +272,8 @@ export async function PATCH(req) {
     })
     if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 })
   }
+
+  await syncAttendees(event_id, member.id, party.attendees)
 
   return NextResponse.json({
     status:    newWaitlisted > 0 ? 'split_change' : 'confirmed_change',
@@ -266,6 +302,8 @@ export async function DELETE(req) {
   }
 
   await supabaseAdmin.from('bookings').update({ status: 'cancelled', updated_at: new Date().toISOString() }).in('id', myBookings.map(b => b.id))
+
+  await supabaseAdmin.from('booking_attendees').delete().eq('event_id', event_id).eq('owner_id', member.id)
 
   const hadConfirmed = myBookings.some(b => b.status === 'confirmed')
   if (hadConfirmed) await promoteWaitlist(event_id)
