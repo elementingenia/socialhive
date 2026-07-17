@@ -446,12 +446,23 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit }) {
               <>
                 {isAdmin && <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.15rem' }}>Confirmed</div>}
                 {confirmedAttendees.map((a, i) => (
-                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', padding: '0.2rem 0', borderBottom: '1px solid var(--border)' }}>
-                    <span style={{ fontWeight: a.isOwn ? 700 : 400, color: a.isOwn ? 'var(--teal)' : 'var(--text)' }}>
-                      {a.name}
-                      {a.isPrivate && !a.isOwn && a.name !== 'Resident' && <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-dim)', marginLeft: 4 }}>(P)</span>}
-                    </span>
-                    <span style={{ color: 'var(--text-dim)' }}>{a.seats} seat{a.seats > 1 ? 's' : ''}</span>
+                  <div key={i} style={{ padding: '0.2rem 0', borderBottom: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                      <span style={{ fontWeight: a.isOwn ? 700 : 400, color: a.isOwn ? 'var(--teal)' : 'var(--text)' }}>
+                        {a.name}
+                        {a.isPrivate && !a.isOwn && a.name !== 'Resident' && <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-dim)', marginLeft: 4 }}>(P)</span>}
+                      </span>
+                      <span style={{ color: 'var(--text-dim)' }}>{a.seats} seat{a.seats > 1 ? 's' : ''}</span>
+                    </div>
+                    {a.party && a.party.length > 0 && (
+                      <div style={{ paddingLeft: '0.85rem', marginTop: '0.1rem', display: 'flex', flexDirection: 'column', gap: '0.05rem' }}>
+                        {a.party.map((p, j) => (
+                          <span key={j} style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                            + {p.name}{p.guest ? ' (guest)' : ''}{p.isPrivate && !p.guest && p.name !== 'Resident' ? ' (P)' : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </>
