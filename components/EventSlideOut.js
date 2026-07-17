@@ -231,7 +231,7 @@ function ECNames({ coordinators, colour }) {
 }
 
 // ── Coordinator Panel ─────────────────────────────────────────────────────────
-function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
+function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey = 0 }) {
   const [data,        setData]        = useState(null)
   const [partyByOwner, setPartyByOwner] = useState({})
   const [loading,     setLoading]     = useState(true)
@@ -289,7 +289,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember }) {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [event.id])
+  useEffect(() => { load() }, [event.id, refreshKey])
 
   // Named additional attendees (workstream A) for every booking on this event,
   // grouped by the owner who booked them. RLS allows any authenticated member
@@ -1283,6 +1283,10 @@ function LoginPrompt() {
 // ── EventSlideOut (main export) ───────────────────────────────────────────────
 export default function EventSlideOut({ event, onClose, isAuthenticated = true, onRefresh }) {
   const { member, isAdmin } = useUser()
+  // Bumped by a member booking action (BookingSection) so the coordinator panel,
+  // which fetches its own attendee data, re-syncs instead of showing stale seats.
+  const [coordRefreshKey, setCoordRefreshKey] = useState(0)
+  const refreshAll = () => { setCoordRefreshKey(k => k + 1); onRefresh?.() }
   const [open, setOpen] = useState(false)
   const [coordinators, setCoordinators] = useState([])
   const [showMenu, setShowMenu] = useState(false)
@@ -1486,7 +1490,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
               {/* Booking section */}
               <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, marginTop: 4 }}>
                 {isAuthenticated ? (
-                  <BookingSection event={event} onRefresh={onRefresh} />
+                  <BookingSection event={event} onRefresh={refreshAll} />
                 ) : (
                   <LoginPrompt />
                 )}
@@ -1494,7 +1498,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
 
               {/* Coordinator Panel */}
               {showCoordinatorPanel && (
-                <CoordinatorPanel event={event} colour={colour} onRefresh={onRefresh} currentMember={member} />
+                <CoordinatorPanel event={event} colour={colour} onRefresh={onRefresh} currentMember={member} refreshKey={coordRefreshKey} />
               )}
             </>
           )}
