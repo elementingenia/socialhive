@@ -174,6 +174,32 @@ export function ToolsIcon({ size = 26 }) {
   )
 }
 
+// ── Clubs hub icon — a small cluster of people (a "club") ────────────────────
+export function ClubsIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fill="currentColor"
+        d="M 35 12 A 9 9 0 1 0 35 30 A 9 9 0 1 0 35 12 Z
+           M 20 33 A 7 7 0 1 0 20 47 A 7 7 0 1 0 20 33 Z
+           M 50 33 A 7 7 0 1 0 50 47 A 7 7 0 1 0 50 47 Z
+           M 35 32 Q 48 32 50 54 L 20 54 Q 22 32 35 32 Z
+           M 15 48 Q 6 49 6 62 L 18 62 Q 18 53 22 49 Q 18 48 15 48 Z
+           M 55 48 Q 64 49 64 62 L 52 62 Q 52 53 48 49 Q 52 48 55 48 Z"/>
+    </svg>
+  )
+}
+
+// ── Work Shed hub icon — a simple shed (roof + walls + door) ─────────────────
+export function ShedIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 35 8 L 62 26 L 62 62 L 8 62 L 8 26 Z
+           M 16 32 L 54 32 L 54 58 L 40 58 L 40 40 L 30 40 L 30 58 L 16 58 Z"/>
+    </svg>
+  )
+}
+
 // ── Useful Information hub icons ─────────────────────────────────────────────
 
 // Info circle with "i" — hub nav icon

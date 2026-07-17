@@ -5,7 +5,7 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MoviesIcon, BarIcon, ToolsIcon, BookClubIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MoviesIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon } from '@/components/NavIcons'
 import RichEditor, { bbToHtml } from '@/components/RichEditor'
 import ResidentEditForm, { Sheet } from '@/components/ResidentEditPanel'
 import { BAR_ENABLED } from '@/lib/features'
@@ -21,6 +21,7 @@ const SECTIONS = [
   { key: 'PageTexts', label: 'Page Texts', Icon: PageTextsIcon },
   { key: 'Movies',    label: 'Movies',     Icon: MoviesIcon },
   { key: 'BookClub',  label: 'Book Club',  Icon: BookClubIcon },
+  { key: 'Clubs',     label: 'Clubs',      Icon: ClubsIcon },
   // Bar section parked (feature not in scope) — see lib/features.js
   ...(BAR_ENABLED ? [{ key: 'Bar', label: 'Bar', Icon: BarIcon }] : []),
   { key: 'Tools',     label: 'Tools',      Icon: ToolsIcon },
@@ -1566,6 +1567,7 @@ export default function AdminPage() {
         {tab === 'PageTexts' && <PageTextsTab />}
         {tab === 'Movies'    && <MoviesTab />}
         {tab === 'BookClub'  && <BookClubTab />}
+        {tab === 'Clubs'     && <ClubsTab />}
         {BAR_ENABLED && tab === 'Bar' && <BarTab />}
         {tab === 'Tools'     && <ToolsTab />}
       </div>
@@ -1595,3 +1597,212 @@ export default function AdminPage() {
 }
 
 
+
+// ── Clubs tab — Club Manager (Phase 2a) ───────────────────────────────────────
+// Create/configure clubs that render in the data-driven /clubs hub. Writes go
+// straight through the supabase client (clubs RLS allows admin write), same as
+// Book Club edits its events client-side.
+const CLUB_COLOURS = [
+  { label: 'Purple',     value: 'var(--purple)',     hex: '#7c3aed' },
+  { label: 'Teal',       value: 'var(--teal)',       hex: '#0d9488' },
+  { label: 'Terracotta', value: 'var(--terracotta)', hex: '#c2410c' },
+  { label: 'Blue',       value: '#4e7aab',           hex: '#4e7aab' },
+  { label: 'Green',      value: '#15803d',           hex: '#15803d' },
+  { label: 'Amber',      value: '#b45309',           hex: '#b45309' },
+]
+const CLUB_FLAGS = [
+  { key: 'has_book_return', label: 'Book return dates' },
+  { key: 'has_kit_return',  label: 'Kit return dates' },
+  { key: 'has_theme',       label: 'Theme name on events' },
+  { key: 'has_cost',        label: 'Paid events (cost)' },
+  { key: 'bring_enabled',   label: 'Attendees bring something' },
+]
+function slugify(s) {
+  return (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+}
+
+function FlagToggle({ on, label, onClick }) {
+  return (
+    <button type="button" onClick={onClick} style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
+      padding: '0.6rem 0.8rem', borderRadius: 10, border: '1px solid var(--border)',
+      background: 'var(--surface)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '0.4rem',
+    }}>
+      <span style={{ fontSize: '0.9rem', color: 'var(--text)' }}>{label}</span>
+      <span style={{ width: 34, height: 20, borderRadius: 10, background: on ? 'var(--green)' : 'var(--border)', position: 'relative', flexShrink: 0 }}>
+        <span style={{ position: 'absolute', top: 2, left: on ? 16 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left 0.15s' }} />
+      </span>
+    </button>
+  )
+}
+
+function ClubForm({ club, onSaved, onCancel }) {
+  const isEdit = !!club
+  const [form, setForm] = useState({
+    name: club?.name || '', slug: club?.slug || '', description: club?.description || '',
+    colour: club?.colour || 'var(--purple)', catalogue_module: club?.catalogue_module || 'none',
+    has_book_return: club?.has_book_return || false, has_kit_return: club?.has_kit_return || false,
+    has_theme: club?.has_theme || false, has_cost: club?.has_cost || false, bring_enabled: club?.bring_enabled || false,
+  })
+  const [slugTouched, setSlugTouched] = useState(isEdit)
+  const [bringCats, setBringCats] = useState([])
+  const [newCat, setNewCat] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  useEffect(() => {
+    if (!isEdit) return
+    supabase.from('club_bring_categories').select('id, label, sort').eq('club_id', club.id).order('sort')
+      .then(({ data }) => setBringCats((data || []).map(c => c.label)))
+  }, [isEdit, club?.id])
+
+  const effectiveSlug = slugTouched ? form.slug : slugify(form.name)
+
+  async function save() {
+    setError('')
+    if (!form.name.trim()) { setError('Name is required'); return }
+    const slug = slugify(effectiveSlug)
+    if (!slug) { setError('Slug is required'); return }
+    setSaving(true)
+    const payload = {
+      name: form.name.trim(), slug, description: form.description.trim() || null, colour: form.colour,
+      catalogue_module: form.catalogue_module,
+      has_book_return: form.has_book_return, has_kit_return: form.has_kit_return,
+      has_theme: form.has_theme, has_cost: form.has_cost, bring_enabled: form.bring_enabled,
+    }
+    let clubId = club?.id
+    if (isEdit) {
+      const { error: e } = await supabase.from('clubs').update(payload).eq('id', club.id)
+      if (e) { setError(e.message.includes('duplicate') ? 'That slug is already taken' : e.message); setSaving(false); return }
+    } else {
+      const { data, error: e } = await supabase.from('clubs').insert(payload).select('id').single()
+      if (e) { setError(e.message.includes('duplicate') ? 'That slug is already taken' : e.message); setSaving(false); return }
+      clubId = data.id
+    }
+    // Replace bring categories
+    await supabase.from('club_bring_categories').delete().eq('club_id', clubId)
+    const cats = form.bring_enabled ? bringCats.map((label, i) => ({ club_id: clubId, label, sort: i })) : []
+    if (cats.length) await supabase.from('club_bring_categories').insert(cats)
+    setSaving(false)
+    onSaved()
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+      <Field label="Club name"><input style={inputStyle} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Dinner Club" /></Field>
+      <Field label="Link (slug)">
+        <input style={inputStyle} value={effectiveSlug} onChange={e => { setSlugTouched(true); set('slug', e.target.value) }} placeholder="dinner-club" />
+      </Field>
+      <Field label="Description"><input style={inputStyle} value={form.description} onChange={e => set('description', e.target.value)} placeholder="One-line description shown in the Clubs list" /></Field>
+      <Field label="Colour">
+        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+          {CLUB_COLOURS.map(c => (
+            <button key={c.label} type="button" onClick={() => set('colour', c.value)} title={c.label} style={{
+              width: 30, height: 30, borderRadius: '50%', background: c.hex, cursor: 'pointer',
+              border: form.colour === c.value ? '3px solid var(--text)' : '2px solid var(--border)',
+            }} />
+          ))}
+        </div>
+      </Field>
+
+      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0.75rem 0 0.5rem' }}>Event options</div>
+      {CLUB_FLAGS.map(fl => (
+        <FlagToggle key={fl.key} on={form[fl.key]} label={fl.label} onClick={() => set(fl.key, !form[fl.key])} />
+      ))}
+
+      {form.bring_enabled && (
+        <Field label="Bring categories (e.g. Entrée, Main, Dessert, Drink)">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.5rem' }}>
+            {bringCats.map((c, i) => (
+              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'var(--surface2)', borderRadius: 16, padding: '0.2rem 0.6rem', fontSize: '0.82rem', color: 'var(--text)' }}>
+                {c}
+                <button type="button" onClick={() => setBringCats(bringCats.filter((_, j) => j !== i))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-dim)', fontSize: '0.9rem', lineHeight: 1 }}>×</button>
+              </span>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '0.4rem' }}>
+            <input style={inputStyle} value={newCat} onChange={e => setNewCat(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && newCat.trim()) { setBringCats([...bringCats, newCat.trim()]); setNewCat('') } }}
+              placeholder="Add a category…" />
+            <button type="button" onClick={() => { if (newCat.trim()) { setBringCats([...bringCats, newCat.trim()]); setNewCat('') } }}
+              style={{ padding: '0 1rem', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface2)', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>Add</button>
+          </div>
+        </Field>
+      )}
+
+      <Field label="Catalogue / Suggestions">
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {[{ v: 'none', t: 'None' }, { v: 'books', t: 'Books' }].map(o => (
+            <button key={o.v} type="button" onClick={() => set('catalogue_module', o.v)} style={{
+              flex: 1, padding: '0.6rem', borderRadius: 10, fontFamily: 'inherit', cursor: 'pointer', fontWeight: form.catalogue_module === o.v ? 700 : 500,
+              border: `1.5px solid ${form.catalogue_module === o.v ? 'var(--purple)' : 'var(--border)'}`,
+              background: form.catalogue_module === o.v ? 'var(--purple)' : 'var(--surface)', color: form.catalogue_module === o.v ? '#fff' : 'var(--text)',
+            }}>{o.t}</button>
+          ))}
+        </div>
+        <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.35rem' }}>Only Book Club uses a catalogue (Books) today. Others: None.</div>
+      </Field>
+
+      {error && <div style={{ color: '#b91c1c', fontSize: '0.85rem', margin: '0.5rem 0' }}>{error}</div>}
+      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+        <button onClick={onCancel} style={{ flex: 1, padding: '0.75rem', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
+        <button onClick={save} disabled={saving} style={{ flex: 2, padding: '0.75rem', borderRadius: 10, border: 'none', background: 'var(--purple)', color: '#fff', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: 'inherit' }}>{saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Create Club')}</button>
+      </div>
+    </div>
+  )
+}
+
+function ClubsTab() {
+  const [clubs, setClubs] = useState(null)
+  const [editing, setEditing] = useState(null) // null | 'new' | club object
+
+  const load = useCallback(() => {
+    supabase.from('clubs').select('*').eq('archived', false).order('sort_order').order('name')
+      .then(({ data }) => setClubs(data || []))
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  async function archive(club) {
+    if (!confirm(`Archive "${club.name}"? It'll be hidden from the Clubs hub.`)) return
+    await supabase.from('clubs').update({ archived: true }).eq('id', club.id)
+    load()
+  }
+
+  if (editing) {
+    return (
+      <div>
+        <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text)', marginBottom: '1rem' }}>{editing === 'new' ? 'New Club' : `Edit ${editing.name}`}</div>
+        <ClubForm club={editing === 'new' ? null : editing} onSaved={() => { setEditing(null); load() }} onCancel={() => setEditing(null)} />
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <button onClick={() => setEditing('new')} style={{ width: '100%', padding: '0.8rem', borderRadius: 12, border: 'none', background: 'var(--purple)', color: '#fff', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginBottom: '1rem' }}>+ New Club</button>
+      {clubs === null ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><div className="spinner" /></div>
+      ) : clubs.length === 0 ? (
+        <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2rem' }}>No clubs yet.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+          {clubs.map(c => (
+            <div key={c.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: `4px solid ${c.colour || 'var(--purple)'}`, borderRadius: 12, padding: '0.85rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, color: 'var(--text)' }}>{c.name}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>/clubs/{c.slug}{c.catalogue_module === 'books' ? ' · Books catalogue' : ''}</div>
+              </div>
+              <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                <button onClick={() => setEditing(c)} style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.82rem' }}>Edit</button>
+                {c.slug !== 'book-club' && (
+                  <button onClick={() => archive(c)} style={{ padding: '0.4rem 0.7rem', borderRadius: 8, border: '1px solid #fca5a5', background: '#fee2e2', color: '#991b1b', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.82rem' }}>Archive</button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

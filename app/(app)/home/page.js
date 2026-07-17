@@ -4,14 +4,19 @@ import { FormattedText } from "@/lib/textFormatter"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
-import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon } from "@/components/NavIcons"
+import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, ShedIcon } from "@/components/NavIcons"
 import { BAR_ENABLED } from "@/lib/features"
 
+// Home hub grid — kept to at most TWO rows (Iain: mobile vertical space is
+// premium). Row 1 = three tiles (span 2 of a 6-col grid), row 2 = two tiles
+// (span 3). Shed is a Phase 3 build — shown now as a greyed "coming soon"
+// placeholder so the grid doesn't reflow when it lands.
 const HUBS = [
-  { key: "movies",   label: "Movies",    Icon: MoviesIcon,   path: "/movies",   colour: "var(--teal)" },
-  { key: "social",   label: "Social",    Icon: SocialIcon,   path: "/social",   colour: "var(--terracotta)" },
-  { key: "bookclub", label: "Book Club", Icon: BookClubIcon, path: "/bookclub", colour: "var(--purple)" },
-  { key: "info",     label: "Info",       Icon: InfoIcon,     path: "/info/contacts", colour: "#4e7aab" },
+  { key: "movies", label: "Movies", Icon: MoviesIcon, path: "/movies",        colour: "var(--teal)",       span: 2 },
+  { key: "social", label: "Social", Icon: SocialIcon, path: "/social",        colour: "var(--terracotta)", span: 2 },
+  { key: "shed",   label: "Shed",   Icon: ShedIcon,   path: null,             colour: "var(--text-dim)",   span: 2, comingSoon: true },
+  { key: "clubs",  label: "Clubs",  Icon: ClubsIcon,  path: "/clubs",         colour: "var(--purple)",     span: 3 },
+  { key: "info",   label: "Info",   Icon: InfoIcon,   path: "/info/contacts", colour: "#4e7aab",           span: 3 },
 ]
 
 // Render HTML (WYSIWYG) or legacy BBCode content
@@ -57,18 +62,31 @@ function SubNoticeCard({ text }) {
 
 function HubTiles() {
   const router = useRouter()
+  const [shedToast, setShedToast] = useState(false)
   return (
-    <div style={{ display: "grid", gridTemplateColumns: `repeat(${HUBS.length}, 1fr)`, gap: "0.5rem", marginBottom: "0.75rem" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "0.5rem", marginBottom: "0.75rem", position: "relative" }}>
       {HUBS.map(h => (
-        <button key={h.key} onClick={() => router.push(h.path)} style={{
-          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "12px",
-          padding: "0.65rem 0.25rem", display: "flex", flexDirection: "column",
-          alignItems: "center", gap: "0.3rem", cursor: "pointer",
-        }}>
+        <button key={h.key}
+          onClick={() => h.comingSoon ? (setShedToast(true), setTimeout(() => setShedToast(false), 2200)) : router.push(h.path)}
+          aria-disabled={h.comingSoon || undefined}
+          style={{
+            gridColumn: `span ${h.span || 2}`,
+            background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "12px",
+            padding: "0.65rem 0.25rem", display: "flex", flexDirection: "column",
+            alignItems: "center", gap: "0.3rem", cursor: "pointer", opacity: h.comingSoon ? 0.55 : 1,
+          }}>
           <span style={{ color: h.colour, lineHeight: 0 }}><h.Icon size={36} /></span>
           <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--text)", lineHeight: 1.2, textAlign: "center" }}>{h.label}</span>
+          {h.comingSoon && <span style={{ fontSize: "0.58rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Coming soon</span>}
         </button>
       ))}
+      {shedToast && (
+        <div style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", bottom: "-2.2rem", zIndex: 5,
+          background: "var(--text)", color: "var(--bg)", fontSize: "0.75rem", fontWeight: 600,
+          padding: "0.4rem 0.75rem", borderRadius: "8px", whiteSpace: "nowrap" }}>
+          The Work Shed is coming soon
+        </div>
+      )}
     </div>
   )
 }
