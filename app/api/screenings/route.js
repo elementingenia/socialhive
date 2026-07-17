@@ -54,6 +54,16 @@ export async function GET(req) {
     .in('event_id', eventIds)
     .neq('status', 'cancelled')
 
+  // Named additional attendees (workstream A) — keyed (event_id, owner_id).
+  const { data: partyRows } = await supabaseAdmin
+    .from('booking_attendees')
+    .select('event_id, owner_id, member_id, guest_name, member:members!member_id(name, hide_name)')
+    .in('event_id', eventIds)
+  const partyMap = {}
+  for (const p of partyRows || []) {
+    (partyMap[`${p.event_id}|${p.owner_id}`] = partyMap[`${p.event_id}|${p.owner_id}`] || []).push(p)
+  }
+
   const votesQuery = movieIds.length
     ? await supabaseAdmin.from('votes').select('movie_id, score').in('movie_id', movieIds)
     : { data: [] }
@@ -110,7 +120,16 @@ export async function GET(req) {
       const isOwn     = b.member_id === member.id
       const isPrivate = !!b.members?.hide_name
       const name = isOwn ? 'You' : (isPrivate && !canManageBooks) ? 'Resident' : (b.members?.name || 'Resident')
-      return { name, seats: b.seats || 1, isOwn, isPrivate }
+      // Named party for this booker, same privacy masking as the booker's row.
+      const party = (partyMap[`${ev.id}|${b.member_id}`] || []).map(p => {
+        if (p.member_id) {
+          const own  = p.member_id === member.id
+          const priv = !!p.member?.hide_name
+          return { name: own ? 'You' : (priv && !canManageBooks) ? 'Resident' : (p.member?.name || 'Resident'), isPrivate: priv, guest: false }
+        }
+        return { name: p.guest_name, isPrivate: false, guest: true }
+      })
+      return { name, seats: b.seats || 1, isOwn, isPrivate, party }
     }
     const attendees = member.is_admin
       ? [

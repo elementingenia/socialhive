@@ -902,6 +902,11 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
   const booked  = confirmedBookings.reduce((s, b) => s + (b.seats || 1), 0)
   const waiting = waitlistBookings.length
   const showNames = event.show_attendee_names !== false
+  // Named additional attendees (workstream A), grouped by the booker.
+  const partyByOwner = {}
+  for (const p of event.booking_attendees || []) {
+    (partyByOwner[p.owner_id] = partyByOwner[p.owner_id] || []).push(p)
+  }
   const unpaidSeats = sumUnpaidSeats(confirmedBookings, event)
   const ecNames = coordinators.map(c => c.members?.name || c.members?.username).filter(Boolean)
   // Matches the canManageBooks convention used everywhere else (Book Club,
@@ -1105,7 +1110,8 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                     const paid = computeIsPaid(b)
                     const submitted = !paid && computeIsSubmitted(b)
                     return (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", padding: "0.2rem 0", borderBottom: "1px solid var(--border)", gap: "0.5rem" }}>
+                      <div key={i} style={{ padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", gap: "0.5rem" }}>
                         <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--terracotta)" : "var(--text)", minWidth: 0 }}>
                           {label}
                           {isPrivate && isAdmin && !isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
@@ -1166,6 +1172,17 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                             )
                           })()}
                         </span>
+                        </div>
+                        {showNames && (partyByOwner[b.member_id] || []).length > 0 && (
+                          <div style={{ paddingLeft: "0.85rem", marginTop: "0.1rem", display: "flex", flexDirection: "column", gap: "0.05rem" }}>
+                            {partyByOwner[b.member_id].map((p, j) => {
+                              const gOwn  = p.member_id && p.member_id === member?.id
+                              const gPriv = !!p.member?.hide_name
+                              const gName = gOwn ? "You" : p.guest_name ? p.guest_name : (gPriv && !isAdmin) ? "Resident" : (p.member?.name || "Resident")
+                              return <span key={j} style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>+ {gName}{p.guest_name ? " (guest)" : ""}{gPriv && isAdmin && !gOwn && p.member?.name ? " (P)" : ""}</span>
+                            })}
+                          </div>
+                        )}
                       </div>
                     )
                   })}
@@ -1305,7 +1322,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, booked_at, updated_at, member:members!member_id(id, name, username, hide_name))")
+      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, booked_at, updated_at, member:members!member_id(id, name, username, hide_name)), booking_attendees(owner_id, member_id, guest_name, member:members!member_id(name, hide_name))")
       .eq("hub_type", "social")
       .eq("archived", false)
       .order("event_date", { ascending: true })
@@ -1458,7 +1475,7 @@ export default function SocialEvents() {
   async function openEventSlideOut(event) {
     const { data } = await supabase
       .from("events")
-      .select("*, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, booked_at, members(name, username))")
+      .select("*, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, booked_at, members(name, username)), booking_attendees(owner_id, member_id, guest_name, member:members!member_id(name, hide_name))")
       .eq("id", event.id).single()
     if (data) {
       const allBookings = (data.bookings || []).filter(b => b.status !== "cancelled")
