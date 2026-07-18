@@ -1133,17 +1133,20 @@ export default function ClubHome({ club }) {
     if (!slideOutEvent) return
     const currentId = slideOutEvent.id
     // Refresh booking state in-place so user sees confirmation without slideout closing
-    const { data: bk } = await supabase
+    const { data: bkRows } = await supabase
       .from("bookings")
-      .select("id, status, seats, has_book")
+      .select("id, status, seats, payment_status, has_book")
       .eq("event_id", currentId)
       .eq("member_id", member?.id)
       .neq("status", "cancelled")
-      .maybeSingle()
+    // A split booking legitimately returns two rows (confirmed + waitlist), so
+    // this can't use maybeSingle(). Carry the real seats/payment_status through
+    // rather than assuming one unpaid seat.
+    const bk = (bkRows || []).find(b => b.status === "confirmed") || (bkRows || [])[0] || null
     setSlideOutEvent(prev => prev ? {
       ...prev,
-      my_bookings: bk?.status === "confirmed"
-        ? [{ status: "confirmed", seats: 1, payment_status: null, has_book: !!bk.has_book }]
+      my_bookings: bk
+        ? [{ status: bk.status, seats: bk.seats || 1, payment_status: bk.payment_status ?? null, has_book: !!bk.has_book }]
         : [],
     } : null)
     load()
@@ -1207,9 +1210,21 @@ export default function ClubHome({ club }) {
         .select("id, event_id, status, seats, payment_status, has_book, book_given_at")
         .eq("member_id", member.id)
         .in("event_id", ids)
+        .neq("status", "cancelled")
 
+      // A member can have more than one row per event (a confirmed booking
+      // plus a waitlist row, or history from a cancel-and-rebook). Blindly
+      // taking the last row meant a CANCELLED booking could overwrite the
+      // confirmed one, so the card showed "Tap to sign up" while the server
+      // correctly refused with "Already booked" (Iain 2026-07-18). Cancelled
+      // rows are now excluded and confirmed always wins.
       const byEvent = {}
-      for (const b of bks || []) byEvent[b.event_id] = b
+      for (const b of bks || []) {
+        const existing = byEvent[b.event_id]
+        if (!existing || (existing.status !== "confirmed" && b.status === "confirmed")) {
+          byEvent[b.event_id] = b
+        }
+      }
       setMyBookings(byEvent)
 
       // Past participated events
