@@ -1377,10 +1377,6 @@ function PageTextsTab() {
       hasSubs: false, hint: 'Text shown at the top of the DVD Library.',
     },
     {
-      key: 'bookclub', label: 'Book Club Home', colour: 'var(--purple)', hex: '#7c3aed',
-      hasSubs: false, hint: 'Welcome message on the Book Club home page.',
-    },
-    {
       key: 'social', label: 'Social Events', colour: 'var(--terracotta)', hex: '#c2410c',
       hasSubs: false, hint: 'Welcome message on the Social Events page.',
     },
