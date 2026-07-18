@@ -35,11 +35,12 @@ export async function POST(req) {
   const member = await getAdminOrEC(token, eventId)
   if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-  // Verify event is social
-  const { data: event } = await supa.from("events").select("hub_type, image_url").eq("id", eventId).single()
+  // Social events and club events both carry an image (a club event's picture
+  // is its theme cue — Iain 2026-07-18). Movies use the film poster instead.
+  const { data: event } = await supa.from("events").select("hub_type, club_id, image_url").eq("id", eventId).single()
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 })
-  if (event.hub_type !== "social") {
-    return NextResponse.json({ error: "Image upload only supported for social events" }, { status: 400 })
+  if (event.hub_type !== "social" && !event.club_id) {
+    return NextResponse.json({ error: "Image upload isn't supported for this event type" }, { status: 400 })
   }
 
   // Delete existing image if present

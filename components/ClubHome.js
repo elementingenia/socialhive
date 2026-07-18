@@ -62,8 +62,9 @@ function BookingStrip({ isJoined, hasBook, bookReturnDate, colour = "var(--purpl
 }
 
 // ── Book Club Event Card ─────────────────────────────────────────────────────
-function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", showToast }) {
+function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", showToast, club }) {
   const { member, isAdmin } = useUser()
+  const caps = clubCaps(club)
   const [summaryOpen,     setSummaryOpen]     = useState(false)
   const [attendeesOpen,   setAttendeesOpen]   = useState(false)
   const [attendees,       setAttendees]       = useState(null)
@@ -285,6 +286,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
                           {remindedId === a.id ? "✅" : "🔔"}
                         </button>
                       )}
+                      {caps.hasBookReturn && (
                       <div onClick={e => { e.stopPropagation(); toggleHasBook(a.id, a.hasBook) }} role="switch" aria-checked={a.hasBook}
                         title={a.hasBook ? "Mark as returned" : "Mark book as given out"}
                         style={{ display: "flex", alignItems: "center", gap: 6, cursor: togglingId === a.id ? "wait" : "pointer", opacity: togglingId === a.id ? 0.6 : 1 }}>
@@ -295,6 +297,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
                             borderRadius: "50%", background: "#fff", transition: "left 0.2s", boxShadow: "0 1px 3px rgba(0,0,0,.25)" }} />
                         </div>
                       </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -682,6 +685,16 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
     book_return_date: event?.book_return_date || "",
     reservation_cutoff: cutoffToDateValue(event?.reservation_cutoff),
     max_seats:    event?.max_seats ?? 20,
+    max_seats_per_booking: event?.max_seats_per_booking ?? 2,
+    allow_nonresident_guests: event?.allow_nonresident_guests || false,
+    payment_required: event?.payment_required || false,
+    cost:         event?.cost || "",
+    payment_due_by: event?.payment_due_by || "",
+    max_seats_per_booking: event?.max_seats_per_booking ?? 2,
+    allow_nonresident_guests: event?.allow_nonresident_guests || false,
+    payment_required: event?.payment_required || false,
+    cost:         event?.cost || "",
+    payment_due_by: event?.payment_due_by || "",
     bring_category_ids: event?.bring_category_ids || null,
     theme_name:   event?.theme_name || "",
     description:  event?.description || "",
@@ -751,6 +764,16 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
       book_return_date: caps.hasBookReturn ? (form.book_return_date || null) : null,
       reservation_cutoff: cutoffFromDateValue(form.reservation_cutoff),
       max_seats:       Number(form.max_seats) || 20,
+      max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
+      allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
+      payment_required: caps.hasCost ? !!form.payment_required : false,
+      cost:            caps.hasCost && form.payment_required ? (Number(form.cost) || 0) : 0,
+      payment_due_by:  caps.hasCost && form.payment_required ? (form.payment_due_by || null) : null,
+      max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
+      allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
+      payment_required: caps.hasCost ? !!form.payment_required : false,
+      cost:            caps.hasCost && form.payment_required ? (Number(form.cost) || 0) : 0,
+      payment_due_by:  caps.hasCost && form.payment_required ? (form.payment_due_by || null) : null,
       bring_category_ids: caps.bringEnabled ? (form.bring_category_ids || null) : null,
       theme_name:      caps.hasTheme ? (form.theme_name.trim() || null) : null,
       archived:        false,
@@ -821,6 +844,106 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
           onChange={e => set("max_seats", e.target.value)} onWheel={e => e.currentTarget.blur()}
           style={inputStyle} />
       </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Max Seats per Booking</label>
+        <input type="number" min={1} max={10} value={form.max_seats_per_booking}
+          onChange={e => set("max_seats_per_booking", e.target.value)} onWheel={e => e.currentTarget.blur()}
+          style={inputStyle} />
+      </div>
+
+      {Number(form.max_seats_per_booking) > 1 && (
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Extra attendees on multi-seat bookings</label>
+        <div style={{ display: "flex", gap: 8 }}>
+          {[{ v: false, t: "Residents only" }, { v: true, t: "Residents + guests" }].map(opt => (
+            <button key={String(opt.v)} type="button" onClick={() => set("allow_nonresident_guests", opt.v)}
+              style={{ flex: 1, padding: "0.6rem 0.5rem", borderRadius: 10, fontSize: "0.88rem", fontFamily: "inherit", cursor: "pointer",
+                border: `1.5px solid ${form.allow_nonresident_guests === opt.v ? colour : "var(--border)"}`,
+                background: form.allow_nonresident_guests === opt.v ? colour : "var(--surface)",
+                color: form.allow_nonresident_guests === opt.v ? "#fff" : "var(--text)",
+                fontWeight: form.allow_nonresident_guests === opt.v ? 700 : 500 }}>{opt.t}</button>
+          ))}
+        </div>
+        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 4 }}>Booking more than one seat means naming each extra attendee.</div>
+      </div>
+      )}
+
+      {caps.hasCost && (
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Paid event</label>
+        <div style={{ display: "flex", gap: 8, marginBottom: form.payment_required ? 10 : 0 }}>
+          {[{ v: false, t: "Free" }, { v: true, t: "Paid" }].map(opt => (
+            <button key={String(opt.v)} type="button" onClick={() => set("payment_required", opt.v)}
+              style={{ flex: 1, padding: "0.6rem 0.5rem", borderRadius: 10, fontSize: "0.88rem", fontFamily: "inherit", cursor: "pointer",
+                border: `1.5px solid ${form.payment_required === opt.v ? colour : "var(--border)"}`,
+                background: form.payment_required === opt.v ? colour : "var(--surface)",
+                color: form.payment_required === opt.v ? "#fff" : "var(--text)",
+                fontWeight: form.payment_required === opt.v ? 700 : 500 }}>{opt.t}</button>
+          ))}
+        </div>
+        {form.payment_required && (
+          <>
+            <label style={labelStyle}>Cost per person ($)</label>
+            <input type="number" min={0} step={1} value={form.cost} onChange={e => set("cost", e.target.value)}
+              onWheel={e => e.currentTarget.blur()} placeholder="e.g. 25" style={{ ...inputStyle, marginBottom: 10 }} />
+            <label style={labelStyle}>Payment due by (optional)</label>
+            <input type="date" value={form.payment_due_by} onChange={e => set("payment_due_by", e.target.value)}
+              onClick={e => e.currentTarget.showPicker?.()} style={inputStyle} />
+          </>
+        )}
+      </div>
+      )}
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Max Seats per Booking</label>
+        <input type="number" min={1} max={10} value={form.max_seats_per_booking}
+          onChange={e => set("max_seats_per_booking", e.target.value)} onWheel={e => e.currentTarget.blur()}
+          style={inputStyle} />
+      </div>
+
+      {Number(form.max_seats_per_booking) > 1 && (
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Extra attendees on multi-seat bookings</label>
+        <div style={{ display: "flex", gap: 8 }}>
+          {[{ v: false, t: "Residents only" }, { v: true, t: "Residents + guests" }].map(opt => (
+            <button key={String(opt.v)} type="button" onClick={() => set("allow_nonresident_guests", opt.v)}
+              style={{ flex: 1, padding: "0.6rem 0.5rem", borderRadius: 10, fontSize: "0.88rem", fontFamily: "inherit", cursor: "pointer",
+                border: `1.5px solid ${form.allow_nonresident_guests === opt.v ? colour : "var(--border)"}`,
+                background: form.allow_nonresident_guests === opt.v ? colour : "var(--surface)",
+                color: form.allow_nonresident_guests === opt.v ? "#fff" : "var(--text)",
+                fontWeight: form.allow_nonresident_guests === opt.v ? 700 : 500 }}>{opt.t}</button>
+          ))}
+        </div>
+        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 4 }}>Booking more than one seat means naming each extra attendee.</div>
+      </div>
+      )}
+
+      {caps.hasCost && (
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Paid event</label>
+        <div style={{ display: "flex", gap: 8, marginBottom: form.payment_required ? 10 : 0 }}>
+          {[{ v: false, t: "Free" }, { v: true, t: "Paid" }].map(opt => (
+            <button key={String(opt.v)} type="button" onClick={() => set("payment_required", opt.v)}
+              style={{ flex: 1, padding: "0.6rem 0.5rem", borderRadius: 10, fontSize: "0.88rem", fontFamily: "inherit", cursor: "pointer",
+                border: `1.5px solid ${form.payment_required === opt.v ? colour : "var(--border)"}`,
+                background: form.payment_required === opt.v ? colour : "var(--surface)",
+                color: form.payment_required === opt.v ? "#fff" : "var(--text)",
+                fontWeight: form.payment_required === opt.v ? 700 : 500 }}>{opt.t}</button>
+          ))}
+        </div>
+        {form.payment_required && (
+          <>
+            <label style={labelStyle}>Cost per person ($)</label>
+            <input type="number" min={0} step={1} value={form.cost} onChange={e => set("cost", e.target.value)}
+              onWheel={e => e.currentTarget.blur()} placeholder="e.g. 25" style={{ ...inputStyle, marginBottom: 10 }} />
+            <label style={labelStyle}>Payment due by (optional)</label>
+            <input type="date" value={form.payment_due_by} onChange={e => set("payment_due_by", e.target.value)}
+              onClick={e => e.currentTarget.showPicker?.()} style={inputStyle} />
+          </>
+        )}
+      </div>
+      )}
 
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Start Time</label>
@@ -1219,10 +1342,12 @@ export default function ClubHome({ club }) {
       {activeEvent ? (
         <EventCard
           event={activeEvent}
-          label={upcoming[0] ? "Current Meeting" : "Current Reading"}
+          label={upcoming[0] ? "Next Event" : "Latest Event"}
           booking={myBookings[activeEvent.id]}
           onOpen={() => openSlideOut(activeEvent)}
           colour={colour}
+          club={club}
+          club={club}
           showToast={showToast}
         />
       ) : (
@@ -1237,7 +1362,7 @@ export default function ClubHome({ club }) {
       {nextEvent && (
         <EventCard
           event={nextEvent}
-          label="Next Meeting"
+          label="Upcoming Event"
           booking={myBookings[nextEvent.id]}
           onOpen={() => openSlideOut(nextEvent)}
           colour="#7c3aed"
