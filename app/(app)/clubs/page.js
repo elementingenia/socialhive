@@ -4,10 +4,10 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { ClubsIcon } from "@/components/NavIcons"
 
-// Clubs hub (Phase 2a). Lists every active club from the `clubs` table. Book
-// Club (slug 'book-club') still lives on its own /bookclub page for now, so we
-// link straight there; other clubs open the generic /clubs/[slug] page. Anyone
-// can open any club — joining (Phase 2c) only controls notices, not access.
+// Clubs hub. Lists every active club from the `clubs` table; each opens the
+// generic /clubs/[slug] page (Phase 2b — including Book Club, which now runs on
+// the same shared engine). Anyone can open any club — joining (Phase 2c) only
+// controls notices, not access.
 export default function ClubsHome() {
   const router = useRouter()
   const [clubs, setClubs] = useState(null)
@@ -19,7 +19,7 @@ export default function ClubsHome() {
   }, [])
 
   function openClub(c) {
-    router.push(c.slug === "book-club" ? "/bookclub" : `/clubs/${c.slug}`)
+    router.push(`/clubs/${c.slug}`)
   }
 
   return (

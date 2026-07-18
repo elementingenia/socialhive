@@ -1,13 +1,15 @@
 "use client"
-import React from "react"
+import React, { useState, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
 import { getActiveHub } from "@/lib/navUtils"
+import { supabase } from "@/lib/supabase"
+import { clubColour, clubNavItems } from "@/lib/clubs"
 import { BAR_ENABLED } from "@/lib/features"
 import {
   HomeIcon, MoviesIcon, CalendarIcon, SuggestionsIcon, DVDIcon,
   BookClubIcon, SocialIcon, AdminIcon, BookingsIcon, BarIcon,
-  InfoIcon, DocumentsIcon, ContactsIcon,
+  InfoIcon, DocumentsIcon, ContactsIcon, ClubsIcon,
 } from "@/components/NavIcons"
 
 const HUB_CONFIG = {
@@ -49,7 +51,30 @@ export default function BottomNav() {
   const { isAdmin, barOptIn } = useUser()
 
   const activeHub = getActiveHub(pathname)
-  const hub       = activeHub ? HUB_CONFIG[activeHub] : null
+
+  // Clubs is the one data-driven hub: its sub-nav depends on WHICH club you're
+  // in (its name, its colour) and whether that club actually has a catalogue —
+  // so Dinner Club shows just Home + Dinner Club, Book Club adds Suggest.
+  const clubSlug = pathname?.startsWith("/clubs/") ? pathname.split("/")[2] : null
+  const [club, setClub] = useState(null)
+  useEffect(() => {
+    if (!clubSlug) { setClub(null); return }
+    supabase.from("clubs").select("id, name, slug, colour, catalogue_module")
+      .eq("slug", clubSlug).maybeSingle()
+      .then(({ data }) => setClub(data || null))
+  }, [clubSlug])
+
+  let hub = activeHub ? HUB_CONFIG[activeHub] : null
+  if (activeHub === "clubs") {
+    hub = club
+      ? {
+          colour: clubColour(club),
+          items: clubNavItems(club).map(it => ({
+            ...it, Icon: it.label === "Suggest" ? SuggestionsIcon : ClubsIcon,
+          })),
+        }
+      : { colour: "var(--purple)", items: [{ path: "/clubs", label: "Clubs", Icon: ClubsIcon }] }
+  }
 
   const navBase = {
     position: "fixed", bottom: 0, left: 0, right: 0,

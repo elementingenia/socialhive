@@ -1640,6 +1640,7 @@ function ClubForm({ club, onSaved, onCancel }) {
   const isEdit = !!club
   const [form, setForm] = useState({
     name: club?.name || '', slug: club?.slug || '', description: club?.description || '',
+    welcome_text: club?.welcome_text || '',
     colour: club?.colour || 'var(--purple)', catalogue_module: club?.catalogue_module || 'none',
     has_book_return: club?.has_book_return || false, has_kit_return: club?.has_kit_return || false,
     has_theme: club?.has_theme || false, has_cost: club?.has_cost || false, bring_enabled: club?.bring_enabled || false,
@@ -1667,6 +1668,7 @@ function ClubForm({ club, onSaved, onCancel }) {
     setSaving(true)
     const payload = {
       name: form.name.trim(), slug, description: form.description.trim() || null, colour: form.colour,
+      welcome_text: form.welcome_text || null,
       catalogue_module: form.catalogue_module,
       has_book_return: form.has_book_return, has_kit_return: form.has_kit_return,
       has_theme: form.has_theme, has_cost: form.has_cost, bring_enabled: form.bring_enabled,
@@ -1695,6 +1697,18 @@ function ClubForm({ club, onSaved, onCancel }) {
         <input style={inputStyle} value={effectiveSlug} onChange={e => { setSlugTouched(true); set('slug', e.target.value) }} placeholder="dinner-club" />
       </Field>
       <Field label="Description"><input style={inputStyle} value={form.description} onChange={e => set('description', e.target.value)} placeholder="One-line description shown in the Clubs list" /></Field>
+      <Field label="Landing page text">
+        <RichEditor
+          key={club?.id || 'new'}
+          initialValue={form.welcome_text}
+          hubColour={CLUB_COLOURS.find(c => c.value === form.colour)?.hex || '#7c3aed'}
+          onChange={html => set('welcome_text', html)}
+          placeholder="Shown in the coloured banner at the top of this club's page…"
+        />
+        <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.35rem' }}>
+          Appears on the club&apos;s page in the club colour with white text. (Replaces the old Admin &rsaquo; Page Texts entry.)
+        </div>
+      </Field>
       <Field label="Colour">
         <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
           {CLUB_COLOURS.map(c => (
