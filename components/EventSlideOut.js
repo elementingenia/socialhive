@@ -889,7 +889,7 @@ function BringPicker({ cats, categoryId, note, onChange, colour, required, label
         {cats.map(c => {
           const on = categoryId === c.id
           return (
-            <button key={c.id} type="button" onClick={() => onChange({ category_id: on ? null : c.id, note })}
+            <button key={c.id} type="button" onClick={() => onChange(on ? { category_id: null, note: "" } : { category_id: c.id, note })}
               style={{ borderRadius: 14, padding: "0.25rem 0.7rem", fontSize: 13, fontWeight: 600,
                 cursor: "pointer", fontFamily: "inherit",
                 border: `1px solid ${on ? colour : "var(--border)"}`,
@@ -899,10 +899,15 @@ function BringPicker({ cats, categoryId, note, onChange, colour, required, label
           )
         })}
       </div>
-      <input value={note || ""} onChange={e => onChange({ category_id: categoryId, note: e.target.value })}
-        placeholder="What exactly? (optional, e.g. Pavlova)"
+      {/* Details stay locked until a category is chosen (Iain 2026-07-18) —
+          a note without a category isn't meaningful. */}
+      <input value={note || ""} disabled={!categoryId}
+        onChange={e => onChange({ category_id: categoryId, note: e.target.value })}
+        placeholder={categoryId ? "What exactly? (optional, e.g. Pavlova)" : "Choose an option above first"}
         style={{ width: "100%", padding: "8px 11px", borderRadius: 8, border: "1px solid var(--border)",
-          background: "var(--surface)", color: "var(--text)", fontSize: 13, boxSizing: "border-box", fontFamily: "inherit" }} />
+          background: categoryId ? "var(--surface)" : "var(--surface2)",
+          color: "var(--text)", fontSize: 13, boxSizing: "border-box", fontFamily: "inherit",
+          cursor: categoryId ? "text" : "not-allowed", opacity: categoryId ? 1 : 0.6 }} />
     </div>
   )
 }
