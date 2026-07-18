@@ -213,6 +213,8 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
         </div>
       )}
 
+      <ClubSocial club={club} colour={colour} isAdmin={isAdmin} />
+
       <div style={{ padding: "0.9rem 1rem 0.6rem" }}>
         {/* Event notes */}
         {event.description && (
@@ -1080,6 +1082,134 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
+// ── Join/leave + club notices (Phase 2c) ─────────────────────────────────────
+// Joining is notices-only — never a gate on booking. Only joined members get
+// notified when a notice is posted; anyone can read them here.
+function ClubSocial({ club, colour, isAdmin }) {
+  const { member } = useUser()
+  const [joined, setJoined]     = useState(null)   // null = loading
+  const [busy, setBusy]         = useState(false)
+  const [notices, setNotices]   = useState([])
+  const [composing, setComposing] = useState(false)
+  const [draft, setDraft]       = useState("")
+  const [posting, setPosting]   = useState(false)
+  const [toast, setToast]       = useState(null)
+
+  const loadNotices = () => {
+    supabase.from("club_notices").select("id, content, created_at")
+      .eq("club_id", club.id).eq("archived", false).order("created_at", { ascending: false })
+      .then(({ data }) => setNotices(data || []))
+  }
+  useEffect(() => {
+    loadNotices()
+    if (!member?.id) { setJoined(false); return }
+    supabase.from("club_members").select("member_id").eq("club_id", club.id).eq("member_id", member.id).maybeSingle()
+      .then(({ data }) => setJoined(!!data))
+  }, [club.id, member?.id])
+
+  async function toggleJoin() {
+    if (!member?.id || busy) return
+    setBusy(true)
+    if (joined) {
+      await supabase.from("club_members").delete().eq("club_id", club.id).eq("member_id", member.id)
+      setJoined(false)
+    } else {
+      await supabase.from("club_members").insert({ club_id: club.id, member_id: member.id })
+      setJoined(true)
+    }
+    setBusy(false)
+  }
+
+  async function postNotice() {
+    if (!draft.trim() || posting) return
+    setPosting(true)
+    const token = await getToken()
+    const res = await fetch("/api/clubs/notices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ club_id: club.id, content: draft }),
+    })
+    const data = await res.json()
+    setPosting(false)
+    if (!res.ok) { setToast(data.error || "Could not post"); setTimeout(() => setToast(null), 3000); return }
+    setDraft(""); setComposing(false); loadNotices()
+    setToast(data.notified ? `Posted — ${data.notified} member${data.notified !== 1 ? "s" : ""} notified` : "Posted")
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  async function removeNotice(id) {
+    if (!confirm("Remove this notice?")) return
+    const token = await getToken()
+    await fetch("/api/clubs/notices", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id }),
+    })
+    loadNotices()
+  }
+
+  const fmt = (iso) => new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short" })
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      {toast && <div style={{ position: "fixed", top: 70, left: "50%", transform: "translateX(-50%)", zIndex: 200, background: "var(--text)", color: "var(--bg)", padding: "0.5rem 1rem", borderRadius: 8, fontSize: "0.85rem", fontWeight: 600 }}>{toast}</div>}
+
+      {/* Join / leave */}
+      {member?.id && joined !== null && (
+        <button onClick={toggleJoin} disabled={busy} style={{
+          width: "100%", padding: "0.7rem", borderRadius: 12, fontFamily: "inherit", fontWeight: 700,
+          fontSize: "0.9rem", cursor: busy ? "wait" : "pointer", marginBottom: 12,
+          border: `1.5px solid ${colour}`,
+          background: joined ? "var(--surface)" : colour,
+          color: joined ? colour : "#fff",
+        }}>
+          {joined ? "✓ Joined — tap to leave" : "+ Join this club (for notices)"}
+        </button>
+      )}
+
+      {/* Admin composer */}
+      {isAdmin && (
+        composing ? (
+          <div style={{ marginBottom: 12, border: `1px solid ${colour}`, borderRadius: 12, padding: "0.75rem" }}>
+            <RichEditor key="club-notice" initialValue="" hubColour={colour.startsWith("var(") ? undefined : colour}
+              onChange={setDraft} placeholder="Write a notice for this club's members…" />
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button onClick={() => { setComposing(false); setDraft("") }} style={{ flex: 1, padding: "0.6rem", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text)", fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>Cancel</button>
+              <button onClick={postNotice} disabled={posting || !draft.trim()} style={{ flex: 2, padding: "0.6rem", borderRadius: 10, border: "none", background: colour, color: "#fff", fontWeight: 700, fontFamily: "inherit", cursor: (posting || !draft.trim()) ? "not-allowed" : "pointer", opacity: (posting || !draft.trim()) ? 0.6 : 1 }}>{posting ? "Posting…" : "Post notice"}</button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setComposing(true)} style={{ width: "100%", padding: "0.6rem", borderRadius: 12, border: `1px dashed ${colour}`, background: "transparent", color: colour, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", marginBottom: 12 }}>
+            📣 Post a club notice
+          </button>
+        )
+      )}
+
+      {/* Notices */}
+      {notices.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {notices.map(n => (
+            <div key={n.id} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderLeft: `4px solid ${colour}`, borderRadius: 10, padding: "0.75rem 0.9rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: colour, textTransform: "uppercase", letterSpacing: "0.04em" }}>📣 Notice</span>
+                <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>{fmt(n.created_at)}</span>
+              </div>
+              <div style={{ fontSize: "0.88rem", color: "var(--text)", lineHeight: 1.5, marginTop: 4 }}>
+                {/<[a-z][\s\S]*>/i.test(n.content)
+                  ? <span dangerouslySetInnerHTML={{ __html: n.content }} />
+                  : n.content}
+              </div>
+              {isAdmin && (
+                <button onClick={() => removeNotice(n.id)} style={{ marginTop: 6, background: "none", border: "none", color: "var(--danger)", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Remove</button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ClubHome({ club }) {
   const { member, isAdmin } = useUser()
   // Everything below is driven by the club's CONFIG, never by a hub name —
