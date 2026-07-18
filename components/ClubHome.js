@@ -86,7 +86,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
   async function loadAttendees() {
     const { data } = await supabase
       .from("bookings")
-      .select("id, seats, has_book, book_given_at, name_hidden, members(id, name, username, hide_name)")
+      .select("id, seats, has_book, book_given_at, name_hidden, bring_note, members(id, name, username, hide_name), bring:club_bring_categories!bring_category_id(label)")
       .eq("event_id", event.id)
       .eq("status", "confirmed")
     // Own row always pinned to the top — consistent with every other attendee
@@ -101,6 +101,8 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
         isPrivate,
         seats: b.seats || 1,
         hasBook: !!b.has_book,
+        bring: b.bring?.label || null,
+        bringNote: b.bring_note || null,
         bookGivenAt: b.book_given_at,
       }
     }).sort((a, b) => (b.isOwn === true) - (a.isOwn === true)))
@@ -269,9 +271,16 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
               attendees.map((a, i) => (
                 <div key={a.id || i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", padding: "0.3rem 0",
                   borderBottom: i < attendees.length - 1 ? "1px solid var(--border)" : "none" }}>
-                  <span style={{ fontWeight: a.isOwn ? 700 : 400, color: a.isOwn ? colour : "var(--text)" }}>
+                  <span style={{ fontWeight: a.isOwn ? 700 : 400, color: a.isOwn ? colour : "var(--text)", minWidth: 0 }}>
                     {a.name}
                     {a.isPrivate && canManageBooks && !a.isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
+                    {/* Visible to EVERY attendee (Iain 2026-07-18) so people can
+                        see what's already covered and adjust what they bring. */}
+                    {a.bring && (
+                      <span style={{ display: "block", fontSize: "0.72rem", fontWeight: 600, color: colour, marginTop: 1 }}>
+                        🍽️ {a.bring}{a.bringNote ? ` — ${a.bringNote}` : ""}
+                      </span>
+                    )}
                   </span>
                   {canManageBooks && (
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

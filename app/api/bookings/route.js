@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { promoteWaitlist } from '@/lib/promoteWaitlist'
 import { notify } from '@/lib/notify'
 import { bookingsClosed } from '@/lib/booking'
-import { validateParty } from '@/lib/attendees'
+import { validateParty, validateBring } from '@/lib/attendees'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -25,7 +25,8 @@ async function syncAttendees(eventId, ownerId, attendees) {
   await supabaseAdmin.from('booking_attendees').delete().eq('event_id', eventId).eq('owner_id', ownerId)
   if (attendees && attendees.length) {
     await supabaseAdmin.from('booking_attendees').insert(
-      attendees.map(a => ({ event_id: eventId, owner_id: ownerId, member_id: a.member_id, guest_name: a.guest_name }))
+      attendees.map(a => ({ event_id: eventId, owner_id: ownerId, member_id: a.member_id, guest_name: a.guest_name,
+        bring_category_id: a.bring_category_id || null, bring_note: a.bring_note || null }))
     )
   }
 }
@@ -49,7 +50,7 @@ export async function POST(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('id, max_seats, hub_type, book_id, payment_required, reservation_cutoff, allow_nonresident_guests').eq('id', event_id).single()
+    .from('events').select('id, max_seats, hub_type, book_id, payment_required, reservation_cutoff, allow_nonresident_guests, bring_category_ids, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
 
   // Reservation cut-off (workstream B). Once past, no new bookings/waitlist
@@ -68,6 +69,18 @@ export async function POST(req) {
     ownerId: member.id,
   })
   if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
+
+  // "Attendees bring something": mandatory for the booker, optional for guests.
+  const bringRequired = !!event.clubs?.bring_enabled
+  const bring = validateBring({
+    required: bringRequired,
+    bringCategoryId: body.bring_category_id,
+    allowedCategoryIds: event.bring_category_ids,
+  })
+  if (!bring.ok) return NextResponse.json({ error: bring.error }, { status: 400 })
+  const bringFields = bringRequired
+    ? { bring_category_id: body.bring_category_id || null, bring_note: body.bring_note || null }
+    : {}
 
   // Paid events must start life as 'pending' (awaiting payment), not the
   // DB default of 'not_required' (which means "this event is free"). Without
@@ -123,7 +136,7 @@ export async function POST(req) {
   if (available >= requestedSeats) {
     const { error } = await supabaseAdmin.from('bookings').insert({
       event_id, member_id: member.id, seats: requestedSeats, status: 'confirmed', booked_at: bookedAt,
-      payment_status: initialPaymentStatus,
+      payment_status: initialPaymentStatus, ...bringFields,
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     await syncAttendees(event_id, member.id, party.attendees)
@@ -145,9 +158,9 @@ export async function POST(req) {
   // User confirmed — insert rows
   const rows = []
   if (willConfirm > 0) {
-    rows.push({ event_id, member_id: member.id, seats: willConfirm,  status: 'confirmed', booked_at: bookedAt, payment_status: initialPaymentStatus })
+    rows.push({ event_id, member_id: member.id, seats: willConfirm,  status: 'confirmed', booked_at: bookedAt, payment_status: initialPaymentStatus, ...bringFields })
   }
-  rows.push({ event_id, member_id: member.id, seats: willWaitlist, status: 'waitlist',  booked_at: bookedAt, payment_status: initialPaymentStatus })
+  rows.push({ event_id, member_id: member.id, seats: willWaitlist, status: 'waitlist',  booked_at: bookedAt, payment_status: initialPaymentStatus, ...bringFields })
 
   const { error } = await supabaseAdmin.from('bookings').insert(rows)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -225,7 +238,7 @@ export async function PATCH(req) {
   const oldConfirmed = myConfirmed.seats || 1
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('max_seats, payment_required, reservation_cutoff, allow_nonresident_guests').eq('id', event_id).single()
+    .from('events').select('max_seats, payment_required, reservation_cutoff, allow_nonresident_guests, bring_category_ids, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   const { data: confirmedRows } = await supabaseAdmin
     .from('bookings').select('seats')
     .eq('event_id', event_id).eq('status', 'confirmed').neq('id', myConfirmed.id)
@@ -249,6 +262,14 @@ export async function PATCH(req) {
   })
   if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
 
+  const bringRequired = !!event?.clubs?.bring_enabled
+  const bring = validateBring({
+    required: bringRequired,
+    bringCategoryId: body.bring_category_id,
+    allowedCategoryIds: event?.bring_category_ids,
+  })
+  if (!bring.ok) return NextResponse.json({ error: bring.error }, { status: 400 })
+
   const newConfirmed  = Math.min(newSeats, maxCanConfirm)
   const newWaitlisted = newSeats - newConfirmed
 
@@ -257,7 +278,8 @@ export async function PATCH(req) {
   }
 
   const { error: updateErr } = await supabaseAdmin
-    .from('bookings').update({ seats: newConfirmed, updated_at: new Date().toISOString() }).eq('id', myConfirmed.id)
+    .from('bookings').update({ seats: newConfirmed, updated_at: new Date().toISOString(),
+      ...(bringRequired ? { bring_category_id: body.bring_category_id || null, bring_note: body.bring_note || null } : {}) }).eq('id', myConfirmed.id)
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
 
   if (newConfirmed < oldConfirmed) {
