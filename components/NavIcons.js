@@ -174,17 +174,21 @@ export function ToolsIcon({ size = 26 }) {
   )
 }
 
-// ── Clubs hub icon — a small cluster of people (a "club") ────────────────────
+// ── Clubs hub icon — a ring of figures, deliberately multi-coloured ──────────
+// Original artwork. Unlike every other nav icon this one does NOT inherit
+// currentColor: Clubs is the one hub containing many differently-coloured
+// groups, so the icon itself carries the app palette to signal "lots of
+// groups" rather than a single hub.
+const CLUB_RING = ['#0d9488', '#c2410c', '#7c3aed', '#2563eb', '#f59e0b', '#15803d']
 export function ClubsIcon({ size = 26 }) {
   return (
     <svg width={size} height={size} viewBox={VB} aria-hidden="true">
-      <path fill="currentColor"
-        d="M 35 12 A 9 9 0 1 0 35 30 A 9 9 0 1 0 35 12 Z
-           M 20 33 A 7 7 0 1 0 20 47 A 7 7 0 1 0 20 33 Z
-           M 50 33 A 7 7 0 1 0 50 47 A 7 7 0 1 0 50 47 Z
-           M 35 32 Q 48 32 50 54 L 20 54 Q 22 32 35 32 Z
-           M 15 48 Q 6 49 6 62 L 18 62 Q 18 53 22 49 Q 18 48 15 48 Z
-           M 55 48 Q 64 49 64 62 L 52 62 Q 52 53 48 49 Q 52 48 55 48 Z"/>
+      {CLUB_RING.map((c, i) => (
+        <g key={i} transform={`rotate(${i * 60} 35 35)`} fill={c}>
+          <circle cx="35" cy="11" r="5.6" />
+          <path d="M 27.5 20.5 Q 35 16.5 42.5 20.5 L 42.5 27 Q 35 30.5 27.5 27 Z" />
+        </g>
+      ))}
     </svg>
   )
 }
