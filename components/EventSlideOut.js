@@ -10,6 +10,7 @@ import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
 import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, sumUnpaidSeats, seatsCost, bookingStatusBadge } from "@/lib/payments"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
+import { clubCaps, clubColour } from "@/lib/clubs"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -257,7 +258,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   const [addSubmitting,       setAddSubmitting]       = useState(false)
   const [insufficientCapacity, setInsufficientCapacity] = useState(null)
   const isMovie  = event.hub_type === "movie"
-  const isBook   = event.hub_type === "bookclub"
+  const isBook   = clubCaps(event.club).hasBooks
   const isSocial = event.hub_type === "social"
 
   const inputStyle = { width: "100%", padding: "0.6rem 0.8rem", borderRadius: 8, border: "1px solid var(--border)",
@@ -1120,7 +1121,9 @@ function BookingSection({ event, onRefresh }) {
     } finally { setSubmitting(false) }
   }
 
-  const isBookclubEvent = event.hub_type === "bookclub"
+  // Sign-up style (one seat, no seat picker, no Modify Seats) — a club flag
+  // now, not a hub name. Book Club = true; Dinner Club will be false.
+  const isBookclubEvent = clubCaps(event.club).singleSignup
 
   return (
     <div>
@@ -1310,7 +1313,8 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
 
   if (!event) return null
 
-  const colour = event.is_public === false ? "#bbb" : (HUB_COLOURS[event.hub_type] || "var(--amber)")
+  const colour = event.is_public === false ? "#bbb"
+    : (event.club ? clubColour(event.club) : (HUB_COLOURS[event.hub_type] || "var(--amber)"))
   const isPrivate = event.is_public === false
 
   // Check if current user is a coordinator for this event
@@ -1338,7 +1342,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px",
           borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "var(--surface)", zIndex: 1 }}>
           <div style={{ fontWeight: 700, fontSize: 15, color: colour, textTransform: "capitalize" }}>
-            {event.hub_type === "bookclub" ? "Book Club" : event.hub_type}
+            {event.club?.name || (event.hub_type === "bookclub" ? "Book Club" : event.hub_type)}
           </div>
           <button onClick={handleClose} style={{ background: "var(--surface2)", border: "none", borderRadius: "50%",
             width: 36, height: 36, fontSize: 20, cursor: "pointer", color: "var(--text)",
@@ -1352,7 +1356,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
               style={{ width: "100%", maxHeight: 260, objectFit: "cover", borderRadius: 12, marginBottom: 14 }} />
           )}
           {/* Book cover */}
-          {event.hub_type === "bookclub" && event.book?.cover_url && (
+          {clubCaps(event.club).hasBooks && event.book?.cover_url && (
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
               <img src={event.book.cover_url} alt={event.book.title}
                 style={{ height: 160, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }} />
@@ -1425,7 +1429,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
               )}
 
               {/* Book Club: member has the physical kit checked out */}
-              {event.hub_type === "bookclub" && event.my_bookings?.find(b => b.status === "confirmed")?.has_book && (
+              {clubCaps(event.club).hasBookReturn && event.my_bookings?.find(b => b.status === "confirmed")?.has_book && (
                 <div style={{ background: "var(--purple)15", border: "1px solid var(--purple)", borderRadius: 10,
                   padding: "10px 12px", marginBottom: 14, fontSize: 13, fontWeight: 600, color: "var(--purple)" }}>
                   📖 You have the book{event.book_return_date ? ` — return by ${fmtDate(event.book_return_date)}` : ""}
@@ -1433,7 +1437,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
               )}
 
               {/* Book-specific */}
-              {event.hub_type === "bookclub" && event.book && (
+              {clubCaps(event.club).hasBooks && event.book && (
                 <div style={{ marginBottom: 14 }}>
                   {event.book.author && <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>by {event.book.author}</div>}
                   {/* Genres */}

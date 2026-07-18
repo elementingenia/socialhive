@@ -70,7 +70,9 @@ export default function BottomNav() {
       ? {
           colour: clubColour(club),
           items: clubNavItems(club).map(it => ({
-            ...it, Icon: it.label === "Suggest" ? SuggestionsIcon : ClubsIcon,
+            ...it,
+            // textOnly = the club itself: label in the club colour, no glyph.
+            Icon: it.textOnly ? null : (it.label === "Suggest" ? SuggestionsIcon : ClubsIcon),
           })),
         }
       : { colour: "var(--purple)", items: [{ path: "/clubs", label: "Clubs", Icon: ClubsIcon }] }
@@ -105,7 +107,7 @@ export default function BottomNav() {
     ]
     return (
       <nav style={navBase}>
-        {hubNavItems.map(({ path, label, Icon, exact, emoji }) => {
+        {hubNavItems.map(({ path, label, Icon, exact }) => {
           const active = exact
             ? pathname === path
             : pathname === path || pathname.startsWith(path + "/")
@@ -113,10 +115,9 @@ export default function BottomNav() {
           return (
             <button key={path} onClick={() => router.push(path)}
               style={btn(active, colour)} aria-current={active ? "page" : undefined}>
-              {emoji
-                ? <span style={{ fontSize: 22, lineHeight: "26px" }} aria-hidden="true">{emoji}</span>
-                : <Icon size={26} />}
-              {label}
+              {Icon
+                ? <><Icon size={26} />{label}</>
+                : <span style={{ fontWeight: 700, fontSize: "0.9rem", lineHeight: 1.2, textAlign: "center" }}>{label}</span>}
             </button>
           )
         })}

@@ -822,6 +822,7 @@ export default function ClubHome({ club }) {
       ...ev,
       hub_type: "club",
       club_id: club.id,
+      club,
       max_seats: 0,
       bookings_count: 0,
       waitlist_count: 0,
