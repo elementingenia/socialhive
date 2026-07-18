@@ -28,10 +28,14 @@ ok(tracksLoanedItem(dinnerClub, { book_id: 'b1' }) === false, 'club without book
 
 // nav items
 const bcNav = clubNavItems(bookClub)
-ok(bcNav.length === 2 && bcNav[1].label === 'Suggest', 'book club nav = club + Suggest')
-ok(bcNav[0].path === '/clubs/book-club' && bcNav[0].exact === true, 'first nav item is the club itself, exact')
+ok(bcNav.length === 3, 'book club nav = Clubs + club + Suggest')
+ok(bcNav[0].path === '/clubs' && bcNav[0].label === 'Clubs', 'first item is back-to-Clubs')
+ok(bcNav[1].path === '/clubs/book-club', 'second item is the club itself')
+ok(bcNav[2].label === 'Suggest', 'Suggest last, only for catalogue clubs')
 const dcNav = clubNavItems(dinnerClub)
-ok(dcNav.length === 1 && dcNav[0].label === 'Dinner Club', 'dinner club nav = club only (no Suggest)')
+ok(dcNav.length === 2 && dcNav[1].label === 'Dinner Club', 'dinner club nav = Clubs + club (no Suggest)')
+ok(clubNavItems({ ...dinnerClub, icon: '🍽️' })[1].emoji === '🍽️', 'club emoji passed through when set')
+ok(dcNav[1].emoji === null, 'no emoji when club.icon unset')
 ok(clubNavItems(null).length === 0, 'null club => no nav items')
 
 console.log(`\nlib/clubs.js: ${pass} passed, ${fail} failed`)

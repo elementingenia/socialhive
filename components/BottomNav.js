@@ -105,7 +105,7 @@ export default function BottomNav() {
     ]
     return (
       <nav style={navBase}>
-        {hubNavItems.map(({ path, label, Icon, exact }) => {
+        {hubNavItems.map(({ path, label, Icon, exact, emoji }) => {
           const active = exact
             ? pathname === path
             : pathname === path || pathname.startsWith(path + "/")
@@ -113,7 +113,9 @@ export default function BottomNav() {
           return (
             <button key={path} onClick={() => router.push(path)}
               style={btn(active, colour)} aria-current={active ? "page" : undefined}>
-              <Icon size={26} />
+              {emoji
+                ? <span style={{ fontSize: 22, lineHeight: "26px" }} aria-hidden="true">{emoji}</span>
+                : <Icon size={26} />}
               {label}
             </button>
           )
