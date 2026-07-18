@@ -1222,6 +1222,7 @@ export default function ClubHome({ club }) {
           label={upcoming[0] ? "Current Meeting" : "Current Reading"}
           booking={myBookings[activeEvent.id]}
           onOpen={() => openSlideOut(activeEvent)}
+          colour={colour}
           showToast={showToast}
         />
       ) : (

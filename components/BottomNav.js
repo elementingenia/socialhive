@@ -1,10 +1,10 @@
 "use client"
-import React, { useState, useEffect } from "react"
+import React from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
 import { getActiveHub } from "@/lib/navUtils"
-import { supabase } from "@/lib/supabase"
 import { clubColour, clubNavItems } from "@/lib/clubs"
+import { useActiveClub } from "@/lib/useActiveClub"
 import { BAR_ENABLED } from "@/lib/features"
 import {
   HomeIcon, MoviesIcon, CalendarIcon, SuggestionsIcon, DVDIcon,
@@ -55,14 +55,7 @@ export default function BottomNav() {
   // Clubs is the one data-driven hub: its sub-nav depends on WHICH club you're
   // in (its name, its colour) and whether that club actually has a catalogue —
   // so Dinner Club shows just Home + Dinner Club, Book Club adds Suggest.
-  const clubSlug = pathname?.startsWith("/clubs/") ? pathname.split("/")[2] : null
-  const [club, setClub] = useState(null)
-  useEffect(() => {
-    if (!clubSlug) { setClub(null); return }
-    supabase.from("clubs").select("id, name, slug, colour, catalogue_module")
-      .eq("slug", clubSlug).maybeSingle()
-      .then(({ data }) => setClub(data || null))
-  }, [clubSlug])
+  const club = useActiveClub()
 
   let hub = activeHub ? HUB_CONFIG[activeHub] : null
   if (activeHub === "clubs") {
