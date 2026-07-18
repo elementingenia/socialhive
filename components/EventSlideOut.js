@@ -1363,7 +1363,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
             </div>
           )}
           {/* Social event image */}
-          {event.hub_type === "social" && event.image_url && (
+          {(event.hub_type === "social" || event.club) && event.image_url && (
             <img src={event.image_url} alt={event.title}
               style={{
                 width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 12, marginBottom: 14,

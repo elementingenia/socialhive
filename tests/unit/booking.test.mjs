@@ -5,7 +5,7 @@
 //
 //   npm run test:unit
 
-import { bookingsClosed, cutoffToInputValue, cutoffFromInputValue, cutoffLabel } from '../../lib/booking.js'
+import { bookingsClosed, cutoffToInputValue, cutoffFromInputValue, cutoffLabel, cutoffToDateValue, cutoffFromDateValue } from '../../lib/booking.js'
 
 let pass = 0, fail = 0
 const ok = (cond, msg) => { cond ? pass++ : (fail++, console.log('  ✗', msg)) }
@@ -30,6 +30,15 @@ ok(cutoffToInputValue(null) === '', 'null ISO => empty input value')
 ok(cutoffToInputValue('garbage') === '', 'unparseable ISO => empty input value, no crash')
 ok(cutoffLabel(iso).length > 0, 'cutoffLabel renders a non-empty label')
 ok(cutoffLabel(null) === '', 'cutoffLabel(null) => empty string')
+
+// date-only cut-off (Bookings Close)
+const endOfDay = cutoffFromDateValue('2026-07-20')
+ok(typeof endOfDay === 'string' && new Date(endOfDay).getDate() === 20, 'date maps to the END of that day, so the 20th stays open')
+ok(bookingsClosed({ reservation_cutoff: endOfDay }, new Date(2026, 6, 20, 12, 0)) === false, 'midday on the cut-off date is still open')
+ok(bookingsClosed({ reservation_cutoff: endOfDay }, new Date(2026, 6, 21, 0, 1)) === true, 'the next day is closed')
+ok(cutoffToDateValue(endOfDay) === '2026-07-20', 'round-trips back to the same date')
+ok(cutoffFromDateValue('') === null, 'empty date => null')
+ok(cutoffToDateValue(null) === '', 'null iso => empty')
 
 console.log(`\nlib/booking.js: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

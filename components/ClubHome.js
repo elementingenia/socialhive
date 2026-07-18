@@ -7,7 +7,8 @@ import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
 import { getToken } from "@/components/ResidentEditPanel"
 import { clubCaps, clubColour } from "@/lib/clubs"
-import { cutoffToInputValue, cutoffFromInputValue } from "@/lib/booking"
+import EventImagePicker from "@/components/EventImagePicker"
+import { cutoffToDateValue, cutoffFromDateValue } from "@/lib/booking"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -55,7 +56,6 @@ function BookingStrip({ isJoined, hasBook, bookReturnDate, colour = "var(--purpl
   }
   return (
     <div style={{ ...base, background: colour + "0f", borderTop: `1px solid ${colour}26` }}>
-      <span style={{ color: colour }}>Join this session</span>
       <span style={{ color: colour, fontSize: "0.75rem" }}>Tap to sign up →</span>
     </div>
   )
@@ -161,6 +161,13 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
         <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.85rem" }}>{label}</span>
         <span style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.78rem", fontWeight: 600 }}>{fmtDate(event.event_date)}</span>
       </div>
+
+      {/* Event image — the theme cue; same focal-point treatment as Social */}
+      {event.image_url && (
+        <img src={event.image_url} alt={event.title}
+          style={{ width: "100%", height: 140, objectFit: "cover", display: "block",
+            objectPosition: `${event.image_focal_x ?? 50}% ${event.image_focal_y ?? 50}%` }} />
+      )}
 
       {/* Book info */}
       {book && (
@@ -579,19 +586,26 @@ function CoordPicker({ members, value, onChange, valid = false, colour = "var(--
 
 // ── Hour picker — hour + AM/PM only (no minutes; Iain 2026-07-17) ────────────
 function HourPicker({ value, onChange, colour, inputStyle }) {
-  const h24  = parseInt((value || "09:00").split(":")[0], 10) || 0
+  const [hhRaw, mmRaw] = (value || "09:00").split(":")
+  const h24  = parseInt(hhRaw, 10) || 0
+  const mins = parseInt(mmRaw, 10) >= 30 ? 30 : 0
   const isPM = h24 >= 12
   const h12  = h24 % 12 === 0 ? 12 : h24 % 12
-  const emit = (newH12, pm) => {
+  const emit = (newH12, pm, m = mins) => {
     let h = newH12 % 12
     if (pm) h += 12
-    onChange(String(h).padStart(2, "0") + ":00")
+    onChange(String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0"))
   }
   return (
     <div style={{ display: "flex", gap: 8 }}>
       <select value={h12} onChange={e => emit(parseInt(e.target.value, 10), isPM)}
         style={{ ...inputStyle, flex: 1, cursor: "pointer" }}>
         {Array.from({ length: 12 }, (_, i) => i + 1).map(h => <option key={h} value={h}>{h}</option>)}
+      </select>
+      <select value={mins} onChange={e => emit(h12, isPM, parseInt(e.target.value, 10))}
+        style={{ ...inputStyle, flex: 1, cursor: "pointer" }}>
+        <option value={0}>00</option>
+        <option value={30}>30</option>
       </select>
       <div style={{ display: "flex", gap: 6 }}>
         {["AM", "PM"].map(l => {
@@ -609,26 +623,43 @@ function HourPicker({ value, onChange, colour, inputStyle }) {
   )
 }
 
-// ── Bring-a-dish categories (read-only here; attendees pick at booking) ──────
-function BringCategoriesNote({ clubId, colour }) {
+// ── Bring-a-dish: pick which of the club's categories apply to THIS event ────
+// The club defines the full list; each event chooses which are allowed, and an
+// attendee booking only sees the allowed ones (Iain 2026-07-18).
+// value === null means "all of them".
+function BringCategoryPicker({ clubId, colour, value, onChange }) {
   const [cats, setCats] = useState([])
   useEffect(() => {
     if (!clubId) return
-    supabase.from("club_bring_categories").select("label, sort").eq("club_id", clubId).order("sort")
-      .then(({ data }) => setCats((data || []).map(c => c.label)))
+    supabase.from("club_bring_categories").select("id, label, sort").eq("club_id", clubId).order("sort")
+      .then(({ data }) => setCats(data || []))
   }, [clubId])
+
   if (!cats.length) {
     return <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>No categories set yet — add them in Admin &rsaquo; Clubs.</div>
+  }
+  const selected = value === null || value === undefined ? cats.map(c => c.id) : value
+  const toggle = (id) => {
+    const next = selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]
+    onChange(next.length === cats.length ? null : next)
   }
   return (
     <div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 4 }}>
-        {cats.map((c, i) => (
-          <span key={i} style={{ background: colour + "1f", color: colour, borderRadius: 14,
-            padding: "0.15rem 0.6rem", fontSize: "0.8rem", fontWeight: 600 }}>{c}</span>
-        ))}
+        {cats.map(c => {
+          const on = selected.includes(c.id)
+          return (
+            <button key={c.id} type="button" onClick={() => toggle(c.id)}
+              style={{ borderRadius: 14, padding: "0.2rem 0.7rem", fontSize: "0.8rem", fontWeight: 600,
+                cursor: "pointer", fontFamily: "inherit",
+                border: `1px solid ${on ? colour : "var(--border)"}`,
+                background: on ? colour : "var(--surface)", color: on ? "#fff" : "var(--text-dim)" }}>
+              {c.label}
+            </button>
+          )
+        })}
       </div>
-      <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Attendees choose one of these when they book.</div>
+      <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Tap to choose which apply to this event — attendees pick one of these when they book.</div>
     </div>
   )
 }
@@ -649,7 +680,9 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
     event_time:   (event?.event_time || nowHour).slice(0, 5),
     kit_return_date: event?.kit_return_date || "",
     book_return_date: event?.book_return_date || "",
-    reservation_cutoff: cutoffToInputValue(event?.reservation_cutoff),
+    reservation_cutoff: cutoffToDateValue(event?.reservation_cutoff),
+    max_seats:    event?.max_seats ?? 20,
+    bring_category_ids: event?.bring_category_ids || null,
     theme_name:   event?.theme_name || "",
     description:  event?.description || "",
     welcome_message: event?.welcome_message || "",
@@ -716,7 +749,9 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
       book_id:         caps.hasBooks ? bookId : null,
       kit_return_date: caps.hasKitReturn  ? (form.kit_return_date  || null) : null,
       book_return_date: caps.hasBookReturn ? (form.book_return_date || null) : null,
-      reservation_cutoff: cutoffFromInputValue(form.reservation_cutoff),
+      reservation_cutoff: cutoffFromDateValue(form.reservation_cutoff),
+      max_seats:       Number(form.max_seats) || 20,
+      bring_category_ids: caps.bringEnabled ? (form.bring_category_ids || null) : null,
       theme_name:      caps.hasTheme ? (form.theme_name.trim() || null) : null,
       archived:        false,
       book_snapshot:   selectedBook ? {
@@ -781,6 +816,13 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
       </div>
 
       <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Total Seats</label>
+        <input type="number" min={1} max={500} value={form.max_seats}
+          onChange={e => set("max_seats", e.target.value)} onWheel={e => e.currentTarget.blur()}
+          style={inputStyle} />
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Start Time</label>
         <HourPicker value={form.event_time} onChange={v => set("event_time", v)} colour={colour} inputStyle={inputStyle} />
       </div>
@@ -805,10 +847,30 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
 
       <div style={{ marginBottom: "1rem" }}>
         <label style={labelStyle}>Bookings Close (optional)</label>
-        <input type="datetime-local" value={form.reservation_cutoff} onChange={e => set("reservation_cutoff", e.target.value)}
-          style={inputStyle} />
-        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>After this, residents see &ldquo;Bookings Closed&rdquo; instead of the sign-up button. Leave blank to keep sign-ups open until the meeting.</div>
+        <input type="date" value={form.reservation_cutoff} onChange={e => set("reservation_cutoff", e.target.value)}
+          onClick={e => e.currentTarget.showPicker?.()} style={inputStyle} />
+        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>Bookings stay open for all of this day, then residents see &ldquo;Bookings Closed&rdquo;. Leave blank to keep them open until the event.</div>
       </div>
+
+      {event?.id && (
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Event Image</label>
+        <EventImagePicker
+          eventId={event.id}
+          imageUrl={event?.image_url}
+          focalX={event?.image_focal_x}
+          focalY={event?.image_focal_y}
+          colour={colour}
+          getToken={getToken}
+        />
+      </div>
+      )}
+      {!event?.id && (
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Event Image</label>
+        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", fontStyle: "italic" }}>Create the event first, then reopen it to add a photo.</div>
+      </div>
+      )}
 
       {caps.hasTheme && (
       <div style={{ marginBottom: 12 }}>
@@ -821,7 +883,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
       {caps.bringEnabled && (
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Attendees bring something</label>
-        <BringCategoriesNote clubId={club?.id} colour={colour} />
+        <BringCategoryPicker clubId={club?.id} colour={colour}
+          value={form.bring_category_ids} onChange={v => set("bring_category_ids", v)} />
       </div>
       )}
 
@@ -887,6 +950,7 @@ export default function ClubHome({ club }) {
   const welcomeText = club?.welcome_text || ""
   const [events,      setEvents]      = useState([])  // all non-archived BC events ordered by date asc
   const [myBookings,  setMyBookings]  = useState({})  // eventId → booking
+  const [seatCounts,  setSeatCounts]  = useState({})  // eventId → {confirmed, waitlist} seats
   const [myBookedIds, setMyBookedIds] = useState(new Set())  // past event ids user participated in
   const [members,     setMembers]     = useState([])
   const [loading,     setLoading]     = useState(true)
@@ -910,15 +974,15 @@ export default function ClubHome({ club }) {
       hub_type: "club",
       club_id: club.id,
       club,
-      max_seats: 0,
-      bookings_count: 0,
-      waitlist_count: 0,
-      my_bookings: myBooking?.status === "confirmed"
-        ? [{ status: "confirmed", seats: 1, payment_status: null, has_book: !!myBooking.has_book }]
+      max_seats: ev.max_seats ?? 0,
+      bookings_count: (seatCounts[ev.id]?.confirmed) || 0,
+      waitlist_count: (seatCounts[ev.id]?.waitlist) || 0,
+      my_bookings: (myBooking && myBooking.status !== "cancelled")
+        ? [{ status: myBooking.status, seats: myBooking.seats || 1, payment_status: myBooking.payment_status ?? null, has_book: !!myBooking.has_book }]
         : [],
       book: ev.books || null,
       book_conflict_title: bookConflictTitle,
-      payment_required: false,
+      payment_required: !!ev.payment_required,
     }
   }
 
@@ -953,7 +1017,7 @@ export default function ClubHome({ club }) {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, max_seats, payment_required, image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("club_id", club.id)
       .eq("archived", false)
       .order("event_date", { ascending: true })
@@ -979,12 +1043,29 @@ export default function ClubHome({ club }) {
     }
     setEvents(enrichedEvs)
 
+    // Seat counts for every event, so the booking modal shows real capacity
+    // (this used to be hardcoded to 0, which made every club event look fully
+    // booked and forced people onto the waitlist — Iain 2026-07-18).
+    if (evs?.length) {
+      const allIds = evs.map(e => e.id)
+      const { data: allBk } = await supabase
+        .from("bookings").select("event_id, status, seats")
+        .in("event_id", allIds).neq("status", "cancelled")
+      const counts = {}
+      for (const b of allBk || []) {
+        const c = counts[b.event_id] || (counts[b.event_id] = { confirmed: 0, waitlist: 0 })
+        if (b.status === "confirmed") c.confirmed += (b.seats || 1)
+        else if (b.status === "waitlist") c.waitlist += (b.seats || 1)
+      }
+      setSeatCounts(counts)
+    }
+
     // My bookings for all BC events
     if (member?.id && evs?.length) {
       const ids = evs.map(e => e.id)
       const { data: bks } = await supabase
         .from("bookings")
-        .select("id, event_id, status, has_book, book_given_at")
+        .select("id, event_id, status, seats, payment_status, has_book, book_given_at")
         .eq("member_id", member.id)
         .in("event_id", ids)
 
