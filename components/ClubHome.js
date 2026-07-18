@@ -694,11 +694,9 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
     payment_required: event?.payment_required || false,
     cost:         event?.cost || "",
     payment_due_by: event?.payment_due_by || "",
-    max_seats_per_booking: event?.max_seats_per_booking ?? 2,
-    allow_nonresident_guests: event?.allow_nonresident_guests || false,
-    payment_required: event?.payment_required || false,
-    cost:         event?.cost || "",
-    payment_due_by: event?.payment_due_by || "",
+    is_public:    event?.is_public !== false,
+    show_attendee_names: event?.show_attendee_names !== false,
+    title:        event?.title || "",
     bring_category_ids: event?.bring_category_ids || null,
     theme_name:   event?.theme_name || "",
     description:  event?.description || "",
@@ -714,6 +712,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
 
   async function save() {
     if (!form.event_date || (caps.hasBooks && !selectedBook)) return
+    if (!caps.hasBooks && !form.title.trim()) { setSaveError("Please give the event a name."); return }
     setSaving(true)
     setSaveError(null)
 
@@ -760,7 +759,9 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
       club_id:         club.id,
       event_date:      form.event_date,
       event_time:      form.event_time || "00:00",
-      title:           selectedBook?.title || club?.name || "Club Event",
+      title:           form.title.trim() || selectedBook?.title || club?.name || "Club Event",
+      is_public:       form.is_public !== false,
+      show_attendee_names: form.show_attendee_names !== false,
       description:     form.description,
       welcome_message: form.welcome_message,
       book_id:         caps.hasBooks ? bookId : null,
@@ -836,6 +837,13 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
       padding: "1.25rem", marginBottom: 16 }}>
       <div style={{ fontWeight: 800, fontSize: "1rem", color: colour, marginBottom: 16 }}>
         {event ? `Edit ${club?.name || "Club"} Event` : `Add ${club?.name || "Club"} Event`}
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Event Name{!caps.hasBooks && <span style={{ color: "var(--danger)" }}> *</span>}</label>
+        <input value={form.title} onChange={e => set("title", e.target.value)}
+          placeholder={caps.hasBooks ? "Leave blank to use the book title" : "e.g. Italian Night"}
+          style={inputStyle} />
       </div>
 
       <div style={{ marginBottom: 12 }}>
@@ -950,6 +958,22 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
         <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 4 }}>When attendees must return their copy to you — allow time before the kit return date.</div>
       </div>
       )}
+
+      <div style={{ marginBottom: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        {[
+          { k: "is_public",           label: "Public calendar" },
+          { k: "show_attendee_names", label: "Show attendees" },
+        ].map(({ k, label }) => (
+          <button key={k} type="button" onClick={() => set(k, !form[k])}
+            style={{ padding: "0.6rem 0.5rem", borderRadius: 10, fontSize: "0.85rem", fontFamily: "inherit",
+              cursor: "pointer", fontWeight: form[k] ? 700 : 500,
+              border: `1.5px solid ${form[k] ? colour : "var(--border)"}`,
+              background: form[k] ? colour + "18" : "var(--surface)",
+              color: form[k] ? colour : "var(--text-dim)" }}>
+            {form[k] ? "✓ " : ""}{label}
+          </button>
+        ))}
+      </div>
 
       <div style={{ marginBottom: "1rem" }}>
         <label style={labelStyle}>Bookings Close (optional)</label>
