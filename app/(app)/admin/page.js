@@ -1617,6 +1617,7 @@ const CLUB_FLAGS = [
   { key: 'has_cost',        label: 'Paid events (cost)' },
   { key: 'bring_enabled',   label: 'Attendees bring something' },
   { key: 'single_signup',   label: 'Sign-up only (one seat per person)' },
+  { key: 'one_event_at_a_time', label: 'One event at a time (block scheduling ahead)' },
 ]
 function slugify(s) {
   return (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
@@ -1646,6 +1647,7 @@ function ClubForm({ club, onSaved, onCancel }) {
     has_book_return: club?.has_book_return || false, has_kit_return: club?.has_kit_return || false,
     has_theme: club?.has_theme || false, has_cost: club?.has_cost || false, bring_enabled: club?.bring_enabled || false,
     single_signup: club?.single_signup || false,
+    one_event_at_a_time: club?.one_event_at_a_time || false,
   })
   const [slugTouched, setSlugTouched] = useState(isEdit)
   const [bringCats, setBringCats] = useState([])
@@ -1675,6 +1677,7 @@ function ClubForm({ club, onSaved, onCancel }) {
       has_book_return: form.has_book_return, has_kit_return: form.has_kit_return,
       has_theme: form.has_theme, has_cost: form.has_cost, bring_enabled: form.bring_enabled,
       single_signup: form.single_signup,
+      one_event_at_a_time: form.one_event_at_a_time,
     }
     let clubId = club?.id
     if (isEdit) {

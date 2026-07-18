@@ -577,6 +577,62 @@ function CoordPicker({ members, value, onChange, valid = false, colour = "var(--
   )
 }
 
+// ── Hour picker — hour + AM/PM only (no minutes; Iain 2026-07-17) ────────────
+function HourPicker({ value, onChange, colour, inputStyle }) {
+  const h24  = parseInt((value || "09:00").split(":")[0], 10) || 0
+  const isPM = h24 >= 12
+  const h12  = h24 % 12 === 0 ? 12 : h24 % 12
+  const emit = (newH12, pm) => {
+    let h = newH12 % 12
+    if (pm) h += 12
+    onChange(String(h).padStart(2, "0") + ":00")
+  }
+  return (
+    <div style={{ display: "flex", gap: 8 }}>
+      <select value={h12} onChange={e => emit(parseInt(e.target.value, 10), isPM)}
+        style={{ ...inputStyle, flex: 1, cursor: "pointer" }}>
+        {Array.from({ length: 12 }, (_, i) => i + 1).map(h => <option key={h} value={h}>{h}</option>)}
+      </select>
+      <div style={{ display: "flex", gap: 6 }}>
+        {["AM", "PM"].map(l => {
+          const on = (l === "PM") === isPM
+          return (
+            <button key={l} type="button" onClick={() => emit(h12, l === "PM")}
+              style={{ padding: "0 1rem", borderRadius: 10, fontFamily: "inherit", cursor: "pointer",
+                fontWeight: on ? 700 : 500,
+                border: `1.5px solid ${on ? colour : "var(--border)"}`,
+                background: on ? colour : "var(--surface)", color: on ? "#fff" : "var(--text)" }}>{l}</button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ── Bring-a-dish categories (read-only here; attendees pick at booking) ──────
+function BringCategoriesNote({ clubId, colour }) {
+  const [cats, setCats] = useState([])
+  useEffect(() => {
+    if (!clubId) return
+    supabase.from("club_bring_categories").select("label, sort").eq("club_id", clubId).order("sort")
+      .then(({ data }) => setCats((data || []).map(c => c.label)))
+  }, [clubId])
+  if (!cats.length) {
+    return <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>No categories set yet — add them in Admin &rsaquo; Clubs.</div>
+  }
+  return (
+    <div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 4 }}>
+        {cats.map((c, i) => (
+          <span key={i} style={{ background: colour + "1f", color: colour, borderRadius: 14,
+            padding: "0.15rem 0.6rem", fontSize: "0.8rem", fontWeight: 600 }}>{c}</span>
+        ))}
+      </div>
+      <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Attendees choose one of these when they book.</div>
+    </div>
+  )
+}
+
 // ── Admin Inline Event Form ───────────────────────────────────────────────────
 function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(--purple)" }) {
   const inputStyle = { width: "100%", padding: "0.75rem 1rem", borderRadius: 10,
@@ -586,11 +642,15 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
 
   const caps = clubCaps(club)
   const activeEC = event ? (event.event_coordinators || []).find(ec => !ec.replaced_at) : null
+  const todayStr = new Date().toISOString().split("T")[0]
+  const nowHour  = String(new Date().getHours()).padStart(2, "0") + ":00"
   const [form,   setForm]   = useState({
-    event_date:   event?.event_date || "",
+    event_date:   event?.event_date || todayStr,
+    event_time:   (event?.event_time || nowHour).slice(0, 5),
     kit_return_date: event?.kit_return_date || "",
     book_return_date: event?.book_return_date || "",
     reservation_cutoff: cutoffToInputValue(event?.reservation_cutoff),
+    theme_name:   event?.theme_name || "",
     description:  event?.description || "",
     welcome_message: event?.welcome_message || "",
     coordinator_id: activeEC?.member_id || "",
@@ -607,8 +667,12 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
     setSaving(true)
     setSaveError(null)
 
-    // Upsert book record
-    let bookId = selectedBook.id || null
+    // Upsert book record — only for clubs that actually have a books
+    // catalogue. Previously this dereferenced selectedBook unconditionally,
+    // which threw (and silently killed the save) for any club without a book.
+    let bookId = null
+    if (caps.hasBooks && selectedBook) {
+    bookId = selectedBook.id || null
     if (!bookId && selectedBook.google_books_id) {
       const { data: existing } = await supabase
         .from("books")
@@ -639,11 +703,13 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
       }
     }
 
+    }
+
     const payload = {
       hub_type:        "club",
       club_id:         club.id,
       event_date:      form.event_date,
-      event_time:      "00:00",
+      event_time:      form.event_time || "00:00",
       title:           selectedBook?.title || club?.name || "Club Event",
       description:     form.description,
       welcome_message: form.welcome_message,
@@ -651,6 +717,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
       kit_return_date: caps.hasKitReturn  ? (form.kit_return_date  || null) : null,
       book_return_date: caps.hasBookReturn ? (form.book_return_date || null) : null,
       reservation_cutoff: cutoffFromInputValue(form.reservation_cutoff),
+      theme_name:      caps.hasTheme ? (form.theme_name.trim() || null) : null,
       archived:        false,
       book_snapshot:   selectedBook ? {
         title:     selectedBook.title,
@@ -704,13 +771,18 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
     <div style={{ background: "var(--surface)", borderRadius: 16, border: `2px solid ${colour}`,
       padding: "1.25rem", marginBottom: 16 }}>
       <div style={{ fontWeight: 800, fontSize: "1rem", color: colour, marginBottom: 16 }}>
-        {event ? "Edit Book Club Event" : "Add Book Club Event"}
+        {event ? `Edit ${club?.name || "Club"} Event` : `Add ${club?.name || "Club"} Event`}
       </div>
 
       <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Meeting Date <span style={{ color: "var(--danger)" }}>*</span></label>
+        <label style={labelStyle}>Date <span style={{ color: "var(--danger)" }}>*</span></label>
         <input type="date" autoFocus value={form.event_date} onChange={e => set("event_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
           style={{ ...inputStyle, border: `1.5px solid ${form.event_date ? "var(--green)" : "var(--danger)"}` }} />
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Start Time</label>
+        <HourPicker value={form.event_time} onChange={v => set("event_time", v)} colour={colour} inputStyle={inputStyle} />
       </div>
 
       {caps.hasKitReturn && (
@@ -737,6 +809,21 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
           style={inputStyle} />
         <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>After this, residents see &ldquo;Bookings Closed&rdquo; instead of the sign-up button. Leave blank to keep sign-ups open until the meeting.</div>
       </div>
+
+      {caps.hasTheme && (
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Theme</label>
+        <input value={form.theme_name} onChange={e => set("theme_name", e.target.value)}
+          placeholder="e.g. Italian Night" style={inputStyle} />
+      </div>
+      )}
+
+      {caps.bringEnabled && (
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Attendees bring something</label>
+        <BringCategoriesNote clubId={club?.id} colour={colour} />
+      </div>
+      )}
 
       {caps.hasBooks && (
       <div style={{ marginBottom: 12 }}>
@@ -981,7 +1068,9 @@ export default function ClubHome({ club }) {
   ).sort((a, b) => b.event_date.localeCompare(a.event_date))
 
   // Can admin add? Only if there's no second upcoming event (no "Next" slot filled)
-  const canAdd  = isAdmin && !nextEvent
+  // Only clubs that deliberately run one cycle at a time (Book Club) block
+  // adding another while one is upcoming; most clubs schedule ahead.
+  const canAdd  = isAdmin && (!caps.oneEventAtATime || !nextEvent)
   const canEdit = isAdmin && activeEvent
 
   if (loading) return (
