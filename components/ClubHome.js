@@ -8,6 +8,7 @@ import ExpandableText from "@/components/ExpandableText"
 import { getToken } from "@/components/ResidentEditPanel"
 import { clubCaps, clubColour } from "@/lib/clubs"
 import EventImagePicker from "@/components/EventImagePicker"
+import { useLocations } from "@/lib/useLocations"
 import { cutoffToDateValue, cutoffFromDateValue } from "@/lib/booking"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -675,6 +676,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
     appearance: "none", WebkitAppearance: "none" }
 
   const caps = clubCaps(club)
+  const onsiteLocations = useLocations()
   const activeEC = event ? (event.event_coordinators || []).find(ec => !ec.replaced_at) : null
   const todayStr = new Date().toISOString().split("T")[0]
   const nowHour  = String(new Date().getHours()).padStart(2, "0") + ":00"
@@ -685,6 +687,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
     book_return_date: event?.book_return_date || "",
     reservation_cutoff: cutoffToDateValue(event?.reservation_cutoff),
     max_seats:    event?.max_seats ?? 20,
+    location_type: event?.location_type || "onsite",
+    location:     event?.location || "",
     max_seats_per_booking: event?.max_seats_per_booking ?? 2,
     allow_nonresident_guests: event?.allow_nonresident_guests || false,
     payment_required: event?.payment_required || false,
@@ -764,6 +768,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
       book_return_date: caps.hasBookReturn ? (form.book_return_date || null) : null,
       reservation_cutoff: cutoffFromDateValue(form.reservation_cutoff),
       max_seats:       Number(form.max_seats) || 20,
+      location_type:   form.location_type || "onsite",
+      location:        form.location || null,
       max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
       allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
       payment_required: caps.hasCost ? !!form.payment_required : false,
@@ -839,67 +845,44 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
       </div>
 
       <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Total Seats</label>
-        <input type="number" min={1} max={500} value={form.max_seats}
-          onChange={e => set("max_seats", e.target.value)} onWheel={e => e.currentTarget.blur()}
-          style={inputStyle} />
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Max Seats per Booking</label>
-        <input type="number" min={1} max={10} value={form.max_seats_per_booking}
-          onChange={e => set("max_seats_per_booking", e.target.value)} onWheel={e => e.currentTarget.blur()}
-          style={inputStyle} />
-      </div>
-
-      {Number(form.max_seats_per_booking) > 1 && (
-      <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Extra attendees on multi-seat bookings</label>
-        <div style={{ display: "flex", gap: 8 }}>
-          {[{ v: false, t: "Residents only" }, { v: true, t: "Residents + guests" }].map(opt => (
-            <button key={String(opt.v)} type="button" onClick={() => set("allow_nonresident_guests", opt.v)}
-              style={{ flex: 1, padding: "0.6rem 0.5rem", borderRadius: 10, fontSize: "0.88rem", fontFamily: "inherit", cursor: "pointer",
-                border: `1.5px solid ${form.allow_nonresident_guests === opt.v ? colour : "var(--border)"}`,
-                background: form.allow_nonresident_guests === opt.v ? colour : "var(--surface)",
-                color: form.allow_nonresident_guests === opt.v ? "#fff" : "var(--text)",
-                fontWeight: form.allow_nonresident_guests === opt.v ? 700 : 500 }}>{opt.t}</button>
+        <label style={labelStyle}>Location</label>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          {["onsite", "offsite"].map(t => (
+            <button key={t} type="button" onClick={() => { set("location_type", t); set("location", "") }}
+              style={{ flex: 1, padding: "0.55rem", borderRadius: 10, fontFamily: "inherit", fontSize: "0.88rem",
+                fontWeight: 700, cursor: "pointer", border: "2px solid",
+                borderColor: form.location_type === t ? colour : "var(--border)",
+                background: form.location_type === t ? colour + "18" : "var(--surface)",
+                color: form.location_type === t ? colour : "var(--text-dim)" }}>
+              {t === "onsite" ? "On-site" : "Off-site"}
+            </button>
           ))}
         </div>
-        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 4 }}>Booking more than one seat means naming each extra attendee.</div>
-      </div>
-      )}
-
-      {caps.hasCost && (
-      <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Paid event</label>
-        <div style={{ display: "flex", gap: 8, marginBottom: form.payment_required ? 10 : 0 }}>
-          {[{ v: false, t: "Free" }, { v: true, t: "Paid" }].map(opt => (
-            <button key={String(opt.v)} type="button" onClick={() => set("payment_required", opt.v)}
-              style={{ flex: 1, padding: "0.6rem 0.5rem", borderRadius: 10, fontSize: "0.88rem", fontFamily: "inherit", cursor: "pointer",
-                border: `1.5px solid ${form.payment_required === opt.v ? colour : "var(--border)"}`,
-                background: form.payment_required === opt.v ? colour : "var(--surface)",
-                color: form.payment_required === opt.v ? "#fff" : "var(--text)",
-                fontWeight: form.payment_required === opt.v ? 700 : 500 }}>{opt.t}</button>
-          ))}
-        </div>
-        {form.payment_required && (
-          <>
-            <label style={labelStyle}>Cost per person ($)</label>
-            <input type="number" min={0} step={1} value={form.cost} onChange={e => set("cost", e.target.value)}
-              onWheel={e => e.currentTarget.blur()} placeholder="e.g. 25" style={{ ...inputStyle, marginBottom: 10 }} />
-            <label style={labelStyle}>Payment due by (optional)</label>
-            <input type="date" value={form.payment_due_by} onChange={e => set("payment_due_by", e.target.value)}
-              onClick={e => e.currentTarget.showPicker?.()} style={inputStyle} />
-          </>
+        {form.location_type === "onsite" ? (
+          <select value={form.location} onChange={e => set("location", e.target.value)}
+            style={{ ...inputStyle, cursor: "pointer" }}>
+            <option value="">Select venue…</option>
+            {onsiteLocations.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        ) : (
+          <textarea value={form.location} onChange={e => set("location", e.target.value)} rows={3}
+            placeholder="Enter venue name and address…" style={{ ...inputStyle, resize: "vertical" }} />
         )}
       </div>
-      )}
 
-      <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Max Seats per Booking</label>
-        <input type="number" min={1} max={10} value={form.max_seats_per_booking}
-          onChange={e => set("max_seats_per_booking", e.target.value)} onWheel={e => e.currentTarget.blur()}
-          style={inputStyle} />
+      <div style={{ marginBottom: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div>
+          <label style={labelStyle}>Total Seats</label>
+          <input type="number" min={1} max={500} value={form.max_seats}
+            onChange={e => set("max_seats", e.target.value)} onWheel={e => e.currentTarget.blur()}
+            style={inputStyle} />
+        </div>
+        <div>
+          <label style={labelStyle}>Max per Booking</label>
+          <input type="number" min={1} max={10} value={form.max_seats_per_booking}
+            onChange={e => set("max_seats_per_booking", e.target.value)} onWheel={e => e.currentTarget.blur()}
+            style={inputStyle} />
+        </div>
       </div>
 
       {Number(form.max_seats_per_booking) > 1 && (
@@ -1140,7 +1123,7 @@ export default function ClubHome({ club }) {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, max_seats, payment_required, image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, max_seats, max_seats_per_booking, allow_nonresident_guests, cost, payment_due_by, payment_required, location_type, location, image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("club_id", club.id)
       .eq("archived", false)
       .order("event_date", { ascending: true })

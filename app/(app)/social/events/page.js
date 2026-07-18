@@ -10,6 +10,7 @@ import EventImagePicker from "@/components/EventImagePicker"
 import ExpandableText from "@/components/ExpandableText"
 import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, paymentSummary, reconciliationIsStale } from "@/lib/payments"
 import { cutoffToInputValue, cutoffFromInputValue } from "@/lib/booking"
+import { useLocations } from "@/lib/useLocations"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -35,14 +36,10 @@ function Toast({ msg, type }) {
   )
 }
 
-const ONSITE_LOCATIONS = [
-  "Community Hall",
-  "Community Sports Bar",
-  "Community Lounge",
-  "Workshop",
-  "Outside Area",
-  "Health Utility Building",
-]
+// Venues now live in the admin-managed `locations` table (migration 050) —
+// see lib/useLocations. This constant is only a fallback for the brief moment
+// before the list loads.
+const ONSITE_LOCATIONS_FALLBACK = []
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -425,6 +422,7 @@ function FixedListPicker({ value, onChange, options, placeholder = "Select…" }
 
 // ── Location field ────────────────────────────────────────────────────────────
 function LocationField({ locationType, location, onTypeChange, onLocationChange }) {
+  const onsiteLocations = useLocations()
   return (
     <div style={FIELD}>
       <label style={LABEL}>Location *</label>
@@ -448,7 +446,7 @@ function LocationField({ locationType, location, onTypeChange, onLocationChange 
         <FixedListPicker
           value={location}
           onChange={onLocationChange}
-          options={ONSITE_LOCATIONS}
+          options={onsiteLocations.length ? onsiteLocations : ONSITE_LOCATIONS_FALLBACK}
           placeholder="Select venue…"
         />
       ) : (

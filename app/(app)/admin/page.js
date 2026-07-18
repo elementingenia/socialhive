@@ -5,7 +5,7 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MoviesIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MoviesIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon } from '@/components/NavIcons'
 import RichEditor, { bbToHtml } from '@/components/RichEditor'
 import ResidentEditForm, { Sheet } from '@/components/ResidentEditPanel'
 import { BAR_ENABLED } from '@/lib/features'
@@ -24,6 +24,7 @@ const SECTIONS = [
   { key: 'Clubs',     label: 'Clubs',      Icon: ClubsIcon },
   // Bar section parked (feature not in scope) — see lib/features.js
   ...(BAR_ENABLED ? [{ key: 'Bar', label: 'Bar', Icon: BarIcon }] : []),
+  { key: 'Locations', label: 'Locations',  Icon: InfoIcon },
   { key: 'Tools',     label: 'Tools',      Icon: ToolsIcon },
 ]
 
@@ -1565,6 +1566,7 @@ export default function AdminPage() {
         {tab === 'BookClub'  && <BookClubTab />}
         {tab === 'Clubs'     && <ClubsTab />}
         {BAR_ENABLED && tab === 'Bar' && <BarTab />}
+        {tab === 'Locations' && <LocationsTab />}
         {tab === 'Tools'     && <ToolsTab />}
       </div>
     )
@@ -1815,6 +1817,96 @@ function ClubsTab() {
                   <button onClick={() => archive(c)} style={{ padding: '0.4rem 0.7rem', borderRadius: 8, border: '1px solid #fca5a5', background: '#fee2e2', color: '#991b1b', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.82rem' }}>Archive</button>
                 )}
               </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Locations tab — the shared, admin-managed venue list (migration 050) ─────
+// Replaces the hardcoded ONSITE_LOCATIONS array so adding or renaming a space
+// no longer needs a code deploy, and every hub/club shares one list.
+function LocationsTab() {
+  const [locations, setLocations] = useState(null)
+  const [newName, setNewName]     = useState('')
+  const [busy, setBusy]           = useState(false)
+  const [error, setError]         = useState('')
+
+  const load = useCallback(() => {
+    supabase.from('locations').select('*').order('sort_order').order('name')
+      .then(({ data }) => setLocations(data || []))
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  async function add() {
+    if (!newName.trim()) return
+    setBusy(true); setError('')
+    const maxSort = (locations || []).reduce((m, l) => Math.max(m, l.sort_order || 0), -1)
+    const { error: e } = await supabase.from('locations').insert({ name: newName.trim(), sort_order: maxSort + 1 })
+    setBusy(false)
+    if (e) { setError(e.message); return }
+    setNewName(''); load()
+  }
+
+  async function rename(loc) {
+    const name = prompt('Rename venue', loc.name)
+    if (!name || !name.trim() || name === loc.name) return
+    await supabase.from('locations').update({ name: name.trim() }).eq('id', loc.id)
+    load()
+  }
+
+  async function toggleArchived(loc) {
+    await supabase.from('locations').update({ archived: !loc.archived }).eq('id', loc.id)
+    load()
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '1rem' }}>
+        On-site venues offered when creating any event, in any hub or club. Hiding a venue keeps it on
+        past events but removes it from the picker.
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+        <input style={inputStyle} value={newName} onChange={e => setNewName(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') add() }} placeholder="Add a venue…" />
+        <button onClick={add} disabled={busy || !newName.trim()} style={{
+          padding: '0 1.2rem', borderRadius: 10, border: 'none', background: 'var(--amber)', color: '#fff',
+          fontWeight: 700, fontFamily: 'inherit', cursor: (busy || !newName.trim()) ? 'not-allowed' : 'pointer',
+          opacity: (busy || !newName.trim()) ? 0.6 : 1,
+        }}>Add</button>
+      </div>
+      {error && <div style={{ color: '#b91c1c', fontSize: '0.85rem', marginBottom: '0.75rem' }}>{error}</div>}
+
+      {locations === null ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><div className="spinner" /></div>
+      ) : locations.length === 0 ? (
+        <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2rem' }}>No venues yet.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          {locations.map(l => (
+            <div key={l.id} style={{
+              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
+              padding: '0.7rem 0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              gap: '0.5rem', opacity: l.archived ? 0.55 : 1,
+            }}>
+              <span style={{ fontWeight: 600, color: 'var(--text)' }}>
+                {l.name}{l.archived && <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginLeft: 6 }}>(hidden)</span>}
+              </span>
+              <span style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+                <button onClick={() => rename(l)} style={{
+                  padding: '0.35rem 0.7rem', borderRadius: 8, border: '1px solid var(--border)',
+                  background: 'var(--surface2)', color: 'var(--text)', fontWeight: 600, fontSize: '0.8rem',
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}>Rename</button>
+                <button onClick={() => toggleArchived(l)} style={{
+                  padding: '0.35rem 0.7rem', borderRadius: 8, border: '1px solid var(--border)',
+                  background: 'var(--surface2)', color: 'var(--text-dim)', fontWeight: 600, fontSize: '0.8rem',
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}>{l.archived ? 'Show' : 'Hide'}</button>
+              </span>
             </div>
           ))}
         </div>
