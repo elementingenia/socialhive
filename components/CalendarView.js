@@ -42,9 +42,22 @@ function fmtMonthYear(d) {
   return d.toLocaleDateString("en-AU", { month: "long", year: "numeric" })
 }
 
+function hubKeyOf(ev) {
+  // Club events are identified by club_id, never hub_type — this works both
+  // before and after the Book Club cutover.
+  return ev?.club_id ? "club" : ev?.hub_type
+}
 function hubLabel(hub_type) {
-  const labels = { movie: "Movie Night", bookclub: "Book Club", social: "Social" }
+  const labels = { movie: "Movie Night", bookclub: "Book Club", social: "Social", club: "Club" }
   return labels[hub_type] || hub_type
+}
+// A club event shows its OWN club name and colour, so Dinner Club and Book
+// Club stay distinguishable inside the single "Clubs" filter.
+function eventLabel(ev) {
+  return ev?.club?.name || hubLabel(ev?.hub_type)
+}
+function eventColour(ev) {
+  return ev?.club?.colour || HUB_COLOURS[hubKeyOf(ev)] || "var(--amber)"
 }
 
 // Monday of the week containing date d
@@ -59,7 +72,7 @@ function getMondayOf(d) {
 
 // ── Event Chip ────────────────────────────────────────────────────────────────
 function EventChip({ event, onTap, compact = false }) {
-  const colour = HUB_COLOURS[event.hub_type] || "var(--amber)"
+  const colour = eventColour(event)
   const isPrivate = event.is_public === false
   const booked = event.bookings_count || 0
   const max = event.max_seats || 0
@@ -106,7 +119,7 @@ function EventChip({ event, onTap, compact = false }) {
             padding: "1px 6px",
             borderRadius: 4,
             fontWeight: 500,
-          }}>{hubLabel(event.hub_type)}</span>
+          }}>{eventLabel(event)}</span>
           {max > 0 && (
             <span style={{ fontSize: 12, color: booked >= max ? "var(--danger)" : "var(--text-dim)" }}>
               {booked}/{max}
@@ -274,7 +287,7 @@ function DayPickerOverlay({ date, events, onSelect, onClose }) {
               width: "100%",
               background: "var(--surface2)",
               border: "none",
-              borderLeft: `4px solid ${HUB_COLOURS[ev.hub_type] || "var(--amber)"}`,
+              borderLeft: `4px solid ${eventColour(ev)}`,
               borderRadius: "0 10px 10px 0",
               padding: "0.75rem 1rem",
               marginBottom: 8,
@@ -285,7 +298,7 @@ function DayPickerOverlay({ date, events, onSelect, onClose }) {
             <div style={{ flex: 1 }}>
               <div style={{ fontWeight: 600, fontSize: 14 }}>{ev.title}</div>
               <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2 }}>
-                {fmtTime(ev.event_time)} · {hubLabel(ev.hub_type)}
+                {fmtTime(ev.event_time)} · {eventLabel(ev)}
               </div>
             </div>
             <span style={{ color: "var(--text-dim)", fontSize: 16 }}>›</span>
@@ -401,7 +414,7 @@ function MonthView({ events, onEventTap }) {
               }}>{day.getDate()}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 2, justifyContent: "center" }}>
                 {dayEvents.map(ev => {
-                  const colour = ev.is_public === false ? "#bbb" : (HUB_COLOURS[ev.hub_type] || "var(--amber)")
+                  const colour = ev.is_public === false ? "#bbb" : eventColour(ev)
                   return (
                     <div
                       key={ev.id}
@@ -452,8 +465,7 @@ function MonthView({ events, onEventTap }) {
 // ── CalendarView (main export) ────────────────────────────────────────────────
 export default function CalendarView({ events = [], onEventTap, defaultView = "week" }) {
   const [view, setView] = useState(defaultView)
-  const [activeHubs, setActiveHubs] = useState(["movie", "bookclub", "social"])
-
+  const [activeHubs, setActiveHubs] = useState(["movie", "club", "social"])
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
@@ -464,7 +476,11 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
   const monday = useMemo(() => getMondayOf(today), [])
   const month4Days = useMemo(() => Array.from({ length: 28 }, (_, i) => addDays(monday, i)), [monday])
 
-  const filteredEvents = useMemo(() => events.filter(ev => activeHubs.includes(ev.hub_type)), [events, activeHubs])
+  const filteredEvents = useMemo(() => events.filter(ev => {
+    const key = hubKeyOf(ev)
+    if (!activeHubs.includes(key)) return false
+    return true
+  }), [events, activeHubs])
 
   const eventsByDate = useMemo(() => {
     const map = {}
@@ -509,7 +525,7 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
       <div style={{ display: "flex", gap: 8, padding: "8px 16px", overflowX: "auto", borderBottom: "1px solid var(--border)" }}>
         {[
           { key: "movie",    label: "Movies"    },
-          { key: "bookclub", label: "Book Club" },
+          { key: "club",     label: "Clubs"     },
           { key: "social",   label: "Social"    },
         ].map(({ key, label }) => {
           const on = activeHubs.includes(key)
@@ -535,6 +551,7 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
             </button>
           )
         })}
+
       </div>
 
       {view === "week"  && <WeekView     days={weekDays}   eventsByDate={eventsByDate} onEventTap={onEventTap} />}

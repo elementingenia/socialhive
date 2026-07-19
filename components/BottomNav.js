@@ -3,11 +3,13 @@ import React from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
 import { getActiveHub } from "@/lib/navUtils"
+import { clubColour, clubNavItems } from "@/lib/clubs"
+import { useActiveClub } from "@/lib/useActiveClub"
 import { BAR_ENABLED } from "@/lib/features"
 import {
   HomeIcon, MoviesIcon, CalendarIcon, SuggestionsIcon, DVDIcon,
   BookClubIcon, SocialIcon, AdminIcon, BookingsIcon, BarIcon,
-  InfoIcon, DocumentsIcon, ContactsIcon,
+  InfoIcon, DocumentsIcon, ContactsIcon, ClubsIcon,
 } from "@/components/NavIcons"
 
 const HUB_CONFIG = {
@@ -49,7 +51,25 @@ export default function BottomNav() {
   const { isAdmin, barOptIn } = useUser()
 
   const activeHub = getActiveHub(pathname)
-  const hub       = activeHub ? HUB_CONFIG[activeHub] : null
+
+  // Clubs is the one data-driven hub: its sub-nav depends on WHICH club you're
+  // in (its name, its colour) and whether that club actually has a catalogue —
+  // so Dinner Club shows just Home + Dinner Club, Book Club adds Suggest.
+  const club = useActiveClub()
+
+  let hub = activeHub ? HUB_CONFIG[activeHub] : null
+  if (activeHub === "clubs") {
+    hub = club
+      ? {
+          colour: clubColour(club),
+          items: clubNavItems(club).map(it => ({
+            ...it,
+            // textOnly = the club itself: label in the club colour, no glyph.
+            Icon: it.textOnly ? null : (it.label === "Suggest" ? SuggestionsIcon : ClubsIcon),
+          })),
+        }
+      : { colour: "var(--purple)", items: [{ path: "/clubs", label: "Clubs", Icon: ClubsIcon }] }
+  }
 
   const navBase = {
     position: "fixed", bottom: 0, left: 0, right: 0,
@@ -88,8 +108,9 @@ export default function BottomNav() {
           return (
             <button key={path} onClick={() => router.push(path)}
               style={btn(active, colour)} aria-current={active ? "page" : undefined}>
-              <Icon size={26} />
-              {label}
+              {Icon
+                ? <><Icon size={26} />{label}</>
+                : <span style={{ fontWeight: 700, fontSize: "0.9rem", lineHeight: 1.2, textAlign: "center" }}>{label}</span>}
             </button>
           )
         })}

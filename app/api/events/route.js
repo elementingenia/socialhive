@@ -37,7 +37,8 @@ export async function GET(req) {
     .select(`
       id, hub_type, title, event_date, event_time, max_seats, max_seats_per_booking,
       is_public, cost, description, payment_required, show_attendee_names, archived,
-      reservation_cutoff, payment_due_by, allow_nonresident_guests,
+      reservation_cutoff, payment_due_by, allow_nonresident_guests, club_id,
+      club:clubs!club_id ( id, name, slug, colour, single_signup ),
       coordinator_id, welcome_message, image_url, movie_id, book_id,
       movie:movies!movie_id (
         id, title, poster_url, rating_imdb, plot, genre, runtime, imdb_id, tmdb_id

@@ -3,7 +3,7 @@
 //
 //   npm run test:unit
 
-import { validateParty } from '../../lib/attendees.js'
+import { validateParty, validateBring } from '../../lib/attendees.js'
 
 let pass = 0, fail = 0
 const ok = (cond, msg) => { cond ? pass++ : (fail++, console.log('  ✗', msg)) }
@@ -27,6 +27,12 @@ ok(validateParty({ seats: 2, attendees: [{ guest_name: 'Aunt May' }], allowGuest
 const g = validateParty({ seats: 2, attendees: [{ guest_name: '  Aunt May  ' }], allowGuests: true, ownerId: OWNER })
 ok(g.ok === true && g.attendees[0].member_id === null && g.attendees[0].guest_name === 'Aunt May', 'guest allowed => ok, trimmed')
 
+// bring fields survive normalisation (the guest-dish bug, 2026-07-18)
+const withBring = validateParty({ seats: 2, attendees: [{ member_id: 'm1', bring_category_id: 'cat1', bring_note: 'Pavlova' }], allowGuests: false, ownerId: OWNER })
+ok(withBring.ok && withBring.attendees[0].bring_category_id === 'cat1' && withBring.attendees[0].bring_note === 'Pavlova', 'resident attendee keeps their dish through validation')
+const guestBring = validateParty({ seats: 2, attendees: [{ guest_name: 'Bob', bring_category_id: 'cat2' }], allowGuests: true, ownerId: OWNER })
+ok(guestBring.ok && guestBring.attendees[0].bring_category_id === 'cat2', 'guest attendee keeps their dish through validation')
+
 // mixed resident + guest
 const mix = validateParty({ seats: 3, attendees: [{ member_id: 'm1' }, { guest_name: 'Bob' }], allowGuests: true, ownerId: OWNER })
 ok(mix.ok === true && mix.attendees.length === 2, 'mixed resident + guest => ok')
@@ -38,6 +44,14 @@ ok(validateParty({ seats: 3, attendees: [{ member_id: 'm1' }, { member_id: 'm1' 
 // empty/blank entries rejected
 ok(validateParty({ seats: 2, attendees: [{ guest_name: '   ' }], allowGuests: true, ownerId: OWNER }).ok === false, 'blank guest name => rejected')
 ok(validateParty({ seats: 2, attendees: [{}], allowGuests: true, ownerId: OWNER }).ok === false, 'empty attendee => rejected')
+
+// bring-a-dish
+ok(validateBring({ required: false }).ok === true, 'not required => ok even with nothing chosen')
+ok(validateBring({ required: true, bringCategoryId: null }).ok === false, 'required + nothing chosen => rejected')
+ok(validateBring({ required: true, bringCategoryId: 'cat1' }).ok === true, 'required + chosen => ok')
+ok(validateBring({ required: true, bringCategoryId: 'cat9', allowedCategoryIds: ['cat1','cat2'] }).ok === false, 'category not allowed for this event => rejected')
+ok(validateBring({ required: true, bringCategoryId: 'cat1', allowedCategoryIds: ['cat1','cat2'] }).ok === true, 'allowed category => ok')
+ok(validateBring({ required: true, bringCategoryId: 'cat1', allowedCategoryIds: [] }).ok === true, 'empty allowed list means all categories')
 
 console.log(`\nlib/attendees.js validateParty: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

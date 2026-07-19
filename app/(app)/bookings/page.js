@@ -18,7 +18,7 @@ const HUB_LABELS = {
 const FILTERS = [
   { key: "all",      label: "All" },
   { key: "movie",    label: "Movies" },
-  { key: "bookclub", label: "Book Club" },
+  { key: "club",     label: "Clubs" },
   { key: "social",   label: "Social" },
 ]
 
@@ -42,9 +42,11 @@ function BookingCard({ group, waitlistPosition, onClick }) {
   const event = group.event
   if (!event) return null
 
-  const colour     = HUB_COLOURS[event.hub_type] || "var(--teal)"
-  const hubLabel   = HUB_LABELS[event.hub_type]  || event.hub_type
-  const isBookClub = event.hub_type === "bookclub"
+  const club       = event.clubs || null
+  const colour     = club?.colour || HUB_COLOURS[event.hub_type] || "var(--teal)"
+  const hubLabel   = club?.name   || HUB_LABELS[event.hub_type]  || event.hub_type
+  // "sign-up" clubs book one seat per person, so no seat count is shown
+  const isBookClub = club ? !!club.single_signup : event.hub_type === "bookclub"
   const { confirmed, waitlist } = group
 
   return (
@@ -151,7 +153,7 @@ export default function BookingsPage() {
     if (!member?.id) return
     const { data } = await supabase
       .from("bookings")
-      .select("id, status, seats, payment_status, booked_at, event_id, events(id, title, event_date, event_time, hub_type)")
+      .select("id, status, seats, payment_status, booked_at, event_id, events(id, title, event_date, event_time, hub_type, club_id, clubs!club_id(name, colour, single_signup))")
       .eq("member_id", member.id)
       .neq("status", "cancelled")
 
@@ -199,7 +201,9 @@ export default function BookingsPage() {
 
   const filtered = filter === "all"
     ? bookings
-    : bookings.filter(b => b.events?.hub_type === filter)
+    : filter === "club"
+      ? bookings.filter(b => b.events?.club_id)
+      : bookings.filter(b => b.events?.hub_type === filter && !b.events?.club_id)
 
   // Group by event_id so split bookings (confirmed + waitlist) show as one tile
   function groupBookings(rows) {

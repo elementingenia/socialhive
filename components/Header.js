@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
 import { useUI }   from "@/lib/UIContext"
 import { getModuleColour, getPageTitle } from "@/lib/navUtils"
+import { useActiveClub } from "@/lib/useActiveClub"
 
 function BellIcon({ size = 22 }) {
   return (
@@ -27,8 +28,11 @@ export default function Header() {
   const { openProfile, openPinModal, openNotif, notifCount, refreshNotifCount } = useUI()
   const pathname     = usePathname()
   const router       = useRouter()
-  const moduleColour = getModuleColour(pathname)
-  const pageTitle    = getPageTitle(pathname)
+  // Inside a club, the chrome takes that club's own colour/name so Clubs match
+  // the other hubs' behaviour (Iain 2026-07-18 — colour standards).
+  const activeClub   = useActiveClub()
+  const moduleColour = activeClub?.colour || getModuleColour(pathname)
+  const pageTitle    = getPageTitle(pathname) || activeClub?.name || ""
   const isHome       = pathname === "/home"
 
   const [menuOpen, setMenuOpen] = useState(false)

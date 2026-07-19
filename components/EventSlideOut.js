@@ -10,6 +10,7 @@ import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
 import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, sumUnpaidSeats, seatsCost, bookingStatusBadge } from "@/lib/payments"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
+import { clubCaps, clubColour } from "@/lib/clubs"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -257,7 +258,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   const [addSubmitting,       setAddSubmitting]       = useState(false)
   const [insufficientCapacity, setInsufficientCapacity] = useState(null)
   const isMovie  = event.hub_type === "movie"
-  const isBook   = event.hub_type === "bookclub"
+  const isBook   = clubCaps(event.club).hasBooks
   const isSocial = event.hub_type === "social"
 
   const inputStyle = { width: "100%", padding: "0.6rem 0.8rem", borderRadius: 8, border: "1px solid var(--border)",
@@ -876,11 +877,46 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   )
 }
 
+// ── Bring-a-dish picker (scope §6) ───────────────────────────────────────────
+// Mandatory for the booker, optional for their guests (Iain's ruling).
+function BringPicker({ cats, categoryId, note, onChange, colour, required, label }) {
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>
+        {label}{required && <span style={{ color: "var(--danger)" }}> *</span>}
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
+        {cats.map(c => {
+          const on = categoryId === c.id
+          return (
+            <button key={c.id} type="button" onClick={() => onChange(on ? { category_id: null, note: "" } : { category_id: c.id, note })}
+              style={{ borderRadius: 14, padding: "0.25rem 0.7rem", fontSize: 13, fontWeight: 600,
+                cursor: "pointer", fontFamily: "inherit",
+                border: `1px solid ${on ? colour : "var(--border)"}`,
+                background: on ? colour : "var(--surface)", color: on ? "#fff" : "var(--text-dim)" }}>
+              {c.label}
+            </button>
+          )
+        })}
+      </div>
+      {/* Details stay locked until a category is chosen (Iain 2026-07-18) —
+          a note without a category isn't meaningful. */}
+      <input value={note || ""} disabled={!categoryId}
+        onChange={e => onChange({ category_id: categoryId, note: e.target.value })}
+        placeholder={categoryId ? "What exactly? (optional, e.g. Pavlova)" : "Choose an option above first"}
+        style={{ width: "100%", padding: "8px 11px", borderRadius: 8, border: "1px solid var(--border)",
+          background: categoryId ? "var(--surface)" : "var(--surface2)",
+          color: "var(--text)", fontSize: 13, boxSizing: "border-box", fontFamily: "inherit",
+          cursor: categoryId ? "text" : "not-allowed", opacity: categoryId ? 1 : 0.6 }} />
+    </div>
+  )
+}
+
 // ── Party picker (workstream A) ───────────────────────────────────────────────
 // Collects the (seats - 1) additional attendees for a multi-seat booking. Each
 // is a resident (searchable, 2-char min per UI standards) or, only when the
 // event allows it, a named non-resident guest.
-function PartyRow({ index, row, allowGuests, members, excludeIds, onChange }) {
+function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, bringCats = [] }) {
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
   const kind = row.kind || "resident"
@@ -894,7 +930,7 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange }) {
       {allowGuests && (
         <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
           {[["resident", "Resident"], ["guest", "Guest"]].map(([k, label]) => (
-            <button key={k} type="button" onClick={() => onChange({ kind: k, member_id: null, member_name: "", guest_name: "" })}
+            <button key={k} type="button" onClick={() => onChange({ ...row, kind: k, member_id: null, member_name: "", guest_name: "" })}
               style={{ flex: 1, padding: "6px 0", borderRadius: 8, fontSize: 13, fontFamily: "inherit", cursor: "pointer",
                 border: `1px solid ${kind === k ? "var(--amber)" : "var(--border)"}`, background: kind === k ? "var(--amber)" : "var(--surface2)",
                 color: kind === k ? "#fff" : "var(--text)", fontWeight: kind === k ? 700 : 500 }}>{label}</button>
@@ -905,7 +941,7 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange }) {
         row.member_id ? (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 14, color: "var(--text)" }}>{row.member_name}</span>
-            <button type="button" onClick={() => { onChange({ kind: "resident", member_id: null, member_name: "", guest_name: "" }); setQuery("") }}
+            <button type="button" onClick={() => { onChange({ ...row, kind: "resident", member_id: null, member_name: "", guest_name: "" }); setQuery("") }}
               style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>Change</button>
           </div>
         ) : (
@@ -915,7 +951,7 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange }) {
             {open && results.length > 0 && (
               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 5, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, marginTop: 4, overflow: "hidden" }}>
                 {results.map(m => (
-                  <button key={m.id} type="button" onClick={() => { onChange({ kind: "resident", member_id: m.id, member_name: m.name, guest_name: "" }); setOpen(false); setQuery("") }}
+                  <button key={m.id} type="button" onClick={() => { onChange({ ...row, kind: "resident", member_id: m.id, member_name: m.name, guest_name: "" }); setOpen(false); setQuery("") }}
                     style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 11px", background: "none", border: "none", borderBottom: "1px solid var(--border)", cursor: "pointer", fontSize: 14, color: "var(--text)", fontFamily: "inherit" }}>{m.name}</button>
                 ))}
               </div>
@@ -924,13 +960,20 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange }) {
         )
       ) : (
         <input value={row.guest_name} placeholder={`Guest name for seat ${index + 2}…`}
-          onChange={e => onChange({ kind: "guest", member_id: null, member_name: "", guest_name: e.target.value })} style={inputStyle} />
+          onChange={e => onChange({ ...row, kind: "guest", member_id: null, member_name: "", guest_name: e.target.value })} style={inputStyle} />
+      )}
+      {bringCats.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <BringPicker cats={bringCats} categoryId={row.bring_category_id} note={row.bring_note}
+            colour="var(--amber)" label="Bringing (optional)"
+            onChange={({ category_id, note }) => onChange({ ...row, bring_category_id: category_id, bring_note: note })} />
+        </div>
       )}
     </div>
   )
 }
 
-function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange }) {
+function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange, bringCats = [] }) {
   const rows = []
   for (let i = 0; i < count; i++) rows.push(value[i] || { kind: "resident", member_id: null, member_name: "", guest_name: "" })
   const chosen = value.filter(v => v?.member_id).map(v => v.member_id)
@@ -941,6 +984,7 @@ function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange 
       </div>
       {rows.map((row, i) => (
         <PartyRow key={i} index={i} row={row} allowGuests={allowGuests} members={members}
+          bringCats={bringCats}
           excludeIds={[...excludeIds, ...chosen.filter(id => id !== row.member_id)]}
           onChange={next => { const copy = value.slice(); copy[i] = next; onChange(copy) }} />
       ))}
@@ -949,7 +993,7 @@ function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange 
 }
 
 // ── Booking Form ──────────────────────────────────────────────────────────────
-function BookingSection({ event, onRefresh }) {
+function BookingSection({ event, onRefresh, onClose }) {
   const [seats, setSeats] = useState(1)
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -965,6 +1009,20 @@ function BookingSection({ event, onRefresh }) {
   const [members, setMembers] = useState([])
   const [party, setParty] = useState([])
   const [myAttendees, setMyAttendees] = useState([])
+  // Bring-a-dish: the club's categories, narrowed to those this event allows.
+  const bringEnabled = clubCaps(event.club).bringEnabled
+  const [bringCats, setBringCats] = useState([])
+  const [myBring, setMyBring] = useState({ category_id: null, note: "" })
+  useEffect(() => {
+    if (!bringEnabled || !event.club?.id) { setBringCats([]); return }
+    supabase.from("club_bring_categories").select("id, label, sort")
+      .eq("club_id", event.club.id).order("sort")
+      .then(({ data }) => {
+        const allowed = event.bring_category_ids
+        const list = (data || []).filter(c => !allowed?.length || allowed.includes(c.id))
+        setBringCats(list)
+      })
+  }, [bringEnabled, event.club?.id, event.id])
 
   useEffect(() => {
     if (event.hub_type !== "bookclub" && (event.max_seats_per_booking || 1) > 1 && members.length === 0) {
@@ -984,15 +1042,25 @@ function BookingSection({ event, onRefresh }) {
 
   useEffect(() => {
     if (!me?.id) return
-    supabase.from("booking_attendees").select("member_id, guest_name, member:members!member_id(name)")
+    supabase.from("booking_attendees").select("member_id, guest_name, bring_category_id, bring_note, member:members!member_id(name)")
       .eq("event_id", event.id).eq("owner_id", me.id)
       .then(({ data }) => setMyAttendees(data || []))
+    // Prefill the booker's own dish so it shows in the manage view and isn't
+    // lost when they Modify (Iain 2026-07-18).
+    supabase.from("bookings").select("bring_category_id, bring_note")
+      .eq("event_id", event.id).eq("member_id", me.id).eq("status", "confirmed").maybeSingle()
+      .then(({ data }) => { if (data?.bring_category_id) setMyBring({ category_id: data.bring_category_id, note: data.bring_note || "" }) })
   }, [event.id, me?.id])
 
   const partyNeed = Math.max(0, seats - 1)
   const partyValid = party.length === partyNeed &&
     party.every(p => p.member_id || (allowGuests && p.guest_name && p.guest_name.trim()))
-  const partyToAttendees = (arr) => arr.map(p => p.member_id ? { member_id: p.member_id } : { guest_name: (p.guest_name || "").trim() })
+  const bringValid = !bringEnabled || !!myBring.category_id
+  const partyToAttendees = (arr) => arr.map(p => ({
+    ...(p.member_id ? { member_id: p.member_id } : { guest_name: (p.guest_name || "").trim() }),
+    bring_category_id: p.bring_category_id || null,
+    bring_note: p.bring_note || null,
+  }))
 
   const myConfirmed = event.my_bookings?.find(b => b.status === "confirmed")
   const myWaitlist  = event.my_bookings?.find(b => b.status === "waitlist")
@@ -1023,16 +1091,32 @@ function BookingSection({ event, onRefresh }) {
   const [modifying, setModifying] = useState(false)
 
   const [modParty, setModParty] = useState([])
+  const modSeeded = useRef(false)
+  const blankRow = () => ({ kind: "resident", member_id: null, member_name: "", guest_name: "", bring_category_id: null, bring_note: null })
   useEffect(() => {
+    if (!modifying) { modSeeded.current = false; return }
     const need = Math.max(0, modifySeats - 1)
-    setModParty(prev => {
-      const seed = prev.length ? prev : (myAttendees || []).map(a => a.member_id
+    if (!modSeeded.current) {
+      // First open of this Modify session: seed the whole party — names AND
+      // dishes — from the existing booking, so Save re-sends them instead of
+      // blanks. Previously a race seeded from a not-yet-loaded myAttendees and
+      // then refused to re-seed, wiping the party/dishes (Iain 2026-07-18).
+      modSeeded.current = true
+      const seed = (myAttendees || []).map(a => (a.member_id
         ? { kind: "resident", member_id: a.member_id, member_name: a.member?.name || "Resident", guest_name: "" }
-        : { kind: "guest", member_id: null, member_name: "", guest_name: a.guest_name || "" })
+        : { kind: "guest", member_id: null, member_name: "", guest_name: a.guest_name || "" }))
+        .map((row, i) => ({ ...row, bring_category_id: myAttendees[i]?.bring_category_id || null, bring_note: myAttendees[i]?.bring_note || null }))
       const copy = seed.slice(0, need)
-      while (copy.length < need) copy.push({ kind: "resident", member_id: null, member_name: "", guest_name: "" })
-      return copy
-    })
+      while (copy.length < need) copy.push(blankRow())
+      setModParty(copy)
+    } else {
+      // Subsequent seat changes within the session: resize, keep what's there.
+      setModParty(prev => {
+        const copy = prev.slice(0, need)
+        while (copy.length < need) copy.push(blankRow())
+        return copy
+      })
+    }
   }, [modifying, modifySeats, myAttendees])
   const modNeed = Math.max(0, modifySeats - 1)
   const modPartyValid = modParty.length === modNeed &&
@@ -1049,12 +1133,14 @@ function BookingSection({ event, onRefresh }) {
       const res = await authedFetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event_id: event.id, seats, accept_split: acceptSplit, attendees: partyToAttendees(party) }),
+        body: JSON.stringify({ event_id: event.id, seats, accept_split: acceptSplit, attendees: partyToAttendees(party), bring_category_id: myBring.category_id, bring_note: myBring.note }),
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Booking failed", "error"); return }
       if (data.status === "split_offer") { setSplitOffer(data); return }
-      // Success — clear any dialog
+      // Success — clear any dialog and return to the event screen the booking
+      // was opened from (Iain 2026-07-18). EC edits to event content don't
+      // close — this is only the member booking action.
       setSplitOffer(null)
       if (data.status === "confirmed") {
         showToast(`Booked — ${data.seats} seat${data.seats !== 1 ? "s" : ""} confirmed!`)
@@ -1066,6 +1152,7 @@ function BookingSection({ event, onRefresh }) {
         }
       }
       onRefresh()
+      if (onClose) setTimeout(() => onClose(), 600)
     } finally { setLoading(false) }
   }
 
@@ -1075,13 +1162,14 @@ function BookingSection({ event, onRefresh }) {
       const res = await authedFetch("/api/bookings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event_id: event.id, seats: modifySeats, attendees: partyToAttendees(modParty) }),
+        body: JSON.stringify({ event_id: event.id, seats: modifySeats, attendees: partyToAttendees(modParty), bring_category_id: myBring.category_id, bring_note: myBring.note }),
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Update failed", "error"); return }
       showToast("Booking updated")
       setModifying(false)
       onRefresh()
+      if (onClose) setTimeout(() => onClose(), 600)
     } finally { setLoading(false) }
   }
 
@@ -1096,9 +1184,11 @@ function BookingSection({ event, onRefresh }) {
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Cancel failed", "error"); return }
-      showToast("Booking cancelled")
       setConfirm(false)
       onRefresh()
+      // Back out to the event/club screen rather than sitting on an empty
+      // booking modal (Iain 2026-07-18).
+      if (onClose) onClose()
     } finally { setLoading(false) }
   }
 
@@ -1120,7 +1210,9 @@ function BookingSection({ event, onRefresh }) {
     } finally { setSubmitting(false) }
   }
 
-  const isBookclubEvent = event.hub_type === "bookclub"
+  // Sign-up style (one seat, no seat picker, no Modify Seats) — a club flag
+  // now, not a hub name. Book Club = true; Dinner Club will be false.
+  const isBookclubEvent = clubCaps(event.club).singleSignup
 
   return (
     <div>
@@ -1165,13 +1257,18 @@ function BookingSection({ event, onRefresh }) {
                   )}
                 </>
               )}
+              {bringEnabled && bringCats.length > 0 && (
+                <BringPicker cats={bringCats} categoryId={myBring.category_id} note={myBring.note}
+                  onChange={setMyBring} colour="var(--amber)" required label="What are you bringing?" />
+              )}
               {!isBookclubEvent && seats > 1 && (
                 <PartyPicker count={seats - 1} allowGuests={allowGuests} members={members}
-                  excludeIds={me?.id ? [me.id] : []} value={party} onChange={setParty} />
+                  excludeIds={me?.id ? [me.id] : []} value={party} onChange={setParty}
+                  bringCats={bringEnabled ? bringCats : []} />
               )}
-              <button onClick={() => handleBook()} disabled={loading || (seats > 1 && !partyValid)}
+              <button onClick={() => handleBook()} disabled={loading || (seats > 1 && !partyValid) || !bringValid}
                 style={{ width: "100%", padding: "14px 0", background: "var(--amber)", color: "#fff", border: "none",
-                  borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: (loading || (seats > 1 && !partyValid)) ? "not-allowed" : "pointer", opacity: (loading || (seats > 1 && !partyValid)) ? 0.7 : 1 }}>
+                  borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: (loading || (seats > 1 && !partyValid) || !bringValid) ? "not-allowed" : "pointer", opacity: (loading || (seats > 1 && !partyValid) || !bringValid) ? 0.7 : 1 }}>
                 {loading ? "Booking…" : isBookclubEvent ? "Sign Up" : availableSeats === 0 ? "Join Waitlist" : "Book Now"}
               </button>
               {event.payment_required && (
@@ -1205,6 +1302,29 @@ function BookingSection({ event, onRefresh }) {
             })()}
             {myWaitlist && <StatusPill label={`⏳ ${myWaitlist.seats} on waitlist${waitlistPos ? ` (#${waitlistPos})` : ""}`} colour="var(--amber-dark)" />}
           </div>
+          {myConfirmed && bringEnabled && (() => {
+            const catLabel = (id) => bringCats.find(c => c.id === id)?.label
+            const mine = myBring.category_id ? { label: catLabel(myBring.category_id), note: myBring.note } : null
+            if (!mine && !myAttendees.length) return null
+            return (
+              <div style={{ fontSize: 12.5, lineHeight: 1.6, background: "var(--surface2)", borderRadius: 10, padding: "8px 10px" }}>
+                {(() => {
+                  const line = { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }
+                  const dish = (label, note) => label ? `${label}${note ? ` — ${note}` : ""}` : ""
+                  return (
+                    <>
+                      {mine && <div style={{ ...line, color: "var(--text)" }}><strong>You</strong>{dish(mine.label, mine.note) ? ` · ${dish(mine.label, mine.note)}` : ""}</div>}
+                      {myAttendees.map((a, i) => {
+                        const nm = a.member_id ? (a.member?.name || "Resident") : `${a.guest_name} (guest)`
+                        const d = dish(a.bring_category_id ? catLabel(a.bring_category_id) : null, a.bring_note)
+                        return <div key={i} style={{ ...line, color: "var(--text-dim)" }}>{nm}{d ? ` · ${d}` : ""}</div>
+                      })}
+                    </>
+                  )
+                })()}
+              </div>
+            )
+          })()}
           {myConfirmed && event.payment_required && event.payment_due_by && !computeIsPaid(myConfirmed) && (
             <div style={{ fontSize: 12, color: "var(--amber-dark)", lineHeight: 1.4 }}>
               Payment due by {fmtDate(event.payment_due_by)}.
@@ -1243,14 +1363,19 @@ function BookingSection({ event, onRefresh }) {
               Can&apos;t increase seats on a split booking — cancel and rebook to request more seats.
             </div>
           )}
+          {bringEnabled && bringCats.length > 0 && (
+            <BringPicker cats={bringCats} categoryId={myBring.category_id} note={myBring.note}
+              onChange={setMyBring} colour="var(--amber)" required label="What are you bringing?" />
+          )}
           {modifySeats > 1 && (
             <PartyPicker count={modifySeats - 1} allowGuests={allowGuests} members={members}
-              excludeIds={me?.id ? [me.id] : []} value={modParty} onChange={setModParty} />
+              excludeIds={me?.id ? [me.id] : []} value={modParty} onChange={setModParty}
+              bringCats={bringEnabled ? bringCats : []} />
           )}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={() => setModifying(false)}
               style={{ flex: 1, padding: "12px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>Cancel</button>
-            <button onClick={handleModify} disabled={loading || (modifySeats > 1 && !modPartyValid)}
+            <button onClick={handleModify} disabled={loading || (modifySeats > 1 && !modPartyValid) || !bringValid}
               style={{ flex: 1, padding: "12px 0", background: "var(--amber)", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: (loading || (modifySeats > 1 && !modPartyValid)) ? "not-allowed" : "pointer", color: "#fff", opacity: (loading || (modifySeats > 1 && !modPartyValid)) ? 0.7 : 1 }}>
               {loading ? "Saving…" : "Save"}
             </button>
@@ -1310,7 +1435,8 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
 
   if (!event) return null
 
-  const colour = event.is_public === false ? "#bbb" : (HUB_COLOURS[event.hub_type] || "var(--amber)")
+  const colour = event.is_public === false ? "#bbb"
+    : (event.club ? clubColour(event.club) : (HUB_COLOURS[event.hub_type] || "var(--amber)"))
   const isPrivate = event.is_public === false
 
   // Check if current user is a coordinator for this event
@@ -1338,7 +1464,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px",
           borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "var(--surface)", zIndex: 1 }}>
           <div style={{ fontWeight: 700, fontSize: 15, color: colour, textTransform: "capitalize" }}>
-            {event.hub_type === "bookclub" ? "Book Club" : event.hub_type}
+            {event.club?.name || (event.hub_type === "bookclub" ? "Book Club" : event.hub_type)}
           </div>
           <button onClick={handleClose} style={{ background: "var(--surface2)", border: "none", borderRadius: "50%",
             width: 36, height: 36, fontSize: 20, cursor: "pointer", color: "var(--text)",
@@ -1352,14 +1478,14 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
               style={{ width: "100%", maxHeight: 260, objectFit: "cover", borderRadius: 12, marginBottom: 14 }} />
           )}
           {/* Book cover */}
-          {event.hub_type === "bookclub" && event.book?.cover_url && (
+          {clubCaps(event.club).hasBooks && event.book?.cover_url && (
             <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
               <img src={event.book.cover_url} alt={event.book.title}
                 style={{ height: 160, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }} />
             </div>
           )}
           {/* Social event image */}
-          {event.hub_type === "social" && event.image_url && (
+          {(event.hub_type === "social" || event.club) && event.image_url && (
             <img src={event.image_url} alt={event.title}
               style={{
                 width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 12, marginBottom: 14,
@@ -1425,7 +1551,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
               )}
 
               {/* Book Club: member has the physical kit checked out */}
-              {event.hub_type === "bookclub" && event.my_bookings?.find(b => b.status === "confirmed")?.has_book && (
+              {clubCaps(event.club).hasBookReturn && event.my_bookings?.find(b => b.status === "confirmed")?.has_book && (
                 <div style={{ background: "var(--purple)15", border: "1px solid var(--purple)", borderRadius: 10,
                   padding: "10px 12px", marginBottom: 14, fontSize: 13, fontWeight: 600, color: "var(--purple)" }}>
                   📖 You have the book{event.book_return_date ? ` — return by ${fmtDate(event.book_return_date)}` : ""}
@@ -1433,7 +1559,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
               )}
 
               {/* Book-specific */}
-              {event.hub_type === "bookclub" && event.book && (
+              {clubCaps(event.club).hasBooks && event.book && (
                 <div style={{ marginBottom: 14 }}>
                   {event.book.author && <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 6 }}>by {event.book.author}</div>}
                   {/* Genres */}
@@ -1490,7 +1616,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
               {/* Booking section */}
               <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, marginTop: 4 }}>
                 {isAuthenticated ? (
-                  <BookingSection event={event} onRefresh={refreshAll} />
+                  <BookingSection event={event} onRefresh={refreshAll} onClose={onClose} />
                 ) : (
                   <LoginPrompt />
                 )}

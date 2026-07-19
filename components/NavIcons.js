@@ -174,6 +174,36 @@ export function ToolsIcon({ size = 26 }) {
   )
 }
 
+// ── Clubs hub icon — a ring of figures, deliberately multi-coloured ──────────
+// Original artwork. Unlike every other nav icon this one does NOT inherit
+// currentColor: Clubs is the one hub containing many differently-coloured
+// groups, so the icon itself carries the app palette to signal "lots of
+// groups" rather than a single hub.
+const CLUB_RING = ['#0d9488', '#c2410c', '#7c3aed', '#2563eb', '#f59e0b', '#15803d']
+export function ClubsIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      {CLUB_RING.map((c, i) => (
+        <g key={i} transform={`rotate(${i * 60} 35 35)`} fill={c}>
+          <circle cx="35" cy="11" r="5.6" />
+          <path d="M 27.5 20.5 Q 35 16.5 42.5 20.5 L 42.5 27 Q 35 30.5 27.5 27 Z" />
+        </g>
+      ))}
+    </svg>
+  )
+}
+
+// ── Work Shed hub icon — a simple shed (roof + walls + door) ─────────────────
+export function ShedIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 35 8 L 62 26 L 62 62 L 8 62 L 8 26 Z
+           M 16 32 L 54 32 L 54 58 L 40 58 L 40 40 L 30 40 L 30 58 L 16 58 Z"/>
+    </svg>
+  )
+}
+
 // ── Useful Information hub icons ─────────────────────────────────────────────
 
 // Info circle with "i" — hub nav icon

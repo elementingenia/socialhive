@@ -27,6 +27,7 @@ function typeIcon(type) {
     case "bar_reconciled":    return "🧾"
     case "book_return_reminder": return "📚"
     case "book_return_overdue":  return "📚"
+    case "club_notice_posted":   return "📣"
     default:                  return "🔔"
   }
 }
@@ -44,6 +45,7 @@ function typeColour(type) {
     case "bar_reconciled":    return "var(--amber-dark)"
     case "book_return_reminder": return "var(--purple)"
     case "book_return_overdue":  return "#e53e3e"
+    case "club_notice_posted":   return "var(--purple)"
     default:                  return "var(--text-dim)"
   }
 }
