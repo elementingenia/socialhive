@@ -930,7 +930,7 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
       {allowGuests && (
         <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
           {[["resident", "Resident"], ["guest", "Guest"]].map(([k, label]) => (
-            <button key={k} type="button" onClick={() => onChange({ kind: k, member_id: null, member_name: "", guest_name: "" })}
+            <button key={k} type="button" onClick={() => onChange({ ...row, kind: k, member_id: null, member_name: "", guest_name: "" })}
               style={{ flex: 1, padding: "6px 0", borderRadius: 8, fontSize: 13, fontFamily: "inherit", cursor: "pointer",
                 border: `1px solid ${kind === k ? "var(--amber)" : "var(--border)"}`, background: kind === k ? "var(--amber)" : "var(--surface2)",
                 color: kind === k ? "#fff" : "var(--text)", fontWeight: kind === k ? 700 : 500 }}>{label}</button>
@@ -941,7 +941,7 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
         row.member_id ? (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 14, color: "var(--text)" }}>{row.member_name}</span>
-            <button type="button" onClick={() => { onChange({ kind: "resident", member_id: null, member_name: "", guest_name: "" }); setQuery("") }}
+            <button type="button" onClick={() => { onChange({ ...row, kind: "resident", member_id: null, member_name: "", guest_name: "" }); setQuery("") }}
               style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>Change</button>
           </div>
         ) : (
@@ -951,7 +951,7 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
             {open && results.length > 0 && (
               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 5, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, marginTop: 4, overflow: "hidden" }}>
                 {results.map(m => (
-                  <button key={m.id} type="button" onClick={() => { onChange({ kind: "resident", member_id: m.id, member_name: m.name, guest_name: "" }); setOpen(false); setQuery("") }}
+                  <button key={m.id} type="button" onClick={() => { onChange({ ...row, kind: "resident", member_id: m.id, member_name: m.name, guest_name: "" }); setOpen(false); setQuery("") }}
                     style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 11px", background: "none", border: "none", borderBottom: "1px solid var(--border)", cursor: "pointer", fontSize: 14, color: "var(--text)", fontFamily: "inherit" }}>{m.name}</button>
                 ))}
               </div>
@@ -1123,7 +1123,9 @@ function BookingSection({ event, onRefresh, onClose }) {
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Booking failed", "error"); return }
       if (data.status === "split_offer") { setSplitOffer(data); return }
-      // Success — clear any dialog
+      // Success — clear any dialog and return to the event screen the booking
+      // was opened from (Iain 2026-07-18). EC edits to event content don't
+      // close — this is only the member booking action.
       setSplitOffer(null)
       if (data.status === "confirmed") {
         showToast(`Booked — ${data.seats} seat${data.seats !== 1 ? "s" : ""} confirmed!`)
@@ -1135,6 +1137,7 @@ function BookingSection({ event, onRefresh, onClose }) {
         }
       }
       onRefresh()
+      if (onClose) setTimeout(() => onClose(), 600)
     } finally { setLoading(false) }
   }
 
@@ -1151,6 +1154,7 @@ function BookingSection({ event, onRefresh, onClose }) {
       showToast("Booking updated")
       setModifying(false)
       onRefresh()
+      if (onClose) setTimeout(() => onClose(), 600)
     } finally { setLoading(false) }
   }
 
