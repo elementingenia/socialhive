@@ -1307,13 +1307,21 @@ function BookingSection({ event, onRefresh, onClose }) {
             const mine = myBring.category_id ? { label: catLabel(myBring.category_id), note: myBring.note } : null
             if (!mine && !myAttendees.length) return null
             return (
-              <div style={{ fontSize: 12.5, color: "var(--text)", lineHeight: 1.5, background: "var(--surface2)", borderRadius: 10, padding: "8px 10px" }}>
-                {mine && <div>🍽️ You: {mine.label}{mine.note ? ` — ${mine.note}` : ""}</div>}
-                {myAttendees.map((a, i) => {
-                  const nm = a.member_id ? (a.member?.name || "Resident") : a.guest_name
-                  const cat = a.bring_category_id ? catLabel(a.bring_category_id) : null
-                  return <div key={i} style={{ color: "var(--text-dim)" }}>+ {nm}{a.guest_name ? " (guest)" : ""}{cat ? ` · 🍽️ ${cat}${a.bring_note ? ` — ${a.bring_note}` : ""}` : ""}</div>
-                })}
+              <div style={{ fontSize: 12.5, lineHeight: 1.6, background: "var(--surface2)", borderRadius: 10, padding: "8px 10px" }}>
+                {(() => {
+                  const line = { whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }
+                  const dish = (label, note) => label ? `${label}${note ? ` — ${note}` : ""}` : ""
+                  return (
+                    <>
+                      {mine && <div style={{ ...line, color: "var(--text)" }}><strong>You</strong>{dish(mine.label, mine.note) ? ` · ${dish(mine.label, mine.note)}` : ""}</div>}
+                      {myAttendees.map((a, i) => {
+                        const nm = a.member_id ? (a.member?.name || "Resident") : `${a.guest_name} (guest)`
+                        const d = dish(a.bring_category_id ? catLabel(a.bring_category_id) : null, a.bring_note)
+                        return <div key={i} style={{ ...line, color: "var(--text-dim)" }}>{nm}{d ? ` · ${d}` : ""}</div>
+                      })}
+                    </>
+                  )
+                })()}
               </div>
             )
           })()}

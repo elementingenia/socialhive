@@ -292,20 +292,18 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
               attendees.map((a, i) => (
                 <div key={a.id || i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", padding: "0.3rem 0",
                   borderBottom: i < attendees.length - 1 ? "1px solid var(--border)" : "none" }}>
-                  <span style={{ fontWeight: a.isOwn ? 700 : 400, color: a.isOwn ? colour : "var(--text)", minWidth: 0 }}>
-                    {a.name}
-                    {a.isPrivate && canManageBooks && !a.isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
-                    {/* Visible to EVERY attendee (Iain 2026-07-18) so people can
-                        see what's already covered and adjust what they bring. */}
-                    {a.bring && (
-                      <span style={{ display: "block", fontSize: "0.72rem", fontWeight: 600, color: colour, marginTop: 1 }}>
-                        🍽️ {a.bring}{a.bringNote ? ` — ${a.bringNote}` : ""}
-                      </span>
-                    )}
+                  <span style={{ minWidth: 0, flex: 1 }}>
+                    {/* One person per line; dish in the club colour; fades if it
+                        doesn't fit (Iain 2026-07-18 — colour is the lead, no icon). */}
+                    <span style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: a.isOwn ? 700 : 400, color: a.isOwn ? colour : "var(--text)" }}>
+                      {a.name}
+                      {a.isPrivate && canManageBooks && !a.isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
+                      {a.bring && <span style={{ fontWeight: 600, color: colour }}> · {a.bring}{a.bringNote ? ` — ${a.bringNote}` : ""}</span>}
+                    </span>
                     {(a.party || []).map((p, j) => (
-                      <span key={j} style={{ display: "block", fontSize: "0.75rem", color: "var(--text-dim)", marginTop: 2 }}>
-                        + {p.name}{p.guest ? " (guest)" : ""}
-                        {p.bring && <span style={{ color: colour, fontWeight: 600 }}> · 🍽️ {p.bring}{p.bringNote ? ` — ${p.bringNote}` : ""}</span>}
+                      <span key={j} style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: "0.75rem", color: "var(--text-dim)" }}>
+                        {p.name}{p.guest ? " (guest)" : ""}
+                        {p.bring && <span style={{ color: colour, fontWeight: 600 }}> · {p.bring}{p.bringNote ? ` — ${p.bringNote}` : ""}</span>}
                       </span>
                     ))}
                   </span>

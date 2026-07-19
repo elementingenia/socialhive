@@ -466,15 +466,6 @@ function MonthView({ events, onEventTap }) {
 export default function CalendarView({ events = [], onEventTap, defaultView = "week" }) {
   const [view, setView] = useState(defaultView)
   const [activeHubs, setActiveHubs] = useState(["movie", "club", "social"])
-  // Optional narrowing to ONE club. Default null = all clubs, so the common
-  // case needs no interaction (Iain's call) while a single club can be focused.
-  const [clubFilter, setClubFilter] = useState(null)
-  const clubsInView = useMemo(() => {
-    const seen = new Map()
-    for (const ev of events) if (ev.club_id && ev.club) seen.set(ev.club_id, ev.club)
-    return [...seen.values()].sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-  }, [events])
-
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
@@ -488,9 +479,8 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
   const filteredEvents = useMemo(() => events.filter(ev => {
     const key = hubKeyOf(ev)
     if (!activeHubs.includes(key)) return false
-    if (key === "club" && clubFilter && ev.club_id !== clubFilter) return false
     return true
-  }), [events, activeHubs, clubFilter])
+  }), [events, activeHubs])
 
   const eventsByDate = useMemo(() => {
     const map = {}
@@ -562,22 +552,6 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
           )
         })}
 
-        {/* Narrow to ONE club — optional; default "All clubs" needs no tap. */}
-        {activeHubs.includes("club") && clubsInView.length > 1 && (
-          <select
-            value={clubFilter || ""}
-            onChange={e => setClubFilter(e.target.value || null)}
-            style={{
-              flexShrink: 0, padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-              border: `1px solid ${clubFilter ? (clubsInView.find(c => c.id === clubFilter)?.colour || "var(--purple)") : "var(--border)"}`,
-              background: "var(--surface2)", color: "var(--text)", fontFamily: "inherit",
-              appearance: "none", WebkitAppearance: "none", cursor: "pointer",
-            }}
-          >
-            <option value="">All clubs</option>
-            {clubsInView.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        )}
       </div>
 
       {view === "week"  && <WeekView     days={weekDays}   eventsByDate={eventsByDate} onEventTap={onEventTap} />}
