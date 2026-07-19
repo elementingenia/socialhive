@@ -28,7 +28,7 @@ export async function POST(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   await notifyEventAttendees(supabaseAdmin, event_id, 'event_updated',
-    `${title || 'This Book Club meeting'} has been rescheduled — check the new date.`)
+    `${title || 'An event you booked'} has been updated — check the new date, time or location.`)
 
   return NextResponse.json({ ok: true })
 }

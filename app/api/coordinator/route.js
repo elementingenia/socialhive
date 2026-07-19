@@ -254,12 +254,22 @@ export async function PATCH(req) {
 
   // ── Mark refund given on a cancelled booking ─────────────────────────────────
   if (action === "set_refund" && booking_id) {
+    const { data: bk } = await supa
+      .from("bookings").select("member_id, seats").eq("id", booking_id).eq("event_id", event_id).maybeSingle()
     const { error: re } = await supa
       .from("bookings")
       .update({ payment_status: refunded ? "refunded" : "pending", updated_at: new Date().toISOString() })
       .eq("id", booking_id)
       .eq("event_id", event_id)
     if (re) return NextResponse.json({ error: re.message }, { status: 500 })
+    // Tell the member their refund has been processed (only when marking one,
+    // not when un-marking). A booking change they didn't initiate.
+    if (refunded && bk?.member_id) {
+      const { data: ev } = await supa.from("events").select("title, cost").eq("id", event_id).single()
+      const owed = ev?.cost ? (parseFloat(ev.cost) * (bk.seats || 1)).toFixed(2) : null
+      await notify(bk.member_id, event_id, "payment_refunded",
+        `Your${owed ? ` $${owed}` : ""} refund for ${ev?.title || "this event"} has been processed.`)
+    }
     return NextResponse.json({ ok: true })
   }
 
