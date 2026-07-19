@@ -842,6 +842,15 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
       const { data, error: evErr } = await supabase.from("events").insert(payload).select("id").single()
       if (evErr) { setSaveError("Could not create event: " + evErr.message); setSaving(false); return }
       eventId = data?.id
+      // Tell the club's joined members about the new event (server-side fan-out).
+      try {
+        const token = await getToken()
+        fetch("/api/clubs/event-added", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ club_id: club.id, event_id: eventId, title: payload.title, event_date: payload.event_date }),
+        }).catch(() => {})
+      } catch {}
     }
 
     // Save coordinator (single EC for Book Club)
