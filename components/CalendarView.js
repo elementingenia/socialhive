@@ -538,7 +538,6 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
       <div style={{ display: "flex", gap: 8, padding: "8px 16px", overflowX: "auto", borderBottom: "1px solid var(--border)" }}>
         {[
           { key: "movie",    label: "Movies"    },
-          { key: "club",     label: "Clubs"     },
           { key: "social",   label: "Social"    },
         ].map(({ key, label }) => {
           const on = activeHubs.includes(key)
@@ -565,12 +564,18 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
           )
         })}
 
-        {/* Club scope: All / My clubs / a specific club (Iain 2026-07-18) */}
-        {activeHubs.includes("club") && (clubsInView.length > 0 || myClubIds.size > 0) && (
+        {/* Club scope IS the clubs filter: All / My clubs / a specific club (Iain 2026-07-19).
+            Always purple; the standalone "Clubs" toggle pill was removed as redundant.
+            WebkitTextSizeAdjust pins the native-select text against iPad's narrow-column
+            font inflation (same text-size-adjust quirk as ExpandableText). */}
+        {(clubsInView.length > 0 || myClubIds.size > 0) && (
           <select value={clubScope} onChange={e => setClubScope(e.target.value)}
-            style={{ flexShrink: 0, padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600,
-              border: `1px solid ${clubScope !== "all" ? "var(--purple)" : "var(--border)"}`,
-              background: "var(--surface2)", color: "var(--text)", fontFamily: "inherit",
+            style={{ flexShrink: 0, maxWidth: 150, padding: "4px 10px", borderRadius: 20,
+              fontSize: 12, fontWeight: 600, lineHeight: 1.2,
+              WebkitTextSizeAdjust: "100%", textSizeAdjust: "100%",
+              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+              border: "1px solid var(--purple)", background: "var(--surface2)",
+              color: "var(--purple)", fontFamily: "inherit",
               appearance: "none", WebkitAppearance: "none", cursor: "pointer" }}>
             <option value="all">All clubs</option>
             <option value="mine">My clubs</option>
