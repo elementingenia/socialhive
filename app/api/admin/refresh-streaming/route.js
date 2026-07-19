@@ -1,5 +1,6 @@
+import { supabaseAdmin } from "@/lib/supabaseAdmin"
+export const dynamic = "force-dynamic"
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { fetchStreamingOffers } from '@/lib/justwatch'
 
 const OMDB_KEY = process.env.OMDB_API_KEY || 'ed1ed939'
@@ -21,11 +22,7 @@ async function fetchMaturityRating(imdbId) {
 }
 
 function makeAdminClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
+  return supabaseAdmin
 }
 
 async function getAdmin(token) {

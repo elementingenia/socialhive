@@ -1,11 +1,7 @@
+import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 // Book Club's event edit happens as a direct client-side supabase.from('events')
 // .update() call (no service-role API route backs it, unlike Movies/Social).

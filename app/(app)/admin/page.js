@@ -932,6 +932,7 @@ function PrivateOwnershipTab({ addToast }) {
   const [adding,        setAdding]        = useState(false)
   const [removing,      setRemoving]      = useState(null)
   const [ownerFilter,   setOwnerFilter]   = useState('')  // '' = all owners
+  const [ownerFilterSearch, setOwnerFilterSearch] = useState('')
   const searchRef = useRef(null)
 
   async function load() {
@@ -1017,13 +1018,13 @@ function PrivateOwnershipTab({ addToast }) {
     return [...seen.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => (a.name || '').localeCompare(b.name || ''))
   }, [records])
   const visibleRecords = ownerFilter ? records.filter(r => r.members?.id === ownerFilter) : records
-  const chipStyle = (active) => ({
-    padding:'0.3rem 0.7rem', borderRadius:'999px', fontSize:'0.78rem', fontWeight:600,
-    fontFamily:'inherit', cursor:'pointer', whiteSpace:'nowrap',
-    border:`1.5px solid ${active ? 'var(--teal)' : 'var(--border)'}`,
-    background: active ? 'var(--teal)' : 'var(--surface)',
-    color: active ? '#fff' : 'var(--text)',
-  })
+  const selectedOwnerName = owners.find(o => o.id === ownerFilter)?.name
+  // Live-search the owners who actually have records (scales to a large community).
+  const ownerFilterResults = useMemo(() => {
+    const q = ownerFilterSearch.trim().toLowerCase()
+    if (q.length < 2) return []
+    return owners.filter(o => (o.name || '').toLowerCase().includes(q)).slice(0, 20)
+  }, [ownerFilterSearch, owners])
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
@@ -1095,14 +1096,40 @@ function PrivateOwnershipTab({ addToast }) {
         </button>
       </div>
 
-      {/* Filter by owner */}
+      {/* Filter by owner (live search — scales to a large community) */}
       {owners.length > 1 && (
-        <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', alignItems:'center' }}>
-          <span style={{ fontSize:'0.72rem', fontWeight:600, color:'var(--text-dim)', marginRight:'0.15rem' }}>Owner:</span>
-          <button onClick={() => setOwnerFilter('')} style={chipStyle(ownerFilter === '')}>All</button>
-          {owners.map(o => (
-            <button key={o.id} onClick={() => setOwnerFilter(o.id)} style={chipStyle(ownerFilter === o.id)}>{o.name}</button>
-          ))}
+        <div>
+          <div style={{ fontSize:'0.72rem', fontWeight:600, color:'var(--text-dim)', marginBottom:'0.3rem' }}>Filter by owner</div>
+          {ownerFilter ? (
+            <div style={{ display:'flex', alignItems:'center', gap:'0.6rem', flexWrap:'wrap' }}>
+              <span style={{ display:'inline-flex', alignItems:'center', gap:'0.4rem', padding:'0.35rem 0.5rem 0.35rem 0.75rem', borderRadius:'999px', background:'var(--teal)', color:'#fff', fontSize:'0.82rem', fontWeight:700 }}>
+                {selectedOwnerName || 'Owner'}
+                <button onClick={() => { setOwnerFilter(''); setOwnerFilterSearch('') }} aria-label="Clear owner filter"
+                  style={{ display:'inline-flex', alignItems:'center', justifyContent:'center', width:'1.15rem', height:'1.15rem', borderRadius:'999px', border:'none', background:'rgba(255,255,255,0.25)', color:'#fff', fontSize:'0.72rem', cursor:'pointer', fontFamily:'inherit', lineHeight:1 }}>✕</button>
+              </span>
+              <span style={{ fontSize:'0.72rem', color:'var(--text-dim)' }}>{visibleRecords.length} record{visibleRecords.length === 1 ? '' : 's'}</span>
+            </div>
+          ) : (
+            <div style={{ position:'relative' }}>
+              <input value={ownerFilterSearch} onChange={e => setOwnerFilterSearch(e.target.value)}
+                placeholder="Type a name (min 2 chars)…" style={inputStyle} />
+              {ownerFilterResults.length > 0 && (
+                <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', zIndex:50, overflow:'hidden', boxShadow:'0 4px 16px rgba(0,0,0,0.2)', marginTop:'0.25rem', maxHeight:'14rem', overflowY:'auto' }}>
+                  {ownerFilterResults.map(o => (
+                    <div key={o.id} onClick={() => { setOwnerFilter(o.id); setOwnerFilterSearch('') }}
+                      style={{ padding:'0.65rem 0.85rem', cursor:'pointer', borderBottom:'1px solid var(--border)', fontSize:'0.88rem', fontWeight:500 }}>
+                      {o.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {ownerFilterSearch.trim().length >= 2 && ownerFilterResults.length === 0 && (
+                <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', zIndex:50, padding:'0.65rem 0.85rem', fontSize:'0.85rem', color:'var(--text-dim)', marginTop:'0.25rem' }}>
+                  No owners match
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -1,14 +1,10 @@
+import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { promoteWaitlist } from '@/lib/promoteWaitlist'
 import { notify } from '@/lib/notify'
 import { bookingsClosed } from '@/lib/booking'
 import { validateParty, validateBring } from '@/lib/attendees'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 async function getMember(token) {
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)

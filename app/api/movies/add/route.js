@@ -1,11 +1,7 @@
+import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { fetchStreamingOffers } from '@/lib/justwatch'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 // Single OMDb call, used for both the Rotten Tomatoes score and the AU/US
 // maturity classification (e.g. PG, M, MA15+) — was previously fetched for

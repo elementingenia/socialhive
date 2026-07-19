@@ -1,10 +1,5 @@
-import { createClient } from "@supabase/supabase-js"
-
-const supa = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
-
+import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
+export const dynamic = "force-dynamic"
 export async function GET() {
   // Try with sub_messages (migration 016). Fall back to welcome_text only (015).
   // Return empty object if table doesn't exist yet.

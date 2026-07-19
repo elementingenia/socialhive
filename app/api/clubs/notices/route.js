@@ -1,15 +1,11 @@
+import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
 import { notify } from "@/lib/notify"
 
 // Club notices (Phase 2c). Posting fans a notification out to everyone who has
 // JOINED the club (club_members) — the deliberate reason join exists — so this
 // must run server-side: the notifications INSERT policy is service-role only
 // (migration 034), and only the service role can write for other members.
-const supa = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 async function requireAdmin(req) {
   const token = req.headers.get("Authorization")?.replace("Bearer ", "")

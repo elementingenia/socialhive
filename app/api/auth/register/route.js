@@ -1,10 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 function toAuthPassword(pin) {
   return pin + '_hive'
@@ -73,7 +69,7 @@ export async function POST(request) {
 
       const lookupRes = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users?filter=${encodeURIComponent(fakeEmail)}`,
-        { headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` } }
+        { cache: "no-store", headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` } }
       )
       const lookupData = lookupRes.ok ? await lookupRes.json() : null
       const orphan = lookupData?.users?.find(u => u.email === fakeEmail)

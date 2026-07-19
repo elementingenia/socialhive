@@ -1,5 +1,5 @@
+import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
 import { validateNewAccount, validatePin } from "@/lib/accounts"
 
 // Admin-only account management (2026-07-16). Fills two gaps: no way for an
@@ -8,10 +8,6 @@ import { validateNewAccount, validatePin } from "@/lib/accounts"
 // (self-service change-password needs the OLD pin). The Auth plumbing mirrors
 // app/api/auth/register + app/api/auth/change-password.
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 const toAuthPassword = (pin) => pin + "_hive"
 
@@ -66,7 +62,7 @@ export async function POST(req) {
       if (!emailTaken) return NextResponse.json({ error: "Could not create the login. Please try again." }, { status: 500 })
       const lookup = await fetch(
         `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users?filter=${encodeURIComponent(fakeEmail)}`,
-        { headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` } }
+        { cache: "no-store", headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` } }
       )
       const orphan = (lookup.ok ? await lookup.json() : null)?.users?.find(u => u.email === fakeEmail)
       if (!orphan) return NextResponse.json({ error: "Could not create the login. Please try again." }, { status: 500 })

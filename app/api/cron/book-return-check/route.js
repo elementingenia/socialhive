@@ -1,33 +1,13 @@
+import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
 import { notify } from "@/lib/notify"
 
-// Root cause of a live bug found during verification (2026-07-15): without
-// this, Next.js's App Router silently caches the fetch() calls supabase-js
-// makes under the hood for a GET route handler like this one -- a booking
-// stamped with book_return_reminded_at one second and read back the next
-// kept coming back null, because the read was being served from Next's
-// fetch cache instead of actually hitting Supabase. force-dynamic disables
-// that (equivalent to cache: "no-store" on every fetch in this route),
-// which every other route in this app gets "for free" from mutating
-// methods / varying params, but this one -- a GET hit with an identical URL
-// every time -- needed explicitly.
+// This route reads back its own just-written rows on the next run, so it must
+// never be served stale. force-dynamic + the shared no-store supabaseAdmin
+// client (see lib/supabaseAdmin.js) guarantee fresh reads. (Originally hit
+// 2026-07-15: a booking's just-written book_return_reminded_at read back null
+// from Next's fetch cache.)
 export const dynamic = "force-dynamic"
-
-// Explicit no-store fetch override (2026-07-15): `export const dynamic =
-// "force-dynamic"` above was not enough on its own -- live-fire testing
-// still showed a booking's just-written book_return_reminded_at reading
-// back as null on the very next invocation, confirmed via a temporary
-// debug param that this route's own query result (not just Supabase's
-// REST API queried directly) was stale. Passing a custom fetch straight to
-// supabase-js forces cache: "no-store" at the exact point requests leave
-// this client, rather than relying on Next.js's route-level cache
-// directive to propagate down into a library's internal fetch calls.
-const supa = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { global: { fetch: (url, options) => fetch(url, { ...options, cache: "no-store" }) } }
-)
 
 // Daily catch-all for Book Club kit copies still out past their due date
 // (Iain, 2026-07-15) -- the manual "remind" bell on the attendee list

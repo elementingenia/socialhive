@@ -1,10 +1,7 @@
-import { createClient } from "@supabase/supabase-js"
+import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
+export const dynamic = "force-dynamic"
 import { NextResponse } from "next/server"
 
-const supa = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 async function requireAdmin(req) {
   const token = (req.headers.get("authorization") || "").replace("Bearer ", "")

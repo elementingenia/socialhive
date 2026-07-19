@@ -1,10 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 // Supabase Auth requires 6+ char passwords — pin may be shorter, so we pad
 function toAuthPassword(pin) {

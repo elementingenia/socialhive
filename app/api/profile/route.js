@@ -1,10 +1,7 @@
-import { createClient } from "@supabase/supabase-js"
+import { supabaseAdmin as supabase } from "@/lib/supabaseAdmin"
+export const dynamic = "force-dynamic"
 import { NextResponse } from "next/server"
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
 
 async function getMember(req) {
   const auth  = req.headers.get("authorization") || ""

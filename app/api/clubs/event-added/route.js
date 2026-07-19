@@ -1,15 +1,11 @@
+import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
 import { notifyClubMembers } from "@/lib/notifyAudience"
 
 // Notify a club's joined members about a NEW club event. Club events are
 // created client-side (ClubHome), but the notification fan-out must be
 // server-side (notifications INSERT is service-role only, migration 034), so
 // the client calls this after a successful create. Admin-gated.
-const supa = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 export async function POST(req) {
   const token = req.headers.get("Authorization")?.replace("Bearer ", "")

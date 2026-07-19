@@ -1,10 +1,6 @@
-import { createClient } from "@supabase/supabase-js"
+import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 
-const supa = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-)
 
 async function getAdminOrEC(token, eventId) {
   const { data: { user }, error } = await supa.auth.getUser(token)

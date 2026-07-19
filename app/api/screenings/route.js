@@ -1,19 +1,12 @@
+import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyHubFollowers } from '@/lib/notifyAudience'
 
-// Stale-read fix (2026-07-19): this GET route's supabase-js reads were being
-// served from Next.js's fetch Data Cache, not the live DB -- e.g. the calendar
-// dropped a just-added screening while the DB clearly had it (same root cause as
-// the cron book_return_reminded_at bug, 2026-07-15). force-dynamic + a no-store
-// fetch on the client force every read to hit Supabase fresh.
+// force-dynamic + the shared no-store supabaseAdmin (lib/supabaseAdmin.js) keep
+// this GET route reading LIVE data. Without it, Next's fetch cache once dropped a
+// just-added screening from the calendar (2026-07-19).
 export const dynamic = "force-dynamic"
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { global: { fetch: (url, options) => fetch(url, { ...options, cache: "no-store" }) } }
-)
 
 async function getMember(token) {
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)

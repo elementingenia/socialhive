@@ -1,5 +1,5 @@
+import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
 import { notify } from "@/lib/notify"
 import { paymentReminderDue } from "@/lib/payments"
 
@@ -16,11 +16,6 @@ import { paymentReminderDue } from "@/lib/payments"
 // next run. See that route for the full write-up.
 export const dynamic = "force-dynamic"
 
-const supa = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  { global: { fetch: (url, options) => fetch(url, { ...options, cache: "no-store" }) } }
-)
 
 // Once-only per booking via bookings.payment_reminded_at (migration 043) so a
 // resident isn't nagged daily past the due date. Vercel Cron issues GET with
