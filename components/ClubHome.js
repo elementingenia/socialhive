@@ -213,8 +213,6 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
         </div>
       )}
 
-      <ClubSocial club={club} colour={colour} isAdmin={isAdmin} />
-
       <div style={{ padding: "0.9rem 1rem 0.6rem" }}>
         {/* Event notes */}
         {event.description && (
@@ -1154,22 +1152,31 @@ function ClubSocial({ club, colour, isAdmin }) {
     <div style={{ marginBottom: 16 }}>
       {toast && <div style={{ position: "fixed", top: 70, left: "50%", transform: "translateX(-50%)", zIndex: 200, background: "var(--text)", color: "var(--bg)", padding: "0.5rem 1rem", borderRadius: 8, fontSize: "0.85rem", fontWeight: 600 }}>{toast}</div>}
 
-      {/* Join / leave */}
-      {member?.id && joined !== null && (
-        <button onClick={toggleJoin} disabled={busy} style={{
-          width: "100%", padding: "0.7rem", borderRadius: 12, fontFamily: "inherit", fontWeight: 700,
-          fontSize: "0.9rem", cursor: busy ? "wait" : "pointer", marginBottom: 12,
-          border: `1.5px solid ${colour}`,
-          background: joined ? "var(--surface)" : colour,
-          color: joined ? colour : "#fff",
-        }}>
-          {joined ? "✓ Joined — tap to leave" : "+ Join this club (for notices)"}
-        </button>
-      )}
+      {/* Join + Post notice — compact pills on one line, outside any event */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
+        {member?.id && joined !== null && (
+          <button onClick={toggleJoin} disabled={busy} title={joined ? "Tap to leave — you'll stop getting this club's notices" : "Join to get this club's notices"}
+            style={{ padding: "0.4rem 0.9rem", borderRadius: 20, fontFamily: "inherit", fontWeight: 700,
+              fontSize: "0.82rem", cursor: busy ? "wait" : "pointer", whiteSpace: "nowrap",
+              border: `1.5px solid ${colour}`,
+              background: joined ? "var(--surface)" : colour,
+              color: joined ? colour : "#fff" }}>
+            {joined ? "✓ Joined" : "Join"}
+          </button>
+        )}
+        {isAdmin && !composing && (
+          <button onClick={() => setComposing(true)}
+            style={{ padding: "0.4rem 0.9rem", borderRadius: 20, border: `1px dashed ${colour}`,
+              background: "transparent", color: colour, fontWeight: 700, fontFamily: "inherit",
+              fontSize: "0.82rem", cursor: "pointer", whiteSpace: "nowrap" }}>
+            📣 Post notice
+          </button>
+        )}
+      </div>
 
       {/* Admin composer */}
-      {isAdmin && (
-        composing ? (
+      {isAdmin && composing && (
+        (() => (
           <div style={{ marginBottom: 12, border: `1px solid ${colour}`, borderRadius: 12, padding: "0.75rem" }}>
             <RichEditor key="club-notice" initialValue="" hubColour={colour.startsWith("var(") ? undefined : colour}
               onChange={setDraft} placeholder="Write a notice for this club's members…" />
@@ -1178,11 +1185,7 @@ function ClubSocial({ club, colour, isAdmin }) {
               <button onClick={postNotice} disabled={posting || !draft.trim()} style={{ flex: 2, padding: "0.6rem", borderRadius: 10, border: "none", background: colour, color: "#fff", fontWeight: 700, fontFamily: "inherit", cursor: (posting || !draft.trim()) ? "not-allowed" : "pointer", opacity: (posting || !draft.trim()) ? 0.6 : 1 }}>{posting ? "Posting…" : "Post notice"}</button>
             </div>
           </div>
-        ) : (
-          <button onClick={() => setComposing(true)} style={{ width: "100%", padding: "0.6rem", borderRadius: 12, border: `1px dashed ${colour}`, background: "transparent", color: colour, fontWeight: 700, fontFamily: "inherit", cursor: "pointer", marginBottom: 12 }}>
-            📣 Post a club notice
-          </button>
-        )
+        ))()
       )}
 
       {/* Notices */}
@@ -1449,6 +1452,8 @@ export default function ClubHome({ club }) {
   return (
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
       <Toast msg={toast} />
+
+      <ClubSocial club={club} colour={colour} isAdmin={isAdmin} />
 
       {/* Welcome tile */}
       {welcomeText && (
