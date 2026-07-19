@@ -848,10 +848,12 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
 
     let eventId = event?.id
     if (eventId) {
-      const dateChanged = event?.event_date !== payload.event_date
+      const detailsChanged = event?.event_date !== payload.event_date
+        || (event?.event_time || null) !== (payload.event_time || null)
+        || (event?.location || null) !== (payload.location || null)
       const { error: evErr } = await supabase.from("events").update(payload).eq("id", eventId)
       if (evErr) { setSaveError("Could not update event: " + evErr.message); setSaving(false); return }
-      if (dateChanged) {
+      if (detailsChanged) {
         const token = await getToken()
         fetch("/api/bookclub/notify-updated", {
           method: "POST",
