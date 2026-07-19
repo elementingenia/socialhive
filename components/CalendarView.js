@@ -489,6 +489,7 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
     const key = hubKeyOf(ev)
     if (!activeHubs.includes(key)) return false
     if (key === "club") {
+      if (clubScope === "hide") return false
       if (clubScope === "mine" && !myClubIds.has(ev.club_id)) return false
       if (clubScope !== "all" && clubScope !== "mine" && ev.club_id !== clubScope) return false
     }
@@ -579,6 +580,7 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
               appearance: "none", WebkitAppearance: "none", cursor: "pointer" }}>
             <option value="all">All clubs</option>
             <option value="mine">My clubs</option>
+            <option value="hide">Hide clubs</option>
             {clubsInView.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         )}

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
@@ -931,6 +931,7 @@ function PrivateOwnershipTab({ addToast }) {
   const [ownType,       setOwnType]       = useState('dvd')
   const [adding,        setAdding]        = useState(false)
   const [removing,      setRemoving]      = useState(null)
+  const [ownerFilter,   setOwnerFilter]   = useState('')  // '' = all owners
   const searchRef = useRef(null)
 
   async function load() {
@@ -1009,6 +1010,21 @@ function PrivateOwnershipTab({ addToast }) {
 
   const canAdd = selected && ownerId
 
+  // Distinct owners present in the records, for the filter row.
+  const owners = useMemo(() => {
+    const seen = new Map()
+    for (const r of records) if (r.members?.id) seen.set(r.members.id, r.members.name)
+    return [...seen.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+  }, [records])
+  const visibleRecords = ownerFilter ? records.filter(r => r.members?.id === ownerFilter) : records
+  const chipStyle = (active) => ({
+    padding:'0.3rem 0.7rem', borderRadius:'999px', fontSize:'0.78rem', fontWeight:600,
+    fontFamily:'inherit', cursor:'pointer', whiteSpace:'nowrap',
+    border:`1.5px solid ${active ? 'var(--teal)' : 'var(--border)'}`,
+    background: active ? 'var(--teal)' : 'var(--surface)',
+    color: active ? '#fff' : 'var(--text)',
+  })
+
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
       {/* Add form */}
@@ -1079,20 +1095,31 @@ function PrivateOwnershipTab({ addToast }) {
         </button>
       </div>
 
+      {/* Filter by owner */}
+      {owners.length > 1 && (
+        <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', alignItems:'center' }}>
+          <span style={{ fontSize:'0.72rem', fontWeight:600, color:'var(--text-dim)', marginRight:'0.15rem' }}>Owner:</span>
+          <button onClick={() => setOwnerFilter('')} style={chipStyle(ownerFilter === '')}>All</button>
+          {owners.map(o => (
+            <button key={o.id} onClick={() => setOwnerFilter(o.id)} style={chipStyle(ownerFilter === o.id)}>{o.name}</button>
+          ))}
+        </div>
+      )}
+
       {/* Existing records */}
       {loading ? <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text-dim)' }}>Loading…</div> : records.length === 0 ? (
         <div style={{ textAlign:'center', padding:'1.5rem', color:'var(--text-dim)', fontSize:'0.9rem' }}>No ownership records yet</div>
       ) : (
         <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
-          {records.map(r => (
+          {visibleRecords.map(r => (
             <div key={r.id} style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.65rem' }}>
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ fontWeight:700, fontSize:'0.88rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
                   {r.movies?.title}{r.movies?.year ? ` (${r.movies.year})` : ''}
                 </div>
                 {r.movies?.actors && <div style={{ fontSize:'0.72rem', color:'var(--text-dim)' }}>{r.movies.actors.split(',')[0].trim()}</div>}
-                <div style={{ fontSize:'0.72rem', color:'var(--text-dim)', marginTop:'0.2rem' }}>
-                  {r.members?.name} · {r.ownership_type === 'dvd' ? '📀 DVD' : '💾 Digital'}
+                <div style={{ fontSize:'0.75rem', color:'var(--text-dim)', marginTop:'0.2rem' }}>
+                  <span style={{ fontWeight:700, color:'var(--text)' }}>{r.members?.name || 'Resident'}</span> · {r.ownership_type === 'dvd' ? '📀 DVD' : '💾 Digital'}
                 </div>
               </div>
               <button onClick={() => handleRemove(r.id)} disabled={removing === r.id}

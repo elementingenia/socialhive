@@ -3,9 +3,16 @@ import { NextResponse } from "next/server"
 import { promoteWaitlist } from "@/lib/promoteWaitlist"
 import { notify } from "@/lib/notify"
 
+// Stale-read fix (2026-07-19): this GET route's supabase-js reads were being
+// served from Next.js's fetch Data Cache, not the live DB -- e.g. the calendar
+// dropped a just-added screening while the DB clearly had it (same root cause as
+// the cron book_return_reminded_at bug, 2026-07-15). force-dynamic + a no-store
+// fetch on the client force every read to hit Supabase fresh.
+export const dynamic = "force-dynamic"
 const supa = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { global: { fetch: (url, options) => fetch(url, { ...options, cache: "no-store" }) } }
 )
 
 // Helper: resolve calling member and verify they are an active EC for the event
