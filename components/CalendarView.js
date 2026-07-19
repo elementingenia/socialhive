@@ -1,6 +1,7 @@
 "use client"
 import { useState, useMemo } from "react"
 import { HUB_COLOURS } from "@/lib/navUtils"
+import { useMyClubs } from "@/lib/useMyClubs"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -466,6 +467,14 @@ function MonthView({ events, onEventTap }) {
 export default function CalendarView({ events = [], onEventTap, defaultView = "week" }) {
   const [view, setView] = useState(defaultView)
   const [activeHubs, setActiveHubs] = useState(["movie", "club", "social"])
+  // Club filter: 'all' | 'mine' | a specific club id (Iain 2026-07-18).
+  const [clubScope, setClubScope] = useState("all")
+  const { myClubIds } = useMyClubs()
+  const clubsInView = useMemo(() => {
+    const seen = new Map()
+    for (const ev of events) if (ev.club_id && ev.club) seen.set(ev.club_id, ev.club)
+    return [...seen.values()].sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+  }, [events])
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
@@ -479,8 +488,12 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
   const filteredEvents = useMemo(() => events.filter(ev => {
     const key = hubKeyOf(ev)
     if (!activeHubs.includes(key)) return false
+    if (key === "club") {
+      if (clubScope === "mine" && !myClubIds.has(ev.club_id)) return false
+      if (clubScope !== "all" && clubScope !== "mine" && ev.club_id !== clubScope) return false
+    }
     return true
-  }), [events, activeHubs])
+  }), [events, activeHubs, clubScope, myClubIds])
 
   const eventsByDate = useMemo(() => {
     const map = {}
@@ -552,6 +565,18 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
           )
         })}
 
+        {/* Club scope: All / My clubs / a specific club (Iain 2026-07-18) */}
+        {activeHubs.includes("club") && (clubsInView.length > 0 || myClubIds.size > 0) && (
+          <select value={clubScope} onChange={e => setClubScope(e.target.value)}
+            style={{ flexShrink: 0, padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600,
+              border: `1px solid ${clubScope !== "all" ? "var(--purple)" : "var(--border)"}`,
+              background: "var(--surface2)", color: "var(--text)", fontFamily: "inherit",
+              appearance: "none", WebkitAppearance: "none", cursor: "pointer" }}>
+            <option value="all">All clubs</option>
+            <option value="mine">My clubs</option>
+            {clubsInView.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        )}
       </div>
 
       {view === "week"  && <WeekView     days={weekDays}   eventsByDate={eventsByDate} onEventTap={onEventTap} />}

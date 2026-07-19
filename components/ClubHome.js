@@ -285,6 +285,27 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
           </button>
         </div>
 
+        {/* EC-only dish breakdown, grouped by category (Iain 2026-07-18) */}
+        {attendeesOpen && canManageBooks && caps.bringEnabled && attendees && (() => {
+          const groups = {}
+          for (const a of attendees) {
+            if (a.bring) (groups[a.bring] = groups[a.bring] || []).push({ name: a.name === "You" ? "You" : a.name, note: a.bringNote })
+            for (const p of (a.party || [])) if (p.bring) (groups[p.bring] = groups[p.bring] || []).push({ name: p.name, note: p.bringNote })
+          }
+          const cats = Object.keys(groups)
+          if (!cats.length) return null
+          return (
+            <div style={{ marginTop: 6, background: colour + "12", borderRadius: 10, padding: "0.5rem 0.8rem 0.6rem" }}>
+              <div style={{ fontSize: "0.68rem", fontWeight: 700, color: colour, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>What&apos;s coming</div>
+              {cats.map(cat => (
+                <div key={cat} style={{ fontSize: "0.78rem", color: "var(--text)", marginBottom: 2, lineHeight: 1.45 }}>
+                  <strong>{cat}</strong> ({groups[cat].length}): <span style={{ color: "var(--text-dim)" }}>{groups[cat].map(g => g.note ? `${g.note} (${g.name})` : g.name).join(", ")}</span>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
+
         {/* Attendees list */}
         {attendeesOpen && (
           <div style={{ marginTop: 6, background: "var(--surface2)", borderRadius: 10, padding: "0.4rem 0.8rem 0.5rem" }}>
