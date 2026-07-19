@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
+import { notifyHubFollowers } from '@/lib/notifyAudience'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -198,6 +199,11 @@ export async function POST(req) {
     .select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Notify residents who follow Movies about the new screening (Iain 2026-07-18).
+  const when = event_date ? new Date(event_date + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }) : ""
+  await notifyHubFollowers(supabaseAdmin, "movie", event.id, "event_added",
+    `New screening: ${title}${when ? ` — ${when}` : ""}`, { excludeMemberId: member.id })
 
   // Save coordinator if provided
   if (coordinator_id && event?.id) {

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
+import { notifyAllActiveMembers } from '@/lib/notifyAudience'
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -93,6 +94,13 @@ export async function POST(req) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   await writeCoordinators(event.id, body.coordinator_ids, member.id)
+
+  // Social is community-wide: every active member is told about a new event
+  // (Iain 2026-07-18). Amendments still notify only attendees (see PATCH).
+  const when = body.event_date ? new Date(body.event_date + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }) : ""
+  await notifyAllActiveMembers(supabaseAdmin, event.id, "event_added",
+    `New Social event: ${body.title.trim()}${when ? ` — ${when}` : ""}`, { excludeMemberId: member.id })
+
   return NextResponse.json({ ok: true, id: event.id })
 }
 
