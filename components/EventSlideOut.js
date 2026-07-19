@@ -1091,17 +1091,32 @@ function BookingSection({ event, onRefresh, onClose }) {
   const [modifying, setModifying] = useState(false)
 
   const [modParty, setModParty] = useState([])
+  const modSeeded = useRef(false)
+  const blankRow = () => ({ kind: "resident", member_id: null, member_name: "", guest_name: "", bring_category_id: null, bring_note: null })
   useEffect(() => {
+    if (!modifying) { modSeeded.current = false; return }
     const need = Math.max(0, modifySeats - 1)
-    setModParty(prev => {
-      const seed = prev.length ? prev : (myAttendees || []).map(a => (a.member_id
+    if (!modSeeded.current) {
+      // First open of this Modify session: seed the whole party — names AND
+      // dishes — from the existing booking, so Save re-sends them instead of
+      // blanks. Previously a race seeded from a not-yet-loaded myAttendees and
+      // then refused to re-seed, wiping the party/dishes (Iain 2026-07-18).
+      modSeeded.current = true
+      const seed = (myAttendees || []).map(a => (a.member_id
         ? { kind: "resident", member_id: a.member_id, member_name: a.member?.name || "Resident", guest_name: "" }
         : { kind: "guest", member_id: null, member_name: "", guest_name: a.guest_name || "" }))
         .map((row, i) => ({ ...row, bring_category_id: myAttendees[i]?.bring_category_id || null, bring_note: myAttendees[i]?.bring_note || null }))
       const copy = seed.slice(0, need)
-      while (copy.length < need) copy.push({ kind: "resident", member_id: null, member_name: "", guest_name: "" })
-      return copy
-    })
+      while (copy.length < need) copy.push(blankRow())
+      setModParty(copy)
+    } else {
+      // Subsequent seat changes within the session: resize, keep what's there.
+      setModParty(prev => {
+        const copy = prev.slice(0, need)
+        while (copy.length < need) copy.push(blankRow())
+        return copy
+      })
+    }
   }, [modifying, modifySeats, myAttendees])
   const modNeed = Math.max(0, modifySeats - 1)
   const modPartyValid = modParty.length === modNeed &&
