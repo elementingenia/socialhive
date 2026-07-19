@@ -37,14 +37,14 @@ function Toast({ msg }) {
 }
 
 // ── Booking Strip ────────────────────────────────────────────────────────────
-function BookingStrip({ isJoined, hasBook, bookReturnDate, colour = "var(--purple)" }) {
+function BookingStrip({ isJoined, seats = 1, hasBook, bookReturnDate, colour = "var(--purple)" }) {
   const base = { display: "flex", alignItems: "center", justifyContent: "space-between",
     padding: "0.55rem 1rem", fontSize: "0.82rem", fontWeight: 600, gap: "0.5rem" }
   if (isJoined) {
     return (
       <div style={{ background: "#f0fdf4", borderTop: "1px solid #bbf7d0" }}>
         <div style={base}>
-          <span style={{ color: "#15803d" }}>✓ You're attending</span>
+          <span style={{ color: "#15803d" }}>✓ Booked {seats} place{seats !== 1 ? "s" : ""}</span>
           <span style={{ color: "#15803d", fontSize: "0.75rem" }}>Tap to manage →</span>
         </div>
         {hasBook && bookReturnDate && (
@@ -89,6 +89,13 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
       .select("id, seats, has_book, book_given_at, name_hidden, bring_note, members(id, name, username, hide_name), bring:club_bring_categories!bring_category_id(label)")
       .eq("event_id", event.id)
       .eq("status", "confirmed")
+    // Named additional attendees (the party), grouped by the booker.
+    const { data: partyRows } = await supabase
+      .from("booking_attendees")
+      .select("owner_id, member_id, guest_name, bring_note, member:members!member_id(name, hide_name), bring:club_bring_categories!bring_category_id(label)")
+      .eq("event_id", event.id)
+    const partyByOwner = {}
+    for (const p of partyRows || []) (partyByOwner[p.owner_id] = partyByOwner[p.owner_id] || []).push(p)
     // Own row always pinned to the top — consistent with every other attendee
     // list (Movies/Social inline lists, EventSlideOut's Coordinator View).
     setAttendees((data || []).map(b => {
@@ -104,6 +111,16 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
         bring: b.bring?.label || null,
         bringNote: b.bring_note || null,
         bookGivenAt: b.book_given_at,
+        party: (partyByOwner[b.members?.id] || []).map(p => {
+          const gPriv = !!p.member?.hide_name
+          const gOwn  = p.member_id && p.member_id === member?.id
+          return {
+            name: gOwn ? "You" : p.guest_name ? p.guest_name : (gPriv && !canManageBooks) ? "Resident" : (p.member?.name || "Resident"),
+            guest: !!p.guest_name,
+            bring: p.bring?.label || null,
+            bringNote: p.bring_note || null,
+          }
+        }),
       }
     }).sort((a, b) => (b.isOwn === true) - (a.isOwn === true)))
   }
@@ -214,6 +231,10 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
       )}
 
       <div style={{ padding: "0.9rem 1rem 0.6rem" }}>
+        {/* Event name (themed events) — book clubs already show the book title above */}
+        {!book && event.title && (
+          <div style={{ fontWeight: 800, fontSize: "1.05rem", color: "var(--text)", marginBottom: 6 }}>{event.title}</div>
+        )}
         {/* Event notes */}
         {event.description && (
           <div style={{ marginBottom: 10 }}>
@@ -281,6 +302,12 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
                         🍽️ {a.bring}{a.bringNote ? ` — ${a.bringNote}` : ""}
                       </span>
                     )}
+                    {(a.party || []).map((p, j) => (
+                      <span key={j} style={{ display: "block", fontSize: "0.75rem", color: "var(--text-dim)", marginTop: 2 }}>
+                        + {p.name}{p.guest ? " (guest)" : ""}
+                        {p.bring && <span style={{ color: colour, fontWeight: 600 }}> · 🍽️ {p.bring}{p.bringNote ? ` — ${p.bringNote}` : ""}</span>}
+                      </span>
+                    ))}
                   </span>
                   {canManageBooks && (
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -320,7 +347,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
       </div>
 
       {/* Booking status strip */}
-      <BookingStrip isJoined={isJoined} hasBook={!!booking?.has_book} bookReturnDate={event?.book_return_date} colour={colour} />
+      <BookingStrip isJoined={isJoined} seats={booking?.seats || 1} hasBook={!!booking?.has_book} bookReturnDate={event?.book_return_date} colour={colour} />
     </div>
   )
 }

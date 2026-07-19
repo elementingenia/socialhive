@@ -993,7 +993,7 @@ function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange,
 }
 
 // ── Booking Form ──────────────────────────────────────────────────────────────
-function BookingSection({ event, onRefresh }) {
+function BookingSection({ event, onRefresh, onClose }) {
   const [seats, setSeats] = useState(1)
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -1042,9 +1042,14 @@ function BookingSection({ event, onRefresh }) {
 
   useEffect(() => {
     if (!me?.id) return
-    supabase.from("booking_attendees").select("member_id, guest_name, member:members!member_id(name)")
+    supabase.from("booking_attendees").select("member_id, guest_name, bring_category_id, bring_note, member:members!member_id(name)")
       .eq("event_id", event.id).eq("owner_id", me.id)
       .then(({ data }) => setMyAttendees(data || []))
+    // Prefill the booker's own dish so it shows in the manage view and isn't
+    // lost when they Modify (Iain 2026-07-18).
+    supabase.from("bookings").select("bring_category_id, bring_note")
+      .eq("event_id", event.id).eq("member_id", me.id).eq("status", "confirmed").maybeSingle()
+      .then(({ data }) => { if (data?.bring_category_id) setMyBring({ category_id: data.bring_category_id, note: data.bring_note || "" }) })
   }, [event.id, me?.id])
 
   const partyNeed = Math.max(0, seats - 1)
@@ -1089,9 +1094,10 @@ function BookingSection({ event, onRefresh }) {
   useEffect(() => {
     const need = Math.max(0, modifySeats - 1)
     setModParty(prev => {
-      const seed = prev.length ? prev : (myAttendees || []).map(a => a.member_id
+      const seed = prev.length ? prev : (myAttendees || []).map(a => (a.member_id
         ? { kind: "resident", member_id: a.member_id, member_name: a.member?.name || "Resident", guest_name: "" }
-        : { kind: "guest", member_id: null, member_name: "", guest_name: a.guest_name || "" })
+        : { kind: "guest", member_id: null, member_name: "", guest_name: a.guest_name || "" }))
+        .map((row, i) => ({ ...row, bring_category_id: myAttendees[i]?.bring_category_id || null, bring_note: myAttendees[i]?.bring_note || null }))
       const copy = seed.slice(0, need)
       while (copy.length < need) copy.push({ kind: "resident", member_id: null, member_name: "", guest_name: "" })
       return copy
@@ -1159,9 +1165,11 @@ function BookingSection({ event, onRefresh }) {
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Cancel failed", "error"); return }
-      showToast("Booking cancelled")
       setConfirm(false)
       onRefresh()
+      // Back out to the event/club screen rather than sitting on an empty
+      // booking modal (Iain 2026-07-18).
+      if (onClose) onClose()
     } finally { setLoading(false) }
   }
 
@@ -1275,6 +1283,21 @@ function BookingSection({ event, onRefresh }) {
             })()}
             {myWaitlist && <StatusPill label={`⏳ ${myWaitlist.seats} on waitlist${waitlistPos ? ` (#${waitlistPos})` : ""}`} colour="var(--amber-dark)" />}
           </div>
+          {myConfirmed && bringEnabled && (() => {
+            const catLabel = (id) => bringCats.find(c => c.id === id)?.label
+            const mine = myBring.category_id ? { label: catLabel(myBring.category_id), note: myBring.note } : null
+            if (!mine && !myAttendees.length) return null
+            return (
+              <div style={{ fontSize: 12.5, color: "var(--text)", lineHeight: 1.5, background: "var(--surface2)", borderRadius: 10, padding: "8px 10px" }}>
+                {mine && <div>🍽️ You: {mine.label}{mine.note ? ` — ${mine.note}` : ""}</div>}
+                {myAttendees.map((a, i) => {
+                  const nm = a.member_id ? (a.member?.name || "Resident") : a.guest_name
+                  const cat = a.bring_category_id ? catLabel(a.bring_category_id) : null
+                  return <div key={i} style={{ color: "var(--text-dim)" }}>+ {nm}{a.guest_name ? " (guest)" : ""}{cat ? ` · 🍽️ ${cat}${a.bring_note ? ` — ${a.bring_note}` : ""}` : ""}</div>
+                })}
+              </div>
+            )
+          })()}
           {myConfirmed && event.payment_required && event.payment_due_by && !computeIsPaid(myConfirmed) && (
             <div style={{ fontSize: 12, color: "var(--amber-dark)", lineHeight: 1.4 }}>
               Payment due by {fmtDate(event.payment_due_by)}.
@@ -1313,14 +1336,19 @@ function BookingSection({ event, onRefresh }) {
               Can&apos;t increase seats on a split booking — cancel and rebook to request more seats.
             </div>
           )}
+          {bringEnabled && bringCats.length > 0 && (
+            <BringPicker cats={bringCats} categoryId={myBring.category_id} note={myBring.note}
+              onChange={setMyBring} colour="var(--amber)" required label="What are you bringing?" />
+          )}
           {modifySeats > 1 && (
             <PartyPicker count={modifySeats - 1} allowGuests={allowGuests} members={members}
-              excludeIds={me?.id ? [me.id] : []} value={modParty} onChange={setModParty} />
+              excludeIds={me?.id ? [me.id] : []} value={modParty} onChange={setModParty}
+              bringCats={bringEnabled ? bringCats : []} />
           )}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={() => setModifying(false)}
               style={{ flex: 1, padding: "12px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>Cancel</button>
-            <button onClick={handleModify} disabled={loading || (modifySeats > 1 && !modPartyValid)}
+            <button onClick={handleModify} disabled={loading || (modifySeats > 1 && !modPartyValid) || !bringValid}
               style={{ flex: 1, padding: "12px 0", background: "var(--amber)", border: "none", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: (loading || (modifySeats > 1 && !modPartyValid)) ? "not-allowed" : "pointer", color: "#fff", opacity: (loading || (modifySeats > 1 && !modPartyValid)) ? 0.7 : 1 }}>
               {loading ? "Saving…" : "Save"}
             </button>
@@ -1561,7 +1589,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
               {/* Booking section */}
               <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, marginTop: 4 }}>
                 {isAuthenticated ? (
-                  <BookingSection event={event} onRefresh={refreshAll} />
+                  <BookingSection event={event} onRefresh={refreshAll} onClose={onClose} />
                 ) : (
                   <LoginPrompt />
                 )}
