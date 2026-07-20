@@ -34,6 +34,14 @@ export default function QuestionsPage() {
 
   useEffect(() => { loadLists() }, [loadLists])
 
+  // Tapping the header Questions icon while already on this page (even inside a
+  // thread) should always return to the full list — same pattern as admin-reset.
+  useEffect(() => {
+    function reset() { setOpenId(null); loadLists() }
+    window.addEventListener("questions-reset", reset)
+    return () => window.removeEventListener("questions-reset", reset)
+  }, [loadLists])
+
   const list = tab === "mine" ? mine : answering
   const showAnswering = (answering && answering.length > 0)
 

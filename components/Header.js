@@ -114,7 +114,7 @@ export default function Header() {
   )
 
   const questionBtn = (
-    <button onClick={() => router.push("/questions")} aria-label="Questions" style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", border: `1.5px solid ${questionCount > 0 ? "var(--amber-dark)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", color: questionCount > 0 ? "var(--amber-dark)" : "var(--text-dim)", background: "none", cursor: "pointer", flexShrink: 0 }}>
+    <button onClick={() => { router.push("/questions"); if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("questions-reset")) }} aria-label="Questions" style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", border: `1.5px solid ${questionCount > 0 ? "var(--amber-dark)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", color: questionCount > 0 ? "var(--amber-dark)" : "var(--text-dim)", background: "none", cursor: "pointer", flexShrink: 0 }}>
       <QuestionIcon size={16} />
       {questionCount > 0 && (
         <span style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: "50%", background: "var(--amber-dark)", color: "#fff", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
