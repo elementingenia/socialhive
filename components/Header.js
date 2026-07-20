@@ -92,15 +92,22 @@ export default function Header() {
       {menuOpen && (
         <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "12px", minWidth: 170, zIndex: 300, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", overflow: "hidden" }}>
           {[
+            { label: "Help & Guide",   href: "/help-guide" },
             { label: "Update Profile", action: () => { setMenuOpen(false); openProfile() } },
             { label: "Change PIN",     action: () => { setMenuOpen(false); openPinModal() } },
             { label: "Sign Out",       action: signOut, danger: true },
-          ].map(item => (
-            <button key={item.label} onClick={item.action} style={{ display: "block", width: "100%", textAlign: "left", padding: "0.75rem 1rem", background: "none", border: "none", cursor: "pointer", fontSize: "0.88rem", fontFamily: "inherit", color: item.danger ? "#e53e3e" : "var(--text)", borderTop: item.danger ? "1px solid var(--border)" : "none" }}
-              onMouseEnter={e => e.currentTarget.style.background = "var(--bg)"}
-              onMouseLeave={e => e.currentTarget.style.background = "none"}
-            >{item.label}</button>
-          ))}
+          ].map(item => {
+            const rowStyle = { display: "block", width: "100%", boxSizing: "border-box", textAlign: "left", padding: "0.75rem 1rem", background: "none", border: "none", cursor: "pointer", fontSize: "0.88rem", fontFamily: "inherit", textDecoration: "none", color: item.danger ? "#e53e3e" : "var(--text)", borderTop: item.danger ? "1px solid var(--border)" : "none" }
+            const hover = { onMouseEnter: e => e.currentTarget.style.background = "var(--bg)", onMouseLeave: e => e.currentTarget.style.background = "none" }
+            return item.href ? (
+              <a key={item.label} href={item.href} target="_blank" rel="noopener noreferrer" onClick={() => setMenuOpen(false)} style={rowStyle} {...hover}>
+                <span aria-hidden style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, borderRadius: "50%", border: "1.5px solid var(--text-dim)", color: "var(--text-dim)", fontSize: "0.7rem", fontWeight: 800, marginRight: 8, verticalAlign: "middle", lineHeight: 1 }}>?</span>
+                {item.label}
+              </a>
+            ) : (
+              <button key={item.label} onClick={item.action} style={rowStyle} {...hover}>{item.label}</button>
+            )
+          })}
         </div>
       )}
     </div>
@@ -126,10 +133,6 @@ export default function Header() {
     </button>
   ) : null
 
-  const helpBtn = (
-    <a href="/help-guide" target="_blank" rel="noopener noreferrer" aria-label="Help" style={{ width: 30, height: 30, borderRadius: "50%", border: "1.5px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-dim)", fontWeight: 800, fontSize: "0.8rem", textDecoration: "none", lineHeight: 1, flexShrink: 0 }}>?</a>
-  )
-
   // ── HOME — larger branded header ──
   if (isHome) {
     return (
@@ -144,7 +147,6 @@ export default function Header() {
         <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexShrink: 0 }}>
           {questionBtn}
           {bellBtn}
-          {helpBtn}
           {avatarPill}
         </div>
       </header>
@@ -169,7 +171,6 @@ export default function Header() {
       <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexShrink: 0 }}>
         {questionBtn}
         {bellBtn}
-        {helpBtn}
         {avatarPill}
       </div>
     </header>
