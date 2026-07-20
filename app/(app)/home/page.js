@@ -73,7 +73,7 @@ function HubTiles() {
         padding: "0.65rem 0.25rem", display: "flex", flexDirection: "column",
         alignItems: "center", gap: "0.3rem", cursor: "pointer", opacity: h.comingSoon ? 0.55 : 1, fontFamily: "inherit",
       }}>
-      <span style={{ color: h.colour, lineHeight: 0, fontSize: h.emoji ? 30 : undefined }}>{h.emoji ? h.emoji : <h.Icon size={36} />}</span>
+      <span style={{ color: h.colour, height: 36, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, fontSize: h.emoji ? 26 : undefined }}>{h.emoji ? h.emoji : <h.Icon size={36} />}</span>
       <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--text)", lineHeight: 1.2, textAlign: "center" }}>{h.label}</span>
       {h.comingSoon && <span style={{ fontSize: "0.58rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Coming soon</span>}
     </button>
