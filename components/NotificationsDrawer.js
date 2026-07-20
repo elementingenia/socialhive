@@ -30,6 +30,8 @@ function typeIcon(type) {
     case "club_notice_posted":   return "📣"
     case "event_added":          return "🗓️"
     case "payment_refunded":     return "💸"
+    case "question_received":    return "❓"
+    case "question_answered":    return "💬"
     default:                  return "🔔"
   }
 }
@@ -50,6 +52,8 @@ function typeColour(type) {
     case "club_notice_posted":   return "var(--purple)"
     case "event_added":          return "var(--teal)"
     case "payment_refunded":     return "var(--teal)"
+    case "question_received":    return "var(--amber-dark)"
+    case "question_answered":    return "var(--teal)"
     default:                  return "var(--text-dim)"
   }
 }

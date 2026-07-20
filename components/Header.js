@@ -15,6 +15,16 @@ function BellIcon({ size = 22 }) {
   )
 }
 
+function QuestionIcon({ size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+      <path d="M9.6 9a2.4 2.4 0 0 1 4.7.6c0 1.6-2.4 2.4-2.4 2.4"/>
+      <line x1="12" y1="16" x2="12" y2="16"/>
+    </svg>
+  )
+}
+
 function getInitials(name) {
   if (!name) return "?"
   const parts = name.trim().split(/\s+/)
@@ -25,7 +35,7 @@ function getInitials(name) {
 
 export default function Header() {
   const { memberName, member } = useUser()
-  const { openProfile, openPinModal, openNotif, notifCount, refreshNotifCount } = useUI()
+  const { openProfile, openPinModal, openNotif, notifCount, refreshNotifCount, questionCount, refreshQuestionCount } = useUI()
   const pathname     = usePathname()
   const router       = useRouter()
   // Inside a club, the chrome takes that club's own colour/name so Clubs match
@@ -48,6 +58,7 @@ export default function Header() {
   }, [menuOpen])
 
   useEffect(() => { refreshNotifCount() }, [refreshNotifCount])
+  useEffect(() => { refreshQuestionCount() }, [refreshQuestionCount])
 
   async function signOut() {
     setMenuOpen(false)
@@ -95,6 +106,17 @@ export default function Header() {
     </div>
   )
 
+  const questionBtn = (
+    <button onClick={() => router.push("/questions")} aria-label="Questions" style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", border: `1.5px solid ${questionCount > 0 ? "var(--amber-dark)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", color: questionCount > 0 ? "var(--amber-dark)" : "var(--text-dim)", background: "none", cursor: "pointer", flexShrink: 0 }}>
+      <QuestionIcon size={16} />
+      {questionCount > 0 && (
+        <span style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: "50%", background: "var(--amber-dark)", color: "#fff", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
+          {questionCount > 9 ? "9+" : questionCount}
+        </span>
+      )}
+    </button>
+  )
+
   const bellBtn = notifCount > 0 ? (
     <button onClick={openNotif} aria-label="Notifications" style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", border: "1.5px solid #e53e3e", display: "flex", alignItems: "center", justifyContent: "center", color: "#e53e3e", background: "none", cursor: "pointer", flexShrink: 0 }}>
       <BellIcon size={16} />
@@ -120,6 +142,7 @@ export default function Header() {
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexShrink: 0 }}>
+          {questionBtn}
           {bellBtn}
           {helpBtn}
           {avatarPill}
@@ -144,6 +167,7 @@ export default function Header() {
       )}
 
       <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexShrink: 0 }}>
+        {questionBtn}
         {bellBtn}
         {helpBtn}
         {avatarPill}

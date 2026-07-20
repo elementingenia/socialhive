@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, ShedIcon } from "@/components/NavIcons"
 import { BAR_ENABLED } from "@/lib/features"
+import AskQuestion from "@/components/AskQuestion"
 
 // Home hub grid — kept to at most TWO rows (Iain: mobile vertical space is
 // premium). Row 1 = three tiles (span 2 of a 6-col grid), row 2 = two tiles
@@ -211,6 +212,10 @@ export default function HomePage() {
 
           {/* Bar tab — only for opted-in members (feature parked, see lib/features.js) */}
           {BAR_ENABLED && barOptIn && memberId && <BarTabCard memberId={memberId} />}
+
+          <div style={{ display: "flex", justifyContent: "center", marginTop: "1.25rem" }}>
+            <AskQuestion contextType="general" contextLabel="the Hive" colour="var(--amber-dark)" />
+          </div>
         </>
       )}
     </div>

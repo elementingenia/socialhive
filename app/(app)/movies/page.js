@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase'
 import EventSlideOut from '@/components/EventSlideOut'
 import FollowHubButton from '@/components/FollowHubButton'
 import { OwnersContact } from '@/components/OwnersManager'
+import AskQuestion from '@/components/AskQuestion'
 import VoteScoreGrid from '@/components/VoteScoreGrid'
 
 function parseGenres(g) {
@@ -524,6 +525,10 @@ export default function MoviesHomePage() {
       <WelcomeBanner text={welcomeText} colour="var(--teal)" />
 
       <OwnersContact contextType="hub" contextKey="movie" style={{ margin: '-2px 0 12px' }} />
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+        <AskQuestion contextType="hub" contextKey="movie" contextLabel="Movies" colour="var(--teal)" />
+      </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
         <FollowHubButton hubType="movie" colour="var(--teal)" label="Follow Movies" />
