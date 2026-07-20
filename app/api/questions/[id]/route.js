@@ -61,6 +61,18 @@ export async function GET(req, { params }) {
   })
 }
 
+export async function DELETE(req, { params }) {
+  const member = await getMember(req)
+  if (!member) return NextResponse.json({ error: "Unauthorised" }, { status: 401 })
+  const { data: q } = await supabaseAdmin.from("questions").select("asker_member_id").eq("id", params.id).single()
+  if (!q) return NextResponse.json({ ok: true })   // already gone
+  // Only the person who asked it (withdraw) or an admin (cleanup) may delete.
+  if (q.asker_member_id !== member.id && !member.is_admin)
+    return NextResponse.json({ error: "Not allowed" }, { status: 403 })
+  await supabaseAdmin.from("questions").delete().eq("id", params.id)   // cascades replies
+  return NextResponse.json({ ok: true })
+}
+
 export async function POST(req, { params }) {
   const member = await getMember(req)
   if (!member) return NextResponse.json({ error: "Unauthorised" }, { status: 401 })

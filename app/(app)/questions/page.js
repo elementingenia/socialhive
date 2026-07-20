@@ -101,6 +101,7 @@ function Thread({ id, onBack }) {
   const [reply, setReply] = useState("")
   const [busy, setBusy]   = useState(false)
   const [error, setError] = useState("")
+  const [withdrawing, setWithdrawing] = useState(false)
 
   const load = useCallback(async () => {
     const res = await authedFetch(`/api/questions/${id}`)
@@ -118,6 +119,14 @@ function Thread({ id, onBack }) {
     if (res.ok) { setReply(""); await load() }
     else { const d = await res.json().catch(() => ({})); setError(d.error || "Could not send.") }
     setBusy(false)
+  }
+
+  async function withdraw() {
+    if (!confirm("Withdraw this question? It will be removed for everyone.")) return
+    setWithdrawing(true)
+    const res = await authedFetch(`/api/questions/${id}`, { method: "DELETE" })
+    if (res.ok) onBack()
+    else { setWithdrawing(false); setError("Could not withdraw. Please try again.") }
   }
 
   if (!data) return <div style={{ display: "flex", justifyContent: "center", padding: "3rem" }}><div className="spinner" /></div>
@@ -165,6 +174,15 @@ function Thread({ id, onBack }) {
       {!data.canReply && q.status !== "closed" && (
         <div style={{ textAlign: "center", fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "1.25rem" }}>
           {data.isAsker ? "Waiting for an answer — you'll be notified." : "Waiting on the asker."}
+        </div>
+      )}
+
+      {data.isAsker && (
+        <div style={{ marginTop: "1.5rem", textAlign: "center" }}>
+          <button onClick={withdraw} disabled={withdrawing}
+            style={{ background: "none", border: "none", color: "#b91c1c", fontWeight: 700, fontSize: "0.82rem", textDecoration: "underline", cursor: withdrawing ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: withdrawing ? 0.6 : 1 }}>
+            {withdrawing ? "Withdrawing…" : "Withdraw this question"}
+          </button>
         </div>
       )}
     </div>
