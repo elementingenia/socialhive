@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
+import { OwnersContact } from "@/components/OwnersManager"
 import ExpandableText from "@/components/ExpandableText"
 import { getToken } from "@/components/ResidentEditPanel"
 import { clubCaps, clubColour } from "@/lib/clubs"
@@ -1521,6 +1522,8 @@ export default function ClubHome({ club }) {
             : welcomeText}
         </div>
       )}
+
+      <OwnersContact contextType="club" contextKey={club?.id} style={{ marginTop: -4, marginBottom: 16 }} />
 
       {/* Admin add/edit controls */}
       {isAdmin && !showForm && (

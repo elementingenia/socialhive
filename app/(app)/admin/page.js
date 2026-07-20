@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
 import { PageTextsIcon, MoviesIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon } from '@/components/NavIcons'
 import RichEditor, { bbToHtml } from '@/components/RichEditor'
+import OwnersManager from '@/components/OwnersManager'
 import ResidentEditForm, { Sheet } from '@/components/ResidentEditPanel'
 import { BAR_ENABLED } from '@/lib/features'
 
@@ -22,6 +23,7 @@ const SECTIONS = [
   { key: 'Movies',    label: 'Movies',     Icon: MoviesIcon },
   { key: 'BookClub',  label: 'Book Club',  Icon: BookClubIcon },
   { key: 'Clubs',     label: 'Clubs',      Icon: ClubsIcon },
+  { key: 'Owners',    label: 'Owners',     Icon: InfoIcon },
   // Bar section parked (feature not in scope) — see lib/features.js
   ...(BAR_ENABLED ? [{ key: 'Bar', label: 'Bar', Icon: BarIcon }] : []),
   { key: 'Locations', label: 'Locations',  Icon: InfoIcon },
@@ -1619,6 +1621,7 @@ export default function AdminPage() {
         {tab === 'Movies'    && <MoviesTab />}
         {tab === 'BookClub'  && <BookClubTab />}
         {tab === 'Clubs'     && <ClubsTab />}
+        {tab === 'Owners'    && <HubOwnersTab />}
         {BAR_ENABLED && tab === 'Bar' && <BarTab />}
         {tab === 'Locations' && <LocationsTab />}
         {tab === 'Tools'     && <ToolsTab />}
@@ -1816,10 +1819,36 @@ function ClubForm({ club, onSaved, onCancel }) {
         <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.35rem' }}>Only Book Club uses a catalogue (Books) today. Others: None.</div>
       </Field>
 
+      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0.75rem 0 0.5rem' }}>Owners</div>
+      {isEdit ? (
+        <OwnersManager contextType="club" contextKey={club.id}
+          hint="Owners answer questions asked on this club's page and appear as its contact. Seeded with the club's first event coordinator — edit freely." />
+      ) : (
+        <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Save the club first, then you can add its owners here.</div>
+      )}
+
       {error && <div style={{ color: '#b91c1c', fontSize: '0.85rem', margin: '0.5rem 0' }}>{error}</div>}
       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
         <button onClick={onCancel} style={{ flex: 1, padding: '0.75rem', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
         <button onClick={save} disabled={saving} style={{ flex: 2, padding: '0.75rem', borderRadius: 10, border: 'none', background: 'var(--purple)', color: '#fff', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: 'inherit' }}>{saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Create Club')}</button>
+      </div>
+    </div>
+  )
+}
+
+function HubOwnersTab() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', lineHeight: 1.5 }}>
+        Owners are the residents who receive questions asked on a hub&apos;s page and are shown as its contact. App admins always receive Home questions as a fallback, so they don&apos;t need listing here.
+      </div>
+      <div>
+        <div style={{ fontWeight: 800, color: 'var(--teal)', marginBottom: '0.5rem' }}>🎬 Movies</div>
+        <OwnersManager contextType="hub" contextKey="movie" />
+      </div>
+      <div>
+        <div style={{ fontWeight: 800, color: 'var(--terracotta)', marginBottom: '0.5rem' }}>🎉 Social</div>
+        <OwnersManager contextType="hub" contextKey="social" />
       </div>
     </div>
   )
