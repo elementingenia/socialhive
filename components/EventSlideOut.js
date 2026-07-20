@@ -11,6 +11,7 @@ import ExpandableText from "@/components/ExpandableText"
 import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, sumUnpaidSeats, seatsCost, bookingStatusBadge } from "@/lib/payments"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
 import { clubCaps, clubColour } from "@/lib/clubs"
+import AskQuestion from "@/components/AskQuestion"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1513,6 +1514,17 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
 
           {/* EC names — on one line under location */}
           {!isPrivate && <ECNames coordinators={coordinators} colour={colour} />}
+
+          {/* Ask about this event — routes to the event's coordinator(s) (Iain 2026-07-20) */}
+          {isAuthenticated && !isPrivate && (
+            <AskQuestion contextType="event" contextKey={event.id} contextLabel={event.title} colour={colour}
+              trigger={(open) => (
+                <button onClick={open}
+                  style={{ background: "none", border: "none", padding: 0, margin: "0 0 10px", fontFamily: "inherit", fontSize: 13, fontWeight: 700, color: colour, textDecoration: "underline", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  💬 Ask about this event
+                </button>
+              )} />
+          )}
 
           {/* Bus driver — sits directly with Coordinator, social offsite only */}
           {!isPrivate && event.has_bus && event.bus_driver && (

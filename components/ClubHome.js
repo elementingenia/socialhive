@@ -79,8 +79,8 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
   const communityScore = book?.avg_score ? parseFloat(book.avg_score).toFixed(1) : null
   const voteCount      = book?.vote_count || 0
 
-  const activeEC  = (event.event_coordinators || []).find(ec => !ec.replaced_at)
-  const coordinator = activeEC?.members?.name || activeEC?.members?.username || null
+  const activeECs = (event.event_coordinators || []).filter(ec => !ec.replaced_at)
+  const coordinator = activeECs.map(ec => ec.members?.name || ec.members?.username).filter(Boolean).join(", ") || null
   const isEC = !!(member && activeEC && activeEC.member_id === member.id)
   const canManageBooks = isAdmin || isEC
 
@@ -725,6 +725,32 @@ function BringCategoryPicker({ clubId, colour, value, onChange }) {
 }
 
 // ── Admin Inline Event Form ───────────────────────────────────────────────────
+function CoordMultiPicker({ members, value = [], onChange, colour = "var(--purple)", max = 3 }) {
+  const chosen = value.map(id => members.find(m => m.id === id)).filter(Boolean)
+  const available = members.filter(m => !value.includes(m.id))
+  return (
+    <div>
+      {chosen.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+          {chosen.map(m => (
+            <span key={m.id} style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--surface2)", border: `1px solid ${colour}`, borderRadius: 999, padding: "0.3rem 0.35rem 0.3rem 0.75rem", fontSize: "0.85rem", fontWeight: 600, color: "var(--text)" }}>
+              {m.name || m.username}
+              <button type="button" onClick={() => onChange(value.filter(id => id !== m.id))} aria-label={`Remove ${m.name || m.username}`}
+                style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "1.15rem", height: "1.15rem", borderRadius: 999, border: "none", background: "var(--border)", color: "var(--text)", fontSize: "0.72rem", cursor: "pointer", fontFamily: "inherit", lineHeight: 1 }}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+      {value.length < max ? (
+        <CoordPicker members={available} value="" valid={value.length > 0} colour={colour}
+          onChange={id => { if (id) onChange([...value, id]) }} />
+      ) : (
+        <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Maximum {max} coordinators reached.</div>
+      )}
+    </div>
+  )
+}
+
 function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(--purple)" }) {
   const inputStyle = { width: "100%", padding: "0.75rem 1rem", borderRadius: 10,
     border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)",
@@ -757,7 +783,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
     theme_name:   event?.theme_name || "",
     description:  event?.description || "",
     welcome_message: event?.welcome_message || "",
-    coordinator_id: activeEC?.member_id || "",
+    coordinator_ids: (event?.event_coordinators || []).filter(ec => !ec.replaced_at).map(ec => ec.member_id),
   })
   const [selectedBook, setSelectedBook] = useState(event?.books || null)
   const [saving, setSaving] = useState(false)
@@ -877,19 +903,17 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
       } catch {}
     }
 
-    // Save coordinator (single EC for Book Club)
-    if (form.coordinator_id && eventId) {
-      // Mark any existing as replaced
+    // Save coordinators (up to 3 ECs). Replace the whole active set with the
+    // chosen list so removals and additions both take effect.
+    if (form.coordinator_ids?.length && eventId) {
       await supabase
         .from("event_coordinators")
         .update({ replaced_at: new Date().toISOString() })
         .eq("event_id", eventId)
         .is("replaced_at", null)
 
-      await supabase.from("event_coordinators").insert({
-        event_id:  eventId,
-        member_id: form.coordinator_id,
-      })
+      await supabase.from("event_coordinators")
+        .insert(form.coordinator_ids.map(id => ({ event_id: eventId, member_id: id })))
     }
 
     setSaving(false)
@@ -1093,12 +1117,12 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
       )}
 
       <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Event Coordinator <span style={{ color: "var(--danger)" }}>*</span></label>
-        <CoordPicker
+        <label style={labelStyle}>Event Coordinator{form.coordinator_ids.length !== 1 ? "s" : ""} <span style={{ color: "var(--danger)" }}>*</span> <span style={{ textTransform: "none", fontWeight: 500, color: "var(--text-dim)" }}>(up to 3)</span></label>
+        <CoordMultiPicker
           members={members}
-          value={form.coordinator_id}
-          onChange={id => set("coordinator_id", id)}
-          valid={!!form.coordinator_id}
+          value={form.coordinator_ids}
+          onChange={ids => set("coordinator_ids", ids)}
+          colour={colour}
         />
       </div>
 
