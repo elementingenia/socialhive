@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
 import { useOwners } from "@/lib/useOwners"
+import AskQuestion from "@/components/AskQuestion"
 
 const inputStyle = {
   width: "100%", padding: "0.75rem 1rem", borderRadius: "10px",
@@ -99,6 +100,32 @@ export function OwnersContact({ contextType, contextKey, style }) {
   return (
     <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", ...style }}>
       {owners.length > 1 ? "Contacts" : "Contact"}: <span style={{ fontWeight: 600, color: "var(--text)" }}>{owners.map(o => o.name).join(", ")}</span>
+    </div>
+  )
+}
+
+
+// One-row contact bar for hub/club landings (Iain 2026-07-20): the owner
+// name(s) ARE the "ask a question" trigger (bold + underlined = clickable),
+// with an optional control (e.g. the hub Join button) on the right — saves a
+// row vs. stacking contact + ask + join separately. If a space has no owner
+// yet, the trigger falls back to a plain "Ask a question" link (routes to
+// admins).
+export function ContactBar({ contextType, contextKey, contextLabel, colour = "var(--amber-dark)", right = null, style }) {
+  const { owners } = useOwners(contextType, contextKey)
+  const names = owners.map(o => o.name).join(", ")
+  const link = { background: "none", border: "none", padding: 0, margin: 0, fontFamily: "inherit", fontSize: "0.82rem", fontWeight: 800, textDecoration: "underline", color: colour, cursor: "pointer" }
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.6rem", flexWrap: "wrap", ...style }}>
+      <AskQuestion contextType={contextType} contextKey={contextKey} contextLabel={contextLabel} colour={colour}
+        trigger={(open) => (
+          <div style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>
+            {owners.length > 0
+              ? <>Contact: <button onClick={open} style={link}>{names}</button></>
+              : <button onClick={open} style={link}>💬 Ask a question</button>}
+          </div>
+        )} />
+      {right}
     </div>
   )
 }

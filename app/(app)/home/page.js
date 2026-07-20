@@ -16,8 +16,9 @@ const HUBS = [
   { key: "movies", label: "Movies", Icon: MoviesIcon, path: "/movies",        colour: "var(--teal)",       span: 2 },
   { key: "social", label: "Social", Icon: SocialIcon, path: "/social",        colour: "var(--terracotta)", span: 2 },
   { key: "shed",   label: "Shed",   Icon: ShedIcon,   path: null,             colour: "var(--text-dim)",   span: 2, comingSoon: true },
-  { key: "clubs",  label: "Clubs",  Icon: ClubsIcon,  path: "/clubs",         colour: "var(--purple)",     span: 3 },
-  { key: "info",   label: "Info",   Icon: InfoIcon,   path: "/info/contacts", colour: "#4e7aab",           span: 3 },
+  { key: "clubs",  label: "Clubs",  Icon: ClubsIcon,  path: "/clubs",         colour: "var(--purple)",     span: 2 },
+  { key: "info",   label: "Info",   Icon: InfoIcon,   path: "/info/contacts", colour: "#4e7aab",           span: 2 },
+  { key: "ask",    label: "Ask a question", emoji: "💬", path: null,           colour: "var(--amber-dark)", span: 2, ask: true },
 ]
 
 // Render HTML (WYSIWYG) or legacy BBCode content
@@ -64,23 +65,24 @@ function SubNoticeCard({ text }) {
 function HubTiles() {
   const router = useRouter()
   const [shedToast, setShedToast] = useState(false)
+  const tile = (h, onClick) => (
+    <button key={h.key} onClick={onClick} aria-disabled={h.comingSoon || undefined}
+      style={{
+        gridColumn: `span ${h.span || 2}`,
+        background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "12px",
+        padding: "0.65rem 0.25rem", display: "flex", flexDirection: "column",
+        alignItems: "center", gap: "0.3rem", cursor: "pointer", opacity: h.comingSoon ? 0.55 : 1, fontFamily: "inherit",
+      }}>
+      <span style={{ color: h.colour, lineHeight: 0, fontSize: h.emoji ? 30 : undefined }}>{h.emoji ? h.emoji : <h.Icon size={36} />}</span>
+      <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--text)", lineHeight: 1.2, textAlign: "center" }}>{h.label}</span>
+      {h.comingSoon && <span style={{ fontSize: "0.58rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Coming soon</span>}
+    </button>
+  )
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "0.5rem", marginBottom: "0.75rem", position: "relative" }}>
-      {HUBS.map(h => (
-        <button key={h.key}
-          onClick={() => h.comingSoon ? (setShedToast(true), setTimeout(() => setShedToast(false), 2200)) : router.push(h.path)}
-          aria-disabled={h.comingSoon || undefined}
-          style={{
-            gridColumn: `span ${h.span || 2}`,
-            background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "12px",
-            padding: "0.65rem 0.25rem", display: "flex", flexDirection: "column",
-            alignItems: "center", gap: "0.3rem", cursor: "pointer", opacity: h.comingSoon ? 0.55 : 1,
-          }}>
-          <span style={{ color: h.colour, lineHeight: 0 }}><h.Icon size={36} /></span>
-          <span style={{ fontSize: "0.7rem", fontWeight: 600, color: "var(--text)", lineHeight: 1.2, textAlign: "center" }}>{h.label}</span>
-          {h.comingSoon && <span style={{ fontSize: "0.58rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>Coming soon</span>}
-        </button>
-      ))}
+      {HUBS.map(h => h.ask
+        ? <AskQuestion key={h.key} contextType="general" contextLabel="the Hive" colour={h.colour} trigger={(open) => tile(h, open)} />
+        : tile(h, () => h.comingSoon ? (setShedToast(true), setTimeout(() => setShedToast(false), 2200)) : router.push(h.path)))}
       {shedToast && (
         <div style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", bottom: "-2.2rem", zIndex: 5,
           background: "var(--text)", color: "var(--bg)", fontSize: "0.75rem", fontWeight: 600,
@@ -212,10 +214,6 @@ export default function HomePage() {
 
           {/* Bar tab — only for opted-in members (feature parked, see lib/features.js) */}
           {BAR_ENABLED && barOptIn && memberId && <BarTabCard memberId={memberId} />}
-
-          <div style={{ display: "flex", justifyContent: "center", marginTop: "1.25rem" }}>
-            <AskQuestion contextType="general" contextLabel="the Hive" colour="var(--amber-dark)" />
-          </div>
         </>
       )}
     </div>

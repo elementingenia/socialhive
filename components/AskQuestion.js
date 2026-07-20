@@ -11,7 +11,7 @@ const inputStyle = {
 // Ask-a-question entry point. Drop it anywhere with the context it belongs to:
 //   <AskQuestion contextType="club" contextKey={club.id} contextLabel="Dinner Club" colour="var(--purple)" />
 // Home uses contextType="general" (no key).
-export default function AskQuestion({ contextType, contextKey, contextLabel, colour = "var(--amber)", block = false }) {
+export default function AskQuestion({ contextType, contextKey, contextLabel, colour = "var(--amber)", block = false, trigger = null }) {
   const [open, setOpen]       = useState(false)
   const [subject, setSubject] = useState("")
   const [body, setBody]       = useState("")
@@ -35,14 +35,18 @@ export default function AskQuestion({ contextType, contextKey, contextLabel, col
     setBusy(false)
   }
 
+  const openModal = () => { reset(); setOpen(true) }
+
   return (
     <>
-      <button onClick={() => { reset(); setOpen(true) }}
-        style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", width: block ? "100%" : "auto", justifyContent: "center",
-          padding: "0.6rem 1rem", borderRadius: 12, border: `1.5px solid ${colour}`, background: "var(--surface)",
-          color: colour, fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit" }}>
-        <span aria-hidden>💬</span> Ask a question
-      </button>
+      {trigger ? trigger(openModal) : (
+        <button onClick={openModal}
+          style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem", width: block ? "100%" : "auto", justifyContent: "center",
+            padding: "0.6rem 1rem", borderRadius: 12, border: `1.5px solid ${colour}`, background: "var(--surface)",
+            color: colour, fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit" }}>
+          <span aria-hidden>💬</span> Ask a question
+        </button>
+      )}
 
       {open && (
         <div onClick={() => setOpen(false)}

@@ -6,8 +6,7 @@ import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import { bbToHtml } from "@/components/RichEditor"
 import { BusIcon } from "@/components/NavIcons"
-import { OwnersContact } from "@/components/OwnersManager"
-import AskQuestion from "@/components/AskQuestion"
+import { ContactBar } from "@/components/OwnersManager"
 import { FormattedText } from "@/lib/textFormatter"
 import { seatsCost, bookingStatusBadge } from "@/lib/payments"
 
@@ -398,11 +397,7 @@ export default function SocialHome() {
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
       <WelcomeBanner text={welcomeText} />
 
-      <OwnersContact contextType="hub" contextKey="social" style={{ margin: "-2px 0 12px" }} />
-
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-        <AskQuestion contextType="hub" contextKey="social" contextLabel="Social" colour="var(--terracotta)" />
-      </div>
+      <ContactBar contextType="hub" contextKey="social" contextLabel="Social" colour="var(--terracotta)" style={{ margin: "-2px 0 12px" }} />
 
       <NextEventTile
         event={nextEvent}
