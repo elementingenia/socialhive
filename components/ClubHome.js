@@ -81,7 +81,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
 
   const activeECs = (event.event_coordinators || []).filter(ec => !ec.replaced_at)
   const coordinator = activeECs.map(ec => ec.members?.name || ec.members?.username).filter(Boolean).join(", ") || null
-  const isEC = !!(member && activeEC && activeEC.member_id === member.id)
+  const isEC = !!(member && activeECs.some(ec => ec.member_id === member.id))
   const canManageBooks = isAdmin || isEC
 
   async function loadAttendees() {
