@@ -1,4 +1,5 @@
 "use client"
+import EventCoordinators from "@/components/EventCoordinators"
 import { useEffect, useState, useCallback, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import { getAuthToken } from "@/lib/getAuthToken"
@@ -983,12 +984,9 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
           </div>
         )}
 
-        {/* EC names */}
-        {ecNames.length > 0 && (
-          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.2rem" }}>
-            Coordinator{ecNames.length > 1 ? "s" : ""}: {ecNames.join(", ")}
-          </div>
-        )}
+        {/* EC names — the names are the ask-a-question trigger for this event */}
+        <EventCoordinators eventId={event.id} eventTitle={event.title} names={ecNames}
+          colour="var(--terracotta)" style={{ marginBottom: "0.2rem" }} />
 
         {/* Bus driver */}
         {event.has_bus && event.bus_driver && (
@@ -1333,7 +1331,7 @@ export default function SocialEvents() {
       const ids = allEvents.map(e => e.id)
       const { data: ecs } = await supabase
         .from("event_coordinators")
-        .select("event_id, member_id, members(name, username)")
+        .select("event_id, member_id, members!event_coordinators_member_id_fkey(name, username)")
         .in("event_id", ids).is("replaced_at", null).order("assigned_at")
       const map = {}
       ;(ecs || []).forEach(ec => {

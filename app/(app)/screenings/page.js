@@ -1,4 +1,5 @@
 'use client'
+import EventCoordinators from "@/components/EventCoordinators"
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { computeFreeCost } from '@/lib/freeCost'
@@ -372,17 +373,14 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit }) {
                 ● {freeCostData.isFree ? (freeCostData.reasons[0] || 'Free') : 'Cost'}
               </span>
             )}
-            {ev.coordinator && (
-              <span style={{ fontSize: '0.72rem', color: 'var(--teal)', fontWeight: 600 }}>
-                👤 {ev.coordinator.name || ev.coordinator.username}
-              </span>
-            )}
             {ev.has_bus && ev.bus_driver && (
               <span style={{ fontSize: '0.72rem', color: 'var(--teal)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                 <BusIcon size={12} /> {ev.bus_driver.name || ev.bus_driver.username}
               </span>
             )}
           </div>
+          <EventCoordinators eventId={ev.id} eventTitle={movie?.title || ev.title}
+            names={ev.coordinator ? [ev.coordinator.name || ev.coordinator.username] : []} colour="var(--teal)" />
           {movie?.actors && (
             <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
               {movie.actors.split(',')[0]?.trim()}

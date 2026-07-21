@@ -1,4 +1,5 @@
 "use client"
+import EventCoordinators from "@/components/EventCoordinators"
 import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
@@ -154,11 +155,8 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
           </div>
         )}
 
-        {ecNames.length > 0 && (
-          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.2rem" }}>
-            Coordinator{ecNames.length > 1 ? "s" : ""}: {ecNames.join(", ")}
-          </div>
-        )}
+        <EventCoordinators eventId={event.id} eventTitle={event.title} names={ecNames}
+          colour="var(--terracotta)" style={{ marginBottom: "0.2rem" }} />
 
         {event.has_bus && event.bus_driver && (
           <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 5 }}>
@@ -354,7 +352,7 @@ export default function SocialHome() {
 
       const { data: ecs } = await supabase
         .from("event_coordinators")
-        .select("member_id, members(name, username)")
+        .select("member_id, members!event_coordinators_member_id_fkey(name, username)")
         .eq("event_id", ev.id).is("replaced_at", null).order("assigned_at")
       setNextCoordinators((ecs || []).map(ec => ec.members))
     }

@@ -74,18 +74,10 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen })
                 <a href={`https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title || '')}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                   style={{ background: 'rgba(220,50,30,0.12)', color: '#c0392b', fontWeight: 700, fontSize: '0.68rem', padding: '0.15rem 0.45rem', borderRadius: '20px', textDecoration: 'none' }}>🍅 RT {movie.rating_rt}</a>
               )}
-              {coordinator && (
-                <span style={{ fontSize: '0.68rem', color: 'var(--teal)', fontWeight: 600 }}>
-                  👤 {coordinator.name || coordinator.username}
-                </span>
-              )}
             </div>
           )}
-          {!movie?.rating_imdb && !movie?.rating_rt && coordinator && (
-            <div style={{ fontSize: '0.72rem', color: 'var(--teal)', fontWeight: 600 }}>
-              👤 {coordinator.name || coordinator.username}
-            </div>
-          )}
+          <EventCoordinators eventId={event.id} eventTitle={movie?.title || event.title}
+            names={coordinator ? [coordinator.name || coordinator.username] : []} colour="var(--teal)" />
           {movie?.plot && (
             <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
               {movie.plot}
