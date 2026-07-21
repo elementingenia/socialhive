@@ -1,13 +1,21 @@
-// Minimal, deliberately-narrow lint gate. Scope: correctness only (no-undef),
-// so it stays noise-free on this never-previously-linted codebase and blocks
-// the exact bug class that shipped twice (activeEC, allow_nonresident_guests):
-// a reference to a variable that doesn't exist in scope. Style rules are out
-// of scope on purpose — widen later if desired.
+// Correctness-focused lint gate for a codebase that was never previously linted.
+// Extends eslint:recommended (which brings no-dupe-keys, no-unreachable,
+// no-dupe-args, no-dupe-else-if, use-isnan, valid-typeof, no-unsafe-negation,
+// etc. — the rules that catch real bugs like the activeEC undefined-ref and the
+// duplicate event-payload keys) but turns OFF the high-noise / stylistic rules
+// so a red run always means a genuine correctness problem, never style drift.
 module.exports = {
   root: true,
   parserOptions: { ecmaVersion: 2022, sourceType: "module", ecmaFeatures: { jsx: true } },
   env: { browser: true, node: true, es2022: true },
   globals: { React: "readonly", JSX: "readonly", structuredClone: "readonly" },
-  rules: { "no-undef": "error" },
+  extends: "eslint:recommended",
+  rules: {
+    "no-unused-vars": "off",
+    "no-empty": "off",
+    "no-useless-escape": "off",
+    "no-constant-condition": ["error", { checkLoops: false }],
+    "no-undef": "error"
+  },
   ignorePatterns: ["node_modules/", ".next/", "public/", "tests/e2e/"]
 };
