@@ -790,7 +790,7 @@ function CoordMultiPicker({ members, value = [], onChange, colour = "var(--purpl
   )
 }
 
-function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(--purple)" }) {
+function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = null, colour = "var(--purple)" }) {
   const inputStyle = { width: "100%", padding: "0.75rem 1rem", borderRadius: 10,
     border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)",
     fontSize: "1rem", boxSizing: "border-box", fontFamily: "inherit",
@@ -830,7 +830,12 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
   // content-defined clubs (books / one-at-a-time) get a pattern that only
   // pre-fills the next date. Only offered when creating, never when editing.
   const recurMode = (caps.hasBooks || caps.oneEventAtATime) ? "pattern" : "series"
-  const [recur, setRecur] = useState({ enabled: false, rule_type: "weekly", rule_config: { weekdays: [] }, month_end_policy: "clamp", horizon_months: 6 })
+  const [recur, setRecur] = useState(() => (!event && clubPattern)
+    ? { enabled: true, rule_type: clubPattern.rule_type, rule_config: clubPattern.rule_config || {}, month_end_policy: clubPattern.month_end_policy || "clamp", horizon_months: clubPattern.horizon_months || 6 }
+    : { enabled: false, rule_type: "weekly", rule_config: { weekdays: [] }, month_end_policy: "clamp", horizon_months: 6 })
+  const isSeriesOccurrence = !!event?.series_id
+  const [seriesScope, setSeriesScope] = useState("this")   // 'this' | 'future' (scope §6)
+  const [occBusy, setOccBusy] = useState(false)
   useEffect(() => {
     if (recurMode !== "pattern" || !recur.enabled || !recur.rule_type) return
     const d = nextOccurrence({ rule_type: recur.rule_type, rule_config: recur.rule_config, start_date: todayStr, month_end_policy: recur.month_end_policy }, todayStr)
@@ -958,6 +963,22 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
         || (event?.location || null) !== (payload.location || null)
       const { error: evErr } = await supabase.from("events").update(payload).eq("id", eventId)
       if (evErr) { setSaveError("Could not update event: " + evErr.message); setSaving(false); return }
+      // Recurring-series edit scope (§6). "This event only" marks it an exception
+      // so future template edits skip it; "This and future" propagates to later
+      // unbooked, non-exception occurrences via the series route.
+      if (event?.series_id) {
+        if (seriesScope === "future") {
+          try {
+            const token = await getToken()
+            const PROP = ["title","description","welcome_message","event_time","location_type","location","max_seats","max_seats_per_booking","allow_nonresident_guests","payment_required","cost","bring_category_ids","theme_name","is_public","show_attendee_names"]
+            const fields = {}; for (const k of PROP) fields[k] = payload[k]
+            await fetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ action: "update_future", series_id: event.series_id, from_date: payload.event_date, ...fields }) })
+          } catch (e) { /* the single edit already saved; propagation is best-effort */ }
+        } else {
+          await supabase.from("events").update({ is_series_exception: true }).eq("id", eventId)
+        }
+      }
       if (detailsChanged) {
         const token = await getToken()
         fetch("/api/bookclub/notify-updated", {
@@ -994,8 +1015,43 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
         .insert(form.coordinator_ids.map(id => ({ event_id: eventId, member_id: id })))
     }
 
+    // Persist the meeting pattern for content-defined clubs so it pre-fills next
+    // time (Book Club, §7a). Fire-and-forget; the single event is already saved.
+    if (!event && recurMode === "pattern" && recur.enabled && recur.rule_type) {
+      try {
+        const token = await getToken()
+        fetch("/api/series", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ club_id: club.id, mode: "pattern", rule_type: recur.rule_type, rule_config: recur.rule_config,
+            month_end_policy: recur.month_end_policy, horizon_months: recur.horizon_months, start_date: form.event_date, event_time: form.event_time || "00:00" }) }).catch(() => {})
+      } catch {}
+    }
     setSaving(false)
     if (!saveError) onSave()
+  }
+
+  async function removeOccurrence() {
+    if (!event?.id) return
+    if (!confirm("Remove just this date? Anyone booked on it will be notified.")) return
+    setOccBusy(true)
+    try {
+      const token = await getToken()
+      const res = await fetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: "cancel_occurrence", event_id: event.id }) })
+      if (res.ok) { onSave() } else setSaveError("Could not remove this date.")
+    } catch (e) { setSaveError("Could not remove this date.") }
+    setOccBusy(false)
+  }
+  async function endSeries() {
+    if (!event?.series_id) return
+    if (!confirm("End this recurring series? Future dates that no one has booked will be removed; booked dates are kept.")) return
+    setOccBusy(true)
+    try {
+      const token = await getToken()
+      const res = await fetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: "end", series_id: event.series_id }) })
+      if (res.ok) { onSave() } else setSaveError("Could not end the series.")
+    } catch (e) { setSaveError("Could not end the series.") }
+    setOccBusy(false)
   }
 
   const labelStyle = { fontSize: "0.78rem", fontWeight: 700, color: "var(--text-dim)",
@@ -1227,6 +1283,25 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
           {saveError}
         </div>
       )}
+      {isSeriesOccurrence && (
+        <div style={{ marginBottom: 12, padding: "0.75rem", border: `1px solid ${colour}`, borderRadius: 12, background: colour + "10" }}>
+          <div style={{ fontSize: "0.78rem", fontWeight: 700, marginBottom: 6 }}>📅 Part of a recurring series — apply changes to:</div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+            {[["this", "This date only"], ["future", "This and future dates"]].map(([v, lbl]) => (
+              <button key={v} type="button" onClick={() => setSeriesScope(v)}
+                style={{ flex: 1, padding: "0.5rem", borderRadius: 8, fontFamily: "inherit", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer",
+                  border: seriesScope === v ? `1px solid ${colour}` : "1px solid var(--border)",
+                  background: seriesScope === v ? colour : "var(--surface)", color: seriesScope === v ? clubTextOn(colour) : "var(--text)" }}>{lbl}</button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="button" onClick={removeOccurrence} disabled={occBusy}
+              style={{ flex: 1, padding: "0.5rem", borderRadius: 8, border: "1px solid #fca5a5", background: "#fee2e2", color: "#991b1b", fontWeight: 700, fontSize: "0.78rem", cursor: occBusy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>Remove this date</button>
+            <button type="button" onClick={endSeries} disabled={occBusy}
+              style={{ flex: 1, padding: "0.5rem", borderRadius: 8, border: "1px solid #fca5a5", background: "#fee2e2", color: "#991b1b", fontWeight: 700, fontSize: "0.78rem", cursor: occBusy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>End series</button>
+          </div>
+        </div>
+      )}
       <div style={{ display: "flex", gap: 10 }}>
         <button onClick={onClose}
           style={{ flex: 1, padding: "0.75rem", background: "var(--surface2)", border: "1px solid var(--border)",
@@ -1394,6 +1469,7 @@ export default function ClubHome({ club }) {
   const [loading,     setLoading]     = useState(true)
   const [toast,       setToast]       = useState(null)
   const [showForm,    setShowForm]    = useState(false)
+  const [clubPattern, setClubPattern] = useState(null)  // content-defined clubs (§7a)
   const [editEvent,   setEditEvent]   = useState(null)
   const [slideOutEvent, setSlideOutEvent] = useState(null)
   const [outstandingBook, setOutstandingBook] = useState(null) // { book_id, title } — member's most recent unreturned book, if any
@@ -1451,7 +1527,15 @@ export default function ClubHome({ club }) {
     load()
   }
 
+  async function loadClubPattern() {
+    if (!(clubCaps(club).hasBooks || clubCaps(club).oneEventAtATime)) return
+    const { data } = await supabase.from("event_series")
+      .select("*").eq("club_id", club.id).eq("mode", "pattern").eq("status", "active")
+      .order("created_at", { ascending: false }).limit(1)
+    setClubPattern((data && data[0]) || null)
+  }
   async function load() {
+    loadClubPattern()
     setLoading(true)
     const today = new Date().toISOString().split("T")[0]
 
@@ -1671,6 +1755,7 @@ export default function ClubHome({ club }) {
           club={club}
           colour={colour}
           event={editEvent}
+          clubPattern={clubPattern}
           members={members}
           onSave={() => { setShowForm(false); setEditEvent(null); load() }}
           onClose={() => { setShowForm(false); setEditEvent(null) }}

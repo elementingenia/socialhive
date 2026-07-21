@@ -2,6 +2,7 @@ import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { notifyClubMembers } from "@/lib/notifyAudience"
 import { generateSeriesEvents } from "@/lib/generateSeriesEvents"
+import { notifyEventAttendees } from "@/lib/notifyEventAttendees"
 import { RULE_TYPES } from "@/lib/recurrence"
 
 // Recurring event series — create / end. Occurrences are materialised as real
@@ -30,6 +31,13 @@ async function resolve(req, clubId) {
   return { error: "Not allowed for this club", status: 403 }
 }
 
+
+// Template fields a "this and future" edit propagates to later occurrences.
+// Never event_date (rule-driven) or book_id (per-occurrence, Book Club).
+const PROPAGATE = ["title","description","welcome_message","event_time","location_type","location",
+  "max_seats","max_seats_per_booking","allow_nonresident_guests","payment_required","cost",
+  "bring_category_ids","theme_name","is_public","show_attendee_names"]
+
 export async function POST(req) {
   const body = await req.json().catch(() => ({}))
   const { club_id, rule_type, rule_config, mode = "series" } = body
@@ -56,6 +64,11 @@ export async function POST(req) {
   }
   if (!row.start_date) return NextResponse.json({ error: "start_date required" }, { status: 400 })
 
+  // Only one active pattern per club (Book Club, §7a): a new one supersedes the old.
+  if (row.mode === "pattern") {
+    await supa.from("event_series").update({ status: "ended" }).eq("club_id", club_id).eq("mode", "pattern").eq("status", "active")
+  }
+
   const { data: series, error: se } = await supa.from("event_series").insert(row).select("*").single()
   if (se) return NextResponse.json({ error: se.message }, { status: 500 })
 
@@ -74,16 +87,71 @@ export async function POST(req) {
   return NextResponse.json({ ok: true, series, occurrences_created: created })
 }
 
-// End a series: stop future generation. Already-generated occurrences are left
-// intact (residents keep their bookings). Scope §5.
+// Series edit / cancel actions (scope §5/§6). action:
+//   end               — stop generation; archive future UNBOOKED occurrences,
+//                        keep booked ones (residents keep their seat).
+//   update_future     — apply the edited template to this + future occurrences
+//                        that have no bookings and aren't exceptions; also update
+//                        the series template so newly generated ones match.
+//   cancel_occurrence — archive a single occurrence and notify only its bookers.
 export async function PATCH(req) {
   const body = await req.json().catch(() => ({}))
-  const { series_id } = body
-  if (!series_id) return NextResponse.json({ error: "series_id required" }, { status: 400 })
-  const { data: s } = await supa.from("event_series").select("club_id").eq("id", series_id).single()
-  if (!s) return NextResponse.json({ error: "Not found" }, { status: 404 })
-  const { error, status } = await resolve(req, s.club_id)
+  const { action, series_id, event_id } = body
+  const today = new Date().toISOString().slice(0, 10)
+
+  // Resolve the club (via series or event) for the role check.
+  let clubId = null, series = null
+  if (series_id) {
+    const { data } = await supa.from("event_series").select("*").eq("id", series_id).single()
+    if (!data) return NextResponse.json({ error: "Series not found" }, { status: 404 })
+    series = data; clubId = data.club_id
+  } else if (event_id) {
+    const { data } = await supa.from("events").select("id, club_id, series_id, title").eq("id", event_id).single()
+    if (!data) return NextResponse.json({ error: "Event not found" }, { status: 404 })
+    clubId = data.club_id
+  } else {
+    return NextResponse.json({ error: "series_id or event_id required" }, { status: 400 })
+  }
+  const { error, status } = await resolve(req, clubId)
   if (error) return NextResponse.json({ error }, { status })
+
+  if (action === "cancel_occurrence") {
+    if (!event_id) return NextResponse.json({ error: "event_id required" }, { status: 400 })
+    const { data: ev } = await supa.from("events").select("title").eq("id", event_id).single()
+    await supa.from("events").update({ archived: true }).eq("id", event_id)
+    // Only this occurrence's bookers are told (scope §6).
+    await notifyEventAttendees(supa, event_id, "event_cancelled",
+      `${ev?.title || "An event you booked"} has been cancelled.`)
+    return NextResponse.json({ ok: true })
+  }
+
+  if (action === "update_future") {
+    if (!series_id) return NextResponse.json({ error: "series_id required" }, { status: 400 })
+    const fromDate = body.from_date || today
+    const patch = {}
+    for (const k of PROPAGATE) if (k in body) patch[k] = body[k]
+    // Update the series template so future GENERATED occurrences match.
+    if (Object.keys(patch).length) {
+      await supa.from("event_series").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", series_id)
+    }
+    // Future occurrences that are safe to rewrite: same series, on/after the
+    // edited date, not an exception, and with NO bookings (protect booked ones).
+    const { data: future } = await supa.from("events")
+      .select("id, bookings(id)").eq("series_id", series_id).eq("archived", false)
+      .eq("is_series_exception", false).gte("event_date", fromDate)
+    const safeIds = (future || []).filter(e => !(e.bookings || []).length).map(e => e.id)
+    if (safeIds.length && Object.keys(patch).length) {
+      await supa.from("events").update(patch).in("id", safeIds)
+    }
+    const protectedCount = (future || []).filter(e => (e.bookings || []).length).length
+    return NextResponse.json({ ok: true, updated: safeIds.length, protected: protectedCount })
+  }
+
+  // default: end the series
   await supa.from("event_series").update({ status: "ended", updated_at: new Date().toISOString() }).eq("id", series_id)
-  return NextResponse.json({ ok: true })
+  const { data: future } = await supa.from("events")
+    .select("id, bookings(id)").eq("series_id", series_id).eq("archived", false).gte("event_date", today)
+  const unbooked = (future || []).filter(e => !(e.bookings || []).length).map(e => e.id)
+  if (unbooked.length) await supa.from("events").update({ archived: true }).in("id", unbooked)
+  return NextResponse.json({ ok: true, removed_unbooked: unbooked.length, kept_booked: (future || []).length - unbooked.length })
 }
