@@ -9,6 +9,7 @@ import ExpandableText from "@/components/ExpandableText"
 import { getToken } from "@/components/ResidentEditPanel"
 import { clubCaps, clubColour } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
+import EventCoordinators from "@/components/EventCoordinators"
 import EventImagePicker from "@/components/EventImagePicker"
 import { useLocations } from "@/lib/useLocations"
 import { cutoffToDateValue, cutoffFromDateValue } from "@/lib/booking"
@@ -223,11 +224,9 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
                 {communityScore ?? "—"} ({voteCount})
               </span>
             </div>
-            {coordinator && (
-              <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: 6 }}>
-                📋 Coordinated by <strong>{coordinator}</strong>
-              </div>
-            )}
+            <EventCoordinators eventId={event.id} eventTitle={event.title}
+              names={activeECs.map(ec => ec.members?.name || ec.members?.username)}
+              colour={colour} style={{ marginTop: 6 }} />
           </div>
         </div>
       )}
