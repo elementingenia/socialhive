@@ -1506,10 +1506,12 @@ export default function ClubHome({ club }) {
   // Determine current (active) and next events
   const today = new Date().toISOString().split("T")[0]
   const upcoming = events.filter(e => e.event_date >= today)
-  const past     = events.filter(e => e.event_date < today)
 
-  // "Active" = first upcoming event (if any), else most recent past event
-  const activeEvent = upcoming[0] || past[past.length - 1] || null
+  // "Active" = the next upcoming event ONLY. A past event must never resurface as
+  // the active/current card just because nothing is scheduled — when there's no
+  // upcoming event the empty state shows, and past events live in the closed
+  // accordion below (per Iain, 2026-07-21).
+  const activeEvent = upcoming[0] || null
   // "Next" = second upcoming event (exists when there are 2+ upcoming)
   const nextEvent   = upcoming.length >= 2 ? upcoming[1] : null
   // Closed = all events except active and next
@@ -1592,11 +1594,10 @@ export default function ClubHome({ club }) {
       {activeEvent ? (
         <EventCard
           event={activeEvent}
-          label={upcoming[0] ? "Next Event" : "Latest Event"}
+          label="Next Event"
           booking={myBookings[activeEvent.id]}
           onOpen={() => openSlideOut(activeEvent)}
           colour={colour}
-          club={club}
           club={club}
           showToast={showToast}
         />

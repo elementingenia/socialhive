@@ -1,9 +1,16 @@
 const { test, expect } = require('@playwright/test')
+const { getUpcomingBookclubEvent, getActiveClubs } = require('./helpers')
 
 // ── Book Club Home ─────────────────────────────────────────────────────────────
 test.describe('Book Club Home', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/bookclub')
+    // Book Club legitimately has no upcoming event between picks. These tests
+    // assert on the event card, so skip (not fail) when there's genuinely no
+    // upcoming pick — a red run then always means a real regression, not a
+    // content gap. The always-on smoke test below still guards the render path.
+    const ev = await getUpcomingBookclubEvent()
+    test.skip(!ev, 'No upcoming Book Club pick — content-dependent tests skipped')
+    await page.goto('/clubs/book-club')
     await page.waitForLoadState('networkidle')
   })
 
@@ -50,11 +57,14 @@ test.describe('Book Club Home', () => {
     await expect(page.getByText('No attendees yet')).not.toBeVisible()
   })
 
-  test('Join prompt visible for non-joined event', async ({ page }) => {
-    // Book Club uses a tap-anywhere BookingStrip ("Join this session" / "You're
-    // attending"), the same convention as Movies/Social — not a dedicated
-    // Join/Leave <button>, which doesn't exist in this component.
-    await expect(page.getByText(/Join this session|You're attending/i).first()).toBeVisible()
+  test('Booking strip visible on the event card', async ({ page }) => {
+    // ClubHome's EventCard renders a tap-anywhere BookingStrip. Live wording
+    // (verified on production 2026-07-21) is "Tap to sign up" when not booked and
+    // "Tap to manage" / "Booked N place" once booked — the older "Join this
+    // session" / "You're attending" copy no longer exists in this component.
+    await expect(
+      page.getByText(/Tap to sign up|Tap to manage|Booked \d|You're attending/i).first()
+    ).toBeVisible()
   })
 })
 
@@ -114,7 +124,13 @@ test.describe('Book Club Suggestions', () => {
 // ── Book Club Admin ────────────────────────────────────────────────────────────
 test.describe('Book Club Admin controls', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/bookclub')
+    // Book Club legitimately has no upcoming event between picks. These tests
+    // assert on the event card, so skip (not fail) when there's genuinely no
+    // upcoming pick — a red run then always means a real regression, not a
+    // content gap. The always-on smoke test below still guards the render path.
+    const ev = await getUpcomingBookclubEvent()
+    test.skip(!ev, 'No upcoming Book Club pick — content-dependent tests skipped')
+    await page.goto('/clubs/book-club')
     await page.waitForLoadState('networkidle')
   })
 
@@ -122,5 +138,30 @@ test.describe('Book Club Admin controls', () => {
     // testbot is an admin — should see at least one of these buttons
     const editOrAdd = page.getByRole('button', { name: /Edit|Add Event/i }).first()
     await expect(editOrAdd).toBeVisible()
+  })
+})
+
+
+// ── Clubs render smoke (content-independent) ────────────────────────────────────
+// Every club runs on the shared ClubHome engine. Visiting each and asserting no
+// client-side exception guards the whole render path REGARDLESS of whether any
+// club has upcoming content — this is the coverage that would have caught the
+// activeEC crash (every club page threw a client-side exception on render).
+test.describe('Clubs render without client-side exceptions (smoke)', () => {
+  test('every active club page renders with no error boundary', async ({ page }) => {
+    test.setTimeout(90000)
+    const clubs = await getActiveClubs()
+    expect(clubs.length, 'No active clubs found in the database').toBeGreaterThan(0)
+    for (const club of clubs) {
+      await page.goto(`/clubs/${club.slug}`)
+      await page.waitForLoadState('networkidle')
+      // Next.js client-side error boundary must not be showing.
+      await expect(
+        page.getByText(/Application error|client-side exception/i),
+        `Club "${club.slug}" rendered the client-side error boundary`
+      ).toHaveCount(0)
+      // Positive signal that the club actually rendered its own content.
+      await expect(page.getByText(club.name).first()).toBeVisible()
+    }
   })
 })

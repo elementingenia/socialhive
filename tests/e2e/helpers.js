@@ -64,11 +64,21 @@ async function getNextScreening() {
 }
 
 async function getUpcomingBookclubEvent() {
+  // Book Club migrated to the shared Clubs engine (/clubs/book-club, Decision #1):
+  // its events are now hub_type=club scoped by club_id, NOT the legacy
+  // hub_type=bookclub. Query via the club slug so this keeps working.
   const rows = await supaGet(
-    `events?select=id,title,event_date&hub_type=eq.bookclub&archived=eq.false&event_date=gte.${todayStr()}&order=event_date.asc&limit=1`,
+    `events?select=id,title,event_date,clubs!inner(slug)&clubs.slug=eq.book-club&archived=eq.false&event_date=gte.${todayStr()}&order=event_date.asc&limit=1`,
     SUPABASE_ANON_KEY
   )
   return rows[0] || null
+}
+
+// Every active club (for the content-independent render smoke test). All clubs
+// run through the shared ClubHome engine, so visiting each and asserting no
+// client-side exception guards the whole ClubHome render path.
+async function getActiveClubs() {
+  return supaGet(`clubs?select=slug,name&archived=eq.false&order=name.asc`, SUPABASE_ANON_KEY)
 }
 
 // ── Service-role reads — needed for anything tied to testbot's own booking
@@ -131,6 +141,7 @@ async function createTestbotNotification() {
 module.exports = {
   getNextScreening,
   getUpcomingBookclubEvent,
+  getActiveClubs,
   getTestbotMovieBooking,
   createTestbotNotification,
   fmtDate,
