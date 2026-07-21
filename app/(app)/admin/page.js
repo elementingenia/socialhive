@@ -9,6 +9,7 @@ import { PageTextsIcon, MoviesIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon,
 import RichEditor, { bbToHtml } from '@/components/RichEditor'
 import OwnersManager from '@/components/OwnersManager'
 import ResidentEditForm, { Sheet } from '@/components/ResidentEditPanel'
+import { CLUB_COLOURS, nextClubColour } from '@/lib/clubColours'
 import { BAR_ENABLED } from '@/lib/features'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -1657,14 +1658,6 @@ export default function AdminPage() {
 // Create/configure clubs that render in the data-driven /clubs hub. Writes go
 // straight through the supabase client (clubs RLS allows admin write), same as
 // Book Club edits its events client-side.
-const CLUB_COLOURS = [
-  { label: 'Purple',     value: 'var(--purple)',     hex: '#7c3aed' },
-  { label: 'Teal',       value: 'var(--teal)',       hex: '#0d9488' },
-  { label: 'Terracotta', value: 'var(--terracotta)', hex: '#c2410c' },
-  { label: 'Blue',       value: '#4e7aab',           hex: '#4e7aab' },
-  { label: 'Green',      value: '#15803d',           hex: '#15803d' },
-  { label: 'Amber',      value: '#b45309',           hex: '#b45309' },
-]
 const CLUB_FLAGS = [
   { key: 'has_book_return', label: 'Book return dates' },
   { key: 'has_kit_return',  label: 'Kit return dates' },
@@ -1693,12 +1686,12 @@ function FlagToggle({ on, label, onClick }) {
   )
 }
 
-function ClubForm({ club, onSaved, onCancel }) {
+function ClubForm({ club, existingColours = [], onSaved, onCancel }) {
   const isEdit = !!club
   const [form, setForm] = useState({
     name: club?.name || '', slug: club?.slug || '', description: club?.description || '',
     welcome_text: club?.welcome_text || '',
-    colour: club?.colour || 'var(--purple)', catalogue_module: club?.catalogue_module || 'none',
+    colour: club?.colour || nextClubColour(existingColours), catalogue_module: club?.catalogue_module || 'none',
     has_book_return: club?.has_book_return || false, has_kit_return: club?.has_kit_return || false,
     has_theme: club?.has_theme || false, has_cost: club?.has_cost || false, bring_enabled: club?.bring_enabled || false,
     single_signup: club?.single_signup || false,
@@ -1762,7 +1755,7 @@ function ClubForm({ club, onSaved, onCancel }) {
         <RichEditor
           key={club?.id || 'new'}
           initialValue={form.welcome_text}
-          hubColour={CLUB_COLOURS.find(c => c.value === form.colour)?.hex || '#7c3aed'}
+          hubColour={CLUB_COLOURS.find(c => c.value === form.colour)?.hex || (form.colour?.startsWith('#') ? form.colour : '#7c3aed')}
           onChange={html => set('welcome_text', html)}
           placeholder="Shown in the coloured banner at the top of this club's page…"
         />
@@ -1874,7 +1867,7 @@ function ClubsTab() {
     return (
       <div>
         <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text)', marginBottom: '1rem' }}>{editing === 'new' ? 'New Club' : `Edit ${editing.name}`}</div>
-        <ClubForm club={editing === 'new' ? null : editing} onSaved={() => { setEditing(null); load() }} onCancel={() => setEditing(null)} />
+        <ClubForm club={editing === 'new' ? null : editing} existingColours={(clubs || []).map(c => c.colour)} onSaved={() => { setEditing(null); load() }} onCancel={() => setEditing(null)} />
       </div>
     )
   }
