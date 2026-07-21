@@ -220,7 +220,7 @@ export async function PATCH(req) {
   const member = await getMember(token)
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const { event_id, movie_id, event_date, event_time, max_seats, notes, coordinator_id, reservation_cutoff } = await req.json()
+  const { event_id, movie_id, event_date, event_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests } = await req.json()
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
   if (!event_date || !event_time) return NextResponse.json({ error: 'Date and time are required' }, { status: 400 })
 

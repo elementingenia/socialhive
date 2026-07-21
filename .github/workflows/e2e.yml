@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint (no-undef gate)
+        run: npm run lint
+
       - name: Run unit tests
         run: npm run test:unit
 

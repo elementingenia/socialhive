@@ -10,7 +10,8 @@
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "check:invariants": "node scripts/check-invariants.js",
-    "test:unit": "node tests/unit/booking.test.mjs && node tests/unit/payments.test.mjs && node tests/unit/attendees.test.mjs && node tests/unit/accounts.test.mjs && node tests/unit/clubs.test.mjs"
+    "test:unit": "node tests/unit/booking.test.mjs && node tests/unit/payments.test.mjs && node tests/unit/attendees.test.mjs && node tests/unit/accounts.test.mjs && node tests/unit/clubs.test.mjs",
+    "lint": "eslint --ext .js,.jsx app components lib"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2",
@@ -20,6 +21,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.0"
+    "@playwright/test": "^1.61.0",
+    "eslint": "^8.57.1"
   }
 }
