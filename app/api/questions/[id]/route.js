@@ -53,11 +53,10 @@ export async function GET(req, { params }) {
       author: r.members?.name || (r.is_answer ? "Coordinator" : "Resident"),
     })),
     isAsker, canAnswer: mayAnswer,
-    // What THIS viewer can do next given the bounded lifecycle:
-    canReply:
-      (t.q.status === "open"     && mayAnswer && !isAsker) ||
-      (t.q.status === "answered" && isAsker) ||
-      (t.q.status === "followup" && mayAnswer && !isAsker),
+    // Open-ended conversation (Iain, 2026-07-21): either party may keep replying
+    // until someone finalises it. Only "closed" stops the exchange.
+    canReply: t.q.status !== "closed" && (isAsker || mayAnswer),
+    canFinalise: t.q.status !== "closed" && (isAsker || mayAnswer),
   })
 }
 
@@ -90,21 +89,29 @@ export async function POST(req, { params }) {
   let is_answer, newStatus, notifyType, notifyTargets = []
   const label = await contextLabel(q.context_type, q.context_key)
 
-  if (q.status === "open") {
-    if (!mayAnswer || isAsker) return NextResponse.json({ error: "This question is awaiting an answer." }, { status: 409 })
-    is_answer = true; newStatus = "answered"
-    notifyType = "question_answered"; notifyTargets = [q.asker_member_id]
-  } else if (q.status === "answered") {
-    if (!isAsker) return NextResponse.json({ error: "Answered — waiting on the asker." }, { status: 409 })
-    is_answer = false; newStatus = "followup"
-    notifyType = "question_received"
-    notifyTargets = (await primaryAnswererIds(q.context_type, q.context_key)).filter(id => id !== member.id)
-  } else if (q.status === "followup") {
-    if (!mayAnswer || isAsker) return NextResponse.json({ error: "This follow-up is awaiting a reply." }, { status: 409 })
-    is_answer = true; newStatus = "closed"
+  // Open-ended exchange (Iain, 2026-07-21). The old bounded lifecycle
+  // (one answer -> one follow-up -> auto-close) proved too restrictive in real
+  // use. Either party may now keep replying until someone finalises the chat.
+  // Statuses: open = never answered (sits in the answerers' queue);
+  // answered = live conversation; closed = finalised. Legacy "followup" rows
+  // are normalised to "answered" on their next reply.
+  if (q.status === "closed") {
+    return NextResponse.json({ error: "This conversation has been finalised." }, { status: 409 })
+  }
+
+  // Status now tracks WHOSE TURN it is, not how many messages are left:
+  //   open      = never answered yet        -> answerers' queue
+  //   answered  = answerer replied last     -> asker's turn
+  //   followup  = asker replied last        -> answerers' turn
+  // so the "To answer" queue and unseen badges keep working, with no cap.
+  is_answer = !isAsker
+  newStatus = is_answer ? "answered" : (q.status === "open" ? "open" : "followup")
+
+  if (is_answer) {
     notifyType = "question_answered"; notifyTargets = [q.asker_member_id]
   } else {
-    return NextResponse.json({ error: "This question is closed." }, { status: 409 })
+    notifyType = "question_received"
+    notifyTargets = (await primaryAnswererIds(q.context_type, q.context_key)).filter(id => id !== member.id)
   }
 
   await supabaseAdmin.from("question_replies").insert({
@@ -121,10 +128,34 @@ export async function POST(req, { params }) {
 
   for (const id of notifyTargets) {
     const msg = notifyType === "question_answered"
-      ? `Your question about ${label} has ${newStatus === "closed" ? "an update" : "an answer"}.`
-      : `Follow-up on a question about ${label}.`
-    await notify(id, null, notifyType, msg, "/questions")
+      ? `Your question about ${label} has a new reply.`
+      : `New reply on a question about ${label}.`
+    await notify(id, null, notifyType, msg, "/questions", member.id)
   }
 
   return NextResponse.json({ ok: true, status: newStatus })
+}
+
+// Finalise the conversation — available to EITHER party (asker or an eligible
+// answerer), replacing the old automatic close. Idempotent. Deliberately does
+// NOT notify: finalising is housekeeping, and the drawer is already busy.
+export async function PATCH(req, { params }) {
+  const member = await getMember(req)
+  if (!member) return NextResponse.json({ error: "Unauthorised" }, { status: 401 })
+
+  const { data: q } = await supabaseAdmin.from("questions").select("*").eq("id", params.id).single()
+  if (!q) return NextResponse.json({ error: "Not found" }, { status: 404 })
+
+  const isAsker = q.asker_member_id === member.id
+  const mayAnswer = await canAnswer(member, q)
+  if (!isAsker && !mayAnswer && !member.is_admin) {
+    return NextResponse.json({ error: "Not allowed" }, { status: 403 })
+  }
+
+  if (q.status !== "closed") {
+    await supabaseAdmin.from("questions")
+      .update({ status: "closed", updated_at: new Date().toISOString() })
+      .eq("id", q.id)
+  }
+  return NextResponse.json({ ok: true, status: "closed" })
 }

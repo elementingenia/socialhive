@@ -130,7 +130,8 @@ export async function PATCH(req) {
   )
   if (dateChanged) {
     await notifyEventAttendees(supabaseAdmin, body.id, 'event_updated',
-      `${body.title} has been updated — check the new date, time or location.`)
+      `${body.title} has been updated — check the new date, time or location.`,
+      { excludeMemberId: member.id })
   }
 
   return NextResponse.json({ ok: true })
