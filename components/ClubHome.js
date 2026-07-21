@@ -10,6 +10,8 @@ import { getToken } from "@/components/ResidentEditPanel"
 import { clubCaps, clubColour } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
 import EventCoordinators from "@/components/EventCoordinators"
+import RecurrencePicker from "@/components/RecurrencePicker"
+import { nextOccurrence } from "@/lib/recurrence"
 import EventImagePicker from "@/components/EventImagePicker"
 import { useLocations } from "@/lib/useLocations"
 import { cutoffToDateValue, cutoffFromDateValue } from "@/lib/booking"
@@ -373,6 +375,43 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
 }
 
 // ── Closed Events Accordion ───────────────────────────────────────────────────
+function UpcomingDatesAccordion({ events, myBookings, onOpen, colour = "var(--purple)" }) {
+  const [open, setOpen] = useState(false)
+  if (!events.length) return null
+  const fmt = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })
+  return (
+    <div style={{ background: "var(--surface)", borderRadius: 14, border: "1px solid var(--border)", overflow: "hidden", marginBottom: 16 }}>
+      <button onClick={() => setOpen(o => !o)}
+        style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center",
+          padding: "1rem", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
+        <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>📅 Upcoming dates ({events.length})</span>
+        <span style={{ color: "var(--text-dim)", fontSize: "1rem", display: "inline-block",
+          transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▼</span>
+      </button>
+      {open && (
+        <div style={{ borderTop: "1px solid var(--border)", padding: "0.4rem 0.5rem" }}>
+          {events.map(ev => {
+            const booked = !!myBookings[ev.id]
+            return (
+              <button key={ev.id} onClick={() => onOpen(ev)}
+                style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
+                  padding: "0.6rem 0.7rem", background: "none", border: "none", borderRadius: 10, cursor: "pointer",
+                  textAlign: "left", fontFamily: "inherit" }}>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ fontWeight: 700, fontSize: "0.85rem", color: clubInk(colour) }}>{fmt(ev.event_date)}</span>
+                  {ev.event_time && <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}> · {ev.event_time.slice(0,5)}</span>}
+                  <span style={{ display: "block", fontSize: "0.78rem", color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.books?.title || ev.title}</span>
+                </span>
+                <span style={{ flexShrink: 0, fontSize: "0.72rem", fontWeight: 700, color: booked ? "#15803d" : colour }}>{booked ? "✓ Booked" : "Book →"}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ClosedEventsAccordion({ events, myBookedIds, colour = "var(--purple)" }) {
   const [open, setOpen] = useState(false)
   if (!events.length) return null
@@ -787,6 +826,16 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
   })
   const [selectedBook, setSelectedBook] = useState(event?.books || null)
   const [saving, setSaving] = useState(false)
+  // Recurring events (scope §7a): schedule-defined clubs get a real series;
+  // content-defined clubs (books / one-at-a-time) get a pattern that only
+  // pre-fills the next date. Only offered when creating, never when editing.
+  const recurMode = (caps.hasBooks || caps.oneEventAtATime) ? "pattern" : "series"
+  const [recur, setRecur] = useState({ enabled: false, rule_type: "weekly", rule_config: { weekdays: [] }, month_end_policy: "clamp", horizon_months: 6 })
+  useEffect(() => {
+    if (recurMode !== "pattern" || !recur.enabled || !recur.rule_type) return
+    const d = nextOccurrence({ rule_type: recur.rule_type, rule_config: recur.rule_config, start_date: todayStr, month_end_policy: recur.month_end_policy }, todayStr)
+    if (d) setForm(f => ({ ...f, event_date: d }))
+  }, [recurMode, recur.enabled, recur.rule_type, JSON.stringify(recur.rule_config), recur.month_end_policy])
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
 
@@ -797,6 +846,40 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
     if (!caps.hasBooks && !form.title.trim()) { setSaveError("Please give the event a name."); return }
     setSaving(true)
     setSaveError(null)
+
+    // Recurring SERIES create (schedule-defined clubs only, new events only).
+    // The API generates the occurrences + fires one notification (scope §3/§9).
+    if (!event && recurMode === "series" && recur.enabled && recur.rule_type) {
+      try {
+        const token = await getToken()
+        const res = await fetch("/api/series", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            club_id: club.id, mode: "series",
+            rule_type: recur.rule_type, rule_config: recur.rule_config,
+            month_end_policy: recur.month_end_policy, horizon_months: recur.horizon_months,
+            start_date: form.event_date, event_time: form.event_time || "00:00",
+            title: form.title.trim() || club?.name || "Club Event",
+            description: form.description, welcome_message: form.welcome_message,
+            location_type: form.location_type || "onsite", location: form.location || null,
+            max_seats: Number(form.max_seats) || 20,
+            max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
+            allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
+            payment_required: caps.hasCost ? !!form.payment_required : false,
+            cost: caps.hasCost && form.payment_required ? (Number(form.cost) || 0) : 0,
+            bring_category_ids: caps.bringEnabled ? (form.bring_category_ids || null) : null,
+            theme_name: caps.hasTheme ? (form.theme_name.trim() || null) : null,
+            is_public: form.is_public !== false, show_attendee_names: form.show_attendee_names !== false,
+            coordinator_ids: form.coordinator_ids || [],
+          }),
+        })
+        if (!res.ok) { const d = await res.json().catch(() => ({})); setSaveError(d.error || "Could not create the recurring event."); setSaving(false); return }
+      } catch (e) { setSaveError("Could not create the recurring event."); setSaving(false); return }
+      setSaving(false)
+      onSave()
+      return
+    }
 
     // Upsert book record — only for clubs that actually have a books
     // catalogue. Previously this dereferenced selectedBook unconditionally,
@@ -1026,6 +1109,12 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
         <label style={labelStyle}>Start Time</label>
         <HourPicker value={form.event_time} onChange={v => set("event_time", v)} colour={colour} inputStyle={inputStyle} />
       </div>
+
+      {!event && (
+        <div style={{ marginBottom: 12 }}>
+          <RecurrencePicker value={recur} onChange={setRecur} startDate={form.event_date} colour={colour} mode={recurMode} />
+        </div>
+      )}
 
       {caps.hasKitReturn && (
       <div style={{ marginBottom: 12 }}>
@@ -1507,17 +1596,20 @@ export default function ClubHome({ club }) {
   // upcoming event the empty state shows, and past events live in the closed
   // accordion below (per Iain, 2026-07-21).
   const activeEvent = upcoming[0] || null
-  // "Next" = second upcoming event (exists when there are 2+ upcoming)
-  const nextEvent   = upcoming.length >= 2 ? upcoming[1] : null
-  // Closed = all events except active and next
-  const closedEvents = events.filter(e =>
-    e.id !== activeEvent?.id && e.id !== nextEvent?.id
-  ).sort((a, b) => b.event_date.localeCompare(a.event_date))
+  const extras      = upcoming.slice(1)   // future events beyond the active one
+  // A single extra shows as its own "Upcoming Event" card (unchanged for typical
+  // clubs); 2+ extras (recurring series) collapse into the Upcoming dates
+  // accordion so the page never floods (scope §8).
+  const nextEvent      = extras.length === 1 ? extras[0] : null
+  const upcomingExtras = extras.length >= 2 ? extras : []
+  // Closed = PAST events only (future extras no longer leak in here).
+  const closedEvents = events.filter(e => e.event_date < today)
+    .sort((a, b) => b.event_date.localeCompare(a.event_date))
 
   // Can admin add? Only if there's no second upcoming event (no "Next" slot filled)
   // Only clubs that deliberately run one cycle at a time (Book Club) block
   // adding another while one is upcoming; most clubs schedule ahead.
-  const canAdd  = isAdmin && (!caps.oneEventAtATime || !nextEvent)
+  const canAdd  = isAdmin && (!caps.oneEventAtATime || upcoming.length < 2)
   const canEdit = isAdmin && activeEvent
 
   if (loading) return (
@@ -1616,7 +1708,10 @@ export default function ClubHome({ club }) {
         />
       )}
 
-      {/* Closed events */}
+      {/* Upcoming dates — grouped when a series/schedule produces many (scope §8) */}
+      <UpcomingDatesAccordion events={upcomingExtras} myBookings={myBookings} onOpen={openSlideOut} colour={colour} />
+
+      {/* Closed events (past only) */}
       <ClosedEventsAccordion events={closedEvents} myBookedIds={myBookedIds} colour={colour} />
 
       {/* Unified booking slide-over */}
