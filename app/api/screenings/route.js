@@ -254,7 +254,8 @@ export async function PATCH(req) {
   const dateChanged = before && (before.event_date !== event_date || before.event_time !== event_time)
   if (dateChanged) {
     await notifyEventAttendees(supabaseAdmin, event_id, 'event_updated',
-      `${title} has been rescheduled — check the new date and time.`)
+      `${title} has been rescheduled — check the new date and time.`,
+      { excludeMemberId: member.id })
   }
 
   return NextResponse.json({ ok: true })

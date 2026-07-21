@@ -390,7 +390,7 @@ export async function PATCH(req) {
     }
     if (bk?.member_id) {
       const { data: ev } = await supa.from("events").select("title").eq("id", event_id).single()
-      await notify(bk.member_id, event_id, "booking_cancelled", `Your booking for ${ev?.title || "this event"} was cancelled.`)
+      await notify(bk.member_id, event_id, "booking_cancelled", `Your booking for ${ev?.title || "this event"} was cancelled.`, undefined, member.id)
     }
     return NextResponse.json({ ok: true })
   }

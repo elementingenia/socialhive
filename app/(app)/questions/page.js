@@ -7,7 +7,7 @@ const STATUS = {
   open:     { label: "Awaiting answer", colour: "var(--amber-dark)" },
   answered: { label: "Answered",        colour: "var(--teal)" },
   followup: { label: "Follow-up sent",  colour: "var(--amber-dark)" },
-  closed:   { label: "Closed",          colour: "var(--text-dim)" },
+  closed:   { label: "Finalised",       colour: "var(--text-dim)" },
 }
 const fmt = (d) => d ? new Date(d).toLocaleDateString("en-AU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""
 
@@ -110,6 +110,7 @@ function Thread({ id, onBack }) {
   const [busy, setBusy]   = useState(false)
   const [error, setError] = useState("")
   const [withdrawing, setWithdrawing] = useState(false)
+  const [finalising, setFinalising] = useState(false)
 
   const load = useCallback(async () => {
     const res = await authedFetch(`/api/questions/${id}`)
@@ -127,6 +128,17 @@ function Thread({ id, onBack }) {
     if (res.ok) { setReply(""); await load() }
     else { const d = await res.json().catch(() => ({})); setError(d.error || "Could not send.") }
     setBusy(false)
+  }
+
+  // Either party may end the conversation (Iain, 2026-07-21) — replaces the old
+  // automatic close after a fixed number of messages.
+  async function finalise() {
+    if (!confirm("Finalise this chat? Neither of you will be able to reply after this.")) return
+    setFinalising(true); setError("")
+    const res = await authedFetch(`/api/questions/${id}`, { method: "PATCH" })
+    if (res.ok) { await load() }
+    else { setError("Could not finalise. Please try again.") }
+    setFinalising(false)
   }
 
   async function withdraw() {
@@ -163,7 +175,7 @@ function Thread({ id, onBack }) {
       </div>
 
       {q.status === "closed" && !data.canReply && (
-        <div style={{ textAlign: "center", fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "1.25rem" }}>This question is closed.</div>
+        <div style={{ textAlign: "center", fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "1.25rem" }}>This conversation has been finalised.</div>
       )}
 
       {data.canReply && (
@@ -185,12 +197,20 @@ function Thread({ id, onBack }) {
         </div>
       )}
 
-      {data.isAsker && (
-        <div style={{ marginTop: "1.5rem", textAlign: "center" }}>
-          <button onClick={withdraw} disabled={withdrawing}
-            style={{ background: "none", border: "none", color: "#b91c1c", fontWeight: 700, fontSize: "0.82rem", textDecoration: "underline", cursor: withdrawing ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: withdrawing ? 0.6 : 1 }}>
-            {withdrawing ? "Withdrawing…" : "Withdraw this question"}
-          </button>
+      {(data.canFinalise || data.isAsker) && (
+        <div style={{ marginTop: "1.5rem", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.55rem" }}>
+          {data.canFinalise && (
+            <button onClick={finalise} disabled={finalising}
+              style={{ background: "none", border: "1px solid var(--border)", borderRadius: 20, padding: "0.45rem 1.1rem", color: "var(--text-dim)", fontWeight: 700, fontSize: "0.82rem", cursor: finalising ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: finalising ? 0.6 : 1 }}>
+              {finalising ? "Finalising…" : "Finalise chat"}
+            </button>
+          )}
+          {data.isAsker && (
+            <button onClick={withdraw} disabled={withdrawing}
+              style={{ background: "none", border: "none", color: "#b91c1c", fontWeight: 700, fontSize: "0.82rem", textDecoration: "underline", cursor: withdrawing ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: withdrawing ? 0.6 : 1 }}>
+              {withdrawing ? "Withdrawing…" : "Withdraw this question"}
+            </button>
+          )}
         </div>
       )}
     </div>

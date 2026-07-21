@@ -17,14 +17,15 @@ export async function POST(req) {
   if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   const { data: member } = await supabaseAdmin
-    .from('members').select('is_admin').eq('auth_id', user.id).single()
+    .from('members').select('id, is_admin').eq('auth_id', user.id).single()
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
   const { event_id, title } = await req.json()
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   await notifyEventAttendees(supabaseAdmin, event_id, 'event_updated',
-    `${title || 'An event you booked'} has been updated — check the new date, time or location.`)
+    `${title || 'An event you booked'} has been updated — check the new date, time or location.`,
+    { excludeMemberId: member.id })
 
   return NextResponse.json({ ok: true })
 }
