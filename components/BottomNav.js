@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
 import { getActiveHub } from "@/lib/navUtils"
 import { clubColour, clubNavItems } from "@/lib/clubs"
+import { clubInk } from "@/lib/clubColours"
 import { useActiveClub } from "@/lib/useActiveClub"
 import { BAR_ENABLED } from "@/lib/features"
 import {
@@ -61,7 +62,7 @@ export default function BottomNav() {
   if (activeHub === "clubs") {
     hub = club
       ? {
-          colour: clubColour(club),
+          colour: clubInk(clubColour(club)),
           items: clubNavItems(club).map(it => ({
             ...it,
             // textOnly = the club itself: label in the club colour, no glyph.

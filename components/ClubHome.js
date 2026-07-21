@@ -8,6 +8,7 @@ import { ContactBar } from "@/components/OwnersManager"
 import ExpandableText from "@/components/ExpandableText"
 import { getToken } from "@/components/ResidentEditPanel"
 import { clubCaps, clubColour } from "@/lib/clubs"
+import { clubTextOn, clubInk } from "@/lib/clubColours"
 import EventImagePicker from "@/components/EventImagePicker"
 import { useLocations } from "@/lib/useLocations"
 import { cutoffToDateValue, cutoffFromDateValue } from "@/lib/booking"
@@ -58,7 +59,7 @@ function BookingStrip({ isJoined, seats = 1, hasBook, bookReturnDate, colour = "
   }
   return (
     <div style={{ ...base, background: colour + "0f", borderTop: `1px solid ${colour}26` }}>
-      <span style={{ color: colour, fontSize: "0.75rem" }}>Tap to sign up →</span>
+      <span style={{ color: clubInk(colour), fontSize: "0.75rem" }}>Tap to sign up →</span>
     </div>
   )
 }
@@ -180,7 +181,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
         overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 16, cursor: "pointer" }}>
       {/* Card header */}
       <div style={{ background: colour, padding: "0.6rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.85rem" }}>{label}</span>
+        <span style={{ color: clubTextOn(colour), fontWeight: 700, fontSize: "0.85rem" }}>{label}</span>
         <span style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.78rem", fontWeight: 600 }}>{fmtDate(event.event_date)}</span>
       </div>
 
@@ -217,7 +218,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
                 fontSize: "0.68rem", padding: "0.15rem 0.5rem", borderRadius: 20, whiteSpace: "nowrap" }}>
                 ⭐ {book.rating ?? "—"}
               </span>
-              <span style={{ background: colour + "1f", color: colour, fontWeight: 700,
+              <span style={{ background: colour + "1f", color: clubInk(colour), fontWeight: 700,
                 fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20, whiteSpace: "nowrap" }}>
                 {communityScore ?? "—"} ({voteCount})
               </span>
@@ -274,13 +275,13 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 4, paddingBottom: 2 }}>
           {book?.summary ? (
             <button onClick={e => { e.stopPropagation(); setSummaryOpen(o => !o) }}
-              style={{ background: "none", border: "none", color: colour, fontSize: "0.78rem",
+              style={{ background: "none", border: "none", color: clubInk(colour), fontSize: "0.78rem",
                 fontWeight: 700, cursor: "pointer", padding: "2px 0", fontFamily: "inherit" }}>
               {summaryOpen ? "Show less ▲" : "Show more ▼"}
             </button>
           ) : <span />}
           <button onClick={e => { e.stopPropagation(); toggleAttendees() }} disabled={attendeesLoading}
-            style={{ background: "none", border: "none", color: colour, fontSize: "0.78rem",
+            style={{ background: "none", border: "none", color: clubInk(colour), fontSize: "0.78rem",
               fontWeight: 700, cursor: attendeesLoading ? "wait" : "pointer", padding: "2px 0", fontFamily: "inherit" }}>
             {attendeesLoading ? "Loading…" : attendeesOpen ? "Hide attendees ▲" : "Show attendees ▼"}
           </button>
@@ -297,7 +298,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
           if (!cats.length) return null
           return (
             <div style={{ marginTop: 6, background: colour + "12", borderRadius: 10, padding: "0.5rem 0.8rem 0.6rem" }}>
-              <div style={{ fontSize: "0.68rem", fontWeight: 700, color: colour, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>What&apos;s coming</div>
+              <div style={{ fontSize: "0.68rem", fontWeight: 700, color: clubInk(colour), textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>What&apos;s coming</div>
               {cats.map(cat => (
                 <div key={cat} style={{ fontSize: "0.78rem", color: "var(--text)", marginBottom: 2, lineHeight: 1.45 }}>
                   <strong>{cat}</strong> ({groups[cat].length}): <span style={{ color: "var(--text-dim)" }}>{groups[cat].map(g => g.note ? `${g.note} (${g.name})` : g.name).join(", ")}</span>
@@ -320,12 +321,12 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
                     <span style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: a.isOwn ? 700 : 400, color: a.isOwn ? colour : "var(--text)" }}>
                       {a.name}
                       {a.isPrivate && canManageBooks && !a.isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
-                      {a.bring && <span style={{ fontWeight: 600, color: colour }}> · {a.bring}{a.bringNote ? ` — ${a.bringNote}` : ""}</span>}
+                      {a.bring && <span style={{ fontWeight: 600, color: clubInk(colour) }}> · {a.bring}{a.bringNote ? ` — ${a.bringNote}` : ""}</span>}
                     </span>
                     {(a.party || []).map((p, j) => (
                       <span key={j} style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: "0.75rem", color: "var(--text-dim)" }}>
                         {p.name}{p.guest ? " (guest)" : ""}
-                        {p.bring && <span style={{ color: colour, fontWeight: 600 }}> · {p.bring}{p.bringNote ? ` — ${p.bringNote}` : ""}</span>}
+                        {p.bring && <span style={{ color: clubInk(colour), fontWeight: 600 }}> · {p.bring}{p.bringNote ? ` — ${p.bringNote}` : ""}</span>}
                       </span>
                     ))}
                   </span>
@@ -403,7 +404,7 @@ function ClosedEventsAccordion({ events, myBookedIds, colour = "var(--purple)" }
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 700, fontSize: "0.88rem", lineHeight: 1.2 }}>{book?.title || ev.title}</div>
                   <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{book?.author && `by ${book.author}`}{book?.published_year ? ` (${book.published_year})` : ""}</div>
-                  <div style={{ fontSize: "0.72rem", color: colour, marginTop: 2 }}>{fmtYear(ev.event_date)}</div>
+                  <div style={{ fontSize: "0.72rem", color: clubInk(colour), marginTop: 2 }}>{fmtYear(ev.event_date)}</div>
                   {participated && (
                     <div style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4,
                       background: "#dcfce7", color: "#15803d", borderRadius: 12, padding: "2px 8px",
@@ -478,7 +479,7 @@ function BookPicker({ onSelect, initialBook, colour = "var(--purple)" }) {
           <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>{chosen.author && `by ${chosen.author}`}{chosen.published_year ? ` (${chosen.published_year})` : ""}</div>
         </div>
         <button onClick={() => { setChosen(null); setQuery(""); setOpen(true); onSelect(null) }}
-          style={{ background: colour, color: "#fff", border: "none", borderRadius: 8,
+          style={{ background: colour, color: clubTextOn(colour), border: "none", borderRadius: 8,
             padding: "4px 10px", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
           Change
         </button>
@@ -921,7 +922,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
   return (
     <div style={{ background: "var(--surface)", borderRadius: 16, border: `2px solid ${colour}`,
       padding: "1.25rem", marginBottom: 16 }}>
-      <div style={{ fontWeight: 800, fontSize: "1rem", color: colour, marginBottom: 16 }}>
+      <div style={{ fontWeight: 800, fontSize: "1rem", color: clubInk(colour), marginBottom: 16 }}>
         {event ? `Edit ${club?.name || "Club"} Event` : `Add ${club?.name || "Club"} Event`}
       </div>
 
@@ -1146,7 +1147,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, colour = "var(-
         </button>
         <button onClick={save} disabled={saving || !form.event_date || (caps.hasBooks && !selectedBook)}
           style={{ flex: 2, padding: "0.75rem", background: colour, border: "none",
-            borderRadius: 12, fontWeight: 700, fontSize: "0.9rem", color: "#fff",
+            borderRadius: 12, fontWeight: 700, fontSize: "0.9rem", color: clubTextOn(colour),
             cursor: (saving || !form.event_date || (caps.hasBooks && !selectedBook)) ? "not-allowed" : "pointer",
             opacity: (saving || !form.event_date || (caps.hasBooks && !selectedBook)) ? 0.6 : 1, fontFamily: "inherit" }}>
           {saving ? "Saving…" : event ? "Save Changes" : "Create Event"}
@@ -1244,7 +1245,7 @@ function ClubSocial({ club, colour, isAdmin }) {
         {isAdmin && !composing && (
           <button onClick={() => setComposing(true)}
             style={{ padding: "0.4rem 0.9rem", borderRadius: 20, border: `1px dashed ${colour}`,
-              background: "transparent", color: colour, fontWeight: 700, fontFamily: "inherit",
+              background: "transparent", color: clubInk(colour), fontWeight: 700, fontFamily: "inherit",
               fontSize: "0.82rem", cursor: "pointer", whiteSpace: "nowrap" }}>
             📣 Post notice
           </button>
@@ -1259,7 +1260,7 @@ function ClubSocial({ club, colour, isAdmin }) {
               onChange={setDraft} placeholder="Write a notice for this club's members…" />
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button onClick={() => { setComposing(false); setDraft("") }} style={{ flex: 1, padding: "0.6rem", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text)", fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>Cancel</button>
-              <button onClick={postNotice} disabled={posting || !draft.trim()} style={{ flex: 2, padding: "0.6rem", borderRadius: 10, border: "none", background: colour, color: "#fff", fontWeight: 700, fontFamily: "inherit", cursor: (posting || !draft.trim()) ? "not-allowed" : "pointer", opacity: (posting || !draft.trim()) ? 0.6 : 1 }}>{posting ? "Posting…" : "Post notice"}</button>
+              <button onClick={postNotice} disabled={posting || !draft.trim()} style={{ flex: 2, padding: "0.6rem", borderRadius: 10, border: "none", background: colour, color: clubTextOn(colour), fontWeight: 700, fontFamily: "inherit", cursor: (posting || !draft.trim()) ? "not-allowed" : "pointer", opacity: (posting || !draft.trim()) ? 0.6 : 1 }}>{posting ? "Posting…" : "Post notice"}</button>
             </div>
           </div>
         ))()
@@ -1271,7 +1272,7 @@ function ClubSocial({ club, colour, isAdmin }) {
           {notices.map(n => (
             <div key={n.id} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderLeft: `4px solid ${colour}`, borderRadius: 10, padding: "0.75rem 0.9rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
-                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: colour, textTransform: "uppercase", letterSpacing: "0.04em" }}>📣 Notice</span>
+                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: clubInk(colour), textTransform: "uppercase", letterSpacing: "0.04em" }}>📣 Notice</span>
                 <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>{fmt(n.created_at)}</span>
               </div>
               <div style={{ fontSize: "0.88rem", color: "var(--text)", lineHeight: 1.5, marginTop: 4 }}>
@@ -1537,7 +1538,7 @@ export default function ClubHome({ club }) {
       {/* Welcome tile */}
       {welcomeText && (
         <div style={{ background: colour, borderRadius: 14,
-          padding: "1rem", marginBottom: 16, fontSize: "0.9rem", color: "#fff", lineHeight: 1.6 }}>
+          padding: "1rem", marginBottom: 16, fontSize: "0.9rem", color: clubTextOn(colour), lineHeight: 1.6 }}>
           {/<[a-z][\s\S]*>/i.test(welcomeText)
             ? <span dangerouslySetInnerHTML={{ __html: welcomeText }} />
             : welcomeText}
@@ -1551,21 +1552,21 @@ export default function ClubHome({ club }) {
         <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
           {canAdd && (
             <button onClick={() => { setEditEvent(null); setShowForm(true) }}
-              style={{ background: colour, color: "#fff", border: "none", borderRadius: 20,
+              style={{ background: colour, color: clubTextOn(colour), border: "none", borderRadius: 20,
                 padding: "8px 18px", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit" }}>
               + Add Event
             </button>
           )}
           {canEdit && (
             <button onClick={() => { setEditEvent(activeEvent); setShowForm(true) }}
-              style={{ background: "transparent", color: colour, border: `1px solid ${colour}`,
+              style={{ background: "transparent", color: clubInk(colour), border: `1px solid ${colour}`,
                 borderRadius: 20, padding: "8px 18px", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit" }}>
               Edit Current Event
             </button>
           )}
           {nextEvent && isAdmin && (
             <button onClick={() => { setEditEvent(nextEvent); setShowForm(true) }}
-              style={{ background: "transparent", color: colour, border: `1px solid ${colour}`,
+              style={{ background: "transparent", color: clubInk(colour), border: `1px solid ${colour}`,
                 borderRadius: 20, padding: "8px 18px", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit" }}>
               Edit Next Event
             </button>

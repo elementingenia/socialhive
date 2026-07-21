@@ -11,6 +11,7 @@ import ExpandableText from "@/components/ExpandableText"
 import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, sumUnpaidSeats, seatsCost, bookingStatusBadge } from "@/lib/payments"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
 import { clubCaps, clubColour } from "@/lib/clubs"
+import { clubTextOn, clubInk } from "@/lib/clubColours"
 import AskQuestion from "@/components/AskQuestion"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -87,7 +88,7 @@ function SeatSelector({ value, min, max, onChange }) {
 
 function StatusPill({ label, colour, bg }) {
   return (
-    <div style={{ display: "inline-block", padding: "6px 16px", background: bg || colour + "20", color: colour,
+    <div style={{ display: "inline-block", padding: "6px 16px", background: bg || colour + "20", color: clubInk(colour),
       borderRadius: 20, fontSize: 13, fontWeight: 700, border: `1px solid ${colour}` }}>{label}</div>
   )
 }
@@ -167,7 +168,7 @@ function MenuModal({ event, colour, onClose }) {
           {event.menu_type === "file" && event.menu_url && (
             <div style={{ padding: "10px 16px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
               <a href={event.menu_url} download={event.menu_file_name || "menu"} target="_blank" rel="noreferrer"
-                style={{ display: "block", textAlign: "center", padding: "10px", borderRadius: 10, background: colour, color: "#fff", fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
+                style={{ display: "block", textAlign: "center", padding: "10px", borderRadius: 10, background: colour, color: clubTextOn(colour), fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
                 Download
               </a>
             </div>
@@ -425,7 +426,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       <div style={{ fontSize: 12, color: "var(--danger)", padding: "8px 10px", background: "var(--danger)10", borderRadius: 8 }}>
         ⚠ Coordinator view unavailable: {apiError}
       </div>
-      <button onClick={load} style={{ marginTop: 8, fontSize: 12, color: colour, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Retry</button>
+      <button onClick={load} style={{ marginTop: 8, fontSize: 12, color: clubInk(colour), background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Retry</button>
     </div>
   )
 
@@ -463,7 +464,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         />
       )}
 
-      <div style={{ fontSize: 12, fontWeight: 700, color: colour, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: clubInk(colour), textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>
         Coordinator View
       </div>
 
@@ -471,7 +472,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       <div style={{ marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Notes</div>
-          {!editNotes && <button onClick={() => setEditNotes(true)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: colour, fontWeight: 600 }}>Edit</button>}
+          {!editNotes && <button onClick={() => setEditNotes(true)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: clubInk(colour), fontWeight: 600 }}>Edit</button>}
         </div>
         {editNotes ? (
           <div>
@@ -481,7 +482,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => setEditNotes(false)} style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cancel</button>
               <button onClick={() => saveField("coordinator_notes", notes)} disabled={saving}
-                style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: colour, color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Save</button>
+                style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: colour, color: clubTextOn(colour), cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Save</button>
             </div>
           </div>
         ) : (
@@ -496,7 +497,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         <div style={{ marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>{isBook ? "Event Details" : "Description"}</div>
-            {!editDesc && <button onClick={() => setEditDesc(true)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: colour, fontWeight: 600 }}>Edit</button>}
+            {!editDesc && <button onClick={() => setEditDesc(true)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: clubInk(colour), fontWeight: 600 }}>Edit</button>}
           </div>
           {editDesc ? (
             <div>
@@ -509,7 +510,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button onClick={() => setEditDesc(false)} style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cancel</button>
                 <button onClick={() => saveField("description", desc)} disabled={saving}
-                  style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: colour, color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Save</button>
+                  style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: colour, color: clubTextOn(colour), cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Save</button>
               </div>
             </div>
           ) : (
@@ -525,7 +526,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         <div style={{ marginBottom: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Booking Message</div>
-            {!editWelcome && <button onClick={() => setEditWelcome(true)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: colour, fontWeight: 600 }}>Edit</button>}
+            {!editWelcome && <button onClick={() => setEditWelcome(true)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: clubInk(colour), fontWeight: 600 }}>Edit</button>}
           </div>
           {editWelcome ? (
             <div>
@@ -535,7 +536,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={() => setEditWelcome(false)} style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Cancel</button>
                 <button onClick={() => saveField("welcome_message", welcome)} disabled={saving}
-                  style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: colour, color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Save</button>
+                  style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: colour, color: clubTextOn(colour), cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Save</button>
               </div>
             </div>
           ) : (
@@ -567,14 +568,14 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       <div style={{ marginBottom: 12 }}>
         {!showAddBooking ? (
           <button onClick={() => setShowAddBooking(true)}
-            style={{ fontSize: 13, fontWeight: 600, color: colour, background: "none", border: `1px dashed ${colour}`,
+            style={{ fontSize: 13, fontWeight: 600, color: clubInk(colour), background: "none", border: `1px dashed ${colour}`,
               borderRadius: 10, padding: "8px 12px", cursor: "pointer", width: "100%" }}>
             + Add Walk-up Booking
           </button>
         ) : (
           <div style={{ background: colour + "0d", border: `1px solid ${colour}40`, borderRadius: 10, padding: 12 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: colour, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: clubInk(colour), textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Add Walk-up Booking
               </div>
               <button onClick={() => {
@@ -648,7 +649,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                 )}
 
                 <button onClick={() => submitAddBooking(false)} disabled={addSubmitting}
-                  style={{ width: "100%", padding: "10px 0", background: colour, color: "#fff", border: "none", borderRadius: 8,
+                  style={{ width: "100%", padding: "10px 0", background: colour, color: clubTextOn(colour), border: "none", borderRadius: 8,
                     fontSize: 14, fontWeight: 700, cursor: addSubmitting ? "not-allowed" : "pointer", opacity: addSubmitting ? 0.7 : 1 }}>
                   {addSubmitting ? "Adding…" : "Add Booking"}
                 </button>
@@ -802,7 +803,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                       <span style={{ fontSize: 11, color: "var(--text-dim)", marginLeft: 6 }}>· Cancelled, book still out</span>
                     </div>
                     <button onClick={() => toggleHasBook(b)}
-                      style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 8, border: `1px solid ${colour}`, background: "none", color: colour, cursor: "pointer", whiteSpace: "nowrap" }}>
+                      style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 8, border: `1px solid ${colour}`, background: "none", color: clubInk(colour), cursor: "pointer", whiteSpace: "nowrap" }}>
                       Mark Returned
                     </button>
                   </div>
@@ -1464,7 +1465,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
         <div style={{ height: 6, background: colour }} />
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px",
           borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "var(--surface)", zIndex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 15, color: colour, textTransform: "capitalize" }}>
+          <div style={{ fontWeight: 700, fontSize: 15, color: clubInk(colour), textTransform: "capitalize" }}>
             {event.club?.name || (event.hub_type === "bookclub" ? "Book Club" : event.hub_type)}
           </div>
           <button onClick={handleClose} style={{ background: "var(--surface2)", border: "none", borderRadius: "50%",
@@ -1520,7 +1521,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
             <AskQuestion contextType="event" contextKey={event.id} contextLabel={event.title} colour={colour}
               trigger={(open) => (
                 <button onClick={open}
-                  style={{ background: "none", border: "none", padding: 0, margin: "0 0 10px", fontFamily: "inherit", fontSize: 13, fontWeight: 700, color: colour, textDecoration: "underline", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
+                  style={{ background: "none", border: "none", padding: 0, margin: "0 0 10px", fontFamily: "inherit", fontSize: 13, fontWeight: 700, color: clubInk(colour), textDecoration: "underline", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 5 }}>
                   💬 Ask about this event
                 </button>
               )} />
@@ -1605,7 +1606,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
                     {event.has_dining && ((event.menu_type === "text" && event.menu_text) || (event.menu_type === "file" && event.menu_url)) && (
                       <button onClick={() => setShowMenu(true)} style={{
                         background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700,
-                        color: colour, textDecoration: "underline", fontFamily: "inherit", padding: 0,
+                        color: clubInk(colour), textDecoration: "underline", fontFamily: "inherit", padding: 0,
                       }}>View Menu</button>
                     )}
                   </div>
