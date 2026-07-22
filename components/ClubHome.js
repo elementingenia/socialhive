@@ -1078,6 +1078,17 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       </div>
 
       <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Start Time</label>
+        <HourPicker value={form.event_time} onChange={v => set("event_time", v)} colour={colour} inputStyle={inputStyle} />
+      </div>
+
+      {!event && (
+        <div style={{ marginBottom: 12 }}>
+          <RecurrencePicker value={recur} onChange={setRecur} startDate={form.event_date} colour={colour} mode={recurMode} />
+        </div>
+      )}
+
+      <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Location</label>
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           {["onsite", "offsite"].map(t => (
@@ -1161,16 +1172,6 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       </div>
       )}
 
-      <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Start Time</label>
-        <HourPicker value={form.event_time} onChange={v => set("event_time", v)} colour={colour} inputStyle={inputStyle} />
-      </div>
-
-      {!event && (
-        <div style={{ marginBottom: 12 }}>
-          <RecurrencePicker value={recur} onChange={setRecur} startDate={form.event_date} colour={colour} mode={recurMode} />
-        </div>
-      )}
 
       {caps.hasKitReturn && (
       <div style={{ marginBottom: 12 }}>
