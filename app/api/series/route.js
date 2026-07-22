@@ -125,11 +125,34 @@ export async function PATCH(req) {
     return NextResponse.json({ ok: true })
   }
 
+  if (action === "change_recurrence") {
+    if (!series_id) return NextResponse.json({ error: "series_id required" }, { status: 400 })
+    // Update the series rule, then regenerate the FUTURE unbooked dates to match.
+    // Booked future dates are left intact (protected) even if off the new pattern.
+    const rulePatch = {}
+    for (const k of ["rule_type", "rule_config", "month_end_policy", "horizon_months"]) if (k in body) rulePatch[k] = body[k]
+    const { data: updated } = await supa.from("event_series")
+      .update({ ...rulePatch, updated_at: new Date().toISOString() }).eq("id", series_id).select("*").single()
+    const { data: future } = await supa.from("events")
+      .select("id, bookings(id)").eq("series_id", series_id).eq("archived", false)
+      .eq("is_series_exception", false).gte("event_date", today)
+    const toArchive = (future || []).filter(e => !(e.bookings || []).length).map(e => e.id)
+    if (toArchive.length) await supa.from("events").update({ archived: true }).in("id", toArchive)
+    const gen = await generateSeriesEvents(updated)
+    return NextResponse.json({ ok: true, archived: toArchive.length, regenerated: gen.created })
+  }
+
   if (action === "update_future") {
     if (!series_id) return NextResponse.json({ error: "series_id required" }, { status: 400 })
     const fromDate = body.from_date || today
     const patch = {}
     for (const k of PROPAGATE) if (k in body) patch[k] = body[k]
+    // Carry the activity image forward too — it's set on the edited event directly
+    // (EventImagePicker PATCHes it), so read it server-side from the source event.
+    if (event_id) {
+      const { data: src } = await supa.from("events").select("image_url, image_focal_x, image_focal_y").eq("id", event_id).single()
+      if (src) { patch.image_url = src.image_url; patch.image_focal_x = src.image_focal_x; patch.image_focal_y = src.image_focal_y }
+    }
     // Update the series template so future GENERATED occurrences match.
     if (Object.keys(patch).length) {
       await supa.from("event_series").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", series_id)
