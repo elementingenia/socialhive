@@ -109,5 +109,16 @@ ok(needsMonthEndChoice(lastThu) === false, 'no month-end prompt for weekday rule
 ok(generateOccurrences({ rule_type: 'nonsense', rule_config: {}, start_date: '2026-01-01' }).length === 0, 'unknown rule type yields nothing, no crash')
 ok(describeRule(null) === '', 'describe(null) is empty, no crash')
 
+// ── Robustness: switching rule type in the UI leaves stale config keys. The
+// engine must NEVER hang or throw on that (regression for the 2026-07-21
+// production freeze: fortnightly with no weekday spun `while (dow!==NaN)` forever).
+eq(generateOccurrences({ rule_type: 'fortnightly', rule_config: { weekdays: [4] }, start_date: '2026-09-03', horizon_months: 6 }), [], 'fortnightly with weekly-style config (no weekday) returns [] and does NOT hang')
+eq(generateOccurrences({ rule_type: 'fortnightly', rule_config: {}, start_date: '2026-09-03' }), [], 'fortnightly with empty config returns []')
+eq(generateOccurrences({ rule_type: 'monthly_date', rule_config: { weekdays: [4] }, start_date: '2026-09-03' }), [], 'monthly_date with no day returns []')
+eq(generateOccurrences({ rule_type: 'monthly_weekday', rule_config: { weekdays: [4] }, start_date: '2026-09-03' }), [], 'monthly_weekday with no ordinal/weekday returns []')
+eq(generateOccurrences({ rule_type: 'monthly_date', rule_config: { day: 40 }, start_date: '2026-09-03' }), [], 'monthly_date with out-of-range day returns []')
+ok(nextOccurrence({ rule_type: 'fortnightly', rule_config: {} }, '2026-09-01') === null, 'nextOccurrence on invalid fortnightly config is null, not a hang')
+
+
 console.log(`\nlib/recurrence.js: ${pass} passed, ${fail} failed`)
 if (fail) process.exit(1)

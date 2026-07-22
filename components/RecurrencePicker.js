@@ -50,7 +50,7 @@ export default function RecurrencePicker({ value, onChange, startDate, colour = 
       {v.enabled && (
         <div style={{ marginTop: "0.7rem", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
-            {rules.map(([k, lbl]) => <button key={k} type="button" style={chip(v.rule_type === k)} onClick={() => set({ rule_type: k })}>{lbl}</button>)}
+            {rules.map(([k, lbl]) => <button key={k} type="button" style={chip(v.rule_type === k)} onClick={() => set({ rule_type: k, rule_config: {} })}>{lbl}</button>)}
           </div>
 
           {(v.rule_type === "weekly") && (
