@@ -375,16 +375,16 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
 }
 
 // ── Closed Events Accordion ───────────────────────────────────────────────────
-function UpcomingDatesAccordion({ events, myBookings, onOpen, colour = "var(--purple)" }) {
+function UpcomingDatesAccordion({ events, myBookings, onOpen, onDelete = null, colour = "var(--purple)" }) {
   const [open, setOpen] = useState(false)
   if (!events.length) return null
   const fmt = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })
   return (
-    <div style={{ background: "var(--surface)", borderRadius: 14, border: "1px solid var(--border)", overflow: "hidden", marginBottom: 16 }}>
+    <div style={{ background: "var(--surface)", borderRadius: 14, border: "1px solid var(--border)", overflow: "hidden", margin: "-4px 0 16px 12px" }}>
       <button onClick={() => setOpen(o => !o)}
         style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center",
-          padding: "1rem", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
-        <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>📅 Upcoming dates ({events.length})</span>
+          padding: "0.75rem 1rem", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
+        <span style={{ fontWeight: 700, fontSize: "0.85rem", color: "var(--text-dim)" }}>📅 Upcoming dates ({events.length})</span>
         <span style={{ color: "var(--text-dim)", fontSize: "1rem", display: "inline-block",
           transform: open ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}>▼</span>
       </button>
@@ -393,17 +393,23 @@ function UpcomingDatesAccordion({ events, myBookings, onOpen, colour = "var(--pu
           {events.map(ev => {
             const booked = !!myBookings[ev.id]
             return (
-              <button key={ev.id} onClick={() => onOpen(ev)}
-                style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
-                  padding: "0.6rem 0.7rem", background: "none", border: "none", borderRadius: 10, cursor: "pointer",
-                  textAlign: "left", fontFamily: "inherit" }}>
-                <span style={{ minWidth: 0 }}>
-                  <span style={{ fontWeight: 700, fontSize: "0.85rem", color: clubInk(colour) }}>{fmt(ev.event_date)}</span>
-                  {ev.event_time && <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}> · {ev.event_time.slice(0,5)}</span>}
-                  <span style={{ display: "block", fontSize: "0.78rem", color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.books?.title || ev.title}</span>
-                </span>
-                <span style={{ flexShrink: 0, fontSize: "0.72rem", fontWeight: 700, color: booked ? "#15803d" : colour }}>{booked ? "✓ Booked" : "Book →"}</span>
-              </button>
+              <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <button onClick={() => onOpen(ev)}
+                  style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
+                    padding: "0.6rem 0.7rem", background: "none", border: "none", borderRadius: 10, cursor: "pointer",
+                    textAlign: "left", fontFamily: "inherit" }}>
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ fontWeight: 700, fontSize: "0.85rem", color: clubInk(colour) }}>{fmt(ev.event_date)}</span>
+                    {ev.event_time && <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}> · {ev.event_time.slice(0,5)}</span>}
+                    <span style={{ display: "block", fontSize: "0.78rem", color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.books?.title || ev.title}</span>
+                  </span>
+                  <span style={{ flexShrink: 0, fontSize: "0.72rem", fontWeight: 700, color: booked ? "#15803d" : colour }}>{booked ? "✓ Booked" : "Book →"}</span>
+                </button>
+                {onDelete && (
+                  <button onClick={() => onDelete(ev)} aria-label="Remove this date" title="Remove this date"
+                    style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", fontSize: "1rem", padding: "0.4rem 0.5rem", color: "#b91c1c" }}>🗑</button>
+                )}
+              </div>
             )
           })}
         </div>
@@ -1672,30 +1678,49 @@ export default function ClubHome({ club }) {
     await load()
   }
 
-  // Determine current (active) and next events
+  // A club/group is a list of ACTIVITIES (Iain, 2026-07-21). Each activity is a
+  // single event or a recurring series; recurring ones show ONE parent card (the
+  // next occurrence) with their future dates nested beneath. Group upcoming events
+  // by series; standalone events each stand alone.
   const today = new Date().toISOString().split("T")[0]
   const upcoming = events.filter(e => e.event_date >= today)
+    .sort((a, b) => a.event_date.localeCompare(b.event_date) || (a.event_time || "").localeCompare(b.event_time || ""))
 
-  // "Active" = the next upcoming event ONLY. A past event must never resurface as
-  // the active/current card just because nothing is scheduled — when there's no
-  // upcoming event the empty state shows, and past events live in the closed
-  // accordion below (per Iain, 2026-07-21).
-  const activeEvent = upcoming[0] || null
-  const extras      = upcoming.slice(1)   // future events beyond the active one
-  // A single extra shows as its own "Upcoming Event" card (unchanged for typical
-  // clubs); 2+ extras (recurring series) collapse into the Upcoming dates
-  // accordion so the page never floods (scope §8).
-  const nextEvent      = extras.length === 1 ? extras[0] : null
-  const upcomingExtras = extras.length >= 2 ? extras : []
-  // Closed = PAST events only (future extras no longer leak in here).
+  const activities = (() => {
+    const bySeries = {}
+    const solo = []
+    for (const e of upcoming) {
+      if (e.series_id) (bySeries[e.series_id] = bySeries[e.series_id] || []).push(e)
+      else solo.push(e)
+    }
+    const list = []
+    for (const sid of Object.keys(bySeries)) {
+      const occ = bySeries[sid]   // already sorted (upcoming is sorted)
+      list.push({ key: "s" + sid, parent: occ[0], children: occ.slice(1), isSeries: true })
+    }
+    for (const e of solo) list.push({ key: "e" + e.id, parent: e, children: [], isSeries: false })
+    list.sort((a, b) => a.parent.event_date.localeCompare(b.parent.event_date) || (a.parent.event_time || "").localeCompare(b.parent.event_time || ""))
+    return list
+  })()
+
+  // Closed = PAST events only.
   const closedEvents = events.filter(e => e.event_date < today)
     .sort((a, b) => b.event_date.localeCompare(a.event_date))
 
-  // Can admin add? Only if there's no second upcoming event (no "Next" slot filled)
-  // Only clubs that deliberately run one cycle at a time (Book Club) block
-  // adding another while one is upcoming; most clubs schedule ahead.
-  const canAdd  = isAdmin && (!caps.oneEventAtATime || upcoming.length < 2)
-  const canEdit = isAdmin && activeEvent
+  // One-at-a-time clubs (Book Club) block a second overlapping activity; groups
+  // schedule as many activities as they like.
+  const canAdd = isAdmin && (!caps.oneEventAtATime || upcoming.length === 0)
+
+  // Delete a single future occurrence (EC-only): archives it + notifies its bookers.
+  async function handleDeleteOccurrence(ev) {
+    if (!confirm("Remove this date? Anyone booked on it will be notified. This can't be undone.")) return
+    try {
+      const token = await getToken()
+      const res = await fetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: "cancel_occurrence", event_id: ev.id }) })
+      if (res.ok) load()
+    } catch (e) { /* best effort */ }
+  }
 
   if (loading) return (
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
@@ -1723,30 +1748,14 @@ export default function ClubHome({ club }) {
 
       <ContactBar contextType="club" contextKey={club?.id} contextLabel={club?.name} colour={colour} style={{ marginTop: -4, marginBottom: 16 }} />
 
-      {/* Admin add/edit controls */}
-      {isAdmin && !showForm && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-          {canAdd && (
-            <button onClick={() => { setEditEvent(null); setShowForm(true) }}
-              style={{ background: colour, color: clubTextOn(colour), border: "none", borderRadius: 20,
-                padding: "8px 18px", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit" }}>
-              + Add Event
-            </button>
-          )}
-          {canEdit && (
-            <button onClick={() => { setEditEvent(activeEvent); setShowForm(true) }}
-              style={{ background: "transparent", color: clubInk(colour), border: `1px solid ${colour}`,
-                borderRadius: 20, padding: "8px 18px", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit" }}>
-              Edit Current Event
-            </button>
-          )}
-          {nextEvent && isAdmin && (
-            <button onClick={() => { setEditEvent(nextEvent); setShowForm(true) }}
-              style={{ background: "transparent", color: clubInk(colour), border: `1px solid ${colour}`,
-                borderRadius: 20, padding: "8px 18px", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit" }}>
-              Edit Next Event
-            </button>
-          )}
+      {/* Admin: add a new activity (single event or recurring series) */}
+      {isAdmin && !showForm && canAdd && (
+        <div style={{ marginBottom: 16 }}>
+          <button onClick={() => { setEditEvent(null); setShowForm(true) }}
+            style={{ background: colour, color: clubTextOn(colour), border: "none", borderRadius: 20,
+              padding: "8px 18px", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit" }}>
+            + Add Event
+          </button>
         </div>
       )}
 
@@ -1763,39 +1772,38 @@ export default function ClubHome({ club }) {
         />
       )}
 
-      {/* Active event */}
-      {activeEvent ? (
-        <EventCard
-          event={activeEvent}
-          label="Next Event"
-          booking={myBookings[activeEvent.id]}
-          onOpen={() => openSlideOut(activeEvent)}
-          colour={colour}
-          club={club}
-          showToast={showToast}
-        />
-      ) : (
+      {/* Activities — one parent card per activity; recurring ones nest their
+          future dates beneath (Iain, 2026-07-21) */}
+      {activities.length ? activities.map(act => (
+        <div key={act.key}>
+          {isAdmin && !showForm && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -6 }}>
+              <button onClick={() => { setEditEvent(act.parent); setShowForm(true) }}
+                style={{ background: "transparent", color: clubInk(colour), border: `1px solid ${colour}`,
+                  borderRadius: 16, padding: "4px 14px", fontWeight: 700, fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit" }}>
+                ✎ Edit
+              </button>
+            </div>
+          )}
+          <EventCard
+            event={act.parent}
+            label={act.isSeries ? "Next date" : null}
+            booking={myBookings[act.parent.id]}
+            onOpen={() => openSlideOut(act.parent)}
+            colour={colour}
+            club={club}
+            showToast={showToast}
+          />
+          <UpcomingDatesAccordion events={act.children} myBookings={myBookings}
+            onOpen={openSlideOut} onDelete={isAdmin ? handleDeleteOccurrence : null} colour={colour} />
+        </div>
+      )) : (
         <div style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",
           padding: "1.5rem", textAlign: "center", marginBottom: 16 }}>
           <div style={{ fontSize: "2rem", marginBottom: 8 }}>📚</div>
           <div style={{ color: "var(--text-dim)", fontSize: "0.9rem" }}>No meetings scheduled yet</div>
         </div>
       )}
-
-      {/* Next event */}
-      {nextEvent && (
-        <EventCard
-          event={nextEvent}
-          label="Upcoming Event"
-          booking={myBookings[nextEvent.id]}
-          onOpen={() => openSlideOut(nextEvent)}
-          colour="#7c3aed"
-          showToast={showToast}
-        />
-      )}
-
-      {/* Upcoming dates — grouped when a series/schedule produces many (scope §8) */}
-      <UpcomingDatesAccordion events={upcomingExtras} myBookings={myBookings} onOpen={openSlideOut} colour={colour} />
 
       {/* Closed events (past only) */}
       <ClosedEventsAccordion events={closedEvents} myBookedIds={myBookedIds} colour={colour} />
