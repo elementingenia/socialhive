@@ -1001,7 +1001,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             const PROP = ["title","description","welcome_message","event_time","location_type","location","max_seats","max_seats_per_booking","allow_nonresident_guests","payment_required","cost","bring_category_ids","theme_name","is_public","show_attendee_names"]
             const fields = {}; for (const k of PROP) fields[k] = payload[k]
             await fetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ action: "update_future", series_id: event.series_id, from_date: payload.event_date, ...fields }) })
+              body: JSON.stringify({ action: "update_future", series_id: event.series_id, event_id: event.id, from_date: payload.event_date, ...fields }) })
             if (recurChanged()) {
               await fetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ action: "change_recurrence", series_id: event.series_id,

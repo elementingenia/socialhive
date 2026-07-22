@@ -147,6 +147,12 @@ export async function PATCH(req) {
     const fromDate = body.from_date || today
     const patch = {}
     for (const k of PROPAGATE) if (k in body) patch[k] = body[k]
+    // Carry the activity image forward too — it's set on the edited event directly
+    // (EventImagePicker PATCHes it), so read it server-side from the source event.
+    if (event_id) {
+      const { data: src } = await supa.from("events").select("image_url, image_focal_x, image_focal_y").eq("id", event_id).single()
+      if (src) { patch.image_url = src.image_url; patch.image_focal_x = src.image_focal_x; patch.image_focal_y = src.image_focal_y }
+    }
     // Update the series template so future GENERATED occurrences match.
     if (Object.keys(patch).length) {
       await supa.from("event_series").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", series_id)
