@@ -68,7 +68,7 @@ function BookingStrip({ isJoined, seats = 1, hasBook, bookReturnDate, colour = "
 }
 
 // ── Book Club Event Card ─────────────────────────────────────────────────────
-function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", showToast, club }) {
+function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var(--purple)", showToast, club }) {
   const { member, isAdmin } = useUser()
   const caps = clubCaps(club)
   const [summaryOpen,     setSummaryOpen]     = useState(false)
@@ -183,9 +183,16 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
       style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",
         overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 16, cursor: "pointer" }}>
       {/* Card header */}
-      <div style={{ background: colour, padding: "0.6rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div style={{ background: colour, padding: "0.6rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <span style={{ color: clubTextOn(colour), fontWeight: 700, fontSize: "0.85rem" }}>{label}</span>
-        <span style={{ color: "rgba(255,255,255,0.85)", fontSize: "0.78rem", fontWeight: 600 }}>{fmtDate(event.event_date)}</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+          <span style={{ color: clubTextOn(colour), opacity: 0.85, fontSize: "0.78rem", fontWeight: 600 }}>{fmtDate(event.event_date)}</span>
+          {onEdit && isAdmin && (
+            <button onClick={(e) => { e.stopPropagation(); onEdit() }}
+              style={{ background: "rgba(255,255,255,0.9)", color: clubInk(colour), border: "none", borderRadius: 14,
+                padding: "3px 12px", fontWeight: 700, fontSize: "0.72rem", cursor: "pointer", fontFamily: "inherit" }}>✎ Edit</button>
+          )}
+        </span>
       </div>
 
       {/* Event image — the theme cue; same focal-point treatment as Social */}
@@ -375,7 +382,7 @@ function EventCard({ event, label, booking, onOpen, colour = "var(--purple)", sh
 }
 
 // ── Closed Events Accordion ───────────────────────────────────────────────────
-function UpcomingDatesAccordion({ events, myBookings, onOpen, onDelete = null, colour = "var(--purple)" }) {
+function UpcomingDatesAccordion({ events, myBookings, onOpen, onEdit = null, colour = "var(--purple)" }) {
   const [open, setOpen] = useState(false)
   if (!events.length) return null
   const fmt = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })
@@ -393,21 +400,20 @@ function UpcomingDatesAccordion({ events, myBookings, onOpen, onDelete = null, c
           {events.map(ev => {
             const booked = !!myBookings[ev.id]
             return (
-              <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 4, borderBottom: "1px solid var(--border)" }}>
                 <button onClick={() => onOpen(ev)}
                   style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
-                    padding: "0.6rem 0.7rem", background: "none", border: "none", borderRadius: 10, cursor: "pointer",
+                    padding: "0.6rem 0.7rem", background: "none", border: "none", cursor: "pointer",
                     textAlign: "left", fontFamily: "inherit" }}>
                   <span style={{ minWidth: 0 }}>
                     <span style={{ fontWeight: 700, fontSize: "0.85rem", color: clubInk(colour) }}>{fmt(ev.event_date)}</span>
                     {ev.event_time && <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}> · {ev.event_time.slice(0,5)}</span>}
-                    <span style={{ display: "block", fontSize: "0.78rem", color: "var(--text-dim)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.books?.title || ev.title}</span>
                   </span>
                   <span style={{ flexShrink: 0, fontSize: "0.72rem", fontWeight: 700, color: booked ? "#15803d" : colour }}>{booked ? "✓ Booked" : "Book →"}</span>
                 </button>
-                {onDelete && (
-                  <button onClick={() => onDelete(ev)} aria-label="Remove this date" title="Remove this date"
-                    style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", fontSize: "1rem", padding: "0.4rem 0.5rem", color: "#b91c1c" }}>🗑</button>
+                {onEdit && (
+                  <button onClick={() => onEdit(ev)} aria-label="Edit this date" title="Edit this date"
+                    style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", fontSize: "0.72rem", fontWeight: 700, padding: "0.4rem 0.6rem", color: clubInk(colour) }}>✎ Edit</button>
                 )}
               </div>
             )
@@ -840,6 +846,22 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     ? { enabled: true, rule_type: clubPattern.rule_type, rule_config: clubPattern.rule_config || {}, month_end_policy: clubPattern.month_end_policy || "clamp", horizon_months: clubPattern.horizon_months || 6 }
     : { enabled: false, rule_type: "weekly", rule_config: { weekdays: [] }, month_end_policy: "clamp", horizon_months: 6 })
   const isSeriesOccurrence = !!event?.series_id
+  const [seriesRow, setSeriesRow] = useState(null)
+  useEffect(() => {
+    if (!event?.series_id) return
+    supabase.from("event_series").select("*").eq("id", event.series_id).maybeSingle()
+      .then(({ data }) => {
+        if (!data) return
+        setSeriesRow(data)
+        setRecur({ enabled: true, rule_type: data.rule_type, rule_config: data.rule_config || {},
+          month_end_policy: data.month_end_policy || "clamp", horizon_months: data.horizon_months || 6 })
+      })
+  }, [event?.series_id])
+  const recurChanged = () => seriesRow && (
+    recur.rule_type !== seriesRow.rule_type ||
+    JSON.stringify(recur.rule_config || {}) !== JSON.stringify(seriesRow.rule_config || {}) ||
+    (recur.month_end_policy || "clamp") !== (seriesRow.month_end_policy || "clamp") ||
+    (recur.horizon_months || 6) !== (seriesRow.horizon_months || 6))
   const [seriesScope, setSeriesScope] = useState("this")   // 'this' | 'future' (scope §6)
   const [occBusy, setOccBusy] = useState(false)
   useEffect(() => {
@@ -980,6 +1002,11 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             const fields = {}; for (const k of PROP) fields[k] = payload[k]
             await fetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
               body: JSON.stringify({ action: "update_future", series_id: event.series_id, from_date: payload.event_date, ...fields }) })
+            if (recurChanged()) {
+              await fetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ action: "change_recurrence", series_id: event.series_id,
+                  rule_type: recur.rule_type, rule_config: recur.rule_config, month_end_policy: recur.month_end_policy, horizon_months: recur.horizon_months }) })
+            }
           } catch (e) { /* the single edit already saved; propagation is best-effort */ }
         } else {
           await supabase.from("events").update({ is_series_exception: true }).eq("id", eventId)
@@ -1301,6 +1328,12 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
                   background: seriesScope === v ? colour : "var(--surface)", color: seriesScope === v ? clubTextOn(colour) : "var(--text)" }}>{lbl}</button>
             ))}
           </div>
+          {seriesScope === "future" && (
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: 4 }}>Repeat pattern (applies to future dates):</div>
+              <RecurrencePicker value={recur} onChange={setRecur} startDate={form.event_date} colour={colour} mode="series" />
+            </div>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" onClick={removeOccurrence} disabled={occBusy}
               style={{ flex: 1, padding: "0.5rem", borderRadius: 8, border: "1px solid #fca5a5", background: "#fee2e2", color: "#991b1b", fontWeight: 700, fontSize: "0.78rem", cursor: occBusy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>Remove this date</button>
@@ -1549,7 +1582,7 @@ export default function ClubHome({ club }) {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, max_seats, max_seats_per_booking, allow_nonresident_guests, cost, payment_due_by, payment_required, location_type, location, image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, max_seats, max_seats_per_booking, allow_nonresident_guests, cost, payment_due_by, payment_required, location_type, location, image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("club_id", club.id)
       .eq("archived", false)
       .order("event_date", { ascending: true })
@@ -1776,26 +1809,18 @@ export default function ClubHome({ club }) {
           future dates beneath (Iain, 2026-07-21) */}
       {activities.length ? activities.map(act => (
         <div key={act.key}>
-          {isAdmin && !showForm && (
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: -6 }}>
-              <button onClick={() => { setEditEvent(act.parent); setShowForm(true) }}
-                style={{ background: "transparent", color: clubInk(colour), border: `1px solid ${colour}`,
-                  borderRadius: 16, padding: "4px 14px", fontWeight: 700, fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit" }}>
-                ✎ Edit
-              </button>
-            </div>
-          )}
           <EventCard
             event={act.parent}
-            label={act.isSeries ? "Next date" : null}
+            label={act.isSeries ? "Next date" : "Event"}
             booking={myBookings[act.parent.id]}
             onOpen={() => openSlideOut(act.parent)}
+            onEdit={isAdmin && !showForm ? () => { setEditEvent(act.parent); setShowForm(true) } : null}
             colour={colour}
             club={club}
             showToast={showToast}
           />
           <UpcomingDatesAccordion events={act.children} myBookings={myBookings}
-            onOpen={openSlideOut} onDelete={isAdmin ? handleDeleteOccurrence : null} colour={colour} />
+            onOpen={openSlideOut} onEdit={isAdmin && !showForm ? (ev) => { setEditEvent(ev); setShowForm(true) } : null} colour={colour} />
         </div>
       )) : (
         <div style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",

@@ -125,6 +125,23 @@ export async function PATCH(req) {
     return NextResponse.json({ ok: true })
   }
 
+  if (action === "change_recurrence") {
+    if (!series_id) return NextResponse.json({ error: "series_id required" }, { status: 400 })
+    // Update the series rule, then regenerate the FUTURE unbooked dates to match.
+    // Booked future dates are left intact (protected) even if off the new pattern.
+    const rulePatch = {}
+    for (const k of ["rule_type", "rule_config", "month_end_policy", "horizon_months"]) if (k in body) rulePatch[k] = body[k]
+    const { data: updated } = await supa.from("event_series")
+      .update({ ...rulePatch, updated_at: new Date().toISOString() }).eq("id", series_id).select("*").single()
+    const { data: future } = await supa.from("events")
+      .select("id, bookings(id)").eq("series_id", series_id).eq("archived", false)
+      .eq("is_series_exception", false).gte("event_date", today)
+    const toArchive = (future || []).filter(e => !(e.bookings || []).length).map(e => e.id)
+    if (toArchive.length) await supa.from("events").update({ archived: true }).in("id", toArchive)
+    const gen = await generateSeriesEvents(updated)
+    return NextResponse.json({ ok: true, archived: toArchive.length, regenerated: gen.created })
+  }
+
   if (action === "update_future") {
     if (!series_id) return NextResponse.json({ error: "series_id required" }, { status: 400 })
     const fromDate = body.from_date || today
