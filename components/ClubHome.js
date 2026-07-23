@@ -1017,8 +1017,16 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             month_end_policy: recur.month_end_policy, horizon_months: recur.horizon_months, start_date: form.event_date, event_time: form.event_time || "00:00" }) }).catch(() => {})
       } catch {}
     }
+    // Every error branch above returns early, so reaching here always means
+    // success -- checking the `saveError` STATE variable instead of a local
+    // flag was the bug (Iain, 2026-07-23): setSaveError(null) at the top of
+    // this function schedules a re-render but doesn't update THIS closure's
+    // `saveError` synchronously, so a stale error from an earlier failed
+    // attempt in the same form session (e.g. the hard-block message) could
+    // still be truthy here and silently skip onSave() -- the event saved
+    // fine, the form just never closed / never returned to the club page.
     setSaving(false)
-    if (!saveError) onSave()
+    onSave()
   }
 
   async function removeOccurrence() {
