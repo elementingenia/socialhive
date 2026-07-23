@@ -59,14 +59,17 @@ export async function GET(req) {
 
   const { data: bookings } = await supabaseAdmin
     .from('bookings')
-    .select('id, event_id, member_id, status, seats, booked_at, members(name, hide_name)')
+    .select('id, event_id, member_id, contact_id, status, seats, booked_at, members(name, hide_name), contacts(name)')
     .in('event_id', eventIds)
     .neq('status', 'cancelled')
 
   // Named additional attendees (workstream A) — keyed (event_id, owner_id).
+  // owner_id is always a member (only an app account can be a booker); the
+  // named seats they add can be a member, a contact (resident, no login), or
+  // a free-text guest.
   const { data: partyRows } = await supabaseAdmin
     .from('booking_attendees')
-    .select('event_id, owner_id, member_id, guest_name, member:members!member_id(name, hide_name)')
+    .select('event_id, owner_id, member_id, contact_id, guest_name, member:members!member_id(name, hide_name), contact:contacts!contact_id(name)')
     .in('event_id', eventIds)
   const partyMap = {}
   for (const p of partyRows || []) {
@@ -122,19 +125,31 @@ export async function GET(req) {
     // Same privacy convention as Book Club/Social/EventSlideOut: non-admin,
     // non-coordinator viewers see "Resident" for anyone with hide_name set;
     // admins and this screening's own coordinator see the real name (frontend
-    // adds a "(P)" marker); the viewer's own row always reads "You".
+    // adds a "(P)" marker); the viewer's own row always reads "You". A
+    // walk-up booking made against a Contacts-hub resident (contact_id, no
+    // login) has no hide_name concept at all, so it's never masked.
+    //
+    // 2026-07-23 (Iain): the person who BOOKED a party member should always
+    // see that name too, privacy flag or not -- they already know who they
+    // added; masking only protects that name from everyone else. isOwn below
+    // is "is this my own booking", reused as the bypass for every party
+    // member under it, not just an exact self-match within the party.
     const isCoordinator = coordMap[ev.id]?.id === member.id
     const canManageBooks = member.is_admin || isCoordinator
     const attendeeOf = b => {
       const isOwn     = b.member_id === member.id
       const isPrivate = !!b.members?.hide_name
-      const name = isOwn ? 'You' : (isPrivate && !canManageBooks) ? 'Resident' : (b.members?.name || 'Resident')
-      // Named party for this booker, same privacy masking as the booker's row.
+      const name = isOwn ? 'You' : (isPrivate && !canManageBooks) ? 'Resident' : (b.members?.name || b.contacts?.name || 'Resident')
+      // Named party for this booker, same privacy masking as the booker's
+      // row -- except the booking owner always sees their own party's names.
       const party = (partyMap[`${ev.id}|${b.member_id}`] || []).map(p => {
         if (p.member_id) {
           const own  = p.member_id === member.id
           const priv = !!p.member?.hide_name
-          return { name: own ? 'You' : (priv && !canManageBooks) ? 'Resident' : (p.member?.name || 'Resident'), isPrivate: priv, guest: false }
+          return { name: own ? 'You' : (priv && !canManageBooks && !isOwn) ? 'Resident' : (p.member?.name || 'Resident'), isPrivate: priv, guest: false }
+        }
+        if (p.contact_id) {
+          return { name: p.contact?.name || 'Resident', isPrivate: false, guest: false }
         }
         return { name: p.guest_name, isPrivate: false, guest: true }
       })

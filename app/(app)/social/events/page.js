@@ -1139,7 +1139,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                     const label = isOwn ? "You"
                       : !showNames ? "Guest"
                       : (isPrivate && !isAdmin) ? "Resident"
-                      : (b.member?.name || b.member?.username || "Member")
+                      : (b.member?.name || b.member?.username || b.contact?.name || "Member")
                     const paid = computeIsPaid(b)
                     const submitted = !paid && computeIsSubmitted(b)
                     return (
@@ -1211,7 +1211,12 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                             {partyByOwner[b.member_id].map((p, j) => {
                               const gOwn  = p.member_id && p.member_id === member?.id
                               const gPriv = !!p.member?.hide_name
-                              const gName = gOwn ? "You" : p.guest_name ? p.guest_name : (gPriv && !isAdmin) ? "Resident" : (p.member?.name || "Resident")
+                              // Contacts (no app login) have no privacy toggle. The
+                              // booking owner (isOwn, this row) always sees their own
+                              // party's real names, privacy flag or not (Iain, 2026-07-23).
+                              const gName = gOwn ? "You" : p.guest_name ? p.guest_name
+                                : p.contact_id ? (p.contact?.name || "Resident")
+                                : (gPriv && !isAdmin && !isOwn) ? "Resident" : (p.member?.name || "Resident")
                               return <span key={j} style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>+ {gName}{p.guest_name ? " (guest)" : ""}{gPriv && isAdmin && !gOwn && p.member?.name ? " (P)" : ""}</span>
                             })}
                           </div>
@@ -1355,7 +1360,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, booked_at, updated_at, member:members!member_id(id, name, username, hide_name)), booking_attendees(owner_id, member_id, guest_name, member:members!member_id(name, hide_name))")
+      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, contact_id, booked_at, updated_at, member:members!member_id(id, name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, member_id, contact_id, guest_name, member:members!member_id(name, hide_name), contact:contacts!contact_id(name))")
       .eq("hub_type", "social")
       .eq("archived", false)
       .order("event_date", { ascending: true })

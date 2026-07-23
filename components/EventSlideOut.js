@@ -15,6 +15,26 @@ import { clubTextOn, clubInk } from "@/lib/clubColours"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+// Every resident-picker in this file (walk-up booking, the self-service
+// "who else is coming?" party picker) needs to search both people with an
+// app login (members) and residents added via Info > Contacts who have
+// never signed up (contacts, member_id IS NULL so we don't double-list
+// someone who already has a real account). Iain, 2026-07-23: a contact IS a
+// resident, not a guest — this directory is the single source both pickers
+// search against so that distinction is consistent everywhere.
+async function fetchResidentDirectory() {
+  const [{ data: members }, { data: contacts }] = await Promise.all([
+    supabase.from("members").select("id, name, username").eq("status", "active").order("name"),
+    supabase.from("contacts").select("id, name").eq("active", true).is("member_id", null).order("name"),
+  ])
+  const list = [
+    ...(members || []).map(m => ({ id: m.id, name: m.name, username: m.username, type: "member" })),
+    ...(contacts || []).map(c => ({ id: c.id, name: c.name, username: null, type: "contact" })),
+  ]
+  list.sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+  return list
+}
+
 // Renders children into document.body instead of in place. Needed for any
 // full-screen overlay (Toast, ConfirmDialog, MenuModal, SplitDialog) used
 // inside EventSlideOut's sliding panel: that panel animates with
@@ -250,7 +270,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   const [cancelling,    setCancelling]    = useState(false)
   // Add Walk-up Booking (2026-07-13) — for residents who don't use the app
   const [showAddBooking,      setShowAddBooking]      = useState(false)
-  const [allMembers,          setAllMembers]          = useState([])
+  const [allResidents,        setAllResidents]        = useState([])
   const [residentQuery,       setResidentQuery]       = useState("")
   const [residentResults,     setResidentResults]     = useState([])
   const [selectedResident,    setSelectedResident]    = useState(null)
@@ -299,14 +319,15 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   // same as it shows real member names rather than masking.
   useEffect(() => {
     supabase.from("booking_attendees")
-      .select("owner_id, member_id, guest_name, member:members!member_id(name, username)")
+      .select("owner_id, member_id, contact_id, guest_name, member:members!member_id(name, username), contact:contacts!contact_id(name)")
       .eq("event_id", event.id)
       .then(({ data: rows }) => {
         const map = {}
         for (const r of rows || []) {
           (map[r.owner_id] = map[r.owner_id] || []).push(
             r.member_id ? { label: r.member?.name || r.member?.username || "Resident", guest: false }
-                        : { label: r.guest_name, guest: true }
+              : r.contact_id ? { label: r.contact?.name || "Resident", guest: false }
+              : { label: r.guest_name, guest: true }
           )
         }
         setPartyByOwner(map)
@@ -314,9 +335,8 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   }, [event.id])
 
   useEffect(() => {
-    if (showAddBooking && allMembers.length === 0) {
-      supabase.from("members").select("id, name, username").eq("status", "active").order("name")
-        .then(({ data: d }) => setAllMembers(d || []))
+    if (showAddBooking && allResidents.length === 0) {
+      fetchResidentDirectory().then(setAllResidents)
     }
   }, [showAddBooking])
 
@@ -384,7 +404,8 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           event_id: event.id, action: "add_booking",
-          member_id: selectedResident.id, seats: addSeats, mark_paid: addMarkPaid,
+          ...(selectedResident.type === "contact" ? { contact_id: selectedResident.id } : { member_id: selectedResident.id }),
+          seats: addSeats, mark_paid: addMarkPaid,
           ...(forceWaitlist ? { force_status: "waitlist" } : {}),
         }),
       })
@@ -430,7 +451,8 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   )
 
   const bookings     = data?.bookings || []
-  const bookedMemberIds = new Set(bookings.map(b => b.members?.id).filter(Boolean))
+  const bookedMemberIds  = new Set(bookings.map(b => b.members?.id).filter(Boolean))
+  const bookedContactIds = new Set(bookings.map(b => b.contacts?.id).filter(Boolean))
   const refundPending = data?.refund_pending || []
   const refundIssued  = data?.refund_issued || []
   const confirmed = bookings.filter(b => b.status === "confirmed")
@@ -455,7 +477,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       {toast && <Toast msg={toast.msg} type={toast.type} />}
       {cancelTarget && (
         <ConfirmDialog
-          message={`Cancel booking for ${cancelTarget.members?.name || cancelTarget.members?.username}?`}
+          message={`Cancel booking for ${cancelTarget.members?.name || cancelTarget.members?.username || cancelTarget.contacts?.name}?`}
           paymentNote={paymentRequired && computeIsPaid(cancelTarget) ? "Mark refund as due after cancelling if payment was received." : null}
           onConfirm={() => cancelBooking(cancelTarget.id)}
           onCancel={() => { if (!cancelling) setCancelTarget(null) }}
@@ -591,8 +613,9 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                     const q = e.target.value
                     setResidentQuery(q)
                     const norm = q.trim().toLowerCase()
-                    setResidentResults(norm.length < 2 ? [] : allMembers.filter(m =>
-                      (m.name?.toLowerCase().includes(norm) || m.username?.toLowerCase().includes(norm)) && !bookedMemberIds.has(m.id)
+                    setResidentResults(norm.length < 2 ? [] : allResidents.filter(m =>
+                      (m.name?.toLowerCase().includes(norm) || m.username?.toLowerCase().includes(norm)) &&
+                      !(m.type === "contact" ? bookedContactIds.has(m.id) : bookedMemberIds.has(m.id))
                     ))
                   }}
                   placeholder="Search resident name (2+ letters)…"
@@ -603,7 +626,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                       <div key={m.id}
                         onClick={() => { setSelectedResident(m); setResidentResults([]); setResidentQuery("") }}
                         style={{ padding: "8px 10px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>
-                        {m.name}{m.username && m.username !== m.name ? ` (${m.username})` : ""}
+                        {m.name}{m.username && m.username !== m.name ? ` (${m.username})` : ""}{m.type === "contact" ? " · no app account" : ""}
                       </div>
                     ))}
                   </div>
@@ -661,13 +684,13 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       {bookings.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--text-dim)", fontStyle: "italic", marginBottom: 12 }}>No bookings yet</div>
       ) : (() => {
-        // Group rows by member so a split booking shows as ONE tile
+        // Group rows by resident (member OR contact) so a split booking shows as ONE tile
         const grouped = {}
         for (const b of bookings) {
-          const mid = b.members?.id || "unknown"
-          if (!grouped[mid]) grouped[mid] = { member: b.members, confirmed: [], waitlist: [] }
-          if (b.status === "waitlist") grouped[mid].waitlist.push(b)
-          else grouped[mid].confirmed.push(b)
+          const key = b.members?.id ? `m:${b.members.id}` : b.contacts?.id ? `c:${b.contacts.id}` : "unknown"
+          if (!grouped[key]) grouped[key] = { member: b.members || null, contact: b.contacts || null, confirmed: [], waitlist: [] }
+          if (b.status === "waitlist") grouped[key].waitlist.push(b)
+          else grouped[key].confirmed.push(b)
         }
         // Own row always pinned to the top — consistent with every other attendee
         // list (Movies/Social inline lists, Book Club's own attendees list).
@@ -675,13 +698,14 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           .sort((a, b) => (b.member?.id === currentMember?.id) - (a.member?.id === currentMember?.id))
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
-            {attendeeGroups.map(({ member, confirmed: confRows, waitlist: waitRows }) => {
+            {attendeeGroups.map(({ member, contact, confirmed: confRows, waitlist: waitRows }) => {
               const isOwnBooking   = member?.id === currentMember?.id
               // This whole panel is already admin/EC-only (showCoordinatorPanel) - show the
               // real name rather than masking to "Resident", but flag Private members with
               // a (P) marker so admins/ECs still know at a glance. Own row always reads "You".
+              // Contacts have no login and therefore no privacy toggle — always shown.
               const isPrivate = !!member?.hide_name
-              const name = isOwnBooking ? "You" : (member?.name || member?.username || "—")
+              const name = isOwnBooking ? "You" : (member?.name || member?.username || contact?.name || "—")
               const confirmedSeats = confRows.reduce((s, b) => s + (b.seats || 1), 0)
               const waitlistSeats  = waitRows.reduce((s, b) => s + (b.seats || 1), 0)
               const hasSplit       = confirmedSeats > 0 && waitlistSeats > 0
@@ -699,7 +723,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
               const hasBook    = !!primaryRow?.has_book
               const isHidden   = !!primaryRow?.name_hidden
               return (
-                <div key={member?.id || name} style={{ background: isOwnBooking ? colour + "10" : "var(--surface2)", borderRadius: 10, padding: "10px 12px",
+                <div key={member?.id || contact?.id || name} style={{ background: isOwnBooking ? colour + "10" : "var(--surface2)", borderRadius: 10, padding: "10px 12px",
                   border: `${isOwnBooking ? 2 : 1}px solid ${borderCol}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -790,7 +814,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
             {data.cancelled_book_out.map(b => {
               const isOwn     = b.members?.id === currentMember?.id
               const isPrivate = !!(b.members?.hide_name || b.name_hidden)
-              const bname = isOwn ? "You" : (b.members?.name || b.members?.username || "—")
+              const bname = isOwn ? "You" : (b.members?.name || b.members?.username || b.contacts?.name || "—")
               return (
                 <div key={b.id} style={{ background: isOwn ? colour + "10" : "var(--surface2)", borderRadius: 10, padding: "10px 12px", border: `${isOwn ? 2 : 1}px solid ${isOwn ? colour : "var(--amber)"}` }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
@@ -821,7 +845,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
             {refundPending.map(b => {
               const isOwn     = b.members?.id === currentMember?.id
               const isPrivate = !!b.members?.hide_name
-              const name = isOwn ? "You" : (b.members?.name || b.members?.username || "—")
+              const name = isOwn ? "You" : (b.members?.name || b.members?.username || b.contacts?.name || "—")
               const seats = b.seats || 1
               const total = eventCost ? `$${(eventCost * seats).toFixed(2)}` : null
               return (
@@ -852,7 +876,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
             {refundIssued.map(b => {
               const isOwn     = b.members?.id === currentMember?.id
               const isPrivate = !!b.members?.hide_name
-              const name = isOwn ? "You" : (b.members?.name || b.members?.username || "—")
+              const name = isOwn ? "You" : (b.members?.name || b.members?.username || b.contacts?.name || "—")
               const seats = b.seats || 1
               const total = eventCost ? `$${(eventCost * seats).toFixed(2)}` : null
               return (
@@ -922,16 +946,20 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
   const [open, setOpen] = useState(false)
   const kind = row.kind || "resident"
   const q = query.trim().toLowerCase()
+  // `members` here is the merged resident directory (app-login members +
+  // Contacts-hub residents with no login) — a contact is picked exactly like
+  // a member, just carries contact_id instead of member_id.
   const results = q.length < 2 ? [] : members
     .filter(m => !excludeIds.includes(m.id) && (m.name || "").toLowerCase().includes(q))
     .slice(0, 6)
   const inputStyle = { width: "100%", padding: "9px 11px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 14, boxSizing: "border-box", fontFamily: "inherit" }
+  const emptyRow = { kind: "resident", member_id: null, contact_id: null, member_name: "", guest_name: "" }
   return (
     <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 10 }}>
       {allowGuests && (
         <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
           {[["resident", "Resident"], ["guest", "Guest"]].map(([k, label]) => (
-            <button key={k} type="button" onClick={() => onChange({ ...row, kind: k, member_id: null, member_name: "", guest_name: "" })}
+            <button key={k} type="button" onClick={() => onChange({ ...row, ...emptyRow, kind: k })}
               style={{ flex: 1, padding: "6px 0", borderRadius: 8, fontSize: 13, fontFamily: "inherit", cursor: "pointer",
                 border: `1px solid ${kind === k ? "var(--amber)" : "var(--border)"}`, background: kind === k ? "var(--amber)" : "var(--surface2)",
                 color: kind === k ? "#fff" : "var(--text)", fontWeight: kind === k ? 700 : 500 }}>{label}</button>
@@ -939,10 +967,10 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
         </div>
       )}
       {kind === "resident" ? (
-        row.member_id ? (
+        (row.member_id || row.contact_id) ? (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 14, color: "var(--text)" }}>{row.member_name}</span>
-            <button type="button" onClick={() => { onChange({ ...row, kind: "resident", member_id: null, member_name: "", guest_name: "" }); setQuery("") }}
+            <button type="button" onClick={() => { onChange({ ...row, ...emptyRow }); setQuery("") }}
               style={{ background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>Change</button>
           </div>
         ) : (
@@ -952,8 +980,17 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
             {open && results.length > 0 && (
               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 5, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, marginTop: 4, overflow: "hidden" }}>
                 {results.map(m => (
-                  <button key={m.id} type="button" onClick={() => { onChange({ ...row, kind: "resident", member_id: m.id, member_name: m.name, guest_name: "" }); setOpen(false); setQuery("") }}
-                    style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 11px", background: "none", border: "none", borderBottom: "1px solid var(--border)", cursor: "pointer", fontSize: 14, color: "var(--text)", fontFamily: "inherit" }}>{m.name}</button>
+                  <button key={m.id} type="button"
+                    onClick={() => {
+                      onChange({ ...row, kind: "resident",
+                        member_id: m.type === "contact" ? null : m.id,
+                        contact_id: m.type === "contact" ? m.id : null,
+                        member_name: m.name, guest_name: "" })
+                      setOpen(false); setQuery("")
+                    }}
+                    style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 11px", background: "none", border: "none", borderBottom: "1px solid var(--border)", cursor: "pointer", fontSize: 14, color: "var(--text)", fontFamily: "inherit" }}>
+                    {m.name}{m.type === "contact" ? " · no app account" : ""}
+                  </button>
                 ))}
               </div>
             )}
@@ -961,7 +998,7 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
         )
       ) : (
         <input value={row.guest_name} placeholder={`Guest name for seat ${index + 2}…`}
-          onChange={e => onChange({ ...row, kind: "guest", member_id: null, member_name: "", guest_name: e.target.value })} style={inputStyle} />
+          onChange={e => onChange({ ...row, kind: "guest", member_id: null, contact_id: null, member_name: "", guest_name: e.target.value })} style={inputStyle} />
       )}
       {bringCats.length > 0 && (
         <div style={{ marginTop: 8 }}>
@@ -976,8 +1013,8 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
 
 function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange, bringCats = [] }) {
   const rows = []
-  for (let i = 0; i < count; i++) rows.push(value[i] || { kind: "resident", member_id: null, member_name: "", guest_name: "" })
-  const chosen = value.filter(v => v?.member_id).map(v => v.member_id)
+  for (let i = 0; i < count; i++) rows.push(value[i] || { kind: "resident", member_id: null, contact_id: null, member_name: "", guest_name: "" })
+  const chosen = value.filter(v => v?.member_id || v?.contact_id).map(v => v.member_id || v.contact_id)
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, margin: "8px 0 12px" }}>
       <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
@@ -986,7 +1023,7 @@ function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange,
       {rows.map((row, i) => (
         <PartyRow key={i} index={i} row={row} allowGuests={allowGuests} members={members}
           bringCats={bringCats}
-          excludeIds={[...excludeIds, ...chosen.filter(id => id !== row.member_id)]}
+          excludeIds={[...excludeIds, ...chosen.filter(id => id !== (row.member_id || row.contact_id))]}
           onChange={next => { const copy = value.slice(); copy[i] = next; onChange(copy) }} />
       ))}
     </div>
@@ -1027,8 +1064,7 @@ function BookingSection({ event, onRefresh, onClose }) {
 
   useEffect(() => {
     if (event.hub_type !== "bookclub" && (event.max_seats_per_booking || 1) > 1 && members.length === 0) {
-      supabase.from("members").select("id, name").eq("status", "active").order("name")
-        .then(({ data }) => setMembers(data || []))
+      fetchResidentDirectory().then(setMembers)
     }
   }, [event.id])
 
@@ -1036,14 +1072,15 @@ function BookingSection({ event, onRefresh, onClose }) {
     const need = Math.max(0, seats - 1)
     setParty(prev => {
       const copy = prev.slice(0, need)
-      while (copy.length < need) copy.push({ kind: "resident", member_id: null, member_name: "", guest_name: "" })
+      while (copy.length < need) copy.push({ kind: "resident", member_id: null, contact_id: null, member_name: "", guest_name: "" })
       return copy
     })
   }, [seats])
 
   useEffect(() => {
     if (!me?.id) return
-    supabase.from("booking_attendees").select("member_id, guest_name, bring_category_id, bring_note, member:members!member_id(name)")
+    supabase.from("booking_attendees")
+      .select("member_id, contact_id, guest_name, bring_category_id, bring_note, member:members!member_id(name), contact:contacts!contact_id(name)")
       .eq("event_id", event.id).eq("owner_id", me.id)
       .then(({ data }) => setMyAttendees(data || []))
     // Prefill the booker's own dish so it shows in the manage view and isn't
@@ -1055,10 +1092,10 @@ function BookingSection({ event, onRefresh, onClose }) {
 
   const partyNeed = Math.max(0, seats - 1)
   const partyValid = party.length === partyNeed &&
-    party.every(p => p.member_id || (allowGuests && p.guest_name && p.guest_name.trim()))
+    party.every(p => p.member_id || p.contact_id || (allowGuests && p.guest_name && p.guest_name.trim()))
   const bringValid = !bringEnabled || !!myBring.category_id
   const partyToAttendees = (arr) => arr.map(p => ({
-    ...(p.member_id ? { member_id: p.member_id } : { guest_name: (p.guest_name || "").trim() }),
+    ...(p.member_id ? { member_id: p.member_id } : p.contact_id ? { contact_id: p.contact_id } : { guest_name: (p.guest_name || "").trim() }),
     bring_category_id: p.bring_category_id || null,
     bring_note: p.bring_note || null,
   }))
@@ -1093,7 +1130,7 @@ function BookingSection({ event, onRefresh, onClose }) {
 
   const [modParty, setModParty] = useState([])
   const modSeeded = useRef(false)
-  const blankRow = () => ({ kind: "resident", member_id: null, member_name: "", guest_name: "", bring_category_id: null, bring_note: null })
+  const blankRow = () => ({ kind: "resident", member_id: null, contact_id: null, member_name: "", guest_name: "", bring_category_id: null, bring_note: null })
   useEffect(() => {
     if (!modifying) { modSeeded.current = false; return }
     const need = Math.max(0, modifySeats - 1)
@@ -1104,8 +1141,10 @@ function BookingSection({ event, onRefresh, onClose }) {
       // then refused to re-seed, wiping the party/dishes (Iain 2026-07-18).
       modSeeded.current = true
       const seed = (myAttendees || []).map(a => (a.member_id
-        ? { kind: "resident", member_id: a.member_id, member_name: a.member?.name || "Resident", guest_name: "" }
-        : { kind: "guest", member_id: null, member_name: "", guest_name: a.guest_name || "" }))
+        ? { kind: "resident", member_id: a.member_id, contact_id: null, member_name: a.member?.name || "Resident", guest_name: "" }
+        : a.contact_id
+        ? { kind: "resident", member_id: null, contact_id: a.contact_id, member_name: a.contact?.name || "Resident", guest_name: "" }
+        : { kind: "guest", member_id: null, contact_id: null, member_name: "", guest_name: a.guest_name || "" }))
         .map((row, i) => ({ ...row, bring_category_id: myAttendees[i]?.bring_category_id || null, bring_note: myAttendees[i]?.bring_note || null }))
       const copy = seed.slice(0, need)
       while (copy.length < need) copy.push(blankRow())
@@ -1316,7 +1355,7 @@ function BookingSection({ event, onRefresh, onClose }) {
                     <>
                       {mine && <div style={{ ...line, color: "var(--text)" }}><strong>You</strong>{dish(mine.label, mine.note) ? ` · ${dish(mine.label, mine.note)}` : ""}</div>}
                       {myAttendees.map((a, i) => {
-                        const nm = a.member_id ? (a.member?.name || "Resident") : `${a.guest_name} (guest)`
+                        const nm = a.member_id ? (a.member?.name || "Resident") : a.contact_id ? (a.contact?.name || "Resident") : `${a.guest_name} (guest)`
                         const d = dish(a.bring_category_id ? catLabel(a.bring_category_id) : null, a.bring_note)
                         return <div key={i} style={{ ...line, color: "var(--text-dim)" }}>{nm}{d ? ` · ${d}` : ""}</div>
                       })}

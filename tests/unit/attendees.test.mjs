@@ -45,6 +45,16 @@ ok(validateParty({ seats: 3, attendees: [{ member_id: 'm1' }, { member_id: 'm1' 
 ok(validateParty({ seats: 2, attendees: [{ guest_name: '   ' }], allowGuests: true, ownerId: OWNER }).ok === false, 'blank guest name => rejected')
 ok(validateParty({ seats: 2, attendees: [{}], allowGuests: true, ownerId: OWNER }).ok === false, 'empty attendee => rejected')
 
+// contact-only residents (2026-07-23) — a real resident with no app login,
+// distinct from both member_id and guest_name.
+const c = validateParty({ seats: 2, attendees: [{ contact_id: 'c1' }], allowGuests: false, ownerId: OWNER })
+ok(c.ok === true && c.attendees[0].contact_id === 'c1' && c.attendees[0].member_id === null && c.attendees[0].guest_name === null, 'contact resident => ok, normalised')
+ok(validateParty({ seats: 3, attendees: [{ contact_id: 'c1' }, { contact_id: 'c1' }], allowGuests: false, ownerId: OWNER }).ok === false, 'duplicate contact => rejected')
+const mixMC = validateParty({ seats: 3, attendees: [{ member_id: 'm1' }, { contact_id: 'c1' }], allowGuests: false, ownerId: OWNER })
+ok(mixMC.ok === true && mixMC.attendees.length === 2, 'mixed member + contact residents => ok')
+// a contact never needs allowGuests — they're a resident, not a guest
+ok(validateParty({ seats: 2, attendees: [{ contact_id: 'c1' }], allowGuests: false, ownerId: OWNER }).ok === true, 'contact resident allowed even when guests are not')
+
 // bring-a-dish
 ok(validateBring({ required: false }).ok === true, 'not required => ok even with nothing chosen')
 ok(validateBring({ required: true, bringCategoryId: null }).ok === false, 'required + nothing chosen => rejected')
