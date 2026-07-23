@@ -9,7 +9,7 @@ import { bbToHtml } from "@/components/RichEditor"
 import { BusIcon } from "@/components/NavIcons"
 import { ContactBar } from "@/components/OwnersManager"
 import { FormattedText } from "@/lib/textFormatter"
-import { seatsCost, bookingStatusBadge } from "@/lib/payments"
+import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted } from "@/lib/payments"
 
 const COLOUR = "var(--terracotta)"
 
@@ -190,13 +190,18 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
             const total = seatsCost(event, seats)
             const badge = bookingStatusBadge(myBooking, event)
             const statusWord = badge.label.toLowerCase() // "booked" or "confirmed" — never re-worded per screen
+            const submitted = badge.label !== "Confirmed" && computeIsSubmitted(myBooking)
             const label = badge.label === "Confirmed"
               ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Paid " + total : ""}`
-              : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Unpaid " + total : ""}`
+              : submitted
+                ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${total ? " " + total : ""}`
+                : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Unpaid " + total : ""}`
+            const pillBg = submitted ? "#f0fdfa" : badge.bg
+            const pillColor = submitted ? "#0f766e" : badge.color
             return (
               <div style={{
                 display: "inline-flex", alignItems: "center",
-                background: badge.bg, color: badge.color,
+                background: pillBg, color: pillColor,
                 borderRadius: "20px", padding: "0.25rem 0.75rem",
                 fontSize: "0.78rem", fontWeight: 700,
               }}>{label}</div>
