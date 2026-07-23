@@ -532,14 +532,19 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
       setError("An end time is required for events in a common space"); return
     }
 
-    // Same-date soft warning (A) -- global, dismissible, never blocks. The
-    // space-clash hard block (B) is enforced server-side on /api/social
-    // regardless of this pre-check.
+    // Space hard block (B) checked FIRST -- if the space is unavailable
+    // that's the only message, never a soft warning clicked through just to
+    // get rejected on save. Same-date soft warning (A) only shows when
+    // there's no hard conflict.
     try {
       const pre = await fetch("/api/events/precheck", {
         method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (await getAuthToken()) },
-        body: JSON.stringify({ event_date: form.event_date, exclude_event_id: activeId || null }),
+        body: JSON.stringify({
+          event_date: form.event_date, event_time: form.event_time, event_end_time: form.event_end_time,
+          location_type: form.location_type, location_name: form.location, exclude_event_id: activeId || null,
+        }),
       }).then(r => r.json()).catch(() => ({}))
+      if (pre.spaceConflict) { setError(pre.spaceConflict.message); return }
       if (pre.sameDateEvents?.length) {
         if (!(await askSameDate(pre.sameDateEvents))) return
       }

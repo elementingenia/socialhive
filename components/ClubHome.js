@@ -955,15 +955,22 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       setSaveError("An end time is required for events in a common space."); setSaving(false); return
     }
 
-    // Same-date soft warning (A) -- global across every hub, dismissible,
-    // never blocks (locked decision, §5). The space-clash hard block (B) is
-    // enforced server-side on the actual save below regardless of this.
+    // Space hard block (B) is checked FIRST -- if the space is unavailable
+    // that's the only message, never a soft warning the user clicks through
+    // just to get rejected anyway on save (Iain, 2026-07-23). Same-date soft
+    // warning (A) only shows when there's no hard conflict.
     try {
       const precheckToken = await getToken()
       const pre = await fetch("/api/events/precheck", {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${precheckToken}` },
-        body: JSON.stringify({ event_date: payload.event_date, exclude_event_id: event?.id || null }),
+        body: JSON.stringify({
+          event_date: payload.event_date, event_time: payload.event_time, event_end_time: payload.event_end_time,
+          location_type: payload.location_type, location_name: payload.location, exclude_event_id: event?.id || null,
+        }),
       }).then(r => r.json()).catch(() => ({}))
+      if (pre.spaceConflict) {
+        setSaveError(pre.spaceConflict.message); setSaving(false); return
+      }
       if (pre.sameDateEvents?.length) {
         if (!(await askSameDate(pre.sameDateEvents))) { setSaving(false); return }
       }

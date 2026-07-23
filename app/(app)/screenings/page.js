@@ -167,14 +167,21 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     if (!date || !time) { setErr('Date and time are required'); return }
     if (!endTime) { setErr('An end time is required -- every screening books the Cinema as a common space'); return }
 
-    // Same-date soft warning (A) -- global, dismissible, never blocks. The
-    // space-clash hard block (B) is enforced server-side on /api/screenings
-    // regardless of this pre-check.
+    // Space hard block (B) checked FIRST -- if the Cinema is unavailable
+    // that's the only message, never a soft warning clicked through just to
+    // get rejected on save. Same-date soft warning (A) only shows when
+    // there's no hard conflict. Every screening books the fixed 'Cinema'
+    // location (app/api/screenings/route.js's CINEMA_NAME), so that's what's
+    // sent here even though there's no location picker in this form.
     try {
       const pre = await authedFetch('/api/events/precheck', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_date: date, exclude_event_id: isEdit ? event.id : null }),
+        body: JSON.stringify({
+          event_date: date, event_time: time, event_end_time: endTime,
+          location_type: 'onsite', location_name: 'Cinema', exclude_event_id: isEdit ? event.id : null,
+        }),
       }).then(r => r.json()).catch(() => ({}))
+      if (pre.spaceConflict) { setErr(pre.spaceConflict.message); return }
       if (pre.sameDateEvents?.length) {
         if (!(await askSameDate(pre.sameDateEvents))) return
       }
