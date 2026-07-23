@@ -1086,6 +1086,22 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     } catch (e) { setSaveError("Could not end the series.") }
     setOccBusy(false)
   }
+  // Cancel a standalone event -- a solo one-off, or a mode:'pattern' event (Book
+  // Club), neither of which carries a series_id so isSeriesOccurrence is false.
+  // Same endpoint/action as removeOccurrence (it archives any event by id and
+  // notifies its bookers) -- this just surfaces it outside the series UI too.
+  async function cancelSoloEvent() {
+    if (!event?.id) return
+    if (!confirm("Cancel this event? Anyone booked will be notified. This can't be undone.")) return
+    setOccBusy(true)
+    try {
+      const token = await getToken()
+      const res = await fetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ action: "cancel_occurrence", event_id: event.id }) })
+      if (res.ok) { onSave() } else setSaveError("Could not cancel this event.")
+    } catch (e) { setSaveError("Could not cancel this event.") }
+    setOccBusy(false)
+  }
 
   const labelStyle = { fontSize: "0.78rem", fontWeight: 700, color: "var(--text-dim)",
     textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4, display: "block" }
@@ -1340,6 +1356,12 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             <button type="button" onClick={endSeries} disabled={occBusy}
               style={{ flex: 1, padding: "0.5rem", borderRadius: 8, border: "1px solid #fca5a5", background: "#fee2e2", color: "#991b1b", fontWeight: 700, fontSize: "0.78rem", cursor: occBusy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>End series</button>
           </div>
+        </div>
+      )}
+      {event && !isSeriesOccurrence && (
+        <div style={{ marginBottom: 12 }}>
+          <button type="button" onClick={cancelSoloEvent} disabled={occBusy}
+            style={{ width: "100%", padding: "0.6rem", borderRadius: 8, border: "1px solid #fca5a5", background: "#fee2e2", color: "#991b1b", fontWeight: 700, fontSize: "0.8rem", cursor: occBusy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>Cancel this event</button>
         </div>
       )}
       <div style={{ display: "flex", gap: 10 }}>
