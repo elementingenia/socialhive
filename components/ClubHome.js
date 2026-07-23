@@ -17,6 +17,7 @@ import { useLocations } from "@/lib/useLocations"
 import { cutoffToDateValue, cutoffFromDateValue } from "@/lib/booking"
 import TimeField from "@/components/TimeField"
 import { needsSpaceValidation } from "@/lib/eventClash"
+import { useSameDateWarning } from "@/components/SameDateWarning"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -829,6 +830,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     (recur.horizon_months || 6) !== (seriesRow.horizon_months || 6))
   const [seriesScope, setSeriesScope] = useState("this")   // 'this' | 'future' (scope §6)
   const [occBusy, setOccBusy] = useState(false)
+  const { ask: askSameDate, Modal: SameDateModal } = useSameDateWarning()
   useEffect(() => {
     if (recurMode !== "pattern" || !recur.enabled || !recur.rule_type) return
     const d = nextOccurrence({ rule_type: recur.rule_type, rule_config: recur.rule_config, start_date: todayStr, month_end_policy: recur.month_end_policy }, todayStr)
@@ -963,8 +965,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         body: JSON.stringify({ event_date: payload.event_date, exclude_event_id: event?.id || null }),
       }).then(r => r.json()).catch(() => ({}))
       if (pre.sameDateEvents?.length) {
-        const names = pre.sameDateEvents.map(e => e.title).join(", ")
-        if (!confirm(`There's already an event on this date: ${names}. Continue anyway?`)) { setSaving(false); return }
+        if (!(await askSameDate(pre.sameDateEvents))) { setSaving(false); return }
       }
     } catch {}
 
@@ -1058,6 +1059,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4, display: "block" }
 
   return (
+    <>
+    {SameDateModal}
     <div style={{ background: "var(--surface)", borderRadius: 16, border: `2px solid ${colour}`,
       padding: "1.25rem", marginBottom: 16 }}>
       <div style={{ fontWeight: 800, fontSize: "1rem", color: clubInk(colour), marginBottom: 16 }}>
@@ -1338,6 +1341,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         </button>
       </div>
     </div>
+    </>
   )
 }
 

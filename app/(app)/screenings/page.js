@@ -8,6 +8,7 @@ import { BusIcon } from '@/components/NavIcons'
 import { authedFetch } from '@/lib/getAuthToken'
 import { cutoffToInputValue, cutoffFromInputValue } from '@/lib/booking'
 import TimeField from '@/components/TimeField'
+import { useSameDateWarning } from '@/components/SameDateWarning'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -138,6 +139,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [coordinator, setCoordinator] = useState(event?.coordinator?.id || null)
   const [saving, setSaving]           = useState(false)
   const [err, setErr]                 = useState(null)
+  const { ask: askSameDate, Modal: SameDateModal } = useSameDateWarning()
   const [open, setOpen]               = useState(false)
 
   useEffect(() => {
@@ -174,8 +176,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
         body: JSON.stringify({ event_date: date, exclude_event_id: isEdit ? event.id : null }),
       }).then(r => r.json()).catch(() => ({}))
       if (pre.sameDateEvents?.length) {
-        const names = pre.sameDateEvents.map(e => e.title).join(', ')
-        if (!confirm(`There's already an event on this date: ${names}. Continue anyway?`)) return
+        if (!(await askSameDate(pre.sameDateEvents))) return
       }
     } catch {}
 
@@ -199,6 +200,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
 
   return (
     <>
+      {SameDateModal}
       <div onClick={handleClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, opacity: open ? 1 : 0, transition: 'opacity 0.25s' }} />
       <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(420px, 100%)', background: 'var(--surface)', zIndex: 201, overflowY: 'auto', transform: open ? 'translateX(0)' : 'translateX(100%)', transition: 'transform 0.28s cubic-bezier(0.4,0,0.2,1)', boxShadow: '-8px 0 32px rgba(0,0,0,0.15)', paddingBottom: 32 }}>
         <div style={{ height: 4, background: 'var(--teal)' }} />

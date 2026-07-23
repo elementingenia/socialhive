@@ -14,6 +14,7 @@ import { cutoffToInputValue, cutoffFromInputValue } from "@/lib/booking"
 import { useLocations } from "@/lib/useLocations"
 import TimeField from "@/components/TimeField"
 import { needsSpaceValidation } from "@/lib/eventClash"
+import { useSameDateWarning } from "@/components/SameDateWarning"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -497,6 +498,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
   const [ecError,      setEcError]      = useState(null)
   const [saving,       setSaving]       = useState(false)
   const [error,        setError]        = useState(null)
+  const { ask: askSameDate, Modal: SameDateModal } = useSameDateWarning()
   const [createdId,    setCreatedId]    = useState(null)
   const [justCreated,  setJustCreated]  = useState(false)
   const [uploadingMenu, setUploadingMenu] = useState(false)
@@ -539,8 +541,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
         body: JSON.stringify({ event_date: form.event_date, exclude_event_id: activeId || null }),
       }).then(r => r.json()).catch(() => ({}))
       if (pre.sameDateEvents?.length) {
-        const names = pre.sameDateEvents.map(e => e.title).join(", ")
-        if (!confirm(`There's already an event on this date: ${names}. Continue anyway?`)) return
+        if (!(await askSameDate(pre.sameDateEvents))) return
       }
     } catch {}
 
@@ -611,6 +612,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 
   return (
     <>
+      {SameDateModal}
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 400 }} />
       <div style={{
         position: "fixed", top: 0, right: 0, bottom: 0,
