@@ -63,17 +63,20 @@ export async function GET(req) {
     .in('event_id', eventIds)
     .neq('status', 'cancelled')
 
-  // Named additional attendees (workstream A) — keyed (event_id, owner_id).
-  // owner_id is always a member (only an app account can be a booker); the
-  // named seats they add can be a member, a contact (resident, no login), or
-  // a free-text guest.
+  // Named additional attendees (workstream A) — keyed (event_id, owner key).
+  // The owner is a member (self-service booking) or, since migration 061, a
+  // contact (a walk-up booking an EC named a party under -- Iain, 2026-07-23:
+  // "let Lyn make a walk-up booking for 2 seats and set Geoff as the second
+  // seat"). Composite key covers both without the two id spaces colliding.
   const { data: partyRows } = await supabaseAdmin
     .from('booking_attendees')
-    .select('event_id, owner_id, member_id, contact_id, guest_name, member:members!member_id(name, hide_name), contact:contacts!contact_id(name)')
+    .select('event_id, owner_id, owner_contact_id, member_id, contact_id, guest_name, member:members!member_id(name, hide_name), contact:contacts!contact_id(name)')
     .in('event_id', eventIds)
   const partyMap = {}
   for (const p of partyRows || []) {
-    (partyMap[`${p.event_id}|${p.owner_id}`] = partyMap[`${p.event_id}|${p.owner_id}`] || []).push(p)
+    const ownerKey = p.owner_id ? `m:${p.owner_id}` : `c:${p.owner_contact_id}`
+    const key = `${p.event_id}|${ownerKey}`
+    ;(partyMap[key] = partyMap[key] || []).push(p)
   }
 
   const votesQuery = movieIds.length
@@ -142,7 +145,8 @@ export async function GET(req) {
       const name = isOwn ? 'You' : (isPrivate && !canManageBooks) ? 'Resident' : (b.members?.name || b.contacts?.name || 'Resident')
       // Named party for this booker, same privacy masking as the booker's
       // row -- except the booking owner always sees their own party's names.
-      const party = (partyMap[`${ev.id}|${b.member_id}`] || []).map(p => {
+      const ownerKey = b.member_id ? `m:${b.member_id}` : b.contact_id ? `c:${b.contact_id}` : null
+      const party = (ownerKey && partyMap[`${ev.id}|${ownerKey}`] || []).map(p => {
         if (p.member_id) {
           const own  = p.member_id === member.id
           const priv = !!p.member?.hide_name

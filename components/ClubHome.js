@@ -100,10 +100,15 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
     // Named additional attendees (the party), grouped by the booker.
     const { data: partyRows } = await supabase
       .from("booking_attendees")
-      .select("owner_id, member_id, contact_id, guest_name, bring_note, member:members!member_id(name, hide_name), contact:contacts!contact_id(name), bring:club_bring_categories!bring_category_id(label)")
+      .select("owner_id, owner_contact_id, member_id, contact_id, guest_name, bring_note, member:members!member_id(name, hide_name), contact:contacts!contact_id(name), bring:club_bring_categories!bring_category_id(label)")
       .eq("event_id", event.id)
     const partyByOwner = {}
-    for (const p of partyRows || []) (partyByOwner[p.owner_id] = partyByOwner[p.owner_id] || []).push(p)
+    for (const p of partyRows || []) {
+      // Composite key: a walk-up booking's party is owned by a contact
+      // (owner_contact_id), not a member (owner_id) -- migration 061, 2026-07-23.
+      const ownerKey = p.owner_id ? `m:${p.owner_id}` : `c:${p.owner_contact_id}`
+      ;(partyByOwner[ownerKey] = partyByOwner[ownerKey] || []).push(p)
+    }
     // Own row always pinned to the top — consistent with every other attendee
     // list (Movies/Social inline lists, EventSlideOut's Coordinator View).
     // Contacts (residents with no app login) have no hide_name concept, so
@@ -124,7 +129,10 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
         bring: b.bring?.label || null,
         bringNote: b.bring_note || null,
         bookGivenAt: b.book_given_at,
-        party: (partyByOwner[b.members?.id] || []).map(p => {
+        party: (() => {
+          const ownerKey = b.members?.id ? `m:${b.members.id}` : b.contacts?.id ? `c:${b.contacts.id}` : null
+          return ownerKey ? (partyByOwner[ownerKey] || []) : []
+        })().map(p => {
           const gPriv = !!p.member?.hide_name
           const gOwn  = p.member_id && p.member_id === member?.id
           return {

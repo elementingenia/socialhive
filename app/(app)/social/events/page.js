@@ -941,7 +941,10 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
   // Named additional attendees (workstream A), grouped by the booker.
   const partyByOwner = {}
   for (const p of event.booking_attendees || []) {
-    (partyByOwner[p.owner_id] = partyByOwner[p.owner_id] || []).push(p)
+    // Composite key: a walk-up booking's party is owned by a contact
+    // (owner_contact_id), not a member (owner_id) -- migration 061, 2026-07-23.
+    const ownerKey = p.owner_id ? `m:${p.owner_id}` : `c:${p.owner_contact_id}`
+    ;(partyByOwner[ownerKey] = partyByOwner[ownerKey] || []).push(p)
   }
   const unpaidSeats = sumUnpaidSeats(confirmedBookings, event)
   const ecNames = coordinators.map(c => c.members?.name || c.members?.username).filter(Boolean)
@@ -1206,9 +1209,12 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                           })()}
                         </span>
                         </div>
-                        {showNames && (partyByOwner[b.member_id] || []).length > 0 && (
+                        {(() => {
+                          const ownerKey = b.member_id ? `m:${b.member_id}` : b.contact_id ? `c:${b.contact_id}` : null
+                          const party = ownerKey ? (partyByOwner[ownerKey] || []) : []
+                          return showNames && party.length > 0 && (
                           <div style={{ paddingLeft: "0.85rem", marginTop: "0.1rem", display: "flex", flexDirection: "column", gap: "0.05rem" }}>
-                            {partyByOwner[b.member_id].map((p, j) => {
+                            {party.map((p, j) => {
                               const gOwn  = p.member_id && p.member_id === member?.id
                               const gPriv = !!p.member?.hide_name
                               // Contacts (no app login) have no privacy toggle. The
@@ -1220,7 +1226,8 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                               return <span key={j} style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>+ {gName}{p.guest_name ? " (guest)" : ""}{gPriv && isAdmin && !gOwn && p.member?.name ? " (P)" : ""}</span>
                             })}
                           </div>
-                        )}
+                          )
+                        })()}
                       </div>
                     )
                   })}
@@ -1360,7 +1367,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, contact_id, booked_at, updated_at, member:members!member_id(id, name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, member_id, contact_id, guest_name, member:members!member_id(name, hide_name), contact:contacts!contact_id(name))")
+      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, contact_id, booked_at, updated_at, member:members!member_id(id, name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, member:members!member_id(name, hide_name), contact:contacts!contact_id(name))")
       .eq("hub_type", "social")
       .eq("archived", false)
       .order("event_date", { ascending: true })
