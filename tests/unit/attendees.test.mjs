@@ -55,6 +55,12 @@ ok(mixMC.ok === true && mixMC.attendees.length === 2, 'mixed member + contact re
 // a contact never needs allowGuests — they're a resident, not a guest
 ok(validateParty({ seats: 2, attendees: [{ contact_id: 'c1' }], allowGuests: false, ownerId: OWNER }).ok === true, 'contact resident allowed even when guests are not')
 
+// a contact-owned booking (walk-up) can also own a party, and can't name
+// itself as its own party member either (2026-07-23).
+const ownerContact = validateParty({ seats: 2, attendees: [{ contact_id: 'c1' }], allowGuests: false, ownerContactId: 'c-owner' })
+ok(ownerContact.ok === true, 'contact-owned booking naming a different contact => ok')
+ok(validateParty({ seats: 2, attendees: [{ contact_id: 'c-owner' }], allowGuests: false, ownerContactId: 'c-owner' }).ok === false, 'contact owner naming themselves => rejected')
+
 // bring-a-dish
 ok(validateBring({ required: false }).ok === true, 'not required => ok even with nothing chosen')
 ok(validateBring({ required: true, bringCategoryId: null }).ok === false, 'required + nothing chosen => rejected')

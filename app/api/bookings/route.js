@@ -4,6 +4,7 @@ import { promoteWaitlist } from '@/lib/promoteWaitlist'
 import { notify } from '@/lib/notify'
 import { bookingsClosed } from '@/lib/booking'
 import { validateParty, validateBring } from '@/lib/attendees'
+import { syncAttendees } from '@/lib/syncAttendees'
 
 
 async function getMember(token) {
@@ -12,19 +13,6 @@ async function getMember(token) {
   const { data: member } = await supabaseAdmin
     .from('members').select('id, name').eq('auth_id', user.id).single()
   return member
-}
-
-// Keep the owner's named party (booking_attendees) in sync with their seat
-// count for an event. Full replace — simplest correct behaviour against seat
-// changes and waitlist churn, since the set is small (a handful of rows).
-async function syncAttendees(eventId, ownerId, attendees) {
-  await supabaseAdmin.from('booking_attendees').delete().eq('event_id', eventId).eq('owner_id', ownerId)
-  if (attendees && attendees.length) {
-    await supabaseAdmin.from('booking_attendees').insert(
-      attendees.map(a => ({ event_id: eventId, owner_id: ownerId, member_id: a.member_id, contact_id: a.contact_id || null, guest_name: a.guest_name,
-        bring_category_id: a.bring_category_id || null, bring_note: a.bring_note || null }))
-    )
-  }
 }
 
 // Seat-level FIFO waitlist promotion now lives in lib/promoteWaitlist.js,
@@ -135,7 +123,7 @@ export async function POST(req) {
       payment_status: initialPaymentStatus, ...bringFields,
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    await syncAttendees(event_id, member.id, party.attendees)
+    await syncAttendees(event_id, { ownerId: member.id }, party.attendees)
     return NextResponse.json({ status: 'confirmed', seats: requestedSeats })
   }
 
@@ -160,7 +148,7 @@ export async function POST(req) {
 
   const { error } = await supabaseAdmin.from('bookings').insert(rows)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  await syncAttendees(event_id, member.id, party.attendees)
+  await syncAttendees(event_id, { ownerId: member.id }, party.attendees)
 
   return NextResponse.json({
     status:     'split_confirmed',
@@ -291,7 +279,7 @@ export async function PATCH(req) {
     if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 })
   }
 
-  await syncAttendees(event_id, member.id, party.attendees)
+  await syncAttendees(event_id, { ownerId: member.id }, party.attendees)
 
   return NextResponse.json({
     status:    newWaitlisted > 0 ? 'split_change' : 'confirmed_change',

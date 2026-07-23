@@ -278,6 +278,13 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   const [addMarkPaid,         setAddMarkPaid]         = useState(false)
   const [addSubmitting,       setAddSubmitting]       = useState(false)
   const [insufficientCapacity, setInsufficientCapacity] = useState(null)
+  // Name the extra seat(s) on a walk-up booking (2026-07-23, Iain: "let Lyn
+  // make a walk-up booking for 2 seats and set Geoff as the second seat").
+  // Optional, off by default -- an EC can still book N anonymous seats
+  // (pre-existing behaviour) without naming who they're for.
+  const [addNameParty,        setAddNameParty]        = useState(false)
+  const [addParty,            setAddParty]            = useState([])
+  const allowGuests = !!event.allow_nonresident_guests
   const isMovie  = event.hub_type === "movie"
   const isBook   = clubCaps(event.club).hasBooks
   const isSocial = event.hub_type === "social"
@@ -319,12 +326,17 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   // same as it shows real member names rather than masking.
   useEffect(() => {
     supabase.from("booking_attendees")
-      .select("owner_id, member_id, contact_id, guest_name, member:members!member_id(name, username), contact:contacts!contact_id(name)")
+      .select("owner_id, owner_contact_id, member_id, contact_id, guest_name, member:members!member_id(name, username), contact:contacts!contact_id(name)")
       .eq("event_id", event.id)
       .then(({ data: rows }) => {
         const map = {}
         for (const r of rows || []) {
-          (map[r.owner_id] = map[r.owner_id] || []).push(
+          // Composite key matches the m:/c: keys the grouped attendee tiles
+          // build below, since a walk-up booking's party is owned by a
+          // contact (owner_contact_id), not a member (owner_id) -- migration
+          // 061, 2026-07-23.
+          const key = r.owner_id ? `m:${r.owner_id}` : `c:${r.owner_contact_id}`
+          ;(map[key] = map[key] || []).push(
             r.member_id ? { label: r.member?.name || r.member?.username || "Resident", guest: false }
               : r.contact_id ? { label: r.contact?.name || "Resident", guest: false }
               : { label: r.guest_name, guest: true }
@@ -341,6 +353,23 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   }, [showAddBooking])
 
   useEffect(() => { setInsufficientCapacity(null) }, [addSeats, selectedResident])
+
+  useEffect(() => {
+    const need = Math.max(0, addSeats - 1)
+    setAddParty(prev => {
+      const copy = prev.slice(0, need)
+      while (copy.length < need) copy.push({ kind: "resident", member_id: null, contact_id: null, member_name: "", guest_name: "" })
+      return copy
+    })
+  }, [addSeats])
+  useEffect(() => { setAddNameParty(false); setAddParty([]) }, [selectedResident])
+
+  const addPartyNeed = Math.max(0, addSeats - 1)
+  const addPartyValid = !addNameParty || (addParty.length === addPartyNeed &&
+    addParty.every(p => p.member_id || p.contact_id || (allowGuests && p.guest_name && p.guest_name.trim())))
+  const addPartyToAttendees = (arr) => arr.map(p => ({
+    ...(p.member_id ? { member_id: p.member_id } : p.contact_id ? { contact_id: p.contact_id } : { guest_name: (p.guest_name || "").trim() }),
+  }))
 
   async function patchAction(body) {
     const res = await authedFetch("/api/coordinator", {
@@ -397,6 +426,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
 
   async function submitAddBooking(forceWaitlist = false) {
     if (!selectedResident) return
+    if (!addPartyValid) return
     setAddSubmitting(true)
     try {
       const res = await authedFetch("/api/coordinator", {
@@ -406,6 +436,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           event_id: event.id, action: "add_booking",
           ...(selectedResident.type === "contact" ? { contact_id: selectedResident.id } : { member_id: selectedResident.id }),
           seats: addSeats, mark_paid: addMarkPaid,
+          ...(addNameParty ? { attendees: addPartyToAttendees(addParty) } : {}),
           ...(forceWaitlist ? { force_status: "waitlist" } : {}),
         }),
       })
@@ -645,6 +676,30 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
 
                 {!isBook && <SeatSelector value={addSeats} min={1} max={4} onChange={setAddSeats} />}
 
+                {!isBook && addSeats > 1 && (
+                  <div style={{ marginBottom: 12 }}>
+                    {!addNameParty ? (
+                      <button type="button" onClick={() => setAddNameParty(true)}
+                        style={{ fontSize: 12, fontWeight: 600, color: clubInk(colour), background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>
+                        + Name who the other {addSeats - 1 === 1 ? "seat is" : `${addSeats - 1} seats are`} for
+                      </button>
+                    ) : (
+                      <>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>Who else is coming?</span>
+                          <button type="button" onClick={() => { setAddNameParty(false); setAddParty([]) }}
+                            style={{ fontSize: 12, color: "var(--text-dim)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                            Skip naming
+                          </button>
+                        </div>
+                        <PartyPicker count={addSeats - 1} allowGuests={allowGuests} members={allResidents}
+                          excludeIds={selectedResident ? [selectedResident.id] : []}
+                          value={addParty} onChange={setAddParty} />
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {paymentRequired && (
                   <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                     {[{ v: false, label: "Unpaid", colour: "var(--amber-dark)", fill: "var(--amber)" },
@@ -670,9 +725,9 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                   </div>
                 )}
 
-                <button onClick={() => submitAddBooking(false)} disabled={addSubmitting}
+                <button onClick={() => submitAddBooking(false)} disabled={addSubmitting || !addPartyValid}
                   style={{ width: "100%", padding: "10px 0", background: colour, color: clubTextOn(colour), border: "none", borderRadius: 8,
-                    fontSize: 14, fontWeight: 700, cursor: addSubmitting ? "not-allowed" : "pointer", opacity: addSubmitting ? 0.7 : 1 }}>
+                    fontSize: 14, fontWeight: 700, cursor: (addSubmitting || !addPartyValid) ? "not-allowed" : "pointer", opacity: (addSubmitting || !addPartyValid) ? 0.7 : 1 }}>
                   {addSubmitting ? "Adding…" : "Add Booking"}
                 </button>
               </div>
@@ -741,13 +796,17 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                           </span>
                         )}
                       </div>
-                      {(partyByOwner[member?.id] || []).length > 0 && (
-                        <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3, lineHeight: 1.5 }}>
-                          With: {partyByOwner[member?.id].map((p, i) => (
-                            <span key={i}>{i > 0 ? ", " : ""}{p.label}{p.guest ? " (guest)" : ""}</span>
-                          ))}
-                        </div>
-                      )}
+                      {(() => {
+                        const ownerKey = member?.id ? `m:${member.id}` : contact?.id ? `c:${contact.id}` : null
+                        const party = ownerKey ? (partyByOwner[ownerKey] || []) : []
+                        return party.length > 0 && (
+                          <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3, lineHeight: 1.5 }}>
+                            With: {party.map((p, i) => (
+                              <span key={i}>{i > 0 ? ", " : ""}{p.label}{p.guest ? " (guest)" : ""}</span>
+                            ))}
+                          </div>
+                        )
+                      })()}
                     </div>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                       {paymentRequired && confirmedSeats > 0 && firstConf && !isRefunded && (

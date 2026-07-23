@@ -2,6 +2,8 @@ import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { promoteWaitlist } from "@/lib/promoteWaitlist"
 import { notify } from "@/lib/notify"
+import { validateParty } from "@/lib/attendees"
+import { syncAttendees } from "@/lib/syncAttendees"
 
 // force-dynamic + the shared no-store supabaseAdmin (lib/supabaseAdmin.js) keep
 // this GET route reading LIVE data. Without it, Next's fetch cache once dropped a
@@ -317,7 +319,7 @@ export async function PATCH(req) {
   // no account to notify/push, and no book-return history to check against
   // (that guard is member-only, by design -- see below).
   if (action === "add_booking") {
-    const { member_id, contact_id, seats: rawSeats, mark_paid, force_status } = body
+    const { member_id, contact_id, seats: rawSeats, mark_paid, force_status, attendees: rawAttendees } = body
     if (!member_id && !contact_id) return NextResponse.json({ error: "member_id or contact_id required" }, { status: 400 })
     if (member_id && contact_id) return NextResponse.json({ error: "Provide only one of member_id or contact_id" }, { status: 400 })
     const seats = Math.min(4, Math.max(1, parseInt(rawSeats) || 1))
@@ -336,9 +338,26 @@ export async function PATCH(req) {
     }
 
     const { data: ev } = await supa
-      .from("events").select("id, max_seats, hub_type, book_id, payment_required, title")
+      .from("events").select("id, max_seats, hub_type, book_id, payment_required, title, allow_nonresident_guests")
       .eq("id", event_id).single()
     if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
+
+    // Named party for this walk-up booking (2026-07-23), same identity rules
+    // as self-service naming -- a resident (member or contact) or, only if
+    // the event allows it, a guest. Unlike self-service, naming stays
+    // OPTIONAL here: an EC can still book N anonymous seats for someone
+    // (the pre-existing behaviour, e.g. "3 people showed up, not sure of
+    // every name") by simply not sending `attendees` at all. If they DO
+    // send it, it's validated the same way self-service is -- all-or-nothing,
+    // not half-named.
+    let party = { ok: true, attendees: [] }
+    if (rawAttendees !== undefined) {
+      party = validateParty({
+        seats, attendees: rawAttendees, allowGuests: !!ev.allow_nonresident_guests,
+        ownerId: member_id || null, ownerContactId: contact_id || null,
+      })
+      if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
+    }
 
     // Same "still has a Book Club kit checked out" guard as self-book.
     // Contacts have no booking history tied to a login, so this only applies
@@ -386,6 +405,10 @@ export async function PATCH(req) {
       booked_at: new Date().toISOString(), payment_status,
     })
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
+
+    if (rawAttendees !== undefined) {
+      await syncAttendees(event_id, { ownerId: member_id || null, ownerContactId: contact_id || null }, party.attendees)
+    }
 
     // No account to notify/push for a contact-owned booking.
     if (member_id) {
