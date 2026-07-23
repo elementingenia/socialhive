@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyAllActiveMembers } from '@/lib/notifyAudience'
+import { needsSpaceValidation, findSpaceConflict, spaceConflictMessage, resolveLocationId } from '@/lib/eventClash'
 
 
 async function getAdminMember(req) {
@@ -33,7 +34,7 @@ async function writeCoordinators(eventId, coordinatorIds, actorId) {
 
 function buildEventPayload(body, isInsert = false) {
   const {
-    title, event_date, event_time, description, welcome_message,
+    title, event_date, event_time, event_end_time, description, welcome_message,
     max_seats, max_seats_per_booking, cost, payment_required,
     show_attendee_names, is_public, has_bus, bus_driver_id,
     location_type, location, has_dining, menu_type, menu_text, reservation_cutoff, payment_due_by, allow_nonresident_guests,
@@ -47,6 +48,7 @@ function buildEventPayload(body, isInsert = false) {
     title:                title.trim(),
     event_date,
     event_time:            event_time        || null,
+    event_end_time:        event_end_time    || null,
     description:           description       || null,
     welcome_message:       welcome_message   || null,
     max_seats:             Number(max_seats)              || 20,
@@ -71,6 +73,23 @@ function buildEventPayload(body, isInsert = false) {
   }
 }
 
+// Event Clash / Space Booking (2026-07-23): validate end time + run the
+// space-conflict hard block for onsite events in a real common space (not
+// "Resident's Home"). Returns { error, status } on failure, or { location_id }
+// with the resolved FK to stamp onto the row (empty object = N/A -- off-site
+// or Resident's Home, no end time/location_id needed).
+async function validateSpace(payload, excludeEventId) {
+  if (!needsSpaceValidation({ location_type: payload.location_type, locationName: payload.location })) return {}
+  if (!payload.event_end_time) return { error: 'An end time is required for events in a common space', status: 400 }
+  const location_id = await resolveLocationId(supabaseAdmin, payload.location)
+  const conflict = await findSpaceConflict(supabaseAdmin, {
+    location_id, event_date: payload.event_date, event_time: payload.event_time,
+    event_end_time: payload.event_end_time, exclude_event_id: excludeEventId,
+  })
+  if (conflict) return { error: spaceConflictMessage(payload.location, conflict), status: 409 }
+  return { location_id }
+}
+
 export async function POST(req) {
   const member = await getAdminMember(req)
   if (!member) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
@@ -81,9 +100,14 @@ export async function POST(req) {
   if (!body.coordinator_ids?.length)
     return NextResponse.json({ error: 'At least one Event Coordinator is required' }, { status: 400 })
 
+  const payload = buildEventPayload(body, true)
+  const space = await validateSpace(payload)
+  if (space.error) return NextResponse.json({ error: space.error }, { status: space.status })
+  payload.location_id = space.location_id || null
+
   const { data: event, error } = await supabaseAdmin
     .from('events')
-    .insert(buildEventPayload(body, true))
+    .insert(payload)
     .select('id')
     .single()
 
@@ -111,12 +135,17 @@ export async function PATCH(req) {
   if (!body.coordinator_ids?.length)
     return NextResponse.json({ error: 'At least one Event Coordinator is required' }, { status: 400 })
 
+  const payload = buildEventPayload(body)
+  const space = await validateSpace(payload, body.id)
+  if (space.error) return NextResponse.json({ error: space.error }, { status: space.status })
+  payload.location_id = space.location_id || null
+
   const { data: before } = await supabaseAdmin
     .from('events').select('event_date, event_time, location').eq('id', body.id).single()
 
   const { error } = await supabaseAdmin
     .from('events')
-    .update(buildEventPayload(body))
+    .update(payload)
     .eq('id', body.id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

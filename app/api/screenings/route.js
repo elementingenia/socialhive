@@ -2,6 +2,14 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyHubFollowers } from '@/lib/notifyAudience'
+import { findSpaceConflict, spaceConflictMessage, resolveLocationId } from '@/lib/eventClash'
+
+// Movie screenings always run in the one dedicated common space -- there's no
+// location picker in the screening form, so every screening is auto-bound to
+// the "Cinema" location (Iain, 2026-07-23) and must carry an end time, same as
+// any other onsite event, so space-use management works consistently across
+// all three hubs.
+const CINEMA_NAME = "Cinema"
 
 // force-dynamic + the shared no-store supabaseAdmin (lib/supabaseAdmin.js) keep
 // this GET route reading LIVE data. Without it, Next's fetch cache once dropped a
@@ -170,9 +178,12 @@ export async function POST(req) {
   const member = await getMember(token)
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const { movie_id, event_date, event_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests } = await req.json()
+  const { movie_id, event_date, event_time, event_end_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests } = await req.json()
   if (!event_date || !event_time) {
     return NextResponse.json({ error: 'Date and time are required' }, { status: 400 })
+  }
+  if (!event_end_time) {
+    return NextResponse.json({ error: 'An end time is required -- every screening books the Cinema as a common space.' }, { status: 400 })
   }
 
   let title = 'Movie Night'
@@ -186,15 +197,20 @@ export async function POST(req) {
     }
   }
 
+  const location_id = await resolveLocationId(supabaseAdmin, CINEMA_NAME)
+  const conflict = await findSpaceConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time })
+  if (conflict) return NextResponse.json({ error: spaceConflictMessage(CINEMA_NAME, conflict) }, { status: 409 })
+
   const { data: event, error } = await supabaseAdmin
     .from('events')
     .insert({
       hub_type: 'movie', title, movie_id: movie_id || null,
-      event_date, event_time, max_seats: max_seats || 20,
+      event_date, event_time, event_end_time, max_seats: max_seats || 20,
       reservation_cutoff: reservation_cutoff || null,
       allow_nonresident_guests: !!allow_nonresident_guests,
       notes: notes || null, created_by: member.id,
       movie_snapshot: movieSnapshot,
+      location_type: 'onsite', location: CINEMA_NAME, location_id,
     })
     .select().single()
 
@@ -220,9 +236,10 @@ export async function PATCH(req) {
   const member = await getMember(token)
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const { event_id, movie_id, event_date, event_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests } = await req.json()
+  const { event_id, movie_id, event_date, event_time, event_end_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests } = await req.json()
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
   if (!event_date || !event_time) return NextResponse.json({ error: 'Date and time are required' }, { status: 400 })
+  if (!event_end_time) return NextResponse.json({ error: 'An end time is required -- every screening books the Cinema as a common space.' }, { status: 400 })
 
   let title = 'Movie Night'
   let movieSnapshot = null
@@ -235,12 +252,16 @@ export async function PATCH(req) {
     }
   }
 
+  const location_id = await resolveLocationId(supabaseAdmin, CINEMA_NAME)
+  const conflict = await findSpaceConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time, exclude_event_id: event_id })
+  if (conflict) return NextResponse.json({ error: spaceConflictMessage(CINEMA_NAME, conflict) }, { status: 409 })
+
   const { data: before } = await supabaseAdmin
     .from('events').select('event_date, event_time').eq('id', event_id).single()
 
   const { error } = await supabaseAdmin
     .from('events')
-    .update({ movie_id: movie_id || null, title, event_date, event_time, max_seats: max_seats || 20, notes: notes || null, movie_snapshot: movieSnapshot, reservation_cutoff: reservation_cutoff || null, allow_nonresident_guests: !!allow_nonresident_guests })
+    .update({ movie_id: movie_id || null, title, event_date, event_time, event_end_time, max_seats: max_seats || 20, notes: notes || null, movie_snapshot: movieSnapshot, reservation_cutoff: reservation_cutoff || null, allow_nonresident_guests: !!allow_nonresident_guests, location_type: 'onsite', location: CINEMA_NAME, location_id })
     .eq('id', event_id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

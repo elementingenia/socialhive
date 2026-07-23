@@ -7,6 +7,8 @@ import EventSlideOut from '@/components/EventSlideOut'
 import { BusIcon } from '@/components/NavIcons'
 import { authedFetch } from '@/lib/getAuthToken'
 import { cutoffToInputValue, cutoffFromInputValue } from '@/lib/booking'
+import TimeField from '@/components/TimeField'
+import { useSameDateWarning } from '@/components/SameDateWarning'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -129,6 +131,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const movieRef                      = useRef(null)
   const [date, setDate]               = useState(event?.event_date || '')
   const [time, setTime]               = useState(event?.event_time?.slice(0, 5) || '18:00')
+  const [endTime, setEndTime]         = useState(event?.event_end_time?.slice(0, 5) || '20:00')
   const [maxSeats, setMaxSeats]       = useState(event?.max_seats || 20)
   const [notes, setNotes]             = useState(event?.notes || '')
   const [cutoff, setCutoff]           = useState(cutoffToInputValue(event?.reservation_cutoff))
@@ -136,6 +139,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [coordinator, setCoordinator] = useState(event?.coordinator?.id || null)
   const [saving, setSaving]           = useState(false)
   const [err, setErr]                 = useState(null)
+  const { ask: askSameDate, Modal: SameDateModal } = useSameDateWarning()
   const [open, setOpen]               = useState(false)
 
   useEffect(() => {
@@ -161,8 +165,30 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
 
   async function handleSubmit() {
     if (!date || !time) { setErr('Date and time are required'); return }
+    if (!endTime) { setErr('An end time is required -- every screening books the Cinema as a common space'); return }
+
+    // Space hard block (B) checked FIRST -- if the Cinema is unavailable
+    // that's the only message, never a soft warning clicked through just to
+    // get rejected on save. Same-date soft warning (A) only shows when
+    // there's no hard conflict. Every screening books the fixed 'Cinema'
+    // location (app/api/screenings/route.js's CINEMA_NAME), so that's what's
+    // sent here even though there's no location picker in this form.
+    try {
+      const pre = await authedFetch('/api/events/precheck', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_date: date, event_time: time, event_end_time: endTime,
+          location_type: 'onsite', location_name: 'Cinema', exclude_event_id: isEdit ? event.id : null,
+        }),
+      }).then(r => r.json()).catch(() => ({}))
+      if (pre.spaceConflict) { setErr(pre.spaceConflict.message); return }
+      if (pre.sameDateEvents?.length) {
+        if (!(await askSameDate(pre.sameDateEvents))) return
+      }
+    } catch {}
+
     setSaving(true); setErr(null)
-    const body = { movie_id: pickedMovie?.id || null, event_date: date, event_time: time, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: allowGuests }
+    const body = { movie_id: pickedMovie?.id || null, event_date: date, event_time: time, event_end_time: endTime, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: allowGuests }
     if (isEdit) body.event_id = event.id
     const res = await authedFetch('/api/screenings', {
       method: isEdit ? 'PATCH' : 'POST',
@@ -181,6 +207,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
 
   return (
     <>
+      {SameDateModal}
       <div onClick={handleClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, opacity: open ? 1 : 0, transition: 'opacity 0.25s' }} />
       <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(420px, 100%)', background: 'var(--surface)', zIndex: 201, overflowY: 'auto', transform: open ? 'translateX(0)' : 'translateX(100%)', transition: 'transform 0.28s cubic-bezier(0.4,0,0.2,1)', boxShadow: '-8px 0 32px rgba(0,0,0,0.15)', paddingBottom: 32 }}>
         <div style={{ height: 4, background: 'var(--teal)' }} />
@@ -240,8 +267,12 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
           </div>
           <div style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Time <span style={{ color: 'var(--danger)' }}>*</span></label>
-            <input type="time" value={time} onChange={e => setTime(e.target.value)}
-              style={{ ...INPUT, border: `1.5px solid ${time ? 'var(--green)' : 'var(--danger)'}` }} />
+            <TimeField value={time} onChange={setTime} colour={time ? 'var(--green)' : 'var(--danger)'} />
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={LABEL}>Ends <span style={{ color: 'var(--danger)' }}>*</span></label>
+            <TimeField value={endTime} onChange={setEndTime} colour={endTime ? 'var(--green)' : 'var(--danger)'} />
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.3rem' }}>Every screening books the Cinema as a common space, so an end time keeps it from double-booking.</div>
           </div>
           <div style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Max Seats</label>
