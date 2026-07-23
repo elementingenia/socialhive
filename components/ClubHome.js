@@ -94,24 +94,29 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
   async function loadAttendees() {
     const { data } = await supabase
       .from("bookings")
-      .select("id, seats, has_book, book_given_at, name_hidden, bring_note, members(id, name, username, hide_name), bring:club_bring_categories!bring_category_id(label)")
+      .select("id, seats, has_book, book_given_at, name_hidden, bring_note, members(id, name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
       .eq("event_id", event.id)
       .eq("status", "confirmed")
     // Named additional attendees (the party), grouped by the booker.
     const { data: partyRows } = await supabase
       .from("booking_attendees")
-      .select("owner_id, member_id, guest_name, bring_note, member:members!member_id(name, hide_name), bring:club_bring_categories!bring_category_id(label)")
+      .select("owner_id, member_id, contact_id, guest_name, bring_note, member:members!member_id(name, hide_name), contact:contacts!contact_id(name), bring:club_bring_categories!bring_category_id(label)")
       .eq("event_id", event.id)
     const partyByOwner = {}
     for (const p of partyRows || []) (partyByOwner[p.owner_id] = partyByOwner[p.owner_id] || []).push(p)
     // Own row always pinned to the top — consistent with every other attendee
     // list (Movies/Social inline lists, EventSlideOut's Coordinator View).
+    // Contacts (residents with no app login) have no hide_name concept, so
+    // their name is never masked. 2026-07-23 (Iain): the booking owner
+    // always sees their own party's real names regardless of privacy —
+    // that's the `!isOwn` bypass added below, matching the same fix in
+    // Social and Movies.
     setAttendees((data || []).map(b => {
       const isOwn     = b.members?.id === member?.id
       const isPrivate = !!(b.members?.hide_name || b.name_hidden)
       return {
         id: b.id,
-        name: isOwn ? "You" : (isPrivate && !canManageBooks) ? "Resident" : (b.members?.name || b.members?.username || "Member"),
+        name: isOwn ? "You" : (isPrivate && !canManageBooks) ? "Resident" : (b.members?.name || b.members?.username || b.contacts?.name || "Member"),
         isOwn,
         isPrivate,
         seats: b.seats || 1,
@@ -123,7 +128,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
           const gPriv = !!p.member?.hide_name
           const gOwn  = p.member_id && p.member_id === member?.id
           return {
-            name: gOwn ? "You" : p.guest_name ? p.guest_name : (gPriv && !canManageBooks) ? "Resident" : (p.member?.name || "Resident"),
+            name: gOwn ? "You" : p.guest_name ? p.guest_name : p.contact_id ? (p.contact?.name || "Resident") : (gPriv && !canManageBooks && !isOwn) ? "Resident" : (p.member?.name || "Resident"),
             guest: !!p.guest_name,
             bring: p.bring?.label || null,
             bringNote: p.bring_note || null,

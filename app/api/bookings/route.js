@@ -21,7 +21,7 @@ async function syncAttendees(eventId, ownerId, attendees) {
   await supabaseAdmin.from('booking_attendees').delete().eq('event_id', eventId).eq('owner_id', ownerId)
   if (attendees && attendees.length) {
     await supabaseAdmin.from('booking_attendees').insert(
-      attendees.map(a => ({ event_id: eventId, owner_id: ownerId, member_id: a.member_id, guest_name: a.guest_name,
+      attendees.map(a => ({ event_id: eventId, owner_id: ownerId, member_id: a.member_id, contact_id: a.contact_id || null, guest_name: a.guest_name,
         bring_category_id: a.bring_category_id || null, bring_note: a.bring_note || null }))
     )
   }

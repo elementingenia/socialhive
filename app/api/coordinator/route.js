@@ -52,7 +52,7 @@ export async function GET(req) {
   // Fetch active bookings for the event
   const { data: activeBookings, error: be } = await supa
     .from("bookings")
-    .select("id, seats, status, payment_status, has_book, book_given_at, name_hidden, booked_at, bring_note, members(id, name, username, hide_name), bring:club_bring_categories!bring_category_id(label)")
+    .select("id, seats, status, payment_status, has_book, book_given_at, name_hidden, booked_at, bring_note, member_id, contact_id, members(id, name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
     .eq("event_id", eventId)
     .neq("status", "cancelled")
     .order("booked_at")
@@ -62,7 +62,7 @@ export async function GET(req) {
   // Also fetch cancelled bookings that have payment info (refund pending or issued)
   const { data: cancelledPayments } = await supa
     .from("bookings")
-    .select("id, seats, status, payment_status, has_book, book_given_at, name_hidden, booked_at, bring_note, members(id, name, username, hide_name), bring:club_bring_categories!bring_category_id(label)")
+    .select("id, seats, status, payment_status, has_book, book_given_at, name_hidden, booked_at, bring_note, member_id, contact_id, members(id, name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
     .eq("event_id", eventId)
     .eq("status", "cancelled")
     .in("payment_status", ["confirmed", "refunded"])
@@ -73,7 +73,7 @@ export async function GET(req) {
   // the EC/admin attendee list rather than silently disappearing.
   const { data: cancelledWithBook } = await supa
     .from("bookings")
-    .select("id, seats, status, payment_status, has_book, book_given_at, name_hidden, booked_at, bring_note, members(id, name, username, hide_name), bring:club_bring_categories!bring_category_id(label)")
+    .select("id, seats, status, payment_status, has_book, book_given_at, name_hidden, booked_at, bring_note, member_id, contact_id, members(id, name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
     .eq("event_id", eventId)
     .eq("status", "cancelled")
     .eq("has_book", true)
@@ -299,7 +299,8 @@ export async function PATCH(req) {
     return NextResponse.json({ ok: true })
   }
 
-  // ── Add a walk-up booking on behalf of a resident (2026-07-13) ──────────────
+  // ── Add a walk-up booking on behalf of a resident (2026-07-13; extended
+  // 2026-07-23 for residents with no app login) ───────────────────────────
   // For residents who don't use the app and turn up in person (often with
   // cash) asking to join. EC/admin picks the resident via live search in the
   // shared CoordinatorPanel (components/EventSlideOut.js) rather than the
@@ -309,14 +310,30 @@ export async function PATCH(req) {
   // returns `insufficient_capacity` and the caller must explicitly resubmit
   // with force_status: "waitlist" (simpler and more predictable for a manual
   // admin action than mirroring the resident-facing split-offer dialog).
+  //
+  // The target resident is either a `members` row (member_id, has an app
+  // account) or a `contacts` row (contact_id, no login -- e.g. added via
+  // Info > Contacts). Exactly one must be given. A contact-owned booking has
+  // no account to notify/push, and no book-return history to check against
+  // (that guard is member-only, by design -- see below).
   if (action === "add_booking") {
-    const { member_id, seats: rawSeats, mark_paid, force_status } = body
-    if (!member_id) return NextResponse.json({ error: "member_id required" }, { status: 400 })
+    const { member_id, contact_id, seats: rawSeats, mark_paid, force_status } = body
+    if (!member_id && !contact_id) return NextResponse.json({ error: "member_id or contact_id required" }, { status: 400 })
+    if (member_id && contact_id) return NextResponse.json({ error: "Provide only one of member_id or contact_id" }, { status: 400 })
     const seats = Math.min(4, Math.max(1, parseInt(rawSeats) || 1))
 
-    const { data: targetMember } = await supa
-      .from("members").select("id, name").eq("id", member_id).maybeSingle()
-    if (!targetMember) return NextResponse.json({ error: "Resident not found" }, { status: 404 })
+    let targetName
+    if (member_id) {
+      const { data: targetMember } = await supa
+        .from("members").select("id, name").eq("id", member_id).maybeSingle()
+      if (!targetMember) return NextResponse.json({ error: "Resident not found" }, { status: 404 })
+      targetName = targetMember.name
+    } else {
+      const { data: targetContact } = await supa
+        .from("contacts").select("id, name").eq("id", contact_id).eq("active", true).maybeSingle()
+      if (!targetContact) return NextResponse.json({ error: "Resident not found" }, { status: 404 })
+      targetName = targetContact.name
+    }
 
     const { data: ev } = await supa
       .from("events").select("id, max_seats, hub_type, book_id, payment_required, title")
@@ -324,7 +341,9 @@ export async function PATCH(req) {
     if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
 
     // Same "still has a Book Club kit checked out" guard as self-book.
-    if (ev.hub_type === "bookclub" && ev.book_id) {
+    // Contacts have no booking history tied to a login, so this only applies
+    // to member_id bookings.
+    if (member_id && ev.hub_type === "bookclub" && ev.book_id) {
       const { data: outstandingRows } = await supa
         .from("bookings")
         .select("id, book_given_at, events(book_id, title, books(title))")
@@ -334,16 +353,17 @@ export async function PATCH(req) {
       if (outstanding?.events?.book_id && outstanding.events.book_id !== ev.book_id) {
         const title = outstanding.events.books?.title || outstanding.events.title || "a book"
         return NextResponse.json({
-          error: `${targetMember.name} still has "${title}" checked out — return it before joining a different book.`,
+          error: `${targetName} still has "${title}" checked out — return it before joining a different book.`,
         }, { status: 409 })
       }
     }
 
-    const { data: existingActive } = await supa
-      .from("bookings").select("id")
-      .eq("event_id", event_id).eq("member_id", member_id).neq("status", "cancelled").maybeSingle()
+    let existingQuery = supa.from("bookings").select("id")
+      .eq("event_id", event_id).neq("status", "cancelled")
+    existingQuery = member_id ? existingQuery.eq("member_id", member_id) : existingQuery.eq("contact_id", contact_id)
+    const { data: existingActive } = await existingQuery.maybeSingle()
     if (existingActive) {
-      return NextResponse.json({ error: `${targetMember.name} already has a booking for this event` }, { status: 409 })
+      return NextResponse.json({ error: `${targetName} already has a booking for this event` }, { status: 409 })
     }
 
     const { data: allBookings } = await supa
@@ -362,13 +382,16 @@ export async function PATCH(req) {
       : "pending"
 
     const { error: insErr } = await supa.from("bookings").insert({
-      event_id, member_id, seats, status: bookingStatus,
+      event_id, member_id: member_id || null, contact_id: contact_id || null, seats, status: bookingStatus,
       booked_at: new Date().toISOString(), payment_status,
     })
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
 
-    await notify(member_id, event_id, "booking_added",
-      `You were added to ${ev.title || "an event"} (${seats} seat${seats !== 1 ? "s" : ""}) by an Event Coordinator.`)
+    // No account to notify/push for a contact-owned booking.
+    if (member_id) {
+      await notify(member_id, event_id, "booking_added",
+        `You were added to ${ev.title || "an event"} (${seats} seat${seats !== 1 ? "s" : ""}) by an Event Coordinator.`)
+    }
 
     return NextResponse.json({ ok: true, status: bookingStatus })
   }
