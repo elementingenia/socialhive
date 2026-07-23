@@ -1389,13 +1389,16 @@ function BookingSection({ event, onRefresh, onClose }) {
               const totalCost = seatsCost(event, seats)
               const badge = bookingStatusBadge(myConfirmed, event)
               const statusWord = badge.label.toLowerCase() // "booked" or "confirmed" — canonical, see lib/payments.js
+              const submitted = event.payment_required && badge.label !== "Confirmed" && computeIsSubmitted(myConfirmed)
               const label = event.payment_required
                 ? (badge.label === "Confirmed"
                     ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Paid${totalCost ? " " + totalCost : ""}`
-                    : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid${totalCost ? " " + totalCost : ""}`)
+                    : submitted
+                      ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${totalCost ? " " + totalCost : ""}`
+                      : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid${totalCost ? " " + totalCost : ""}`)
                 : `✓ ${seats} seat${seats !== 1 ? "s" : ""} confirmed`
               const colour = event.payment_required
-                ? (badge.label === "Confirmed" ? "var(--green)" : "#d97706")
+                ? (badge.label === "Confirmed" ? "var(--green)" : submitted ? "#0f766e" : "#d97706")
                 : "var(--green)"
               return <StatusPill label={label} colour={colour} />
             })()}
