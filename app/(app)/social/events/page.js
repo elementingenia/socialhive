@@ -12,6 +12,8 @@ import ExpandableText from "@/components/ExpandableText"
 import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, paymentSummary, reconciliationIsStale } from "@/lib/payments"
 import { cutoffToInputValue, cutoffFromInputValue } from "@/lib/booking"
 import { useLocations } from "@/lib/useLocations"
+import TimeField from "@/components/TimeField"
+import { needsSpaceValidation } from "@/lib/eventClash"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -470,6 +472,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     title:                 event?.title               || "",
     event_date:            event?.event_date          || "",
     event_time:            event?.event_time ? fmtTime24(event.event_time) : "",
+    event_end_time:        event?.event_end_time ? fmtTime24(event.event_end_time) : "",
     description:           event?.description         || "",
     welcome_message:       event?.welcome_message     || "",
     max_seats:             event?.max_seats           ?? 20,
@@ -523,6 +526,23 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     if (!form.title.trim())    { setError("Title is required"); return }
     if (!form.event_date)      { setError("Date is required");  return }
     if (!coordinators.length)  { setEcError("At least one coordinator is required"); return }
+    if (needsSpaceValidation({ location_type: form.location_type, locationName: form.location }) && !form.event_end_time) {
+      setError("An end time is required for events in a common space"); return
+    }
+
+    // Same-date soft warning (A) -- global, dismissible, never blocks. The
+    // space-clash hard block (B) is enforced server-side on /api/social
+    // regardless of this pre-check.
+    try {
+      const pre = await fetch("/api/events/precheck", {
+        method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (await getAuthToken()) },
+        body: JSON.stringify({ event_date: form.event_date, exclude_event_id: activeId || null }),
+      }).then(r => r.json()).catch(() => ({}))
+      if (pre.sameDateEvents?.length) {
+        const names = pre.sameDateEvents.map(e => e.title).join(", ")
+        if (!confirm(`There's already an event on this date: ${names}. Continue anyway?`)) return
+      }
+    } catch {}
 
     setSaving(true)
     const payload = {
@@ -636,8 +656,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
             </div>
             <div>
               <label style={LABEL}>Time</label>
-              <input type="time" value={form.event_time}
-                onChange={e => set("event_time", e.target.value)} style={INPUT} />
+              <TimeField value={form.event_time} onChange={v => set("event_time", v)} />
             </div>
           </div>
 
@@ -648,6 +667,17 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
             onTypeChange={v => set("location_type", v)}
             onLocationChange={v => set("location", v)}
           />
+
+          {/* End time -- required for onsite events in a real common space (not
+              "Resident's Home"), needed to keep the space-clash check working
+              (Iain, 2026-07-23). */}
+          {needsSpaceValidation({ location_type: form.location_type, locationName: form.location }) && (
+            <div style={FIELD}>
+              <label style={LABEL}>Ends {"*"}</label>
+              <TimeField value={form.event_end_time} onChange={v => set("event_end_time", v)} />
+              <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>Lets the app stop this space being double-booked by another event.</div>
+            </div>
+          )}
 
           {/* Description */}
           <div style={FIELD}>

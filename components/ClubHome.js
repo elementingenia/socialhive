@@ -15,6 +15,8 @@ import { nextOccurrence } from "@/lib/recurrence"
 import EventImagePicker from "@/components/EventImagePicker"
 import { useLocations } from "@/lib/useLocations"
 import { cutoffToDateValue, cutoffFromDateValue } from "@/lib/booking"
+import TimeField from "@/components/TimeField"
+import { needsSpaceValidation } from "@/lib/eventClash"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -696,44 +698,6 @@ function CoordPicker({ members, value, onChange, valid = false, colour = "var(--
 }
 
 // ── Hour picker — hour + AM/PM only (no minutes; Iain 2026-07-17) ────────────
-function HourPicker({ value, onChange, colour, inputStyle }) {
-  const [hhRaw, mmRaw] = (value || "09:00").split(":")
-  const h24  = parseInt(hhRaw, 10) || 0
-  const mins = parseInt(mmRaw, 10) >= 30 ? 30 : 0
-  const isPM = h24 >= 12
-  const h12  = h24 % 12 === 0 ? 12 : h24 % 12
-  const emit = (newH12, pm, m = mins) => {
-    let h = newH12 % 12
-    if (pm) h += 12
-    onChange(String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0"))
-  }
-  return (
-    <div style={{ display: "flex", gap: 8 }}>
-      <select value={h12} onChange={e => emit(parseInt(e.target.value, 10), isPM)}
-        style={{ ...inputStyle, flex: 1, cursor: "pointer" }}>
-        {Array.from({ length: 12 }, (_, i) => i + 1).map(h => <option key={h} value={h}>{h}</option>)}
-      </select>
-      <select value={mins} onChange={e => emit(h12, isPM, parseInt(e.target.value, 10))}
-        style={{ ...inputStyle, flex: 1, cursor: "pointer" }}>
-        <option value={0}>00</option>
-        <option value={30}>30</option>
-      </select>
-      <div style={{ display: "flex", gap: 6 }}>
-        {["AM", "PM"].map(l => {
-          const on = (l === "PM") === isPM
-          return (
-            <button key={l} type="button" onClick={() => emit(h12, l === "PM")}
-              style={{ padding: "0 1rem", borderRadius: 10, fontFamily: "inherit", cursor: "pointer",
-                fontWeight: on ? 700 : 500,
-                border: `1.5px solid ${on ? colour : "var(--border)"}`,
-                background: on ? colour : "var(--surface)", color: on ? "#fff" : "var(--text)" }}>{l}</button>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 // ── Bring-a-dish: pick which of the club's categories apply to THIS event ────
 // The club defines the full list; each event chooses which are allowed, and an
 // attendee booking only sees the allowed ones (Iain 2026-07-18).
@@ -816,6 +780,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   const [form,   setForm]   = useState({
     event_date:   event?.event_date || todayStr,
     event_time:   (event?.event_time || nowHour).slice(0, 5),
+    event_end_time: event?.event_end_time ? event.event_end_time.slice(0, 5) : "",
     kit_return_date: event?.kit_return_date || "",
     book_return_date: event?.book_return_date || "",
     reservation_cutoff: cutoffToDateValue(event?.reservation_cutoff),
@@ -953,10 +918,10 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     }
 
     const payload = {
-      hub_type:        "club",
       club_id:         club.id,
       event_date:      form.event_date,
       event_time:      form.event_time || "00:00",
+      event_end_time:  form.event_end_time || null,
       title:           form.title.trim() || selectedBook?.title || club?.name || "Club Event",
       is_public:       form.is_public !== false,
       show_attendee_names: form.show_attendee_names !== false,
@@ -976,76 +941,62 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       payment_due_by:  caps.hasCost && form.payment_required ? (form.payment_due_by || null) : null,
       bring_category_ids: caps.bringEnabled ? (form.bring_category_ids || null) : null,
       theme_name:      caps.hasTheme ? (form.theme_name.trim() || null) : null,
-      archived:        false,
       book_snapshot:   selectedBook ? {
         title:     selectedBook.title,
         author:    selectedBook.author,
         cover_url: selectedBook.cover_url,
       } : null,
+      coordinator_ids: form.coordinator_ids || [],
     }
 
+    if (needsSpaceValidation({ location_type: payload.location_type, locationName: payload.location }) && !payload.event_end_time) {
+      setSaveError("An end time is required for events in a common space."); setSaving(false); return
+    }
+
+    // Same-date soft warning (A) -- global across every hub, dismissible,
+    // never blocks (locked decision, §5). The space-clash hard block (B) is
+    // enforced server-side on the actual save below regardless of this.
+    try {
+      const precheckToken = await getToken()
+      const pre = await fetch("/api/events/precheck", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${precheckToken}` },
+        body: JSON.stringify({ event_date: payload.event_date, exclude_event_id: event?.id || null }),
+      }).then(r => r.json()).catch(() => ({}))
+      if (pre.sameDateEvents?.length) {
+        const names = pre.sameDateEvents.map(e => e.title).join(", ")
+        if (!confirm(`There's already an event on this date: ${names}. Continue anyway?`)) { setSaving(false); return }
+      }
+    } catch {}
+
+    // Event create/edit now goes through a service-role route (2026-07-23) so
+    // the space-clash check is authoritative -- see app/api/clubs/events. Book
+    // upsert above stays client-side; only the events row + coordinators +
+    // notifications + series-scope propagation move server-side.
     let eventId = event?.id
+    const token = await getToken()
     if (eventId) {
-      const detailsChanged = event?.event_date !== payload.event_date
-        || (event?.event_time || null) !== (payload.event_time || null)
-        || (event?.location || null) !== (payload.location || null)
-      const { error: evErr } = await supabase.from("events").update(payload).eq("id", eventId)
-      if (evErr) { setSaveError("Could not update event: " + evErr.message); setSaving(false); return }
-      // Recurring-series edit scope (§6). "This event only" marks it an exception
-      // so future template edits skip it; "This and future" propagates to later
-      // unbooked, non-exception occurrences via the series route.
-      if (event?.series_id) {
-        if (seriesScope === "future") {
-          try {
-            const token = await getToken()
-            const PROP = ["title","description","welcome_message","event_time","location_type","location","max_seats","max_seats_per_booking","allow_nonresident_guests","payment_required","cost","bring_category_ids","theme_name","is_public","show_attendee_names"]
-            const fields = {}; for (const k of PROP) fields[k] = payload[k]
-            await fetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ action: "update_future", series_id: event.series_id, event_id: event.id, from_date: payload.event_date, ...fields }) })
-            if (recurChanged()) {
-              await fetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ action: "change_recurrence", series_id: event.series_id,
-                  rule_type: recur.rule_type, rule_config: recur.rule_config, month_end_policy: recur.month_end_policy, horizon_months: recur.horizon_months }) })
-            }
-          } catch (e) { /* the single edit already saved; propagation is best-effort */ }
-        } else {
-          await supabase.from("events").update({ is_series_exception: true }).eq("id", eventId)
-        }
-      }
-      if (detailsChanged) {
-        const token = await getToken()
-        fetch("/api/bookclub/notify-updated", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ event_id: eventId, title: payload.title }),
-        }).catch(() => {})
-      }
+      const res = await fetch("/api/clubs/events", {
+        method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          event_id: eventId, series_scope: seriesScope,
+          recur_changed: !!event?.series_id && recurChanged(),
+          recur: (event?.series_id && recurChanged()) ? {
+            rule_type: recur.rule_type, rule_config: recur.rule_config,
+            month_end_policy: recur.month_end_policy, horizon_months: recur.horizon_months,
+          } : null,
+          ...payload,
+        }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setSaveError(d.error || "Could not update event."); setSaving(false); return }
     } else {
-      const { data, error: evErr } = await supabase.from("events").insert(payload).select("id").single()
-      if (evErr) { setSaveError("Could not create event: " + evErr.message); setSaving(false); return }
-      eventId = data?.id
-      // Tell the club's joined members about the new event (server-side fan-out).
-      try {
-        const token = await getToken()
-        fetch("/api/clubs/event-added", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ club_id: club.id, event_id: eventId, title: payload.title, event_date: payload.event_date }),
-        }).catch(() => {})
-      } catch {}
-    }
-
-    // Save coordinators (up to 3 ECs). Replace the whole active set with the
-    // chosen list so removals and additions both take effect.
-    if (form.coordinator_ids?.length && eventId) {
-      await supabase
-        .from("event_coordinators")
-        .update({ replaced_at: new Date().toISOString() })
-        .eq("event_id", eventId)
-        .is("replaced_at", null)
-
-      await supabase.from("event_coordinators")
-        .insert(form.coordinator_ids.map(id => ({ event_id: eventId, member_id: id })))
+      const res = await fetch("/api/clubs/events", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setSaveError(d.error || "Could not create event."); setSaving(false); return }
+      eventId = d.id
     }
 
     // Persist the meeting pattern for content-defined clubs so it pre-fills next
@@ -1128,7 +1079,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
 
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Start Time</label>
-        <HourPicker value={form.event_time} onChange={v => set("event_time", v)} colour={colour} inputStyle={inputStyle} />
+        <TimeField value={form.event_time} onChange={v => set("event_time", v)} colour={colour} />
       </div>
 
       {!event && (
@@ -1162,6 +1113,14 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             placeholder="Enter venue name and address…" style={{ ...inputStyle, resize: "vertical" }} />
         )}
       </div>
+
+      {needsSpaceValidation({ location_type: form.location_type, locationName: form.location }) && (
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelStyle}>Ends <span style={{ color: "var(--danger)" }}>*</span></label>
+          <TimeField value={form.event_end_time} onChange={v => set("event_end_time", v)} colour={form.event_end_time ? "var(--green)" : "var(--danger)"} />
+          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 4 }}>Lets the app stop this space being double-booked by another event.</div>
+        </div>
+      )}
 
       <div style={{ marginBottom: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <div>

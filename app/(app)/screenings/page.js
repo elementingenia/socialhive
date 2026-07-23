@@ -7,6 +7,7 @@ import EventSlideOut from '@/components/EventSlideOut'
 import { BusIcon } from '@/components/NavIcons'
 import { authedFetch } from '@/lib/getAuthToken'
 import { cutoffToInputValue, cutoffFromInputValue } from '@/lib/booking'
+import TimeField from '@/components/TimeField'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -129,6 +130,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const movieRef                      = useRef(null)
   const [date, setDate]               = useState(event?.event_date || '')
   const [time, setTime]               = useState(event?.event_time?.slice(0, 5) || '18:00')
+  const [endTime, setEndTime]         = useState(event?.event_end_time?.slice(0, 5) || '20:00')
   const [maxSeats, setMaxSeats]       = useState(event?.max_seats || 20)
   const [notes, setNotes]             = useState(event?.notes || '')
   const [cutoff, setCutoff]           = useState(cutoffToInputValue(event?.reservation_cutoff))
@@ -161,8 +163,24 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
 
   async function handleSubmit() {
     if (!date || !time) { setErr('Date and time are required'); return }
+    if (!endTime) { setErr('An end time is required -- every screening books the Cinema as a common space'); return }
+
+    // Same-date soft warning (A) -- global, dismissible, never blocks. The
+    // space-clash hard block (B) is enforced server-side on /api/screenings
+    // regardless of this pre-check.
+    try {
+      const pre = await authedFetch('/api/events/precheck', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_date: date, exclude_event_id: isEdit ? event.id : null }),
+      }).then(r => r.json()).catch(() => ({}))
+      if (pre.sameDateEvents?.length) {
+        const names = pre.sameDateEvents.map(e => e.title).join(', ')
+        if (!confirm(`There's already an event on this date: ${names}. Continue anyway?`)) return
+      }
+    } catch {}
+
     setSaving(true); setErr(null)
-    const body = { movie_id: pickedMovie?.id || null, event_date: date, event_time: time, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: allowGuests }
+    const body = { movie_id: pickedMovie?.id || null, event_date: date, event_time: time, event_end_time: endTime, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: allowGuests }
     if (isEdit) body.event_id = event.id
     const res = await authedFetch('/api/screenings', {
       method: isEdit ? 'PATCH' : 'POST',
@@ -240,8 +258,12 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
           </div>
           <div style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Time <span style={{ color: 'var(--danger)' }}>*</span></label>
-            <input type="time" value={time} onChange={e => setTime(e.target.value)}
-              style={{ ...INPUT, border: `1.5px solid ${time ? 'var(--green)' : 'var(--danger)'}` }} />
+            <TimeField value={time} onChange={setTime} colour={time ? 'var(--green)' : 'var(--danger)'} />
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={LABEL}>Ends <span style={{ color: 'var(--danger)' }}>*</span></label>
+            <TimeField value={endTime} onChange={setEndTime} colour={endTime ? 'var(--green)' : 'var(--danger)'} />
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.3rem' }}>Every screening books the Cinema as a common space, so an end time keeps it from double-booking.</div>
           </div>
           <div style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Max Seats</label>
