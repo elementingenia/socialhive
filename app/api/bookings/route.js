@@ -4,6 +4,7 @@ import { promoteWaitlist } from '@/lib/promoteWaitlist'
 import { notify } from '@/lib/notify'
 import { bookingsClosed } from '@/lib/booking'
 import { validateParty, validateBring } from '@/lib/attendees'
+import { fetchTakenResidentIds } from '@/lib/takenResidents'
 import { syncAttendees } from '@/lib/syncAttendees'
 
 
@@ -46,11 +47,13 @@ export async function POST(req) {
 
   // Multi-attendee: every extra seat must be named (workstream A). Validated
   // here authoritatively; the same check runs client-side to gate the button.
+  const { memberIds: takenMemberIds, contactIds: takenContactIds } = await fetchTakenResidentIds(event_id, { excludeOwnerId: member.id })
   const party = validateParty({
     seats: requestedSeats,
     attendees: body.attendees,
     allowGuests: !!event.allow_nonresident_guests,
     ownerId: member.id,
+    takenMemberIds, takenContactIds,
   })
   if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
 
@@ -246,11 +249,13 @@ export async function PATCH(req) {
   }
 
   // Re-validate the named party against the new seat count (workstream A).
+  const { memberIds: takenMemberIds, contactIds: takenContactIds } = await fetchTakenResidentIds(event_id, { excludeOwnerId: member.id })
   const party = validateParty({
     seats: newSeats,
     attendees: body.attendees,
     allowGuests: !!event?.allow_nonresident_guests,
     ownerId: member.id,
+    takenMemberIds, takenContactIds,
   })
   if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
 

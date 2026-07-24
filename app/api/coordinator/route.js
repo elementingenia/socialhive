@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { promoteWaitlist } from "@/lib/promoteWaitlist"
 import { notify } from "@/lib/notify"
 import { validateParty } from "@/lib/attendees"
+import { fetchTakenResidentIds } from "@/lib/takenResidents"
 import { syncAttendees } from "@/lib/syncAttendees"
 
 // force-dynamic + the shared no-store supabaseAdmin (lib/supabaseAdmin.js) keep
@@ -352,9 +353,13 @@ export async function PATCH(req) {
     // not half-named.
     let party = { ok: true, attendees: [] }
     if (rawAttendees !== undefined) {
+      const { memberIds: takenMemberIds, contactIds: takenContactIds } = await fetchTakenResidentIds(event_id, {
+        excludeOwnerId: member_id || null, excludeOwnerContactId: contact_id || null,
+      })
       party = validateParty({
         seats, attendees: rawAttendees, allowGuests: !!ev.allow_nonresident_guests,
         ownerId: member_id || null, ownerContactId: contact_id || null,
+        takenMemberIds, takenContactIds,
       })
       if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
     }

@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { createPortal } from "react-dom"
 import { HUB_COLOURS } from "@/lib/navUtils"
 import { BusIcon, CalendarIcon } from "@/components/NavIcons"
@@ -33,6 +33,29 @@ async function fetchResidentDirectory() {
   ]
   list.sort((a, b) => (a.name || "").localeCompare(b.name || ""))
   return list
+}
+
+// Every resident/contact already attached to a live booking for this event
+// (as the primary booker or as someone else's named party member) -- used to
+// grey out already-booked people in the resident picker instead of letting
+// the same person be added to two different bookings for one event (Iain,
+// 2026-07-24: Annie Pallot was pickable into both Scampi's party and Iain's
+// own party for the same screening). UI-side of the fix; the server enforces
+// the same rule authoritatively in lib/attendees.js's validateParty(). RLS
+// allows any authenticated member to read bookings/booking_attendees, same
+// basis CoordinatorPanel's attendee list already relies on.
+async function fetchTakenResidentIds(eventId) {
+  const [{ data: bookingRows }, { data: attendeeRows }] = await Promise.all([
+    supabase.from("bookings").select("member_id, contact_id").eq("event_id", eventId).neq("status", "cancelled"),
+    supabase.from("booking_attendees").select("member_id, contact_id").eq("event_id", eventId),
+  ])
+  const memberIds = new Set()
+  const contactIds = new Set()
+  for (const r of [...(bookingRows || []), ...(attendeeRows || [])]) {
+    if (r.member_id) memberIds.add(r.member_id)
+    if (r.contact_id) contactIds.add(r.contact_id)
+  }
+  return { memberIds, contactIds }
 }
 
 // Renders children into document.body instead of in place. Needed for any
@@ -351,6 +374,14 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       fetchResidentDirectory().then(setAllResidents)
     }
   }, [showAddBooking])
+
+  // Already-booked residents/contacts for this event (see fetchTakenResidentIds
+  // above) so a walk-up booking can't silently double up someone who's
+  // already in another booking's party.
+  const [taken, setTaken] = useState({ memberIds: new Set(), contactIds: new Set() })
+  useEffect(() => {
+    if (showAddBooking) fetchTakenResidentIds(event.id).then(setTaken)
+  }, [showAddBooking, event.id, refreshKey])
 
   useEffect(() => { setInsufficientCapacity(null) }, [addSeats, selectedResident])
 
@@ -694,7 +725,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                         </div>
                         <PartyPicker count={addSeats - 1} allowGuests={allowGuests} members={allResidents}
                           excludeIds={selectedResident ? [selectedResident.id] : []}
-                          value={addParty} onChange={setAddParty} />
+                          value={addParty} onChange={setAddParty} taken={taken} />
                       </>
                     )}
                   </div>
@@ -1000,7 +1031,7 @@ function BringPicker({ cats, categoryId, note, onChange, colour, required, label
 // Collects the (seats - 1) additional attendees for a multi-seat booking. Each
 // is a resident (searchable, 2-char min per UI standards) or, only when the
 // event allows it, a named non-resident guest.
-function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, bringCats = [] }) {
+function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, bringCats = [], taken }) {
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
   const kind = row.kind || "resident"
@@ -1008,8 +1039,10 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
   // `members` here is the merged resident directory (app-login members +
   // Contacts-hub residents with no login) — a contact is picked exactly like
   // a member, just carries contact_id instead of member_id.
+  const isTaken = (m) => !!taken && (m.type === "contact" ? taken.contactIds.has(m.id) : taken.memberIds.has(m.id))
   const results = q.length < 2 ? [] : members
     .filter(m => !excludeIds.includes(m.id) && (m.name || "").toLowerCase().includes(q))
+    .sort((a, b) => Number(isTaken(a)) - Number(isTaken(b)))
     .slice(0, 6)
   const inputStyle = { width: "100%", padding: "9px 11px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 14, boxSizing: "border-box", fontFamily: "inherit" }
   const emptyRow = { kind: "resident", member_id: null, contact_id: null, member_name: "", guest_name: "" }
@@ -1038,19 +1071,23 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
               onChange={e => { setQuery(e.target.value); setOpen(true) }} onFocus={() => setOpen(true)} style={inputStyle} />
             {open && results.length > 0 && (
               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 5, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, marginTop: 4, overflow: "hidden" }}>
-                {results.map(m => (
-                  <button key={m.id} type="button"
-                    onClick={() => {
-                      onChange({ ...row, kind: "resident",
-                        member_id: m.type === "contact" ? null : m.id,
-                        contact_id: m.type === "contact" ? m.id : null,
-                        member_name: m.name, guest_name: "" })
-                      setOpen(false); setQuery("")
-                    }}
-                    style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 11px", background: "none", border: "none", borderBottom: "1px solid var(--border)", cursor: "pointer", fontSize: 14, color: "var(--text)", fontFamily: "inherit" }}>
-                    {m.name}{m.type === "contact" ? " · no app account" : ""}
-                  </button>
-                ))}
+                {results.map(m => {
+                  const takenAlready = isTaken(m)
+                  return (
+                    <button key={m.id} type="button" disabled={takenAlready}
+                      onClick={() => {
+                        if (takenAlready) return
+                        onChange({ ...row, kind: "resident",
+                          member_id: m.type === "contact" ? null : m.id,
+                          contact_id: m.type === "contact" ? m.id : null,
+                          member_name: m.name, guest_name: "" })
+                        setOpen(false); setQuery("")
+                      }}
+                      style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 11px", background: "none", border: "none", borderBottom: "1px solid var(--border)", cursor: takenAlready ? "default" : "pointer", fontSize: 14, color: "var(--text)", fontFamily: "inherit", opacity: takenAlready ? 0.45 : 1 }}>
+                      {m.name}{m.type === "contact" ? " · no app account" : ""}{takenAlready ? " · Already booked" : ""}
+                    </button>
+                  )
+                })}
               </div>
             )}
           </div>
@@ -1070,7 +1107,7 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
   )
 }
 
-function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange, bringCats = [] }) {
+function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange, bringCats = [], taken }) {
   const rows = []
   for (let i = 0; i < count; i++) rows.push(value[i] || { kind: "resident", member_id: null, contact_id: null, member_name: "", guest_name: "" })
   const chosen = value.filter(v => v?.member_id || v?.contact_id).map(v => v.member_id || v.contact_id)
@@ -1081,7 +1118,7 @@ function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange,
       </div>
       {rows.map((row, i) => (
         <PartyRow key={i} index={i} row={row} allowGuests={allowGuests} members={members}
-          bringCats={bringCats}
+          bringCats={bringCats} taken={taken}
           excludeIds={[...excludeIds, ...chosen.filter(id => id !== (row.member_id || row.contact_id))]}
           onChange={next => { const copy = value.slice(); copy[i] = next; onChange(copy) }} />
       ))}
@@ -1115,8 +1152,20 @@ function BookingSection({ event, onRefresh, onClose }) {
     supabase.from("club_bring_categories").select("id, label, sort")
       .eq("club_id", event.club.id).order("sort")
       .then(({ data }) => {
+        const all = data || []
         const allowed = event.bring_category_ids
-        const list = (data || []).filter(c => !allowed?.length || allowed.includes(c.id))
+        let list = !allowed?.length ? all : all.filter(c => allowed.includes(c.id))
+        // Defensive fallback (Iain hit this live 2026-07-24, Sydney Harbour
+        // Night): if an event narrowed its allowed categories but every one
+        // of those stored ids is now stale (e.g. Admin > Clubs re-saved the
+        // club and regenerated fresh row ids for unchanged categories --
+        // fixed at the source in ClubForm, but any event snapshot taken
+        // before that fix still has orphaned ids), showing NOTHING would
+        // silently disable Book Now for everyone with nothing they can do
+        // about it. Showing every current category is the safer failure —
+        // the original narrowing choice is unrecoverable once the ids are
+        // gone, but nobody should be blocked from booking because of it.
+        if (allowed?.length && list.length === 0 && all.length > 0) list = all
         setBringCats(list)
       })
   }, [bringEnabled, event.club?.id, event.id])
@@ -1126,6 +1175,27 @@ function BookingSection({ event, onRefresh, onClose }) {
       fetchResidentDirectory().then(setMembers)
     }
   }, [event.id])
+
+  // Already-booked residents/contacts for this event, so the party picker
+  // can grey them out instead of allowing the same person into two
+  // different bookings (see fetchTakenResidentIds above). Subtracts the
+  // current user's OWN existing party (myAttendees) so re-picking the exact
+  // person already in their own booking -- e.g. tapping Change then
+  // re-selecting the same name -- doesn't get wrongly greyed out as "taken
+  // by someone else" when they're only taken by this same booking.
+  const [takenRaw, setTakenRaw] = useState({ memberIds: new Set(), contactIds: new Set() })
+  useEffect(() => {
+    fetchTakenResidentIds(event.id).then(setTakenRaw)
+  }, [event.id])
+  const taken = useMemo(() => {
+    const memberIds = new Set(takenRaw.memberIds)
+    const contactIds = new Set(takenRaw.contactIds)
+    for (const a of myAttendees) {
+      if (a.member_id) memberIds.delete(a.member_id)
+      if (a.contact_id) contactIds.delete(a.contact_id)
+    }
+    return { memberIds, contactIds }
+  }, [takenRaw, myAttendees])
 
   useEffect(() => {
     const need = Math.max(0, seats - 1)
@@ -1363,7 +1433,7 @@ function BookingSection({ event, onRefresh, onClose }) {
               {!isBookclubEvent && seats > 1 && (
                 <PartyPicker count={seats - 1} allowGuests={allowGuests} members={members}
                   excludeIds={me?.id ? [me.id] : []} value={party} onChange={setParty}
-                  bringCats={bringEnabled ? bringCats : []} />
+                  bringCats={bringEnabled ? bringCats : []} taken={taken} />
               )}
               <button onClick={() => handleBook()} disabled={loading || (seats > 1 && !partyValid) || !bringValid}
                 style={{ width: "100%", padding: "14px 0", background: "var(--amber)", color: "#fff", border: "none",
@@ -1472,7 +1542,7 @@ function BookingSection({ event, onRefresh, onClose }) {
           {modifySeats > 1 && (
             <PartyPicker count={modifySeats - 1} allowGuests={allowGuests} members={members}
               excludeIds={me?.id ? [me.id] : []} value={modParty} onChange={setModParty}
-              bringCats={bringEnabled ? bringCats : []} />
+              bringCats={bringEnabled ? bringCats : []} taken={taken} />
           )}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={() => setModifying(false)}
