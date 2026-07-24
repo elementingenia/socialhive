@@ -1,7 +1,6 @@
 "use client"
 import { useState, useRef, useEffect, useCallback } from "react"
 import { authedFetch } from "@/lib/getAuthToken"
-import { supabase } from "@/lib/supabase"
 import { WATERMARK_EDITOR_ASPECT, computeWatermarkTransform } from "@/lib/clubWatermark"
 
 // Club watermark image uploader + pan/zoom editor (Club visual identity,
@@ -47,14 +46,17 @@ export default function ClubWatermarkPicker({ clubId, imageUrl, posX, posY, zoom
       })
     : null
 
-  // Position/zoom are ordinary club fields (like colour) -- RLS already lets
-  // an admin write them directly, no service-role route needed. Only the
-  // actual file upload/delete touches Storage, which does need one (see
-  // /api/clubs/image).
+  // Position/zoom go through the service-role /api/clubs/appearance route
+  // (admin OR this club's owner -- lib/clubAuth.js), not a direct client
+  // write -- clubs' RLS only allows admin writes (migration 045), and this
+  // picker is now also used by Owners/Contacts via ClubAppearanceModal, who
+  // RLS would otherwise silently block.
   async function saveTransform(nextPosX, nextPosY, nextZoom) {
-    await supabase.from("clubs").update({
-      image_pos_x: nextPosX, image_pos_y: nextPosY, image_zoom: nextZoom,
-    }).eq("id", clubId)
+    await authedFetch("/api/clubs/appearance", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ club_id: clubId, image_pos_x: nextPosX, image_pos_y: nextPosY, image_zoom: nextZoom }),
+    })
     onUpdated?.({ image_pos_x: nextPosX, image_pos_y: nextPosY, image_zoom: nextZoom })
   }
 

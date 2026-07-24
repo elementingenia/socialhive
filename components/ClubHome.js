@@ -7,7 +7,9 @@ import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import { ContactBar } from "@/components/OwnersManager"
 import ExpandableText from "@/components/ExpandableText"
 import { getToken } from "@/components/ResidentEditPanel"
-import { clubCaps, clubColour } from "@/lib/clubs"
+import { useOwners } from "@/lib/useOwners"
+import ClubAppearanceModal from "@/components/ClubAppearanceModal"
+import { clubCaps } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
 import { WATERMARK_PAGE_OPACITY, computeWatermarkTransform } from "@/lib/clubWatermark"
 import EventCoordinators from "@/components/EventCoordinators"
@@ -1378,7 +1380,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
 // ── Join/leave + club notices (Phase 2c) ─────────────────────────────────────
 // Joining is notices-only — never a gate on booking. Only joined members get
 // notified when a notice is posted; anyone can read them here.
-function ClubSocial({ club, colour, isAdmin }) {
+function ClubSocial({ club, colour, isAdmin, onAppearanceUpdated }) {
   const { member } = useUser()
   const [joined, setJoined]     = useState(null)   // null = loading
   const [busy, setBusy]         = useState(false)
@@ -1387,6 +1389,13 @@ function ClubSocial({ club, colour, isAdmin }) {
   const [draft, setDraft]       = useState("")
   const [posting, setPosting]   = useState(false)
   const [toast, setToast]       = useState(null)
+  const [appearanceOpen, setAppearanceOpen] = useState(false)
+  // Club background control -- Iain, 2026-07-24: Admins and this club's
+  // Owners/Contacts (the same space_owners rows that make someone eligible
+  // to answer questions asked on this club's page) can set colour + image.
+  const { owners } = useOwners("club", club.id)
+  const isOwner = !!member?.id && owners.some(o => o.id === member.id)
+  const canManageAppearance = isAdmin || isOwner
 
   const loadNotices = () => {
     supabase.from("club_notices").select("id, content, created_at")
@@ -1467,7 +1476,24 @@ function ClubSocial({ club, colour, isAdmin }) {
             📣 Post notice
           </button>
         )}
+        {canManageAppearance && (
+          <button onClick={() => setAppearanceOpen(true)}
+            style={{ padding: "0.4rem 0.9rem", borderRadius: 20, border: `1px dashed ${colour}`,
+              background: "transparent", color: clubInk(colour), fontWeight: 700, fontFamily: "inherit",
+              fontSize: "0.82rem", cursor: "pointer", whiteSpace: "nowrap" }}>
+            🎨 Background
+          </button>
+        )}
       </div>
+
+      {canManageAppearance && (
+        <ClubAppearanceModal
+          club={club}
+          open={appearanceOpen}
+          onClose={() => setAppearanceOpen(false)}
+          onUpdated={patch => onAppearanceUpdated?.(patch)}
+        />
+      )}
 
       {/* Admin composer */}
       {isAdmin && composing && (
@@ -1565,8 +1591,25 @@ export default function ClubHome({ club }) {
   // Everything below is driven by the club's CONFIG, never by a hub name —
   // that's what lets Book Club and Dinner Club share this one page.
   const caps   = clubCaps(club)
-  const colour = clubColour(club)
   const welcomeText = club?.welcome_text || ""
+
+  // Local mirror of the appearance fields only (colour + watermark), so
+  // ClubAppearanceModal can update the page instantly without the parent
+  // page (clubs/[slug]/page.js, which owns `club` and has no setter to
+  // hand down) needing a full refetch. Resynced whenever the club identity
+  // itself changes -- this component instance can be reused across
+  // different clubs by the router without remounting.
+  const [appearance, setAppearance] = useState(() => ({
+    colour: club?.colour, image_url: club?.image_url,
+    image_pos_x: club?.image_pos_x, image_pos_y: club?.image_pos_y, image_zoom: club?.image_zoom,
+  }))
+  useEffect(() => {
+    setAppearance({
+      colour: club?.colour, image_url: club?.image_url,
+      image_pos_x: club?.image_pos_x, image_pos_y: club?.image_pos_y, image_zoom: club?.image_zoom,
+    })
+  }, [club?.id])
+  const colour = appearance.colour || "var(--purple)"
   const [events,      setEvents]      = useState([])  // all non-archived BC events ordered by date asc
   const [myBookings,  setMyBookings]  = useState({})  // eventId → booking
   const [seatCounts,  setSeatCounts]  = useState({})  // eventId → {confirmed, waitlist} seats
@@ -1831,12 +1874,12 @@ export default function ClubHome({ club }) {
 
   return (
     <div style={{ padding: "1.25rem 1rem 6rem", position: "relative", zIndex: 1 }}>
-      {club?.image_url && (
-        <ClubPageWatermark imageUrl={club.image_url} posX={club.image_pos_x} posY={club.image_pos_y} zoom={club.image_zoom} />
+      {appearance.image_url && (
+        <ClubPageWatermark imageUrl={appearance.image_url} posX={appearance.image_pos_x} posY={appearance.image_pos_y} zoom={appearance.image_zoom} />
       )}
       <Toast msg={toast} />
 
-      <ClubSocial club={club} colour={colour} isAdmin={isAdmin} />
+      <ClubSocial club={{ ...club, ...appearance }} colour={colour} isAdmin={isAdmin} onAppearanceUpdated={patch => setAppearance(a => ({ ...a, ...patch }))} />
 
       {/* Welcome tile */}
       {welcomeText && (
