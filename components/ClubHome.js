@@ -9,7 +9,7 @@ import ExpandableText from "@/components/ExpandableText"
 import { getToken } from "@/components/ResidentEditPanel"
 import { clubCaps, clubColour } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
-import { WATERMARK_ASPECT, computeWatermarkTransform } from "@/lib/clubWatermark"
+import { WATERMARK_PAGE_OPACITY, computeWatermarkTransform } from "@/lib/clubWatermark"
 import EventCoordinators from "@/components/EventCoordinators"
 import RecurrencePicker from "@/components/RecurrencePicker"
 import { nextOccurrence } from "@/lib/recurrence"
@@ -1508,39 +1508,44 @@ function ClubSocial({ club, colour, isAdmin }) {
   )
 }
 
-// Watermarked club-colour banner behind the welcome tile (Club visual
-// identity, Initiative 1 -- branch spike, 2026-07-24). Renders nothing if
-// the club has no image, per the vertical-space rule -- this is purely an
-// opt-in visual upgrade to the existing colour banner, never a forced empty
-// band. Uses the exact same pan/zoom math as ClubWatermarkPicker
+// Feint whole-page watermark (Club visual identity, Initiative 1 -- branch
+// spike, reworked 2026-07-24 after Iain clarified: this covers the ENTIRE
+// space between Header and BottomNav, not a banner tile behind the welcome
+// text -- v1 of this branch built the wrong target region). Fixed to the
+// viewport (not the scrollable content height, which varies per club and
+// would need re-measuring on every load/booking change) so it reads as a
+// steady background wallpaper while cards scroll over it, same idea as
+// Header (position:sticky) and BottomNav (position:fixed) already use for
+// the chrome either side of it -- both are opaque, so this naturally only
+// shows in the gap between them with no extra clipping needed. Renders
+// nothing at all if the club has no image, per the vertical-space rule.
+// Uses the exact same pan/zoom math as ClubWatermarkPicker
 // (lib/clubWatermark.js) so what an admin crops in Club Manager is exactly
-// what residents see here.
-function WatermarkBackground({ imageUrl, posX, posY, zoom }) {
-  const containerRef = useRef(null)
+// what residents see here -- only the "container" differs (the picker
+// previews against a representative phone-shaped box; this measures the
+// user's actual viewport, so cropping still varies a little by device,
+// same as any responsive full-bleed background would).
+function ClubPageWatermark({ imageUrl, posX, posY, zoom }) {
   const [natural, setNatural] = useState(null)
-  const [containerSize, setContainerSize] = useState(null)
+  const [viewport, setViewport] = useState(null)
 
   useEffect(() => {
-    if (!containerRef.current) return
-    const el = containerRef.current
-    const ro = new ResizeObserver(entries => {
-      const r = entries[0]?.contentRect
-      if (r) setContainerSize({ w: r.width, h: r.height })
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [imageUrl])
+    function measure() { setViewport({ w: window.innerWidth, h: window.innerHeight }) }
+    measure()
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
+  }, [])
 
-  const transform = (natural && containerSize)
+  const transform = (natural && viewport)
     ? computeWatermarkTransform({
-        containerW: containerSize.w, containerH: containerSize.h,
+        containerW: viewport.w, containerH: viewport.h,
         naturalW: natural.w, naturalH: natural.h,
         zoom, posX, posY,
       })
     : null
 
   return (
-    <div ref={containerRef} style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
+    <div style={{ position: "fixed", inset: 0, overflow: "hidden", zIndex: 0, pointerEvents: "none" }}>
       <img
         src={imageUrl}
         alt=""
@@ -1548,7 +1553,7 @@ function WatermarkBackground({ imageUrl, posX, posY, zoom }) {
         onLoad={e => setNatural({ w: e.target.naturalWidth, h: e.target.naturalHeight })}
         style={transform ? {
           position: "absolute", width: transform.width, height: transform.height,
-          left: transform.left, top: transform.top, pointerEvents: "none", display: "block",
+          left: transform.left, top: transform.top, display: "block", opacity: WATERMARK_PAGE_OPACITY,
         } : { opacity: 0 }}
       />
     </div>
@@ -1825,36 +1830,21 @@ export default function ClubHome({ club }) {
   )
 
   return (
-    <div style={{ padding: "1.25rem 1rem 6rem" }}>
+    <div style={{ padding: "1.25rem 1rem 6rem", position: "relative", zIndex: 1 }}>
+      {club?.image_url && (
+        <ClubPageWatermark imageUrl={club.image_url} posX={club.image_pos_x} posY={club.image_pos_y} zoom={club.image_zoom} />
+      )}
       <Toast msg={toast} />
 
       <ClubSocial club={club} colour={colour} isAdmin={isAdmin} />
 
-      {/* Welcome tile -- optionally watermarked with the club's own photo
-          (portrait or landscape; the admin pans/zooms it to fit in Club
-          Manager). Renders whenever there's text OR an image, so a
-          text-only club keeps today's exact behaviour and an image-only
-          club still gets its watermark even with no banner copy. */}
-      {(welcomeText || club?.image_url) && (
-        <div style={{ position: "relative", background: colour, borderRadius: 14,
-          padding: "1rem", marginBottom: 16, fontSize: "0.9rem", color: clubTextOn(colour), lineHeight: 1.6,
-          overflow: "hidden", minHeight: club?.image_url ? "clamp(90px, 20vw, 150px)" : undefined }}>
-          {club?.image_url && (
-            <>
-              <WatermarkBackground imageUrl={club.image_url} posX={club.image_pos_x} posY={club.image_pos_y} zoom={club.image_zoom} />
-              {/* Scrim in the club's own colour -- keeps white text readable
-                  over any photo, and keeps the club's colour identity even
-                  though a photo is now behind it. */}
-              <div style={{ position: "absolute", inset: 0, background: colour, opacity: 0.6 }} />
-            </>
-          )}
-          {welcomeText && (
-            <div style={{ position: "relative" }}>
-              {/<[a-z][\s\S]*>/i.test(welcomeText)
-                ? <span dangerouslySetInnerHTML={{ __html: welcomeText }} />
-                : welcomeText}
-            </div>
-          )}
+      {/* Welcome tile */}
+      {welcomeText && (
+        <div style={{ background: colour, borderRadius: 14,
+          padding: "1rem", marginBottom: 16, fontSize: "0.9rem", color: clubTextOn(colour), lineHeight: 1.6 }}>
+          {/<[a-z][\s\S]*>/i.test(welcomeText)
+            ? <span dangerouslySetInnerHTML={{ __html: welcomeText }} />
+            : welcomeText}
         </div>
       )}
 

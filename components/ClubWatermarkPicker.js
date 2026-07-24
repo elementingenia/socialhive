@@ -2,14 +2,18 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import { authedFetch } from "@/lib/getAuthToken"
 import { supabase } from "@/lib/supabase"
-import { WATERMARK_ASPECT, computeWatermarkTransform } from "@/lib/clubWatermark"
+import { WATERMARK_EDITOR_ASPECT, computeWatermarkTransform } from "@/lib/clubWatermark"
 
 // Club watermark image uploader + pan/zoom editor (Club visual identity,
-// Initiative 1 -- branch spike, 2026-07-24). Unlike EventImagePicker's
-// single focal-point drag, this lets the admin upload EITHER a portrait or
-// landscape photo and both move AND resize it so it always fully covers the
-// banner -- Iain's ask, 2026-07-24. Position/zoom auto-save on drag/slider
-// release, same convention as EventImagePicker's focal point.
+// Initiative 1 -- branch spike, reworked 2026-07-24 -- this becomes a feint
+// background across the WHOLE club page, not a banner tile). Unlike
+// EventImagePicker's single focal-point drag, this lets the admin upload
+// EITHER a portrait or landscape photo and both move AND resize it so it
+// always fully covers the space -- Iain's ask, 2026-07-24. Position/zoom
+// auto-save on drag/slider release, same convention as EventImagePicker's
+// focal point. Previewed here at full brightness (so it's actually
+// possible to see what you're positioning) -- the live page fades it down
+// to a faint watermark, it will NOT look this strong on the real page.
 export default function ClubWatermarkPicker({ clubId, imageUrl, posX, posY, zoom, colour, onUpdated }) {
   const [uploading, setUploading]     = useState(false)
   const [localUrl,  setLocalUrl]      = useState(imageUrl || null)
@@ -124,9 +128,10 @@ export default function ClubWatermarkPicker({ clubId, imageUrl, posX, posY, zoom
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             style={{
-              position: "relative", width: "100%", aspectRatio: WATERMARK_ASPECT,
-              borderRadius: 10, overflow: "hidden", marginBottom: 8,
+              position: "relative", width: "min(100%, 220px)", aspectRatio: WATERMARK_EDITOR_ASPECT,
+              borderRadius: 10, overflow: "hidden", marginBottom: 8, margin: "0 auto 8px",
               cursor: "grab", touchAction: "none", background: "var(--surface2)",
+              border: "1px solid var(--border)",
             }}
           >
             <img
@@ -139,10 +144,6 @@ export default function ClubWatermarkPicker({ clubId, imageUrl, posX, posY, zoom
                 left: transform.left, top: transform.top, pointerEvents: "none", display: "block",
               } : { opacity: 0 }}
             />
-            {/* Colour scrim -- same purpose as the club-colour welcome tile:
-                guarantees white overlay text stays readable regardless of
-                what's in the photo. Preview only; ClubHome renders its own. */}
-            <div style={{ position: "absolute", inset: 0, background: colour, opacity: 0.45, pointerEvents: "none" }} />
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
             <span style={{ fontSize: 11, color: "var(--text-dim)", flexShrink: 0 }}>Zoom</span>
@@ -153,7 +154,7 @@ export default function ClubWatermarkPicker({ clubId, imageUrl, posX, posY, zoom
             />
           </div>
           <div style={{ fontSize: 11, color: "var(--text-dim)", marginBottom: 8 }}>
-            Drag the photo to reposition it, use Zoom to resize -- it always fills the banner, portrait or landscape.
+            Drag the photo to reposition it, use Zoom to resize -- it always fills the space, portrait or landscape. Shown at full brightness so you can see it clearly; on the actual page it fades to a faint background behind everything.
           </div>
         </>
       )}

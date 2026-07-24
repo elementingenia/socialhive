@@ -10,7 +10,9 @@ let pass = 0, fail = 0
 const ok = (c, m) => { c ? pass++ : (fail++, console.log('  ✗', m)) }
 const approx = (a, b, tol = 0.01) => Math.abs(a - b) <= tol
 
-// Wide banner container, matches WATERMARK_ASPECT "3 / 1"
+// A generic 3:1 test container -- computeWatermarkTransform is aspect-
+// agnostic (it takes whatever container/viewport size it is given), so
+// these results generalise to any real container/viewport shape.
 const container = { containerW: 900, containerH: 300 }
 
 // ── Portrait photo in a wide banner -- width is the constraining axis, so

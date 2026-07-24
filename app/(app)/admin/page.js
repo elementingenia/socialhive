@@ -1788,7 +1788,7 @@ function ClubForm({ club, existingColours = [], onSaved, onCancel }) {
             onUpdated={patch => setForm(f => ({ ...f, ...patch }))}
           />
           <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.35rem' }}>
-            Shows behind the welcome banner at the top of the club's page -- watermarked with the club colour so text stays readable. Works with portrait or landscape photos; drag and zoom to fit.
+            Shows as a faint background across the whole club page, behind everything from the welcome banner down to the last event card. Works with portrait or landscape photos; drag and zoom to fit.
           </div>
         </Field>
       ) : (
