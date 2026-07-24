@@ -1,7 +1,27 @@
 "use client"
 import { useState } from "react"
+import { createPortal } from "react-dom"
 import { supabase } from "@/lib/supabase"
 import { getAuthToken } from "@/lib/getAuthToken"
+
+// Root-level portal -- same pattern already used by EventSlideOut.js's Toast
+// (fixed 2026-07-14 for an identical bug class: Cancel Booking's confirm
+// dialog rendered off-screen because it inherited a scrolled/positioned
+// ancestor instead of the real viewport). Sheet needed the same fix
+// 2026-07-24: a caller (ClubHome.js) wraps its own content in
+// `position: relative; z-index: 1` for an unrelated reason (keeping page
+// content above a fixed background layer), which creates a NEW stacking
+// context -- so a Sheet rendered inline deep inside it got capped at
+// z-index 1 for stacking purposes, no matter what z-index Sheet itself
+// declared, and BottomNav (z-index 100, rendered as a page-level sibling)
+// painted straight over it. Portaling to document.body takes Sheet
+// completely out of any such ancestor's stacking context, so its own
+// z-index (200) is compared directly against page-level chrome as
+// intended, regardless of where in the component tree it's opened from.
+function Portal({ children }) {
+  if (typeof document === "undefined") return null
+  return createPortal(children, document.body)
+}
 
 export const COLOUR = "#4e7aab"
 
@@ -40,6 +60,7 @@ export async function getToken() {
 export function Sheet({ open, onClose, title, footer, children }) {
   if (!open) return null
   return (
+    <Portal>
     <div onClick={onClose} style={{
       position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200,
       display: "flex", alignItems: "flex-end", justifyContent: "center",
@@ -76,6 +97,7 @@ export function Sheet({ open, onClose, title, footer, children }) {
         )}
       </div>
     </div>
+    </Portal>
   )
 }
 
