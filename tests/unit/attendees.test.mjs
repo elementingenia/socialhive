@@ -61,6 +61,17 @@ const ownerContact = validateParty({ seats: 2, attendees: [{ contact_id: 'c1' }]
 ok(ownerContact.ok === true, 'contact-owned booking naming a different contact => ok')
 ok(validateParty({ seats: 2, attendees: [{ contact_id: 'c-owner' }], allowGuests: false, ownerContactId: 'c-owner' }).ok === false, 'contact owner naming themselves => rejected')
 
+// already-booked elsewhere on this event (2026-07-24) -- the same resident
+// can't be added to two different bookings for one event.
+const taken1 = validateParty({ seats: 2, attendees: [{ member_id: 'm9' }], allowGuests: false, ownerId: OWNER, takenMemberIds: new Set(['m9']) })
+ok(taken1.ok === false, 'resident already booked elsewhere => rejected')
+const taken2 = validateParty({ seats: 2, attendees: [{ contact_id: 'c9' }], allowGuests: false, ownerId: OWNER, takenContactIds: new Set(['c9']) })
+ok(taken2.ok === false, 'contact already booked elsewhere => rejected')
+const notTaken = validateParty({ seats: 2, attendees: [{ member_id: 'm9' }], allowGuests: false, ownerId: OWNER, takenMemberIds: new Set(['someone-else']) })
+ok(notTaken.ok === true, 'resident not in the taken set => ok')
+const noTakenSets = validateParty({ seats: 2, attendees: [{ member_id: 'm9' }], allowGuests: false, ownerId: OWNER })
+ok(noTakenSets.ok === true, 'omitting takenMemberIds/takenContactIds entirely => ok (backward compatible)')
+
 // bring-a-dish
 ok(validateBring({ required: false }).ok === true, 'not required => ok even with nothing chosen')
 ok(validateBring({ required: true, bringCategoryId: null }).ok === false, 'required + nothing chosen => rejected')

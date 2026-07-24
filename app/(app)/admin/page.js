@@ -1709,7 +1709,7 @@ function ClubForm({ club, existingColours = [], onSaved, onCancel }) {
   useEffect(() => {
     if (!isEdit) return
     supabase.from('club_bring_categories').select('id, label, sort').eq('club_id', club.id).order('sort')
-      .then(({ data }) => setBringCats((data || []).map(c => c.label)))
+      .then(({ data }) => setBringCats((data || []).map(c => ({ id: c.id, label: c.label }))))
   }, [isEdit, club?.id])
 
   const effectiveSlug = slugTouched ? form.slug : slugify(form.name)
@@ -1738,10 +1738,29 @@ function ClubForm({ club, existingColours = [], onSaved, onCancel }) {
       if (e) { setError(e.message.includes('duplicate') ? 'That slug is already taken' : e.message); setSaving(false); return }
       clubId = data.id
     }
-    // Replace bring categories
-    await supabase.from('club_bring_categories').delete().eq('club_id', clubId)
-    const cats = form.bring_enabled ? bringCats.map((label, i) => ({ club_id: clubId, label, sort: i })) : []
-    if (cats.length) await supabase.from('club_bring_categories').insert(cats)
+    // Sync bring categories, preserving each row's existing id where the
+    // category itself is unchanged. A blind delete-all/insert-all here used
+    // to hand out a fresh UUID to every category on every single club save
+    // (even ones unrelated to bring-a-dish) -- any event that had narrowed
+    // itself to specific categories via events.bring_category_ids silently
+    // lost that narrowing the next time anyone saved the club, because none
+    // of its stored ids matched anymore. Found live 2026-07-24 after Iain
+    // reported a Dinner Club event's "Book Now" was permanently disabled
+    // for every resident with no way to fix it from their side.
+    if (form.bring_enabled) {
+      const { data: existingCats } = await supabase.from('club_bring_categories').select('id').eq('club_id', clubId)
+      const keepIds = new Set(bringCats.filter(c => c.id).map(c => c.id))
+      const staleIds = (existingCats || []).filter(c => !keepIds.has(c.id)).map(c => c.id)
+      if (staleIds.length) await supabase.from('club_bring_categories').delete().in('id', staleIds)
+      for (let i = 0; i < bringCats.length; i++) {
+        const c = bringCats[i]
+        if (c.id) await supabase.from('club_bring_categories').update({ label: c.label, sort: i }).eq('id', c.id)
+      }
+      const newRows = bringCats.map((c, i) => ({ c, i })).filter(({ c }) => !c.id).map(({ c, i }) => ({ club_id: clubId, label: c.label, sort: i }))
+      if (newRows.length) await supabase.from('club_bring_categories').insert(newRows)
+    } else {
+      await supabase.from('club_bring_categories').delete().eq('club_id', clubId)
+    }
     setSaving(false)
     onSaved()
   }
@@ -1806,17 +1825,17 @@ function ClubForm({ club, existingColours = [], onSaved, onCancel }) {
         <Field label="Bring categories (e.g. Entrée, Main, Dessert, Drink)">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.5rem' }}>
             {bringCats.map((c, i) => (
-              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'var(--surface2)', borderRadius: 16, padding: '0.2rem 0.6rem', fontSize: '0.82rem', color: 'var(--text)' }}>
-                {c}
+              <span key={c.id || `new-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'var(--surface2)', borderRadius: 16, padding: '0.2rem 0.6rem', fontSize: '0.82rem', color: 'var(--text)' }}>
+                {c.label}
                 <button type="button" onClick={() => setBringCats(bringCats.filter((_, j) => j !== i))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-dim)', fontSize: '0.9rem', lineHeight: 1 }}>×</button>
               </span>
             ))}
           </div>
           <div style={{ display: 'flex', gap: '0.4rem' }}>
             <input style={inputStyle} value={newCat} onChange={e => setNewCat(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && newCat.trim()) { setBringCats([...bringCats, newCat.trim()]); setNewCat('') } }}
+              onKeyDown={e => { if (e.key === 'Enter' && newCat.trim()) { setBringCats([...bringCats, { id: null, label: newCat.trim() }]); setNewCat('') } }}
               placeholder="Add a category…" />
-            <button type="button" onClick={() => { if (newCat.trim()) { setBringCats([...bringCats, newCat.trim()]); setNewCat('') } }}
+            <button type="button" onClick={() => { if (newCat.trim()) { setBringCats([...bringCats, { id: null, label: newCat.trim() }]); setNewCat('') } }}
               style={{ padding: '0 1rem', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface2)', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>Add</button>
           </div>
         </Field>
