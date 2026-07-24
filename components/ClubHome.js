@@ -9,6 +9,7 @@ import ExpandableText from "@/components/ExpandableText"
 import { getToken } from "@/components/ResidentEditPanel"
 import { clubCaps, clubColour } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
+import { WATERMARK_ASPECT, computeWatermarkTransform } from "@/lib/clubWatermark"
 import EventCoordinators from "@/components/EventCoordinators"
 import RecurrencePicker from "@/components/RecurrencePicker"
 import { nextOccurrence } from "@/lib/recurrence"
@@ -1507,6 +1508,53 @@ function ClubSocial({ club, colour, isAdmin }) {
   )
 }
 
+// Watermarked club-colour banner behind the welcome tile (Club visual
+// identity, Initiative 1 -- branch spike, 2026-07-24). Renders nothing if
+// the club has no image, per the vertical-space rule -- this is purely an
+// opt-in visual upgrade to the existing colour banner, never a forced empty
+// band. Uses the exact same pan/zoom math as ClubWatermarkPicker
+// (lib/clubWatermark.js) so what an admin crops in Club Manager is exactly
+// what residents see here.
+function WatermarkBackground({ imageUrl, posX, posY, zoom }) {
+  const containerRef = useRef(null)
+  const [natural, setNatural] = useState(null)
+  const [containerSize, setContainerSize] = useState(null)
+
+  useEffect(() => {
+    if (!containerRef.current) return
+    const el = containerRef.current
+    const ro = new ResizeObserver(entries => {
+      const r = entries[0]?.contentRect
+      if (r) setContainerSize({ w: r.width, h: r.height })
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [imageUrl])
+
+  const transform = (natural && containerSize)
+    ? computeWatermarkTransform({
+        containerW: containerSize.w, containerH: containerSize.h,
+        naturalW: natural.w, naturalH: natural.h,
+        zoom, posX, posY,
+      })
+    : null
+
+  return (
+    <div ref={containerRef} style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
+      <img
+        src={imageUrl}
+        alt=""
+        draggable={false}
+        onLoad={e => setNatural({ w: e.target.naturalWidth, h: e.target.naturalHeight })}
+        style={transform ? {
+          position: "absolute", width: transform.width, height: transform.height,
+          left: transform.left, top: transform.top, pointerEvents: "none", display: "block",
+        } : { opacity: 0 }}
+      />
+    </div>
+  )
+}
+
 export default function ClubHome({ club }) {
   const { member, isAdmin } = useUser()
   // Everything below is driven by the club's CONFIG, never by a hub name —
@@ -1782,13 +1830,31 @@ export default function ClubHome({ club }) {
 
       <ClubSocial club={club} colour={colour} isAdmin={isAdmin} />
 
-      {/* Welcome tile */}
-      {welcomeText && (
-        <div style={{ background: colour, borderRadius: 14,
-          padding: "1rem", marginBottom: 16, fontSize: "0.9rem", color: clubTextOn(colour), lineHeight: 1.6 }}>
-          {/<[a-z][\s\S]*>/i.test(welcomeText)
-            ? <span dangerouslySetInnerHTML={{ __html: welcomeText }} />
-            : welcomeText}
+      {/* Welcome tile -- optionally watermarked with the club's own photo
+          (portrait or landscape; the admin pans/zooms it to fit in Club
+          Manager). Renders whenever there's text OR an image, so a
+          text-only club keeps today's exact behaviour and an image-only
+          club still gets its watermark even with no banner copy. */}
+      {(welcomeText || club?.image_url) && (
+        <div style={{ position: "relative", background: colour, borderRadius: 14,
+          padding: "1rem", marginBottom: 16, fontSize: "0.9rem", color: clubTextOn(colour), lineHeight: 1.6,
+          overflow: "hidden", minHeight: club?.image_url ? "clamp(90px, 20vw, 150px)" : undefined }}>
+          {club?.image_url && (
+            <>
+              <WatermarkBackground imageUrl={club.image_url} posX={club.image_pos_x} posY={club.image_pos_y} zoom={club.image_zoom} />
+              {/* Scrim in the club's own colour -- keeps white text readable
+                  over any photo, and keeps the club's colour identity even
+                  though a photo is now behind it. */}
+              <div style={{ position: "absolute", inset: 0, background: colour, opacity: 0.6 }} />
+            </>
+          )}
+          {welcomeText && (
+            <div style={{ position: "relative" }}>
+              {/<[a-z][\s\S]*>/i.test(welcomeText)
+                ? <span dangerouslySetInnerHTML={{ __html: welcomeText }} />
+                : welcomeText}
+            </div>
+          )}
         </div>
       )}
 

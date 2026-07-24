@@ -10,7 +10,7 @@
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
     "check:invariants": "node scripts/check-invariants.js",
-    "test:unit": "node tests/unit/booking.test.mjs && node tests/unit/payments.test.mjs && node tests/unit/attendees.test.mjs && node tests/unit/accounts.test.mjs && node tests/unit/clubs.test.mjs && node tests/unit/recurrence.test.mjs",
+    "test:unit": "node tests/unit/booking.test.mjs && node tests/unit/payments.test.mjs && node tests/unit/attendees.test.mjs && node tests/unit/accounts.test.mjs && node tests/unit/clubs.test.mjs && node tests/unit/recurrence.test.mjs && node tests/unit/clubWatermark.test.mjs",
     "lint": "eslint --ext .js,.jsx app components lib"
   },
   "dependencies": {

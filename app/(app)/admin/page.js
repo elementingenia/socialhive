@@ -10,6 +10,7 @@ import RichEditor, { bbToHtml } from '@/components/RichEditor'
 import OwnersManager from '@/components/OwnersManager'
 import ResidentEditForm, { Sheet } from '@/components/ResidentEditPanel'
 import { CLUB_COLOURS, nextClubColour } from '@/lib/clubColours'
+import ClubWatermarkPicker from '@/components/ClubWatermarkPicker'
 import { BAR_ENABLED } from '@/lib/features'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -1691,6 +1692,7 @@ function ClubForm({ club, existingColours = [], onSaved, onCancel }) {
   const [form, setForm] = useState({
     name: club?.name || '', slug: club?.slug || '', description: club?.description || '',
     welcome_text: club?.welcome_text || '',
+    image_url: club?.image_url || null, image_pos_x: club?.image_pos_x ?? 50, image_pos_y: club?.image_pos_y ?? 50, image_zoom: club?.image_zoom ?? 1,
     colour: club?.colour || nextClubColour(existingColours), catalogue_module: club?.catalogue_module || 'none',
     has_book_return: club?.has_book_return || false, has_kit_return: club?.has_kit_return || false,
     has_theme: club?.has_theme || false, has_cost: club?.has_cost || false, bring_enabled: club?.bring_enabled || false,
@@ -1773,6 +1775,27 @@ function ClubForm({ club, existingColours = [], onSaved, onCancel }) {
           ))}
         </div>
       </Field>
+
+      {isEdit ? (
+        <Field label="Watermark image (optional)">
+          <ClubWatermarkPicker
+            clubId={club.id}
+            imageUrl={form.image_url}
+            posX={form.image_pos_x}
+            posY={form.image_pos_y}
+            zoom={form.image_zoom}
+            colour={CLUB_COLOURS.find(c => c.value === form.colour)?.hex || (form.colour?.startsWith('#') ? form.colour : '#7c3aed')}
+            onUpdated={patch => setForm(f => ({ ...f, ...patch }))}
+          />
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.35rem' }}>
+            Shows behind the welcome banner at the top of the club's page -- watermarked with the club colour so text stays readable. Works with portrait or landscape photos; drag and zoom to fit.
+          </div>
+        </Field>
+      ) : (
+        <Field label="Watermark image (optional)">
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Save the club first, then you can add its watermark image here.</div>
+        </Field>
+      )}
 
       <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0.75rem 0 0.5rem' }}>Event options</div>
       {CLUB_FLAGS.map(fl => (
