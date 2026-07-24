@@ -202,7 +202,15 @@ export async function PATCH(req) {
 
     const msg = `${member.name || 'A resident'} marked payment${owed ? ` ($${owed})` : ''} as submitted for ${event?.title || 'this event'} — please confirm.`
     for (const id of notifyIds) {
-      await notify(id, event_id, 'payment_submitted', msg)
+      // actorId guard (Iain, 2026-07-24): if the resident marking their own
+      // payment as submitted is also an admin or this event's coordinator --
+      // easy to hit, since Iain is both -- they'd otherwise get a "please
+      // confirm" notification about their own action. notify()'s central
+      // actorId param exists for exactly this (added 2026-07-21), this call
+      // site just never passed it -- the general self-notification fix
+      // landed on other call sites but missed this one, written earlier
+      // (2026-07-12) and not revisited since.
+      await notify(id, event_id, 'payment_submitted', msg, undefined, member.id)
     }
 
     return NextResponse.json({ ok: true })
