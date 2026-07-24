@@ -10,8 +10,11 @@ import { authedFetch } from "@/lib/getAuthToken"
 // without going through the full Admin > Club Manager form. Everything here
 // auto-saves (colour on click, image/position/zoom via ClubWatermarkPicker's
 // own auto-save) through /api/clubs/appearance and /api/clubs/image, both
-// gated admin-or-owner (lib/clubAuth.js) -- so this is deliberately just a
-// simple sheet with a Close button, no separate Save step to forget.
+// gated admin-or-owner (lib/clubAuth.js) -- there's no separate Save step to
+// forget. Uses Sheet's `footer` prop (added same day) for a persistent
+// "Done" button pinned to the bottom -- Iain hit the sheet's Close button
+// scrolling out of view on a tall picker and couldn't get back to it;
+// Sheet's header is now sticky too, so this is belt-and-braces reachability.
 export default function ClubAppearanceModal({ club, open, onClose, onUpdated }) {
   const [colour, setColour] = useState(club?.colour || CLUB_COLOURS[0].value)
   const [saving, setSaving] = useState(false)
@@ -31,8 +34,16 @@ export default function ClubAppearanceModal({ club, open, onClose, onUpdated }) 
 
   const swatchHex = CLUB_COLOURS.find(c => c.value === colour)?.hex || (colour?.startsWith("#") ? colour : "#7c3aed")
 
+  const doneButton = (
+    <button onClick={onClose} type="button" style={{
+      width: "100%", padding: "0.75rem", borderRadius: 10, border: "none",
+      background: swatchHex, color: "#fff", fontWeight: 700, fontFamily: "inherit",
+      fontSize: "0.95rem", cursor: "pointer",
+    }}>Done</button>
+  )
+
   return (
-    <Sheet open={open} onClose={onClose} title={`${club?.name || "Club"} background`}>
+    <Sheet open={open} onClose={onClose} title={`${club?.name || "Club"} background`} footer={doneButton}>
       <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
         <div>
           <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.5rem" }}>
