@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { promoteWaitlist } from '@/lib/promoteWaitlist'
 import { notify } from '@/lib/notify'
 import { bookingsClosed } from '@/lib/booking'
-import { validateParty, validateBring } from '@/lib/attendees'
+import { validateParty, validateBring, resolveBringCategoryIds } from '@/lib/attendees'
 import { fetchTakenResidentIds } from '@/lib/takenResidents'
 import { syncAttendees } from '@/lib/syncAttendees'
 
@@ -59,10 +59,16 @@ export async function POST(req) {
 
   // "Attendees bring something": mandatory for the booker, optional for guests.
   const bringRequired = !!event.clubs?.bring_enabled
+  let allowedCategoryIds = event.bring_category_ids
+  if (bringRequired && event.club_id) {
+    const { data: currentCats } = await supabaseAdmin
+      .from('club_bring_categories').select('id').eq('club_id', event.club_id)
+    allowedCategoryIds = resolveBringCategoryIds({ allowedCategoryIds: event.bring_category_ids, currentCategoryIds: (currentCats || []).map(c => c.id) })
+  }
   const bring = validateBring({
     required: bringRequired,
     bringCategoryId: body.bring_category_id,
-    allowedCategoryIds: event.bring_category_ids,
+    allowedCategoryIds,
   })
   if (!bring.ok) return NextResponse.json({ error: bring.error }, { status: 400 })
   const bringFields = bringRequired
@@ -260,10 +266,16 @@ export async function PATCH(req) {
   if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
 
   const bringRequired = !!event?.clubs?.bring_enabled
+  let patchAllowedCategoryIds = event?.bring_category_ids
+  if (bringRequired && event?.club_id) {
+    const { data: currentCats } = await supabaseAdmin
+      .from('club_bring_categories').select('id').eq('club_id', event.club_id)
+    patchAllowedCategoryIds = resolveBringCategoryIds({ allowedCategoryIds: event?.bring_category_ids, currentCategoryIds: (currentCats || []).map(c => c.id) })
+  }
   const bring = validateBring({
     required: bringRequired,
     bringCategoryId: body.bring_category_id,
-    allowedCategoryIds: event?.bring_category_ids,
+    allowedCategoryIds: patchAllowedCategoryIds,
   })
   if (!bring.ok) return NextResponse.json({ error: bring.error }, { status: 400 })
 
