@@ -59,7 +59,7 @@ async function validateSpace(payload, excludeEventId) {
 
 const FIELDS = ["club_id", "event_date", "event_time", "event_end_time", "title", "is_public", "show_attendee_names",
   "description", "welcome_message", "book_id", "kit_return_date", "book_return_date", "reservation_cutoff", "max_seats",
-  "location_type", "location", "max_seats_per_booking", "allow_nonresident_guests", "payment_required", "cost",
+  "location_type", "location", "max_seats_per_booking", "allow_nonresident_guests", "require_attendee_names", "payment_required", "cost",
   "payment_due_by", "bring_category_ids", "theme_name", "book_snapshot"]
 
 function buildPayload(body, isInsert) {
@@ -126,7 +126,7 @@ export async function PATCH(req) {
     const authHeader = req.headers.get("Authorization")
     if (series_scope === "future") {
       const PROP = ["title", "description", "welcome_message", "event_time", "event_end_time", "location_type",
-        "location", "location_id", "max_seats", "max_seats_per_booking", "allow_nonresident_guests",
+        "location", "location_id", "max_seats", "max_seats_per_booking", "allow_nonresident_guests", "require_attendee_names",
         "payment_required", "cost", "bring_category_ids", "theme_name", "is_public", "show_attendee_names"]
       const fields = {}
       for (const k of PROP) if (k in payload) fields[k] = payload[k]

@@ -72,6 +72,24 @@ ok(notTaken.ok === true, 'resident not in the taken set => ok')
 const noTakenSets = validateParty({ seats: 2, attendees: [{ member_id: 'm9' }], allowGuests: false, ownerId: OWNER })
 ok(noTakenSets.ok === true, 'omitting takenMemberIds/takenContactIds entirely => ok (backward compatible)')
 
+// optional naming (2026-07-25) -- required defaults to true (unchanged
+// behaviour for every caller above that doesn't pass it); required:false is
+// the new per-event opt-out.
+ok(validateParty({ seats: 3, attendees: [], allowGuests: false, ownerId: OWNER, required: false }).ok === true, 'not required, 0 of 2 named => ok')
+const partial = validateParty({ seats: 3, attendees: [{ member_id: 'm1' }], allowGuests: false, ownerId: OWNER, required: false })
+ok(partial.ok === true && partial.attendees.length === 1, 'not required, 1 of 2 named => ok, only the named one kept')
+const blankRow = validateParty({ seats: 3, attendees: [{ member_id: 'm1' }, { kind: 'resident', member_id: null, contact_id: null, guest_name: '' }], allowGuests: false, ownerId: OWNER, required: false })
+ok(blankRow.ok === true && blankRow.attendees.length === 1, 'not required, blank placeholder row => dropped, not an error')
+ok(validateParty({ seats: 3, attendees: [{ member_id: 'm1' }, { member_id: 'm2' }, { member_id: 'm3' }], allowGuests: false, ownerId: OWNER, required: false }).ok === false, 'not required, more named than seats allow => still rejected')
+// not-required doesn't loosen the OTHER rules -- duplicates, owner-as-guest,
+// taken-elsewhere, and guests-not-allowed all still apply to whatever IS named
+ok(validateParty({ seats: 3, attendees: [{ member_id: 'm1' }, { member_id: 'm1' }], allowGuests: false, ownerId: OWNER, required: false }).ok === false, 'not required, duplicate resident named => still rejected')
+ok(validateParty({ seats: 2, attendees: [{ member_id: OWNER }], allowGuests: false, ownerId: OWNER, required: false }).ok === false, 'not required, owner names themselves => still rejected')
+ok(validateParty({ seats: 2, attendees: [{ guest_name: 'Bob' }], allowGuests: false, ownerId: OWNER, required: false }).ok === false, 'not required, guest named on residents-only event => still rejected')
+// required explicitly true behaves exactly like the default (redundant but
+// documents the intent at call sites that pass it explicitly)
+ok(validateParty({ seats: 3, attendees: [{ member_id: 'm1' }], allowGuests: false, ownerId: OWNER, required: true }).ok === false, 'required:true, 1 of 2 named => rejected, same as default')
+
 // bring-a-dish
 ok(validateBring({ required: false }).ok === true, 'not required => ok even with nothing chosen')
 ok(validateBring({ required: true, bringCategoryId: null }).ok === false, 'required + nothing chosen => rejected')

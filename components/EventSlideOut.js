@@ -725,7 +725,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                         </div>
                         <PartyPicker count={addSeats - 1} allowGuests={allowGuests} members={allResidents}
                           excludeIds={selectedResident ? [selectedResident.id] : []}
-                          value={addParty} onChange={setAddParty} taken={taken} />
+                          value={addParty} onChange={setAddParty} taken={taken} required={false} />
                       </>
                     )}
                   </div>
@@ -1107,14 +1107,16 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
   )
 }
 
-function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange, bringCats = [], taken }) {
+function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange, bringCats = [], taken, required = true }) {
   const rows = []
   for (let i = 0; i < count; i++) rows.push(value[i] || { kind: "resident", member_id: null, contact_id: null, member_name: "", guest_name: "" })
   const chosen = value.filter(v => v?.member_id || v?.contact_id).map(v => v.member_id || v.contact_id)
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10, margin: "8px 0 12px" }}>
       <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
-        Who else is coming? Please name the other {count === 1 ? "attendee" : `${count} attendees`}.
+        {required
+          ? `Who else is coming? Please name the other ${count === 1 ? "attendee" : `${count} attendees`}.`
+          : `Who else is coming? Naming them is optional — leave any seat blank if you'd rather not say.`}
       </div>
       {rows.map((row, i) => (
         <PartyRow key={i} index={i} row={row} allowGuests={allowGuests} members={members}
@@ -1219,9 +1221,15 @@ function BookingSection({ event, onRefresh, onClose }) {
       .then(({ data }) => { if (data?.bring_category_id) setMyBring({ category_id: data.bring_category_id, note: data.bring_note || "" }) })
   }, [event.id, me?.id])
 
+  // Naming extra seats used to be mandatory on every multi-seat booking.
+  // Iain, 2026-07-25: default is now the opposite -- naming is optional
+  // unless the event explicitly requires it (events.require_attendee_names).
+  // Server-side (lib/attendees.js's validateParty) is authoritative; this
+  // mirrors it client-side just to gate the button the same way.
+  const requireNaming = !!event.require_attendee_names
+  const isRowFilled = p => !!(p.member_id || p.contact_id || (allowGuests && p.guest_name && p.guest_name.trim()))
   const partyNeed = Math.max(0, seats - 1)
-  const partyValid = party.length === partyNeed &&
-    party.every(p => p.member_id || p.contact_id || (allowGuests && p.guest_name && p.guest_name.trim()))
+  const partyValid = !requireNaming || (party.length === partyNeed && party.every(isRowFilled))
   const bringValid = !bringEnabled || !!myBring.category_id
   const partyToAttendees = (arr) => arr.map(p => ({
     ...(p.member_id ? { member_id: p.member_id } : p.contact_id ? { contact_id: p.contact_id } : { guest_name: (p.guest_name || "").trim() }),
@@ -1288,8 +1296,11 @@ function BookingSection({ event, onRefresh, onClose }) {
     }
   }, [modifying, modifySeats, myAttendees])
   const modNeed = Math.max(0, modifySeats - 1)
-  const modPartyValid = modParty.length === modNeed &&
-    modParty.every(p => p.member_id || (allowGuests && p.guest_name && p.guest_name.trim()))
+  // Also now covers contact_id, matching partyValid above -- modPartyValid
+  // was missing it (a pre-existing gap: a contact picked as a party member
+  // on Modify was silently never counted as "filled"), found while adding
+  // the optional-naming check right next to it.
+  const modPartyValid = !requireNaming || (modParty.length === modNeed && modParty.every(isRowFilled))
 
   function showToast(msg, type = "success") {
     setToast({ msg, type })
@@ -1433,7 +1444,7 @@ function BookingSection({ event, onRefresh, onClose }) {
               {!isBookclubEvent && seats > 1 && (
                 <PartyPicker count={seats - 1} allowGuests={allowGuests} members={members}
                   excludeIds={me?.id ? [me.id] : []} value={party} onChange={setParty}
-                  bringCats={bringEnabled ? bringCats : []} taken={taken} />
+                  bringCats={bringEnabled ? bringCats : []} taken={taken} required={requireNaming} />
               )}
               <button onClick={() => handleBook()} disabled={loading || (seats > 1 && !partyValid) || !bringValid}
                 style={{ width: "100%", padding: "14px 0", background: "var(--amber)", color: "#fff", border: "none",
@@ -1542,7 +1553,7 @@ function BookingSection({ event, onRefresh, onClose }) {
           {modifySeats > 1 && (
             <PartyPicker count={modifySeats - 1} allowGuests={allowGuests} members={members}
               excludeIds={me?.id ? [me.id] : []} value={modParty} onChange={setModParty}
-              bringCats={bringEnabled ? bringCats : []} taken={taken} />
+              bringCats={bringEnabled ? bringCats : []} taken={taken} required={requireNaming} />
           )}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={() => setModifying(false)}
@@ -1605,6 +1616,22 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
     }
   }, [event])
 
+  // Lock background scroll while the sheet is open. Without this, iOS Safari
+  // can "scroll chain" a touch-drag inside the sheet's own scroll container
+  // through to the page behind it once the drag starts near the sheet's own
+  // scroll boundary -- which reads to the user as the sheet being stuck /
+  // unable to reach content further down (Iain + Scampi hit this live,
+  // 2026-07-25, on the taller booking form the new attendee-naming picker
+  // produces -- previously most forms fit on one screen so this scroll-chain
+  // path rarely got exercised). Combined with overscrollBehavior:"contain"
+  // on the sheet's own scroll container below.
+  useEffect(() => {
+    if (!event) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => { document.body.style.overflow = prevOverflow }
+  }, [event])
+
   if (!event) return null
 
   const colour = event.is_public === false ? "#bbb"
@@ -1622,12 +1649,12 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
   }
 
   return (
-    <>
+    <Portal>
       <div onClick={handleClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300,
         opacity: open ? 1 : 0, transition: "opacity 0.25s ease" }} />
 
       <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "min(420px, 96vw)",
-        background: "var(--surface)", zIndex: 301, overflowY: "auto",
+        background: "var(--surface)", zIndex: 301, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch",
         transform: open ? "translateX(0)" : "translateX(100%)",
         transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
         boxShadow: "-8px 0 32px rgba(0,0,0,0.15)", paddingBottom: 32 }}>
@@ -1804,6 +1831,6 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
           {isPrivate && !isAuthenticated && <div style={{ marginTop: 8 }}><LoginPrompt /></div>}
         </div>
       </div>
-    </>
+    </Portal>
   )
 }

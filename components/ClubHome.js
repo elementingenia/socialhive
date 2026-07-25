@@ -21,6 +21,7 @@ import { cutoffToDateValue, cutoffFromDateValue } from "@/lib/booking"
 import TimeField from "@/components/TimeField"
 import { needsSpaceValidation } from "@/lib/eventClash"
 import { useSameDateWarning } from "@/components/SameDateWarning"
+import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -805,7 +806,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     location_type: event?.location_type || "onsite",
     location:     event?.location || "",
     max_seats_per_booking: event?.max_seats_per_booking ?? 2,
-    allow_nonresident_guests: event?.allow_nonresident_guests || false,
+    allow_nonresident_guests: event ? !!event.allow_nonresident_guests : true, // new events default to "Anyone" (2026-07-25)
+    require_attendee_names: !!event?.require_attendee_names,
     payment_required: event?.payment_required || false,
     cost:         event?.cost || "",
     payment_due_by: event?.payment_due_by || "",
@@ -882,6 +884,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             max_seats: Number(form.max_seats) || 20,
             max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
             allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
+            require_attendee_names: Number(form.max_seats_per_booking) > 1 ? !!form.require_attendee_names : false,
             payment_required: caps.hasCost ? !!form.payment_required : false,
             cost: caps.hasCost && form.payment_required ? (Number(form.cost) || 0) : 0,
             bring_category_ids: caps.bringEnabled ? (form.bring_category_ids || null) : null,
@@ -954,6 +957,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       location:        form.location || null,
       max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
       allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
+      require_attendee_names: Number(form.max_seats_per_booking) > 1 ? !!form.require_attendee_names : false,
       payment_required: caps.hasCost ? !!form.payment_required : false,
       cost:            caps.hasCost && form.payment_required ? (Number(form.cost) || 0) : 0,
       payment_due_by:  caps.hasCost && form.payment_required ? (form.payment_due_by || null) : null,
@@ -1172,20 +1176,13 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       </div>
 
       {Number(form.max_seats_per_booking) > 1 && (
-      <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Extra attendees on multi-seat bookings</label>
-        <div style={{ display: "flex", gap: 8 }}>
-          {[{ v: false, t: "Residents only" }, { v: true, t: "Residents + guests" }].map(opt => (
-            <button key={String(opt.v)} type="button" onClick={() => set("allow_nonresident_guests", opt.v)}
-              style={{ flex: 1, padding: "0.6rem 0.5rem", borderRadius: 10, fontSize: "0.88rem", fontFamily: "inherit", cursor: "pointer",
-                border: `1.5px solid ${form.allow_nonresident_guests === opt.v ? colour : "var(--border)"}`,
-                background: form.allow_nonresident_guests === opt.v ? colour : "var(--surface)",
-                color: form.allow_nonresident_guests === opt.v ? "#fff" : "var(--text)",
-                fontWeight: form.allow_nonresident_guests === opt.v ? 700 : 500 }}>{opt.t}</button>
-          ))}
-        </div>
-        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 4 }}>Booking more than one seat means naming each extra attendee.</div>
-      </div>
+        <AttendeeNamingPicker
+          allowGuests={form.allow_nonresident_guests}
+          onAllowGuestsChange={v => set("allow_nonresident_guests", v)}
+          required={form.require_attendee_names}
+          onRequiredChange={v => set("require_attendee_names", v)}
+          colour={colour}
+        />
       )}
 
       {caps.hasCost && (
@@ -1691,7 +1688,7 @@ export default function ClubHome({ club }) {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, max_seats, max_seats_per_booking, allow_nonresident_guests, cost, payment_due_by, payment_required, location_type, location, image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("club_id", club.id)
       .eq("archived", false)
       .order("event_date", { ascending: true })
