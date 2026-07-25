@@ -1616,6 +1616,22 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
     }
   }, [event])
 
+  // Lock background scroll while the sheet is open. Without this, iOS Safari
+  // can "scroll chain" a touch-drag inside the sheet's own scroll container
+  // through to the page behind it once the drag starts near the sheet's own
+  // scroll boundary -- which reads to the user as the sheet being stuck /
+  // unable to reach content further down (Iain + Scampi hit this live,
+  // 2026-07-25, on the taller booking form the new attendee-naming picker
+  // produces -- previously most forms fit on one screen so this scroll-chain
+  // path rarely got exercised). Combined with overscrollBehavior:"contain"
+  // on the sheet's own scroll container below.
+  useEffect(() => {
+    if (!event) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    return () => { document.body.style.overflow = prevOverflow }
+  }, [event])
+
   if (!event) return null
 
   const colour = event.is_public === false ? "#bbb"
@@ -1638,7 +1654,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
         opacity: open ? 1 : 0, transition: "opacity 0.25s ease" }} />
 
       <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "min(420px, 96vw)",
-        background: "var(--surface)", zIndex: 301, overflowY: "auto",
+        background: "var(--surface)", zIndex: 301, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch",
         transform: open ? "translateX(0)" : "translateX(100%)",
         transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
         boxShadow: "-8px 0 32px rgba(0,0,0,0.15)", paddingBottom: 32 }}>
