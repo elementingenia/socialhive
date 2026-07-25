@@ -3,7 +3,7 @@
 //
 //   npm run test:unit
 
-import { validateParty, validateBring } from '../../lib/attendees.js'
+import { validateParty, validateBring, resolveBringCategoryIds } from '../../lib/attendees.js'
 
 let pass = 0, fail = 0
 const ok = (cond, msg) => { cond ? pass++ : (fail++, console.log('  ✗', msg)) }
@@ -79,6 +79,23 @@ ok(validateBring({ required: true, bringCategoryId: 'cat1' }).ok === true, 'requ
 ok(validateBring({ required: true, bringCategoryId: 'cat9', allowedCategoryIds: ['cat1','cat2'] }).ok === false, 'category not allowed for this event => rejected')
 ok(validateBring({ required: true, bringCategoryId: 'cat1', allowedCategoryIds: ['cat1','cat2'] }).ok === true, 'allowed category => ok')
 ok(validateBring({ required: true, bringCategoryId: 'cat1', allowedCategoryIds: [] }).ok === true, 'empty allowed list means all categories')
+
+// resolveBringCategoryIds -- reconciling a possibly-stale events.bring_category_ids
+// snapshot against the club's current live categories (2026-07-25 fix,
+// Sydney Harbour Night hit "That option isn't available" on submit even
+// though the client's own fallback showed it as pickable).
+ok(resolveBringCategoryIds({ allowedCategoryIds: null, currentCategoryIds: ['a','b'] }) === null, 'no narrowing stored => unrestricted')
+ok(resolveBringCategoryIds({ allowedCategoryIds: [], currentCategoryIds: ['a','b'] }) === null, 'empty narrowing stored => unrestricted')
+{
+  const r = resolveBringCategoryIds({ allowedCategoryIds: ['a','b'], currentCategoryIds: ['a','b','c'] })
+  ok(Array.isArray(r) && r.length === 2 && r.includes('a') && r.includes('b'), 'all stored ids still valid => unchanged')
+}
+ok(resolveBringCategoryIds({ allowedCategoryIds: ['stale1','stale2'], currentCategoryIds: ['a','b','c'] }) === null, 'totally stale narrowing => falls back to unrestricted')
+{
+  const r = resolveBringCategoryIds({ allowedCategoryIds: ['a','stale'], currentCategoryIds: ['a','b','c'] })
+  ok(Array.isArray(r) && r.length === 1 && r[0] === 'a', 'partially stale narrowing => keeps only the still-valid ids')
+}
+ok(validateBring({ required: true, bringCategoryId: 'a', allowedCategoryIds: resolveBringCategoryIds({ allowedCategoryIds: ['a'], currentCategoryIds: [] }) }).ok === true, 'club has zero current categories => resolves to something validateBring treats as unrestricted, never a hard block')
 
 console.log(`\nlib/attendees.js validateParty: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
