@@ -282,11 +282,26 @@ function MyBookingsCard({ bookings, onViewAll }) {
                     <span style={{ background: badge.bg, color: badge.color, borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
                       ⏳ {badge.label}
                     </span>
-                  ) : (
-                    <span style={{ background: badge.bg, color: badge.color, borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
-                      {badge.label === "Confirmed" ? "✓ " : ""}{n} seat{n !== 1 ? "s" : ""} · {badge.label}{seatsCost(ev, n) ? ` ${seatsCost(ev, n)}` : ""}
-                    </span>
-                  )}
+                  ) : (() => {
+                    // Same submitted-aware wording/colour as the Next Social
+                    // Event tile above (Iain, 2026-07-25: the two pills for
+                    // the same booking were showing different things —
+                    // "Payment submitted" up top, plain "Booked" down here).
+                    const total     = seatsCost(ev, n)
+                    const submitted = badge.label !== "Confirmed" && computeIsSubmitted({ payment_status })
+                    const label = badge.label === "Confirmed"
+                      ? `✓ ${n} seat${n !== 1 ? "s" : ""} · ${badge.label}${total ? ` ${total}` : ""}`
+                      : submitted
+                        ? `${n} seat${n !== 1 ? "s" : ""} · ${badge.label} · Payment submitted${total ? ` ${total}` : ""}`
+                        : `${n} seat${n !== 1 ? "s" : ""} · ${badge.label}${total ? ` ${total}` : ""}`
+                    const pillBg    = submitted ? "#f0fdfa" : badge.bg
+                    const pillColor = submitted ? "#0f766e" : badge.color
+                    return (
+                      <span style={{ background: pillBg, color: pillColor, borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
+                        {label}
+                      </span>
+                    )
+                  })()}
                 </div>
               </div>
             )
