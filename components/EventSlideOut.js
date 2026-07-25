@@ -1649,7 +1649,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
   }
 
   return (
-    <>
+    <Portal>
       <div onClick={handleClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300,
         opacity: open ? 1 : 0, transition: "opacity 0.25s ease" }} />
 
@@ -1831,6 +1831,6 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
           {isPrivate && !isAuthenticated && <div style={{ marginTop: 8 }}><LoginPrompt /></div>}
         </div>
       </div>
-    </>
+    </Portal>
   )
 }
