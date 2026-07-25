@@ -35,7 +35,7 @@ export async function POST(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('id, max_seats, hub_type, book_id, payment_required, reservation_cutoff, allow_nonresident_guests, bring_category_ids, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('id, max_seats, hub_type, book_id, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
 
   // Reservation cut-off (workstream B). Once past, no new bookings/waitlist
@@ -54,6 +54,7 @@ export async function POST(req) {
     allowGuests: !!event.allow_nonresident_guests,
     ownerId: member.id,
     takenMemberIds, takenContactIds,
+    required: !!event.require_attendee_names,
   })
   if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
 
@@ -233,7 +234,7 @@ export async function PATCH(req) {
   const oldConfirmed = myConfirmed.seats || 1
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('max_seats, payment_required, reservation_cutoff, allow_nonresident_guests, bring_category_ids, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('max_seats, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   const { data: confirmedRows } = await supabaseAdmin
     .from('bookings').select('seats')
     .eq('event_id', event_id).eq('status', 'confirmed').neq('id', myConfirmed.id)
@@ -256,6 +257,7 @@ export async function PATCH(req) {
     allowGuests: !!event?.allow_nonresident_guests,
     ownerId: member.id,
     takenMemberIds, takenContactIds,
+    required: !!event?.require_attendee_names,
   })
   if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
 

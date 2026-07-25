@@ -15,6 +15,7 @@ import { useLocations } from "@/lib/useLocations"
 import TimeField from "@/components/TimeField"
 import { needsSpaceValidation } from "@/lib/eventClash"
 import { useSameDateWarning } from "@/components/SameDateWarning"
+import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -490,7 +491,8 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     menu_text:             event?.menu_text           || "",
     reservation_cutoff:    cutoffToInputValue(event?.reservation_cutoff),
     payment_due_by:        event?.payment_due_by || "",
-    allow_nonresident_guests: event?.allow_nonresident_guests || false,
+    allow_nonresident_guests: event ? !!event.allow_nonresident_guests : true, // new events default to "Anyone" (2026-07-25)
+    require_attendee_names: !!event?.require_attendee_names,
   })
 
   const [coordinators, setCoordinators] = useState([])
@@ -563,7 +565,8 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
       menu_text:             form.has_dining && form.menu_type === "text" ? form.menu_text : null,
       reservation_cutoff:    cutoffFromInputValue(form.reservation_cutoff),
       payment_due_by:        form.payment_required ? (form.payment_due_by || null) : null,
-      allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? form.allow_nonresident_guests : false,
+      allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
+      require_attendee_names: Number(form.max_seats_per_booking) > 1 ? !!form.require_attendee_names : false,
     }
     if (activeId) payload.id = activeId
 
@@ -837,10 +840,13 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 
           {Number(form.max_seats_per_booking) > 1 && (
             <div style={FIELD}>
-              <Toggle value={form.allow_nonresident_guests} onChange={v => set("allow_nonresident_guests", v)} label="Allow non-resident guests" />
-              <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>
-                When a resident books more than one seat they must name each extra attendee. Off = they must all be residents; on = residents or named guests.
-              </div>
+              <AttendeeNamingPicker
+                allowGuests={form.allow_nonresident_guests}
+                onAllowGuestsChange={v => set("allow_nonresident_guests", v)}
+                required={form.require_attendee_names}
+                onRequiredChange={v => set("require_attendee_names", v)}
+                colour="var(--terracotta, #c2410c)"
+              />
             </div>
           )}
 
@@ -1367,7 +1373,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, contact_id, booked_at, updated_at, member:members!member_id(id, name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, member:members!member_id(name, hide_name), contact:contacts!contact_id(name))")
+      .select("id, title, event_date, event_time, description, welcome_message, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_required, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, contact_id, booked_at, updated_at, member:members!member_id(id, name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, member:members!member_id(name, hide_name), contact:contacts!contact_id(name))")
       .eq("hub_type", "social")
       .eq("archived", false)
       .order("event_date", { ascending: true })

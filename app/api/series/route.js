@@ -35,7 +35,7 @@ async function resolve(req, clubId) {
 // Template fields a "this and future" edit propagates to later occurrences.
 // Never event_date (rule-driven) or book_id (per-occurrence, Book Club).
 const PROPAGATE = ["title","description","welcome_message","event_time","location_type","location",
-  "max_seats","max_seats_per_booking","allow_nonresident_guests","payment_required","cost",
+  "max_seats","max_seats_per_booking","allow_nonresident_guests","require_attendee_names","payment_required","cost",
   "bring_category_ids","theme_name","is_public","show_attendee_names"]
 
 export async function POST(req) {
@@ -57,6 +57,7 @@ export async function POST(req) {
     location_type: body.location_type || "onsite", location: body.location || null,
     max_seats: body.max_seats ?? 20, max_seats_per_booking: body.max_seats_per_booking ?? 1,
     allow_nonresident_guests: !!body.allow_nonresident_guests,
+    require_attendee_names: !!body.require_attendee_names,
     payment_required: !!body.payment_required, cost: body.payment_required ? (body.cost ?? 0) : 0,
     bring_category_ids: body.bring_category_ids || null, theme_name: body.theme_name || null,
     is_public: body.is_public !== false, show_attendee_names: body.show_attendee_names !== false,

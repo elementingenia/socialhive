@@ -339,7 +339,7 @@ export async function PATCH(req) {
     }
 
     const { data: ev } = await supa
-      .from("events").select("id, max_seats, hub_type, book_id, payment_required, title, allow_nonresident_guests")
+      .from("events").select("id, max_seats, hub_type, book_id, payment_required, title, allow_nonresident_guests, require_attendee_names")
       .eq("id", event_id).single()
     if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
 
@@ -360,6 +360,7 @@ export async function PATCH(req) {
         seats, attendees: rawAttendees, allowGuests: !!ev.allow_nonresident_guests,
         ownerId: member_id || null, ownerContactId: contact_id || null,
         takenMemberIds, takenContactIds,
+        required: !!ev.require_attendee_names,
       })
       if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
     }
