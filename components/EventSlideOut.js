@@ -1598,6 +1598,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
   const [open, setOpen] = useState(false)
   const [coordinators, setCoordinators] = useState([])
   const [showMenu, setShowMenu] = useState(false)
+  const sheetRef = useRef(null)
 
   useEffect(() => {
     if (event) {
@@ -1632,6 +1633,36 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
     return () => { document.body.style.overflow = prevOverflow }
   }, [event])
 
+  // Pin the sheet to the true visible area (iOS Safari, 2026-07-25: Iain +
+  // Scampi both saw the sheet settle in a position where Book Now was no
+  // longer reachable, even after the scroll-chain fix above). top:0/bottom:0
+  // sizes the sheet against the LAYOUT viewport, but Safari's own "scroll
+  // focused input into view" behaviour when a party/bring text field is
+  // focused shifts the VISUAL viewport (and sometimes leaves it shifted
+  // after the keyboard closes) independently of that layout box -- so the
+  // sheet's own geometry stays "correct" on paper while the actual visible
+  // window has moved under it. window.visualViewport is the API made for
+  // exactly this: it reports the real visible rect, and re-pinning the sheet
+  // to it on every change cancels out whatever Safari just did.
+  useEffect(() => {
+    if (!event) return
+    const vv = window.visualViewport
+    if (!vv) return
+    function sync() {
+      const el = sheetRef.current
+      if (!el) return
+      el.style.top = vv.offsetTop + "px"
+      el.style.height = vv.height + "px"
+    }
+    sync()
+    vv.addEventListener("resize", sync)
+    vv.addEventListener("scroll", sync)
+    return () => {
+      vv.removeEventListener("resize", sync)
+      vv.removeEventListener("scroll", sync)
+    }
+  }, [event])
+
   if (!event) return null
 
   const colour = event.is_public === false ? "#bbb"
@@ -1653,7 +1684,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
       <div onClick={handleClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300,
         opacity: open ? 1 : 0, transition: "opacity 0.25s ease" }} />
 
-      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "min(420px, 96vw)",
+      <div ref={sheetRef} style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "min(420px, 96vw)",
         background: "var(--surface)", zIndex: 301, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch",
         transform: open ? "translateX(0)" : "translateX(100%)",
         transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
