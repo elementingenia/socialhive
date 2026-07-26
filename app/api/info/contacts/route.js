@@ -67,9 +67,9 @@ export async function PATCH(req) {
     }
   }
 
-  // Standalone contact: name is a real contacts-row field. Member-linked
-  // resident: name belongs to members.name (routed below), and phone is
-  // self-service via Profile — never write either onto the contacts row.
+  // Standalone contact: name is a real contacts-row field, admin-editable.
+  // Member-linked resident: name belongs to members.name and is self-service
+  // only (2026-07-26) -- like phone, never written onto the contacts row here.
   if (!member_id && name !== undefined) updates.name = name
   if (member_id) delete updates.phone
 
@@ -86,16 +86,16 @@ export async function PATCH(req) {
     )
   }
 
-  // Members-table fields. name is admin-editable here (2026-07-16) to fill the
-  // gap where a self-registered resident's name still defaults to their
-  // username, or an admin-created account needs its real name corrected — the
-  // resident can still edit it themselves in Profile (same members.name column,
-  // so no divergent copies).
-  if (member_id && (is_admin !== undefined || hide_name !== undefined || (name !== undefined && name.trim()))) {
+  // Members-table fields. name is NOT accepted here for a member_id target
+  // (reversed 2026-07-26, Iain) -- once a resident has a login, name is
+  // self-service like email/house#/phone: only they can change it, from
+  // their own Profile. The 2026-07-16 admin-name-override exception this
+  // replaced is gone; ResidentEditForm no longer sends `name` for a linked
+  // member, so this route ignores it too even if an old client still does.
+  if (member_id && (is_admin !== undefined || hide_name !== undefined)) {
     const memberUpdates = {}
     if (is_admin !== undefined) memberUpdates.is_admin = is_admin
     if (hide_name !== undefined) memberUpdates.hide_name = hide_name
-    if (name !== undefined && name.trim()) memberUpdates.name = name.trim()
     const { error } = await supabaseAdmin.from('members').update(memberUpdates).eq('id', member_id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
