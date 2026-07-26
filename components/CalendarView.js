@@ -1,7 +1,8 @@
 "use client"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef, useEffect } from "react"
 import { HUB_COLOURS } from "@/lib/navUtils"
 import { useMyClubs } from "@/lib/useMyClubs"
+import { MoviesIcon, SocialIcon, ClubsIcon } from "@/components/NavIcons"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -463,6 +464,80 @@ function MonthView({ events, onEventTap }) {
   )
 }
 
+// Custom pill + popover for the Groups & Clubs calendar filter — replaces a
+// native <select> so its text is guaranteed to match the Movies/Social pill
+// font exactly (see comment at the call site, Iain 2026-07-27).
+function ClubScopeDropdown({ clubScope, setClubScope, clubsInView }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e) {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener("mousedown", onDocClick)
+    return () => document.removeEventListener("mousedown", onDocClick)
+  }, [open])
+
+  const FIXED = [
+    { value: "all",  label: "All Groups & Clubs" },
+    { value: "mine", label: "My Groups & Clubs" },
+    { value: "hide", label: "Hide Groups & Clubs" },
+  ]
+  const options = [...FIXED, ...clubsInView.map(c => ({ value: c.id, label: c.name }))]
+  const current = options.find(o => o.value === clubScope) || FIXED[0]
+
+  return (
+    <div ref={rootRef} style={{ position: "relative", flexShrink: 0 }}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
+          maxWidth: 220, padding: "4px 10px", borderRadius: 20,
+          border: "1px solid var(--purple)", background: "var(--surface2)",
+          cursor: "pointer", fontFamily: "inherit",
+        }}
+      >
+        <span style={{ display: "flex", color: "var(--purple)", flexShrink: 0 }}>
+          <ClubsIcon size={14} />
+        </span>
+        <span style={{
+          fontSize: 12, fontWeight: 600, color: "var(--purple)",
+          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        }}>{current.label}</span>
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 50,
+          minWidth: 200, maxHeight: 260, overflowY: "auto",
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", padding: 4,
+        }}>
+          {options.map(o => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => { setClubScope(o.value); setOpen(false) }}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                padding: "8px 10px", borderRadius: 8, border: "none",
+                background: o.value === clubScope ? "var(--surface2)" : "transparent",
+                color: o.value === clubScope ? "var(--purple)" : "var(--text)",
+                fontFamily: "inherit", fontSize: 13,
+                fontWeight: o.value === clubScope ? 700 : 500,
+                cursor: "pointer",
+              }}
+            >{o.label}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── CalendarView (main export) ────────────────────────────────────────────────
 export default function CalendarView({ events = [], onEventTap, defaultView = "week" }) {
   const [view, setView] = useState(defaultView)
@@ -547,9 +622,9 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
       {/* Hub filters — tap to toggle */}
       <div style={{ display: "flex", gap: 8, padding: "8px 16px", overflowX: "auto", borderBottom: "1px solid var(--border)" }}>
         {[
-          { key: "movie",    label: "Movies"    },
-          { key: "social",   label: "Social"    },
-        ].map(({ key, label }) => {
+          { key: "movie",    label: "Movies", Icon: MoviesIcon },
+          { key: "social",   label: "Social", Icon: SocialIcon },
+        ].map(({ key, label, Icon }) => {
           const on = activeHubs.includes(key)
           const colour = HUB_COLOURS[key] || "var(--amber)"
           return (
@@ -568,7 +643,9 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
                 transition: "all 0.15s",
               }}
             >
-              <div style={{ width: 8, height: 8, borderRadius: "50%", background: on ? colour : "var(--text-dim)", flexShrink: 0 }} />
+              <span style={{ display: "flex", color: on ? colour : "var(--text-dim)", flexShrink: 0 }}>
+                <Icon size={14} />
+              </span>
               <span style={{ fontSize: 12, fontWeight: 600, color: on ? colour : "var(--text-dim)" }}>{label}</span>
             </button>
           )
@@ -576,22 +653,18 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
 
         {/* Club scope IS the clubs filter: All / My clubs / a specific club (Iain 2026-07-19).
             Always purple; the standalone "Clubs" toggle pill was removed as redundant.
-            WebkitTextSizeAdjust pins the native-select text against iPad's narrow-column
-            font inflation (same text-size-adjust quirk as ExpandableText). */}
+            Custom button + popover menu, NOT a native <select> (Iain 2026-07-27: a native
+            select's text rendered visibly larger than the Movies/Social pills on iOS Safari
+            no matter what inline fontSize was set -- platform-enforced minimum form-control
+            font size overriding CSS. A styled button reusing this exact pill's style object
+            guarantees pixel-identical text with Movies/Social, and brings this control in
+            line with the project's own "no native browser form controls" standard.) */}
         {(clubsInView.length > 0 || myClubIds.size > 0) && (
-          <select value={clubScope} onChange={e => setClubScope(e.target.value)}
-            style={{ flexShrink: 0, maxWidth: 220, padding: "4px 10px", borderRadius: 20,
-              fontSize: 12, fontWeight: 600, lineHeight: 1.2,
-              WebkitTextSizeAdjust: "100%", textSizeAdjust: "100%",
-              whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-              border: "1px solid var(--purple)", background: "var(--surface2)",
-              color: "var(--purple)", fontFamily: "inherit",
-              appearance: "none", WebkitAppearance: "none", cursor: "pointer" }}>
-            <option value="all">All Groups & Clubs</option>
-            <option value="mine">My Groups & Clubs</option>
-            <option value="hide">Hide Groups & Clubs</option>
-            {clubsInView.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          <ClubScopeDropdown
+            clubScope={clubScope}
+            setClubScope={setClubScope}
+            clubsInView={clubsInView}
+          />
         )}
       </div>
       </div>
