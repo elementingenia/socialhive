@@ -138,7 +138,7 @@ export default function ClubWatermarkPicker({ clubId, imageUrl, posX, posY, zoom
           >
             <img
               src={localUrl}
-              alt="Club watermark"
+              alt="Group/Club watermark"
               draggable={false}
               onLoad={e => setNatural({ w: e.target.naturalWidth, h: e.target.naturalHeight })}
               style={transform ? {

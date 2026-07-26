@@ -42,7 +42,7 @@ async function resolve(req, clubId) {
   const { data: ec } = await supa.from("event_coordinators")
     .select("id, events!inner(club_id)").eq("member_id", member.id).eq("events.club_id", clubId).limit(1)
   if (ec?.length) return { member }
-  return { error: "Not allowed for this club", status: 403 }
+  return { error: "Not allowed for this group/club", status: 403 }
 }
 
 async function validateSpace(payload, excludeEventId) {

@@ -61,7 +61,7 @@ export default function QuestionsPage() {
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
       <h1 style={{ fontSize: "1.3rem", fontWeight: 900, margin: "0 0 0.25rem" }}>Questions</h1>
       <p style={{ fontSize: "0.85rem", color: "var(--text-dim)", margin: "0 0 1rem", lineHeight: 1.5 }}>
-        Ask a question from any hub, club or event page — it goes privately to the right contact.
+        Ask a question from any hub, group/club or event page — it goes privately to the right contact.
       </p>
 
       {showAnswering && (
@@ -77,7 +77,7 @@ export default function QuestionsPage() {
         <div style={{ textAlign: "center", color: "var(--text-dim)", padding: "2.5rem 1rem" }}>
           <div style={{ fontSize: "2rem" }}>💬</div>
           <div style={{ fontWeight: 700, marginTop: "0.5rem" }}>{tab === "mine" ? "You haven't asked anything yet" : "Nothing to answer"}</div>
-          <div style={{ fontSize: "0.85rem", marginTop: "0.25rem" }}>{tab === "mine" ? "Use “Ask a question” on any hub, club or event." : "Questions routed to you will appear here."}</div>
+          <div style={{ fontSize: "0.85rem", marginTop: "0.25rem" }}>{tab === "mine" ? "Use “Ask a question” on any hub, group/club or event." : "Questions routed to you will appear here."}</div>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>

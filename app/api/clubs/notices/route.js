@@ -26,7 +26,7 @@ export async function POST(req) {
   }
 
   const { data: club } = await supa.from("clubs").select("id, name").eq("id", club_id).single()
-  if (!club) return NextResponse.json({ error: "Club not found" }, { status: 404 })
+  if (!club) return NextResponse.json({ error: "Group/Club not found" }, { status: 404 })
 
   const { data: notice, error } = await supa.from("club_notices")
     .insert({ club_id, content: content.trim(), created_by: admin.id })

@@ -44,7 +44,7 @@ async function enrich(rows) {
   const label = (r) =>
     r.context_type === "general" ? "the Hive" :
     r.context_type === "hub"     ? (HUB_LABELS[r.context_key] || "a hub") :
-    r.context_type === "club"    ? (clubName[r.context_key] || "a club") :
+    r.context_type === "club"    ? (clubName[r.context_key] || "a group/club") :
     r.context_type === "event"   ? (eventName[r.context_key] || "an event") : "the Hive"
 
   return rows.map(r => ({

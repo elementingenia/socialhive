@@ -28,7 +28,7 @@ async function resolve(req, clubId) {
   const { data: ec } = await supa.from("event_coordinators")
     .select("id, events!inner(club_id)").eq("member_id", member.id).eq("events.club_id", clubId).limit(1)
   if (ec?.length) return { member }
-  return { error: "Not allowed for this club", status: 403 }
+  return { error: "Not allowed for this group/club", status: 403 }
 }
 
 
@@ -81,7 +81,7 @@ export async function POST(req) {
     // ONE notification for the whole series, excluding the creator (§9).
     const { data: club } = await supa.from("clubs").select("name").eq("id", club_id).single()
     await notifyClubMembers(supa, club_id, null, "event_added",
-      `New recurring ${club?.name || "club"} event: ${series.title || "event"}`,
+      `New recurring ${club?.name || "group/club"} event: ${series.title || "event"}`,
       { excludeMemberId: member.id })
   }
 

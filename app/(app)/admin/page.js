@@ -1767,18 +1767,18 @@ function ClubForm({ club, existingColours = [], onSaved, onCancel }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-      <Field label="Club name"><input style={inputStyle} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Dinner Club" /></Field>
+      <Field label="Group/Club name"><input style={inputStyle} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Dinner Club" /></Field>
       <Field label="Link (slug)">
         <input style={inputStyle} value={effectiveSlug} onChange={e => { setSlugTouched(true); set('slug', e.target.value) }} placeholder="dinner-club" />
       </Field>
-      <Field label="Description"><input style={inputStyle} value={form.description} onChange={e => set('description', e.target.value)} placeholder="One-line description shown in the Clubs list" /></Field>
+      <Field label="Description"><input style={inputStyle} value={form.description} onChange={e => set('description', e.target.value)} placeholder="One-line description shown in the Groups & Clubs list" /></Field>
       <Field label="Landing page text">
         <RichEditor
           key={club?.id || 'new'}
           initialValue={form.welcome_text}
           hubColour={CLUB_COLOURS.find(c => c.value === form.colour)?.hex || (form.colour?.startsWith('#') ? form.colour : '#7c3aed')}
           onChange={html => set('welcome_text', html)}
-          placeholder="Shown in the coloured banner at the top of this club's page…"
+          placeholder="Shown in the coloured banner at the top of this group/club's page…"
         />
         <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.35rem' }}>
           Appears on the club&apos;s page in the club colour with white text. (Replaces the old Admin &rsaquo; Page Texts entry.)
@@ -1812,7 +1812,7 @@ function ClubForm({ club, existingColours = [], onSaved, onCancel }) {
         </Field>
       ) : (
         <Field label="Watermark image (optional)">
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Save the club first, then you can add its watermark image here.</div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Save the group/club first, then you can add its watermark image here.</div>
         </Field>
       )}
 
@@ -1857,15 +1857,15 @@ function ClubForm({ club, existingColours = [], onSaved, onCancel }) {
       <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0.75rem 0 0.5rem' }}>Owners</div>
       {isEdit ? (
         <OwnersManager contextType="club" contextKey={club.id}
-          hint="Owners answer questions asked on this club's page and appear as its contact. Seeded with the club's first event coordinator — edit freely." />
+          hint="Owners answer questions asked on this group/club's page and appear as its contact. Seeded with the group/club's first event coordinator — edit freely." />
       ) : (
-        <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Save the club first, then you can add its owners here.</div>
+        <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Save the group/club first, then you can add its owners here.</div>
       )}
 
       {error && <div style={{ color: '#b91c1c', fontSize: '0.85rem', margin: '0.5rem 0' }}>{error}</div>}
       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
         <button onClick={onCancel} style={{ flex: 1, padding: '0.75rem', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-        <button onClick={save} disabled={saving} style={{ flex: 2, padding: '0.75rem', borderRadius: 10, border: 'none', background: 'var(--purple)', color: '#fff', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: 'inherit' }}>{saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Create Club')}</button>
+        <button onClick={save} disabled={saving} style={{ flex: 2, padding: '0.75rem', borderRadius: 10, border: 'none', background: 'var(--purple)', color: '#fff', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: 'inherit' }}>{saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Create Group/Club')}</button>
       </div>
     </div>
   )
@@ -1908,7 +1908,7 @@ function ClubsTab() {
   if (editing) {
     return (
       <div>
-        <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text)', marginBottom: '1rem' }}>{editing === 'new' ? 'New Club' : `Edit ${editing.name}`}</div>
+        <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text)', marginBottom: '1rem' }}>{editing === 'new' ? 'New Group/Club' : `Edit ${editing.name}`}</div>
         <ClubForm club={editing === 'new' ? null : editing} existingColours={(clubs || []).map(c => c.colour)} onSaved={() => { setEditing(null); load() }} onCancel={() => setEditing(null)} />
       </div>
     )
@@ -1916,11 +1916,11 @@ function ClubsTab() {
 
   return (
     <div>
-      <button onClick={() => setEditing('new')} style={{ width: '100%', padding: '0.8rem', borderRadius: 12, border: 'none', background: 'var(--purple)', color: '#fff', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginBottom: '1rem' }}>+ New Club</button>
+      <button onClick={() => setEditing('new')} style={{ width: '100%', padding: '0.8rem', borderRadius: 12, border: 'none', background: 'var(--purple)', color: '#fff', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', marginBottom: '1rem' }}>+ New Group/Club</button>
       {clubs === null ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><div className="spinner" /></div>
       ) : clubs.length === 0 ? (
-        <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2rem' }}>No clubs yet.</div>
+        <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2rem' }}>No groups or clubs yet.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
           {clubs.map(c => (

@@ -25,7 +25,7 @@ export async function POST(req) {
   if (error) return NextResponse.json({ error }, { status })
 
   const { data: club } = await supa.from("clubs").select("id, image_url").eq("id", clubId).single()
-  if (!club) return NextResponse.json({ error: "Club not found" }, { status: 404 })
+  if (!club) return NextResponse.json({ error: "Group/Club not found" }, { status: 404 })
 
   if (club.image_url) {
     const oldPath = club.image_url.split("/event-images/").pop()?.split("?")[0]

@@ -878,7 +878,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             rule_type: recur.rule_type, rule_config: recur.rule_config,
             month_end_policy: recur.month_end_policy, horizon_months: recur.horizon_months,
             start_date: form.event_date, event_time: form.event_time || "00:00",
-            title: form.title.trim() || club?.name || "Club Event",
+            title: form.title.trim() || club?.name || "Group/Club Event",
             description: form.description, welcome_message: form.welcome_message,
             location_type: form.location_type || "onsite", location: form.location || null,
             max_seats: Number(form.max_seats) || 20,
@@ -943,7 +943,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       event_date:      form.event_date,
       event_time:      form.event_time || "00:00",
       event_end_time:  form.event_end_time || null,
-      title:           form.title.trim() || selectedBook?.title || club?.name || "Club Event",
+      title:           form.title.trim() || selectedBook?.title || club?.name || "Group/Club Event",
       is_public:       form.is_public !== false,
       show_attendee_names: form.show_attendee_names !== false,
       description:     form.description,
@@ -1456,7 +1456,7 @@ function ClubSocial({ club, colour, isAdmin, onAppearanceUpdated }) {
       {/* Join + Post notice — compact pills on one line, outside any event */}
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
         {member?.id && joined !== null && (
-          <button onClick={toggleJoin} disabled={busy} title={joined ? "Tap to leave — you'll stop getting this club's notices" : "Join to get this club's notices"}
+          <button onClick={toggleJoin} disabled={busy} title={joined ? "Tap to leave — you'll stop getting this group/club's notices" : "Join to get this group/club's notices"}
             style={{ padding: "0.4rem 0.9rem", borderRadius: 20, fontFamily: "inherit", fontWeight: 700,
               fontSize: "0.82rem", cursor: busy ? "wait" : "pointer", whiteSpace: "nowrap",
               border: `1.5px solid ${colour}`,
@@ -1497,7 +1497,7 @@ function ClubSocial({ club, colour, isAdmin, onAppearanceUpdated }) {
         (() => (
           <div style={{ marginBottom: 12, border: `1px solid ${colour}`, borderRadius: 12, padding: "0.75rem" }}>
             <RichEditor key="club-notice" initialValue="" hubColour={colour.startsWith("var(") ? undefined : colour}
-              onChange={setDraft} placeholder="Write a notice for this club's members…" />
+              onChange={setDraft} placeholder="Write a notice for this group/club's members…" />
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button onClick={() => { setComposing(false); setDraft("") }} style={{ flex: 1, padding: "0.6rem", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text)", fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>Cancel</button>
               <button onClick={postNotice} disabled={posting || !draft.trim()} style={{ flex: 2, padding: "0.6rem", borderRadius: 10, border: "none", background: colour, color: clubTextOn(colour), fontWeight: 700, fontFamily: "inherit", cursor: (posting || !draft.trim()) ? "not-allowed" : "pointer", opacity: (posting || !draft.trim()) ? 0.6 : 1 }}>{posting ? "Posting…" : "Post notice"}</button>
