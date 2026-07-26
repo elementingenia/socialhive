@@ -469,7 +469,9 @@ function MonthView({ events, onEventTap }) {
 // font exactly (see comment at the call site, Iain 2026-07-27).
 function ClubScopeDropdown({ clubScope, setClubScope, clubsInView }) {
   const [open, setOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState(null)
   const rootRef = useRef(null)
+  const btnRef = useRef(null)
 
   useEffect(() => {
     if (!open) return
@@ -488,11 +490,27 @@ function ClubScopeDropdown({ clubScope, setClubScope, clubsInView }) {
   const options = [...FIXED, ...clubsInView.map(c => ({ value: c.id, label: c.name }))]
   const current = options.find(o => o.value === clubScope) || FIXED[0]
 
+  // Position with the button's screen coords rather than CSS position:absolute
+  // (Iain, 2026-07-27 live-fire find: the pill row is horizontally scrollable
+  // via overflowX:"auto", and per spec that forces overflow-y to clip too --
+  // an absolutely-positioned dropdown was silently invisible, clipped by its
+  // own scrollable ancestor even though it was correctly in the DOM). Using
+  // position:"fixed" with a rect computed at open-time escapes that ancestor
+  // clipping (no transformed ancestor exists here to re-anchor "fixed").
+  function toggle() {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      setMenuPos({ top: r.bottom + 4, left: r.left })
+    }
+    setOpen(o => !o)
+  }
+
   return (
     <div ref={rootRef} style={{ position: "relative", flexShrink: 0 }}>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={toggle}
         style={{
           display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
           maxWidth: 220, padding: "4px 10px", borderRadius: 20,
@@ -509,9 +527,9 @@ function ClubScopeDropdown({ clubScope, setClubScope, clubsInView }) {
         }}>{current.label}</span>
       </button>
 
-      {open && (
+      {open && menuPos && (
         <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 50,
+          position: "fixed", top: menuPos.top, left: menuPos.left, zIndex: 200,
           minWidth: 200, maxHeight: 260, overflowY: "auto",
           background: "var(--surface)", border: "1px solid var(--border)",
           borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,0.15)", padding: 4,
