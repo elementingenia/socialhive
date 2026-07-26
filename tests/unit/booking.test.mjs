@@ -5,7 +5,7 @@
 //
 //   npm run test:unit
 
-import { bookingsClosed, cutoffToInputValue, cutoffFromInputValue, cutoffLabel, cutoffToDateValue, cutoffFromDateValue } from '../../lib/booking.js'
+import { bookingsClosed, cutoffToInputValue, cutoffFromInputValue, cutoffLabel, cutoffToDateValue, cutoffFromDateValue, eventReminderDue } from '../../lib/booking.js'
 
 let pass = 0, fail = 0
 const ok = (cond, msg) => { cond ? pass++ : (fail++, console.log('  ✗', msg)) }
@@ -39,6 +39,19 @@ ok(bookingsClosed({ reservation_cutoff: endOfDay }, new Date(2026, 6, 21, 0, 1))
 ok(cutoffToDateValue(endOfDay) === '2026-07-20', 'round-trips back to the same date')
 ok(cutoffFromDateValue('') === null, 'empty date => null')
 ok(cutoffToDateValue(null) === '', 'null iso => empty')
+
+// eventReminderDue -- day-before reminder (2026-07-26)
+const tomorrow = '2026-08-01'
+const confirmed = { status: 'confirmed', member_id: 'm1', event_reminded_at: null }
+ok(eventReminderDue({ event_date: tomorrow, archived: false }, confirmed, tomorrow) === true, "confirmed booking, event tomorrow, never reminded => due")
+ok(eventReminderDue({ event_date: '2026-08-02', archived: false }, confirmed, tomorrow) === false, "event is not tomorrow => not due")
+ok(eventReminderDue({ event_date: tomorrow, archived: false }, { ...confirmed, status: 'waitlist' }, tomorrow) === false, "waitlisted booking => never reminded")
+ok(eventReminderDue({ event_date: tomorrow, archived: false }, { ...confirmed, status: 'cancelled' }, tomorrow) === false, "cancelled booking => never reminded")
+ok(eventReminderDue({ event_date: tomorrow, archived: false }, { ...confirmed, member_id: null }, tomorrow) === false, "contact-owned booking (no member_id) => no push target, skipped")
+ok(eventReminderDue({ event_date: tomorrow, archived: false }, { ...confirmed, event_reminded_at: '2026-07-30T00:00:00Z' }, tomorrow) === false, "already reminded once => not due again")
+ok(eventReminderDue({ event_date: tomorrow, archived: true }, confirmed, tomorrow) === false, "archived event => never due")
+ok(eventReminderDue(null, confirmed, tomorrow) === false, "no event => false, no crash")
+ok(eventReminderDue({ event_date: tomorrow, archived: false }, null, tomorrow) === false, "no booking => false, no crash")
 
 console.log(`\nlib/booking.js: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

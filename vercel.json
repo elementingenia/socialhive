@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/event-reminder-check",
+      "schedule": "0 20 * * *"
+    },
+    {
       "path": "/api/cron/book-return-check",
       "schedule": "0 23 * * *"
     },
