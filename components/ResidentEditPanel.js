@@ -319,7 +319,6 @@ export function CreateLoginForm({ defaultName = "", contactId = null, onCreated 
 // Members tab, so there is exactly one implementation and one API call path
 // for "everything about this person" — not two copies that can drift apart.
 export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitle, categories, residentsId, isSelf, onSaved, onClose }) {
-  const [name, setName]       = useState(member.name || "")
   const [title, setTitle]     = useState(linkedTitle || "")
   const [categoryIds, setCategoryIds] = useState(linkedCategoryIds)
   const [isAdminFlag, setIsAdminFlag] = useState(member.is_admin)
@@ -337,7 +336,6 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({
         member_id: member.id,
-        name: name.trim(),
         title: title.trim() || null,
         category_ids: [residentsId, ...categoryIds.filter(id => id !== residentsId)],
         ...(isSelf ? {} : { is_admin: isAdminFlag }),
@@ -355,8 +353,8 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
     <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
       <div>
         <label style={labelStyle}>Full name</label>
-        <input value={name} onChange={e => setName(e.target.value)} style={inputStyle} placeholder="Their real name" />
-        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>Shown on attendee lists (unless Private). The resident can also change this in their own profile.</div>
+        <div style={readOnlyStyle}>{member.name || "—"}</div>
+        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>Set from their profile — not editable here. Once someone has a login, name is self-service like email/house#/phone (Iain, 2026-07-26).</div>
       </div>
       {member.username && (
         <div>
