@@ -1050,7 +1050,7 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
     <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 10 }}>
       {allowGuests && (
         <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-          {[["resident", "Resident"], ["guest", "Guest"]].map(([k, label]) => (
+          {[["guest", "Guest"], ["resident", "Resident"]].map(([k, label]) => (
             <button key={k} type="button" onClick={() => onChange({ ...row, ...emptyRow, kind: k })}
               style={{ flex: 1, padding: "6px 0", borderRadius: 8, fontSize: 13, fontFamily: "inherit", cursor: "pointer",
                 border: `1px solid ${kind === k ? "var(--amber)" : "var(--border)"}`, background: kind === k ? "var(--amber)" : "var(--surface2)",
