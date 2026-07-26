@@ -44,12 +44,12 @@ export default function ClubsHome() {
     <div style={{ background: "var(--bg)", minHeight: "100vh", padding: "1rem 1rem 6rem" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", marginBottom: "1rem" }}>
         <span style={{ color: "var(--purple)", lineHeight: 0 }}><ClubsIcon size={30} /></span>
-        <h1 style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--text)", margin: 0 }}>Clubs</h1>
+        <h1 style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--text)", margin: 0 }}>Groups & Clubs</h1>
       </div>
 
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
-        {pill("mine", "My Clubs")}
-        {pill("all", "All Clubs")}
+        {pill("mine", "My Groups & Clubs")}
+        {pill("all", "All Groups & Clubs")}
       </div>
 
       {shown === null ? (
@@ -58,8 +58,8 @@ export default function ClubsHome() {
         <div style={{ textAlign: "center", padding: "3rem 1rem", color: "var(--text-dim)" }}>
           <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🐝</div>
           {effectiveScope === "mine"
-            ? <>You haven&apos;t joined any clubs yet. <button onClick={() => setScope("all")} style={{ background: "none", border: "none", color: "var(--purple)", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>See all clubs →</button></>
-            : "No clubs yet. An admin can add one from the Club Manager."}
+            ? <>You haven&apos;t joined any groups or clubs yet. <button onClick={() => setScope("all")} style={{ background: "none", border: "none", color: "var(--purple)", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>See all groups &amp; clubs →</button></>
+            : "No groups or clubs yet. An admin can add one from Admin > Groups & Clubs."}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>

@@ -69,7 +69,7 @@ export default function BottomNav() {
             Icon: it.textOnly ? null : (it.label === "Suggest" ? SuggestionsIcon : ClubsIcon),
           })),
         }
-      : { colour: "var(--purple)", items: [{ path: "/clubs", label: "Clubs", Icon: ClubsIcon }] }
+      : { colour: "var(--purple)", items: [{ path: "/clubs", label: "Groups & Clubs", Icon: ClubsIcon }] }
   }
 
   const navBase = {

@@ -16,7 +16,7 @@ const HUBS = [
   { key: "movies", label: "Movies", Icon: MoviesIcon, path: "/movies",        colour: "var(--teal)",       span: 2 },
   { key: "social", label: "Social", Icon: SocialIcon, path: "/social",        colour: "var(--terracotta)", span: 2 },
   { key: "shed",   label: "Shed",   Icon: ShedIcon,   path: null,             colour: "var(--text-dim)",   span: 2, comingSoon: true },
-  { key: "clubs",  label: "Clubs",  Icon: ClubsIcon,  path: "/clubs",         colour: "var(--purple)",     span: 2 },
+  { key: "clubs",  label: "Groups & Clubs",  Icon: ClubsIcon,  path: "/clubs",         colour: "var(--purple)",     span: 2 },
   { key: "info",   label: "Info",   Icon: InfoIcon,   path: "/info/contacts", colour: "#4e7aab",           span: 2 },
   { key: "ask",    label: "Ask a question", emoji: "💬", path: null,           colour: "var(--amber-dark)", span: 2, ask: true },
 ]

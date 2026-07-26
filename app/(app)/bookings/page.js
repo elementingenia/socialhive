@@ -18,7 +18,7 @@ const HUB_LABELS = {
 const FILTERS = [
   { key: "all",      label: "All" },
   { key: "movie",    label: "Movies" },
-  { key: "club",     label: "Clubs" },
+  { key: "club",     label: "Groups & Clubs" },
   { key: "social",   label: "Social" },
 ]
 

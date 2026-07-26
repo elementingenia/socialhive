@@ -24,7 +24,7 @@ const SECTIONS = [
   { key: 'PageTexts', label: 'Page Texts', Icon: PageTextsIcon },
   { key: 'Movies',    label: 'Movies',     Icon: MoviesIcon },
   { key: 'BookClub',  label: 'Book Club',  Icon: BookClubIcon },
-  { key: 'Clubs',     label: 'Clubs',      Icon: ClubsIcon },
+  { key: 'Clubs',     label: 'Groups & Clubs', Icon: ClubsIcon },
   { key: 'Owners',    label: 'Owners',     Icon: InfoIcon },
   // Bar section parked (feature not in scope) — see lib/features.js
   ...(BAR_ENABLED ? [{ key: 'Bar', label: 'Bar', Icon: BarIcon }] : []),
@@ -1900,7 +1900,7 @@ function ClubsTab() {
   useEffect(() => { load() }, [load])
 
   async function archive(club) {
-    if (!confirm(`Archive "${club.name}"? It'll be hidden from the Clubs hub.`)) return
+    if (!confirm(`Archive "${club.name}"? It'll be hidden from Groups & Clubs.`)) return
     await supabase.from('clubs').update({ archived: true }).eq('id', club.id)
     load()
   }

@@ -513,6 +513,15 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
 
   return (
     <div>
+      {/* View toggle + hub filters -- stuck together as one unit just below the
+          app's own sticky header (Iain, 2026-07-26: these were scrolling off
+          with the rest of the page, so switching view or filters mid-scroll
+          meant scrolling all the way back up first). 54px roughly matches the
+          sub-page Header's rendered height (components/Header.js: 30px logo +
+          0.45rem vertical padding + 3px border) -- close enough that there's
+          no visible gap or overlap under either the authenticated /calendar
+          page's shared Header or the public /cal page's own minimal header. */}
+      <div style={{ position: "sticky", top: 54, zIndex: 40, background: "var(--bg)" }}>
       {/* View toggle */}
       <div style={{ display: "flex", gap: 6, padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
         {viewBtns.map(btn => (
@@ -578,12 +587,13 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
               border: "1px solid var(--purple)", background: "var(--surface2)",
               color: "var(--purple)", fontFamily: "inherit",
               appearance: "none", WebkitAppearance: "none", cursor: "pointer" }}>
-            <option value="all">All clubs</option>
-            <option value="mine">My clubs</option>
-            <option value="hide">Hide clubs</option>
+            <option value="all">All Groups & Clubs</option>
+            <option value="mine">My Groups & Clubs</option>
+            <option value="hide">Hide Groups & Clubs</option>
             {clubsInView.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         )}
+      </div>
       </div>
 
       {view === "week"  && <WeekView     days={weekDays}   eventsByDate={eventsByDate} onEventTap={onEventTap} />}

@@ -32,7 +32,7 @@ ok(tracksLoanedItem(dinnerClub, { book_id: 'b1' }) === false, 'club without book
 // nav items
 const bcNav = clubNavItems(bookClub)
 ok(bcNav.length === 3, 'book club nav = Clubs + club + Suggest')
-ok(bcNav[0].path === '/clubs' && bcNav[0].label === 'Clubs', 'first item is back-to-Clubs')
+ok(bcNav[0].path === '/clubs' && bcNav[0].label === 'Groups & Clubs', 'first item is back-to-Groups-and-Clubs')
 ok(bcNav[1].path === '/clubs/book-club', 'second item is the club itself')
 ok(bcNav[2].label === 'Suggest', 'Suggest last, only for catalogue clubs')
 const dcNav = clubNavItems(dinnerClub)

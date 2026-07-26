@@ -27,7 +27,7 @@ export default function ClubPage() {
         <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🐝</div>
         This club couldn&apos;t be found.
         <div style={{ marginTop: "1rem" }}>
-          <button onClick={() => router.push("/clubs")} style={{ background: "var(--purple)", color: "#fff", border: "none", borderRadius: 10, padding: "0.6rem 1.2rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Back to Clubs</button>
+          <button onClick={() => router.push("/clubs")} style={{ background: "var(--purple)", color: "#fff", border: "none", borderRadius: 10, padding: "0.6rem 1.2rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Back to Groups & Clubs</button>
         </div>
       </div>
     )
