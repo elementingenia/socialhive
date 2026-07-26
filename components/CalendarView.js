@@ -580,8 +580,8 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
             font inflation (same text-size-adjust quirk as ExpandableText). */}
         {(clubsInView.length > 0 || myClubIds.size > 0) && (
           <select value={clubScope} onChange={e => setClubScope(e.target.value)}
-            style={{ flexShrink: 0, maxWidth: 190, padding: "4px 10px", borderRadius: 20,
-              fontSize: 11, fontWeight: 600, lineHeight: 1.2,
+            style={{ flexShrink: 0, maxWidth: 220, padding: "4px 10px", borderRadius: 20,
+              fontSize: 12, fontWeight: 600, lineHeight: 1.2,
               WebkitTextSizeAdjust: "100%", textSizeAdjust: "100%",
               whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
               border: "1px solid var(--purple)", background: "var(--surface2)",

@@ -1885,6 +1885,21 @@ function HubOwnersTab() {
         <div style={{ fontWeight: 800, color: 'var(--terracotta)', marginBottom: '0.5rem' }}>🎉 Social</div>
         <OwnersManager contextType="hub" contextKey="social" />
       </div>
+      {/* Shed placeholder (Iain, 2026-07-27): the Work Shed hub itself is
+          Phase 3 / not built yet (see the "coming soon" tile on Home) -- this
+          section exists only so the option is visibly present in Admin
+          ahead of launch, not because it does anything. Deliberately NOT a
+          working OwnersManager: there's no real /shed page yet for an owner
+          to be a contact on, and no context_key="shed" is read anywhere else
+          in the app, so wiring it live would let an admin "add" an owner
+          that silently goes nowhere. Swap this for a real OwnersManager
+          contextType="hub" contextKey="shed" once the Shed hub ships. */}
+      <div>
+        <div style={{ fontWeight: 800, color: 'var(--text-dim)', marginBottom: '0.5rem' }}>🔧 Shed</div>
+        <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontStyle: 'italic' }}>
+          Coming soon — the Work Shed hub hasn't launched yet, so owners can't be added here until it has.
+        </div>
+      </div>
     </div>
   )
 }
