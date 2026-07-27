@@ -248,7 +248,7 @@ function ContactForm({ contact, categories, setCategories, members, onSaved, onC
 }
 
 // ── Category management ───────────────────────────────────────────────────────
-function CategoryManager({ categories, setCategories, onSaved }) {
+function CategoryManager({ categories, setCategories, onSaved, loginCountByCategory = {} }) {
   const [catForm, setCatForm]     = useState("")
   const [catSaving, setCatSaving] = useState(false)
   const [catError, setCatError]   = useState("")
@@ -322,6 +322,18 @@ function CategoryManager({ categories, setCategories, onSaved }) {
             {/* Askable + Delete share this row rather than stacking -- vertical
                 space is a core mantra and this list grows with the community. */}
             <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexShrink: 0 }}>
+              {/* Why a category isn't offered must be VISIBLE. Askable is only
+                  half the rule -- it also needs someone with an app login --
+                  and without this an admin adds a contact to Committee, sees
+                  "Askable", and has no idea why it never appears on Home
+                  (exactly what happened with Stuart, 2026-07-27). */}
+              {!isBuiltInCategory(c.name) && c.askable && !loginCountByCategory[c.id] && (
+                <span style={{
+                  fontSize: "0.68rem", fontWeight: 600, color: "var(--external-ink)",
+                  background: "rgba(138,143,107,0.18)", borderRadius: 10,
+                  padding: "0.1rem 0.5rem", whiteSpace: "nowrap",
+                }}>No app login yet</span>
+              )}
               {!isBuiltInCategory(c.name) && (
                 <button onClick={() => toggleAskable(c)} style={{
                   background: c.askable ? COLOUR : "var(--surface)", color: c.askable ? "#fff" : "var(--text-dim)",
@@ -342,8 +354,11 @@ function CategoryManager({ categories, setCategories, onSaved }) {
       </div>
       <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "0.6rem", lineHeight: 1.45 }}>
         <strong>Askable</strong> lets residents send a question to this group from Home. A group only
-        appears as an option if it also contains at least one person with an app login. Residents is
-        never askable — a question to everyone is a notice, not a question.
+        appears as an option if it <em>also</em> contains at least one person with an app login — a
+        contact with no login can&apos;t receive or answer a question, so a group of only those is
+        marked <em>No app login yet</em> and stays hidden. Give someone a login from their contact
+        card (Edit → &quot;Give this person a login&quot;). Residents is never askable — a question to
+        everyone is a notice, not a question.
       </div>
       {catError && <div style={{ color: "#b91c1c", fontSize: "0.8rem", marginTop: "0.5rem" }}>{catError}</div>}
     </div>
@@ -460,6 +475,22 @@ export default function ContactsPage() {
   }, [residentsId, activeFilter])
 
   const displayContacts = useMemo(() => contacts.filter(c => !c.member_id && (c.active || isAdmin)), [contacts, isAdmin])
+
+  // How many people in each category could actually receive a question --
+  // i.e. have an app login and an active member record. Mirrors
+  // lib/categoryQuestions.js's loginMemberIds, computed from data this page
+  // already has (no extra request).
+  const loginCountByCategory = useMemo(() => {
+    const activeMemberIds = new Set(members.map(m => m.id))
+    const counts = {}
+    for (const c of contacts) {
+      if (!c.active || !c.member_id || !activeMemberIds.has(c.member_id)) continue
+      for (const link of c.contact_category_members || []) {
+        counts[link.category_id] = (counts[link.category_id] || 0) + 1
+      }
+    }
+    return counts
+  }, [contacts, members])
   const contactByMemberId = useMemo(() => {
     const map = {}
     for (const c of contacts) if (c.member_id) map[c.member_id] = c
@@ -579,7 +610,7 @@ export default function ContactsPage() {
       </Sheet>
 
       <Sheet open={sheet === "categories"} onClose={() => setSheet(null)} title="Manage Categories">
-        <CategoryManager categories={categories} setCategories={setCategories} onSaved={load} />
+        <CategoryManager categories={categories} setCategories={setCategories} onSaved={load} loginCountByCategory={loginCountByCategory} />
       </Sheet>
 
       <Sheet open={sheet === "invite"} onClose={() => setSheet(null)} title="Invite Code">
