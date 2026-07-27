@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import ResidentEditForm, { Sheet, CategoryPicker, COLOUR, inputStyle, labelStyle, getToken, CreateLoginForm } from "@/components/ResidentEditPanel"
 import { isBuiltInCategory } from "@/lib/contactCategories"
-import { isExternalContact } from "@/lib/categoryQuestions"
+import { isExternalContact, displayRecipientName } from "@/lib/categoryQuestions"
 import AskQuestion from "@/components/AskQuestion"
 
 const secondaryButtonStyle = {
@@ -552,8 +552,15 @@ export default function ContactsPage() {
     const cat = categories.find(c => c.id === activeFilter)
     if (!cat || !cat.askable || isBuiltInCategory(cat.name)) return null
     const others = [...(loginMembersByCategory[cat.id] || [])].filter(id => id !== me?.id)
-    return others.length ? cat : null
-  }, [activeFilter, categories, loginMembersByCategory, me])
+    if (!others.length) return null
+    // Masked exactly like the contacts list itself -- a Private resident reads
+    // as "Resident" to a non-admin. Same helper the targets endpoint uses.
+    const byId = Object.fromEntries(members.map(m => [m.id, m]))
+    const names = others
+      .map(id => displayRecipientName(byId[id], { id: me?.id, is_admin: isAdmin }))
+      .filter(Boolean)
+    return { ...cat, recipientNames: names }
+  }, [activeFilter, categories, loginMembersByCategory, me, members, isAdmin])
 
   const categoryFiltered = activeFilter === "all"
     ? entries
@@ -601,6 +608,7 @@ export default function ContactsPage() {
             contextKey={askableActiveCategory.id}
             contextLabel={askableActiveCategory.name}
             colour={COLOUR}
+            recipientNames={askableActiveCategory.recipientNames}
             trigger={(open) => (
               <button onClick={open} style={{
                 width: "100%", display: "flex", alignItems: "center", justifyContent: "center",

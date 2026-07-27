@@ -27,7 +27,7 @@ const inputStyle = {
 // and had no Portal or sticky close button. Reuse the canonical asset.
 export default function AskQuestion({
   contextType, contextKey, contextLabel, colour = "var(--amber)",
-  block = false, trigger = null, pickTarget = false,
+  block = false, trigger = null, pickTarget = false, recipientNames = null,
 }) {
   const [open, setOpen]       = useState(false)
   const [subject, setSubject] = useState("")
@@ -63,7 +63,12 @@ export default function AskQuestion({
   const activeType  = pickTarget ? picked?.context_type : contextType
   const activeKey   = pickTarget ? picked?.context_key  : contextKey
   const activeLabel = pickTarget ? picked?.label        : contextLabel
-  const activeNames = picked?.recipient_names || []
+  // Picker mode gets names from /api/questions/targets; fixed-context callers
+  // may pass them directly (Info > Contacts already has the data, so naming
+  // the recipient there costs nothing). Either way the compose step says who
+  // it's going to -- that line is the most valuable thing in this feature and
+  // shouldn't depend on which entry point you came in through.
+  const activeNames = picked?.recipient_names || recipientNames || []
 
   async function submit() {
     if (!subject.trim() || !body.trim()) { setError("Please add a subject and your question."); return }
