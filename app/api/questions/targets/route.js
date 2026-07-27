@@ -31,33 +31,35 @@ async function getMember(req) {
 }
 
 export async function GET(req) {
-  const viewer = await getMember(req)
-  if (!viewer) return NextResponse.json({ error: "Unauthorised" }, { status: 401 })
-
-  // Two parallel reads; askableCategories() is itself batched to four flat
-  // queries. Previously this route issued ~15 sequential round-trips and took
-  // roughly five seconds on a cold start.
-  const [cats, { data: allMembers }] = await Promise.all([
+  // Auth and data don't depend on each other -- the viewer is only needed to
+  // apply name masking in memory afterwards -- so they run together rather
+  // than in series. Round-trip depth is now 1, not 6.
+  const [viewer, cats, { data: admins }] = await Promise.all([
+    getMember(req),
     askableCategories(),
-    supabaseAdmin.from("members").select("id, name, hide_name, is_admin").eq("status", "active"),
+    supabaseAdmin.from("members").select("id, name, hide_name")
+      .eq("status", "active").eq("is_admin", true),
   ])
-  const byId = Object.fromEntries((allMembers || []).map(m => [m.id, m]))
+  if (!viewer) return NextResponse.json({ error: "Unauthorised" }, { status: 401 })
 
   // Excludes the viewer -- you can't answer your own question, so listing
   // yourself as a recipient would be misleading.
-  const build = (type, key, label, ids, hint) => {
-    const names = [...new Set(ids.filter(id => id !== viewer.id && byId[id]))]
-      .map(id => displayRecipientName(byId[id], viewer)).filter(Boolean)
-    if (!names.length) return null
+  const build = (type, key, label, people, hint) => {
+    const names = people
+      .filter(m => m && m.id !== viewer.id)
+      .map(m => displayRecipientName(m, viewer))
+      .filter(Boolean)
+    const unique = [...new Set(names)]
+    if (!unique.length) return null
     return {
       context_type: type, context_key: key, label, hint: hint || null,
-      recipient_names: names, recipient_count: names.length,
+      recipient_names: unique, recipient_count: unique.length,
     }
   }
 
   const targets = []
   for (const c of cats) {
-    const t = build("category", c.id, c.name, c.memberIds)
+    const t = build("category", c.id, c.name, c.members)
     if (t) targets.push(t)
   }
 
@@ -65,8 +67,7 @@ export async function GET(req) {
   // context_type 'general' -- it was just invisible: Home's Ask tile sent here
   // silently and the resident had no idea who they were reaching.
   const adminTarget = build(
-    "general", null, "Hive Admins",
-    (allMembers || []).filter(m => m.is_admin).map(m => m.id),
+    "general", null, "Hive Admins", admins || [],
     "Anything else, or not sure who to ask",
   )
   if (adminTarget) targets.push(adminTarget)
