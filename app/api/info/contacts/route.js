@@ -67,14 +67,46 @@ export async function PATCH(req) {
     }
   }
 
-  // Standalone contact: name is a real contacts-row field, admin-editable.
-  // Member-linked resident: name belongs to members.name and is self-service
-  // only (2026-07-26) -- like phone, never written onto the contacts row here.
+  // FIELD OWNERSHIP (Iain, 2026-07-27 -- supersedes the 2026-07-08 split and
+  // the 2026-07-26 phone/name lock). The stable principle:
+  //
+  //   Identity      -> self-service ONLY: name, username.
+  //   Contact detail-> DUAL-EDIT: email, house_number, phone (resident from
+  //                    their Profile, or an admin from the contact card).
+  //
+  // `username` is never accepted here at all: the Supabase Auth email is
+  // derived from it (`<username>@thesocialhive.internal`), so changing it
+  // would orphan the Auth user and lock the resident out.
+  //
+  // CRITICAL: for a member-linked resident these three fields must be written
+  // to `members`, NOT onto the contacts row. Migration 030 established that a
+  // member-linked contacts row's own name/email/house_number are never trusted
+  // or displayed -- the app always overlays live members.*. Writing them to
+  // `contacts` would report success and change nothing on screen.
+  const MEMBER_OWNED = ['email', 'house_number', 'phone']
+
+  // Standalone contact: every field, including name, lives on the contacts row.
   if (!member_id && name !== undefined) updates.name = name
-  if (member_id) delete updates.phone
+
+  let memberFieldUpdates = {}
+  if (member_id) {
+    for (const f of MEMBER_OWNED) {
+      if (updates[f] !== undefined) {
+        memberFieldUpdates[f] = typeof updates[f] === 'string'
+          ? (updates[f].trim() || null)
+          : updates[f]
+        delete updates[f]   // never let a stale copy land on the contacts row
+      }
+    }
+  }
 
   if (Object.keys(updates).length) {
     const { error } = await supabaseAdmin.from('contacts').update(updates).eq('id', targetId)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  if (member_id && Object.keys(memberFieldUpdates).length) {
+    const { error } = await supabaseAdmin.from('members').update(memberFieldUpdates).eq('id', member_id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
@@ -86,12 +118,10 @@ export async function PATCH(req) {
     )
   }
 
-  // Members-table fields. name is NOT accepted here for a member_id target
-  // (reversed 2026-07-26, Iain) -- once a resident has a login, name is
-  // self-service like email/house#/phone: only they can change it, from
-  // their own Profile. The 2026-07-16 admin-name-override exception this
-  // replaced is gone; ResidentEditForm no longer sends `name` for a linked
-  // member, so this route ignores it too even if an old client still does.
+  // Account flags -- admin-only, no Profile equivalent. `name` is still NOT
+  // accepted for a member_id target: it is identity, self-service only, and
+  // ResidentEditForm never sends it for a linked member (see FIELD OWNERSHIP
+  // above). Contact details are handled by memberFieldUpdates further up.
   if (member_id && (is_admin !== undefined || hide_name !== undefined)) {
     const memberUpdates = {}
     if (is_admin !== undefined) memberUpdates.is_admin = is_admin
