@@ -5,7 +5,7 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MoviesIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MoviesIcon, SocialIcon, ShedIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon } from '@/components/NavIcons'
 import RichEditor, { bbToHtml } from '@/components/RichEditor'
 import OwnersManager from '@/components/OwnersManager'
 import ResidentEditForm, { Sheet } from '@/components/ResidentEditPanel'
@@ -1878,11 +1878,15 @@ function HubOwnersTab() {
         Owners are the residents who receive questions asked on a hub&apos;s page and are shown as its contact. App admins always receive Home questions as a fallback, so they don&apos;t need listing here.
       </div>
       <div>
-        <div style={{ fontWeight: 800, color: 'var(--teal)', marginBottom: '0.5rem' }}>🎬 Movies</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: 'var(--teal)', marginBottom: '0.5rem' }}>
+          <MoviesIcon size={18} /> Movies
+        </div>
         <OwnersManager contextType="hub" contextKey="movie" />
       </div>
       <div>
-        <div style={{ fontWeight: 800, color: 'var(--terracotta)', marginBottom: '0.5rem' }}>🎉 Social</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: 'var(--terracotta)', marginBottom: '0.5rem' }}>
+          <SocialIcon size={18} /> Social
+        </div>
         <OwnersManager contextType="hub" contextKey="social" />
       </div>
       {/* Shed placeholder (Iain, 2026-07-27): the Work Shed hub itself is
@@ -1895,7 +1899,9 @@ function HubOwnersTab() {
           that silently goes nowhere. Swap this for a real OwnersManager
           contextType="hub" contextKey="shed" once the Shed hub ships. */}
       <div>
-        <div style={{ fontWeight: 800, color: 'var(--text-dim)', marginBottom: '0.5rem' }}>🔧 Shed</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: 'var(--text-dim)', marginBottom: '0.5rem' }}>
+          <ShedIcon size={18} /> Shed
+        </div>
         <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontStyle: 'italic' }}>
           Coming soon — the Work Shed hub hasn't launched yet, so owners can't be added here until it has.
         </div>
