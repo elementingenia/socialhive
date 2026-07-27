@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
+import { isBuiltInCategory } from "@/lib/contactCategories"
 async function getAdminMember(token) {
   if (!token) return null
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
@@ -19,6 +20,24 @@ export async function POST(req) {
   return NextResponse.json(data)
 }
 
+// PATCH — toggle whether residents can send an in-app Question to this
+// category. Necessary but not sufficient: the category also needs at least one
+// member with an app login before it is ever offered (lib/questionRouting.js's
+// askableCategories()). Residents is seeded false by migration 065.
+export async function PATCH(req) {
+  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+  const member = await getAdminMember(token)
+  if (!member) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+
+  const { id, askable } = await req.json()
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+  if (typeof askable !== 'boolean') return NextResponse.json({ error: 'askable must be true or false' }, { status: 400 })
+
+  const { error } = await supabaseAdmin.from('contact_categories').update({ askable }).eq('id', id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}
+
 // DELETE — only allowed when the category has no contacts or members assigned
 export async function DELETE(req) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
@@ -29,7 +48,7 @@ export async function DELETE(req) {
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
   const { data: cat } = await supabaseAdmin.from('contact_categories').select('name').eq('id', id).single()
-  if (cat?.name?.toLowerCase() === 'residents') {
+  if (isBuiltInCategory(cat?.name)) {
     return NextResponse.json({ error: 'Residents is a built-in category and cannot be deleted' }, { status: 400 })
   }
 

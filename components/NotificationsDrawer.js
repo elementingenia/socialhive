@@ -33,6 +33,7 @@ function typeIcon(type) {
     case "payment_refunded":     return "💸"
     case "question_received":    return "❓"
     case "question_answered":    return "💬"
+    case "question_unanswered":  return "⏳"
     default:                  return "🔔"
   }
 }
@@ -56,6 +57,7 @@ function typeColour(type) {
     case "payment_refunded":     return "var(--teal)"
     case "question_received":    return "var(--amber-dark)"
     case "question_answered":    return "var(--teal)"
+    case "question_unanswered":  return "var(--danger)"
     default:                  return "var(--text-dim)"
   }
 }
