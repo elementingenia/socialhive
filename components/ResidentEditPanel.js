@@ -255,6 +255,14 @@ export function CreateLoginForm({ defaultName = "", contactId = null, onCreated 
 // for "everything about this person" — not two copies that can drift apart.
 export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitle, categories, residentsId, isSelf, onSaved, onClose }) {
   const [title, setTitle]     = useState(linkedTitle || "")
+  // Contact details are dual-edit as of 2026-07-27 (Iain): the resident keeps
+  // editing them in their own Profile, and an admin can now fill them in from
+  // here. Practical driver -- plenty of residents will never set a phone or
+  // house number themselves, and an admin had no way to complete the record.
+  // Identity (name, username) stays self-service only.
+  const [email, setEmail]     = useState(member.email || "")
+  const [house, setHouse]     = useState(member.house_number || "")
+  const [phone, setPhone]     = useState(member.phone || "")
   const [categoryIds, setCategoryIds] = useState(linkedCategoryIds)
   const [isAdminFlag, setIsAdminFlag] = useState(member.is_admin)
   const [hideName, setHideName]       = useState(member.hide_name)
@@ -272,6 +280,9 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
       body: JSON.stringify({
         member_id: member.id,
         title: title.trim() || null,
+        email: email.trim() || null,
+        house_number: house.trim() || null,
+        phone: phone.trim() || null,
         category_ids: [residentsId, ...categoryIds.filter(id => id !== residentsId)],
         ...(isSelf ? {} : { is_admin: isAdminFlag }),
         hide_name: hideName,
@@ -289,7 +300,7 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
       <div>
         <label style={labelStyle}>Full name</label>
         <div style={readOnlyStyle}>{member.name || "—"}</div>
-        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>Set from their profile — not editable here. Once someone has a login, name is self-service like email/house#/phone (Iain, 2026-07-26).</div>
+        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>Set from their profile — only they can change their own name.</div>
       </div>
       {member.username && (
         <div>
@@ -299,16 +310,22 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
       )}
       <div>
         <label style={labelStyle}>Email</label>
-        <div style={readOnlyStyle}>{member.email || "—"}</div>
+        <input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} />
       </div>
-      <div>
-        <label style={labelStyle}>House #</label>
-        <div style={readOnlyStyle}>{member.house_number || "—"}</div>
+      {/* House # and Phone share a row -- two short fields have no business
+          taking two full rows in a sheet this long (vertical space). */}
+      <div style={{ display: "flex", gap: "0.6rem" }}>
+        <div style={{ flex: 1 }}>
+          <label style={labelStyle}>House #</label>
+          <input value={house} onChange={e => setHouse(e.target.value)} style={inputStyle} />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={labelStyle}>Phone</label>
+          <input value={phone} onChange={e => setPhone(e.target.value)} type="tel" style={inputStyle} />
+        </div>
       </div>
-      <div>
-        <label style={labelStyle}>Phone</label>
-        <div style={readOnlyStyle}>{member.phone || "—"}</div>
-        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>Set from their profile — not editable here</div>
+      <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "-0.5rem" }}>
+        The resident can also change these themselves in their profile — whichever was saved last wins.
       </div>
       <div>
         <label style={labelStyle}>Category</label>
