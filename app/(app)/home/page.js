@@ -81,7 +81,7 @@ function HubTiles() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "0.5rem", marginBottom: "0.75rem", position: "relative" }}>
       {HUBS.map(h => h.ask
-        ? <AskQuestion key={h.key} contextType="general" contextLabel="the Hive" colour={h.colour} trigger={(open) => tile(h, open)} />
+        ? <AskQuestion key={h.key} pickTarget colour={h.colour} trigger={(open) => tile(h, open)} />
         : tile(h, () => h.comingSoon ? (setShedToast(true), setTimeout(() => setShedToast(false), 2200)) : router.push(h.path)))}
       {shedToast && (
         <div style={{ position: "absolute", left: "50%", transform: "translateX(-50%)", bottom: "-2.2rem", zIndex: 5,

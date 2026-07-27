@@ -24,6 +24,15 @@
   --wine-dark: #661d4d;
   --wine-light: #f3e0ea;
 
+  /* External contacts -- a muted sage for people outside the community
+     (tradespeople, suppliers, the Community Manager). Deliberately NOT grey:
+     grey reads as "disabled/broken" and these contacts are perfectly usable,
+     you just can't message them in-app. Warm enough to sit inside the cream
+     palette rather than fight it. Paired text #5f6544 gives 4.85-5.54:1 on
+     --surface / --bg / --surface2 (WCAG AA). See Contacts, scope §7. */
+  --external: #8a8f6b;
+  --external-ink: #5f6544;
+
   /* Utility */
   --danger: #dc2626;
   --shadow: 0 2px 16px rgba(0,0,0,0.08);

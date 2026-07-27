@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { notify } from "@/lib/notify"
 import {
   primaryAnswererIds, contextLabel, answeringBoxQuestions, HUB_LABELS,
+  askableCategories,
 } from "@/lib/questionRouting"
 
 export const dynamic = "force-dynamic"
@@ -22,17 +23,20 @@ async function enrich(rows) {
   const askerIds = [...new Set(rows.map(r => r.asker_member_id))]
   const clubIds  = [...new Set(rows.filter(r => r.context_type === "club").map(r => r.context_key))]
   const eventIds = [...new Set(rows.filter(r => r.context_type === "event").map(r => r.context_key))]
+  const catIds   = [...new Set(rows.filter(r => r.context_type === "category").map(r => r.context_key))]
   const qIds     = rows.map(r => r.id)
 
-  const [{ data: askers }, { data: clubs }, { data: events }, { data: replies }] = await Promise.all([
+  const [{ data: askers }, { data: clubs }, { data: events }, { data: cats }, { data: replies }] = await Promise.all([
     supabaseAdmin.from("members").select("id, name").in("id", askerIds),
     clubIds.length  ? supabaseAdmin.from("clubs").select("id, name").in("id", clubIds)       : Promise.resolve({ data: [] }),
     eventIds.length ? supabaseAdmin.from("events").select("id, title").in("id", eventIds)     : Promise.resolve({ data: [] }),
+    catIds.length   ? supabaseAdmin.from("contact_categories").select("id, name").in("id", catIds) : Promise.resolve({ data: [] }),
     supabaseAdmin.from("question_replies").select("question_id, created_at").in("question_id", qIds),
   ])
   const askerName = Object.fromEntries((askers || []).map(m => [m.id, m.name]))
   const clubName  = Object.fromEntries((clubs  || []).map(c => [c.id, c.name]))
   const eventName = Object.fromEntries((events || []).map(e => [e.id, e.title]))
+  const catName   = Object.fromEntries((cats   || []).map(c => [String(c.id), c.name]))
   const replyAgg  = {}
   for (const r of replies || []) {
     const a = replyAgg[r.question_id] || { count: 0, last: null }
@@ -45,7 +49,8 @@ async function enrich(rows) {
     r.context_type === "general" ? "the Hive" :
     r.context_type === "hub"     ? (HUB_LABELS[r.context_key] || "a hub") :
     r.context_type === "club"    ? (clubName[r.context_key] || "a group/club") :
-    r.context_type === "event"   ? (eventName[r.context_key] || "an event") : "the Hive"
+    r.context_type === "event"   ? (eventName[r.context_key] || "an event") :
+    r.context_type === "category"? (catName[r.context_key] || "a contact group") : "the Hive"
 
   return rows.map(r => ({
     id: r.id, subject: r.subject, status: r.status,
@@ -90,12 +95,24 @@ export async function POST(req) {
   if (!member) return NextResponse.json({ error: "Unauthorised" }, { status: 401 })
 
   const { context_type, context_key, subject, body } = await req.json()
-  if (!["general", "hub", "club", "event"].includes(context_type))
+  if (!["general", "hub", "club", "event", "category"].includes(context_type))
     return NextResponse.json({ error: "Invalid context" }, { status: 400 })
   if (context_type !== "general" && !context_key)
     return NextResponse.json({ error: "Missing context" }, { status: 400 })
   if (!subject?.trim() || !body?.trim())
     return NextResponse.json({ error: "A subject and a message are required" }, { status: 400 })
+
+  // Category targets are gated SERVER-SIDE, not just hidden in the picker
+  // (dynamic-eligibility-in-routes standard). Both conditions are checked
+  // by askableCategories(): admin policy (askable) AND >= 1 member with a
+  // login. Without this, a hand-crafted POST could address Residents (a
+  // ~34-person broadcast) or Trades (nobody who can answer, so it would
+  // fall through to admins and mislead the asker).
+  if (context_type === "category") {
+    const allowed = await askableCategories()
+    if (!allowed.some(c => c.id === String(context_key)))
+      return NextResponse.json({ error: "That group can't be asked questions" }, { status: 400 })
+  }
 
   const key = context_type === "general" ? null : String(context_key)
   const { data: q, error } = await supabaseAdmin.from("questions").insert({
