@@ -8,7 +8,7 @@ import { displayRecipientName } from "@/lib/categoryQuestions"
 // The list is deliberately just TWO kinds of thing (Iain, 2026-07-27):
 //   1. Contact categories -- excluding Residents, and only those containing
 //      someone who can actually answer (see askableCategories)
-//   2. Hive Admins -- the catch-all, listed last
+//   2. Admins -- the catch-all, listed last
 //
 // Hubs and Groups & Clubs were removed after review: they made the list long
 // and confusing, and every hub/club landing already carries its own Ask
@@ -67,7 +67,7 @@ export async function GET(req) {
   // context_type 'general' -- it was just invisible: Home's Ask tile sent here
   // silently and the resident had no idea who they were reaching.
   const adminTarget = build(
-    "general", null, "Hive Admins", admins || [],
+    "general", null, "Admins", admins || [],
     "Anything else, or not sure who to ask",
   )
   if (adminTarget) targets.push(adminTarget)
