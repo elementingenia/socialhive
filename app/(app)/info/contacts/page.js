@@ -4,7 +4,8 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import ResidentEditForm, { Sheet, CategoryPicker, COLOUR, inputStyle, labelStyle, getToken, CreateLoginForm } from "@/components/ResidentEditPanel"
 import { isBuiltInCategory } from "@/lib/contactCategories"
-import { isExternalContact } from "@/lib/categoryQuestions"
+import { isExternalContact, displayRecipientName } from "@/lib/categoryQuestions"
+import AskQuestion from "@/components/AskQuestion"
 
 const secondaryButtonStyle = {
   padding: "0.5rem 0.9rem", borderRadius: 10, border: "1px solid var(--border)",
@@ -248,7 +249,7 @@ function ContactForm({ contact, categories, setCategories, members, onSaved, onC
 }
 
 // ── Category management ───────────────────────────────────────────────────────
-function CategoryManager({ categories, setCategories, onSaved, loginCountByCategory = {} }) {
+function CategoryManager({ categories, setCategories, onSaved, loginMembersByCategory = {} }) {
   const [catForm, setCatForm]     = useState("")
   const [catSaving, setCatSaving] = useState(false)
   const [catError, setCatError]   = useState("")
@@ -327,7 +328,7 @@ function CategoryManager({ categories, setCategories, onSaved, loginCountByCateg
                   and without this an admin adds a contact to Committee, sees
                   "Askable", and has no idea why it never appears on Home
                   (exactly what happened with Stuart, 2026-07-27). */}
-              {!isBuiltInCategory(c.name) && c.askable && !loginCountByCategory[c.id] && (
+              {!isBuiltInCategory(c.name) && c.askable && !loginMembersByCategory[c.id]?.size && (
                 <span style={{
                   fontSize: "0.68rem", fontWeight: 600, color: "var(--external-ink)",
                   background: "rgba(138,143,107,0.18)", borderRadius: 10,
@@ -476,20 +477,21 @@ export default function ContactsPage() {
 
   const displayContacts = useMemo(() => contacts.filter(c => !c.member_id && (c.active || isAdmin)), [contacts, isAdmin])
 
-  // How many people in each category could actually receive a question --
-  // i.e. have an app login and an active member record. Mirrors
-  // lib/categoryQuestions.js's loginMemberIds, computed from data this page
-  // already has (no extra request).
-  const loginCountByCategory = useMemo(() => {
+  // Who in each category could actually receive a question -- i.e. has an app
+  // login and an active member record. Mirrors lib/categoryQuestions.js's
+  // loginMemberIds, computed from data this page already has (no extra
+  // request). Member IDs rather than a count, because the Ask button below
+  // has to exclude the viewer themselves.
+  const loginMembersByCategory = useMemo(() => {
     const activeMemberIds = new Set(members.map(m => m.id))
-    const counts = {}
+    const map = {}
     for (const c of contacts) {
       if (!c.active || !c.member_id || !activeMemberIds.has(c.member_id)) continue
       for (const link of c.contact_category_members || []) {
-        counts[link.category_id] = (counts[link.category_id] || 0) + 1
+        (map[link.category_id] ||= new Set()).add(c.member_id)
       }
     }
-    return counts
+    return map
   }, [contacts, members])
   const contactByMemberId = useMemo(() => {
     const map = {}
@@ -541,6 +543,25 @@ export default function ContactsPage() {
     return [...memberEntries, ...contactEntries].sort((a, b) => a.name.localeCompare(b.name))
   }, [members, displayContacts, contactByMemberId, residentsId, isAdmin])
 
+  // Mirrors the server-side gate in lib/questionRouting.js's askableCategories:
+  // active + askable + at least one member with a login. The extra clause here
+  // is excluding the viewer, which only matters on this screen (Home's picker
+  // gets an already-filtered list from the API).
+  const askableActiveCategory = useMemo(() => {
+    if (!activeFilter || activeFilter === "all") return null
+    const cat = categories.find(c => c.id === activeFilter)
+    if (!cat || !cat.askable || isBuiltInCategory(cat.name)) return null
+    const others = [...(loginMembersByCategory[cat.id] || [])].filter(id => id !== me?.id)
+    if (!others.length) return null
+    // Masked exactly like the contacts list itself -- a Private resident reads
+    // as "Resident" to a non-admin. Same helper the targets endpoint uses.
+    const byId = Object.fromEntries(members.map(m => [m.id, m]))
+    const names = others
+      .map(id => displayRecipientName(byId[id], { id: me?.id, is_admin: isAdmin }))
+      .filter(Boolean)
+    return { ...cat, recipientNames: names }
+  }, [activeFilter, categories, loginMembersByCategory, me, members, isAdmin])
+
   const categoryFiltered = activeFilter === "all"
     ? entries
     : entries.filter(e => e.categoryIds.includes(activeFilter))
@@ -568,6 +589,37 @@ export default function ContactsPage() {
               color: activeFilter === c.id ? "#fff" : "var(--text-dim)",
             }}>{c.name}</button>
           ))}
+        </div>
+      )}
+
+      {/* Ask this group, from the moment of intent -- you're already looking at
+          the Committee because you want something from them, so don't make the
+          resident go back to Home and re-pick the category they're staring at.
+          Fixed-context AskQuestion (no picker needed, no extra endpoint).
+          Rendered ONLY when it applies: nothing at all for Residents, "All",
+          a non-askable category, or one where the only login-holder is the
+          viewer themselves (you can't ask yourself -- the targets endpoint
+          excludes the viewer for the same reason, and a button that opened
+          onto nobody would be a dead end). No wrapper when absent. */}
+      {askableActiveCategory && (
+        <div style={{ marginBottom: "0.75rem" }}>
+          <AskQuestion
+            contextType="category"
+            contextKey={askableActiveCategory.id}
+            contextLabel={askableActiveCategory.name}
+            colour={COLOUR}
+            recipientNames={askableActiveCategory.recipientNames}
+            trigger={(open) => (
+              <button onClick={open} style={{
+                width: "100%", display: "flex", alignItems: "center", justifyContent: "center",
+                gap: "0.4rem", padding: "0.55rem", borderRadius: 10,
+                border: `1.5px solid ${COLOUR}`, background: "var(--surface)", color: COLOUR,
+                fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", fontFamily: "inherit",
+              }}>
+                <span aria-hidden>💬</span> Ask the {askableActiveCategory.name}
+              </button>
+            )}
+          />
         </div>
       )}
 
@@ -610,7 +662,7 @@ export default function ContactsPage() {
       </Sheet>
 
       <Sheet open={sheet === "categories"} onClose={() => setSheet(null)} title="Manage Categories">
-        <CategoryManager categories={categories} setCategories={setCategories} onSaved={load} loginCountByCategory={loginCountByCategory} />
+        <CategoryManager categories={categories} setCategories={setCategories} onSaved={load} loginMembersByCategory={loginMembersByCategory} />
       </Sheet>
 
       <Sheet open={sheet === "invite"} onClose={() => setSheet(null)} title="Invite Code">
