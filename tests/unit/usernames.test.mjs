@@ -72,6 +72,21 @@ eq(suggestUsername("Doris Sacco", ["doriss"]), "DorisSa",
   ok(taken.every(t => !!t), 'none returned null')
 }
 
+// ── hyphenated / apostrophe surnames take the FIRST surname letter ───────────
+// Regression: the original rule used the LAST token, so Susan Ellis-Crewe would
+// have become "SusanC" - unguessable. Caught 2026-07-29 renaming live accounts.
+eq(suggestUsername("Susan Ellis-Crewe", []), "SusanE", 'Ellis-Crewe -> SusanE, not SusanC')
+eq(suggestUsername("Sherrie Heaton-Lindus", []), "SherrieH", 'Heaton-Lindus -> SherrieH, not SherrieL')
+eq(suggestUsername("Joe O'Hehir", []), "JoeO", "O'Hehir -> JoeO, not JoeH")
+eq(candidates("Susan Ellis-Crewe").slice(0,4), ["SusanE","SusanEl","SusanEll","SusanElli"],
+   'widening walks the whole hyphenated surname')
+{
+  // The three Susans in the roster must still separate cleanly.
+  const taken = []
+  for (const n of ["Susan Ellis-Crewe","Susan Galley","Susan Handley"]) taken.push(suggestUsername(n, taken))
+  eq(taken, ["SusanE","SusanG","SusanH"], 'all three Susans stay distinct and intuitive')
+}
+
 // ── candidates order ─────────────────────────────────────────────────────────
 eq(candidates("Doris Sacco").slice(0,3), ["DorisS","DorisSa","DorisSac"], 'candidates widen one letter at a time')
 
