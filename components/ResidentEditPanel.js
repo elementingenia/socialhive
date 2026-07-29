@@ -253,6 +253,74 @@ export function CreateLoginForm({ defaultName = "", contactId = null, onCreated 
 // Single shared editor used from BOTH the Info > Contacts page and Admin >
 // Members tab, so there is exactly one implementation and one API call path
 // for "everything about this person" — not two copies that can drift apart.
+// Rename a login. Only possible since migration 066 decoupled the Auth email
+// from the username -- before that a rename orphaned the Auth user and locked
+// the person out, so this was a read-only field. Kept behind an explicit
+// "Change" click because it IS a credential: the resident has to be told the
+// new one before they next log in.
+function UsernameControl({ memberId, username, onSaved }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft]     = useState(username)
+  const [saving, setSaving]   = useState(false)
+  const [error, setError]     = useState("")
+  const [done, setDone]       = useState("")
+
+  async function save() {
+    const u = draft.trim()
+    if (u === username) { setEditing(false); return }
+    setSaving(true); setError(""); setDone("")
+    const token = await getToken()
+    const res = await fetch("/api/admin/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+      body: JSON.stringify({ action: "set_username", member_id: memberId, username: u }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setSaving(false)
+    if (!res.ok) { setError(data.error || "Could not rename"); return }
+    setDone(`Now logs in as ${u}`)
+    setEditing(false)
+    onSaved && onSaved()
+  }
+
+  return (
+    <div>
+      <label style={labelStyle}>Username (for login)</label>
+      {editing ? (
+        <>
+          <input value={draft} onChange={e => setDraft(e.target.value)} style={inputStyle} autoFocus />
+          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", margin: "0.3rem 0 0.5rem" }}>
+            Letters, numbers and underscores only, 3 or more. Their PIN does not change — but
+            tell them the new username or they won&apos;t be able to log in.
+          </div>
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            <button onClick={() => { setEditing(false); setDraft(username); setError("") }}
+              style={{ flex: 1, padding: "0.5rem", borderRadius: 8, border: "1px solid var(--border)",
+                background: "var(--surface2)", color: "var(--text)", fontWeight: 600,
+                fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+            <button onClick={save} disabled={saving}
+              style={{ flex: 1, padding: "0.5rem", borderRadius: 8, border: "none", background: COLOUR,
+                color: "#fff", fontWeight: 700, fontSize: "0.82rem",
+                cursor: saving ? "wait" : "pointer", fontFamily: "inherit" }}>
+              {saving ? "Saving…" : "Save username"}
+            </button>
+          </div>
+        </>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          <div style={{ ...readOnlyStyle, flex: 1 }}>{username}</div>
+          <button onClick={() => { setEditing(true); setDone("") }}
+            style={{ padding: "0.4rem 0.7rem", borderRadius: 8, border: "1px solid var(--border)",
+              background: "var(--surface)", color: "var(--text)", fontWeight: 700,
+              fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>Change</button>
+        </div>
+      )}
+      {error && <div style={{ color: "var(--danger)", fontSize: "0.78rem", marginTop: "0.3rem" }}>{error}</div>}
+      {done && <div style={{ color: "var(--green)", fontSize: "0.78rem", marginTop: "0.3rem" }}>{done}</div>}
+    </div>
+  )
+}
+
 export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitle, categories, residentsId, isSelf, onSaved, onClose }) {
   const [title, setTitle]     = useState(linkedTitle || "")
   // Contact details are dual-edit as of 2026-07-27 (Iain): the resident keeps
@@ -303,10 +371,7 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
         <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>Set from their profile — only they can change their own name.</div>
       </div>
       {member.username && (
-        <div>
-          <label style={labelStyle}>Username (for login)</label>
-          <div style={readOnlyStyle}>{member.username}</div>
-        </div>
+        <UsernameControl memberId={member.id} username={member.username} onSaved={onSaved} />
       )}
       <div>
         <label style={labelStyle}>Email</label>
