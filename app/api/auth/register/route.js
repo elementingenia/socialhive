@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
+import { newAuthEmail } from "@/lib/authEmail"
 
 
 function toAuthPassword(pin) {
@@ -42,7 +43,9 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Username already taken' }, { status: 409 })
     }
 
-    const fakeEmail = `${username.trim().toLowerCase()}@thesocialhive.internal`
+    // Random and permanent, so this account's username stays editable forever
+    // (migration 066). Do NOT derive it from the username.
+    const fakeEmail = newAuthEmail()
     const authPassword = toAuthPassword(password)
 
     // Create Supabase Auth user
@@ -96,6 +99,7 @@ export async function POST(request) {
       username: username.trim(),
       pin: password,
       auth_id: authUserId,
+      auth_email: fakeEmail,
       is_admin: false,
       status: 'active',
       joined_date: new Date().toISOString().split('T')[0]

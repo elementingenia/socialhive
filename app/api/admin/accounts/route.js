@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
-import { validateNewAccount, validatePin } from "@/lib/accounts"
+import { newAuthEmail } from "@/lib/authEmail"
+import { validateNewAccount, validateUsername, validatePin } from "@/lib/accounts"
 
 // Admin-only account management (2026-07-16). Fills two gaps: no way for an
 // admin to create a login for a resident who hasn't self-registered (and to
@@ -33,6 +34,45 @@ export async function POST(req) {
   // the new member becomes the account, and the contact row is linked to it
   // (member_id) so its phone/title/categories carry over. Members are implicit
   // Residents, so no separate contacts row is needed when created from scratch.
+  // Rename a member's username. Possible at all only because migration 066
+  // stopped deriving the Auth email from it -- this is now a plain UPDATE on
+  // members with no Auth involvement whatsoever. Deliberately does NOT touch
+  // auth_email, auth_id, or pin: the person keeps logging in with exactly the
+  // same credentials, just typing a different username.
+  if (action === "set_username") {
+    const memberId = body.member_id
+    const username = (body.username || "").trim()
+    if (!memberId) return NextResponse.json({ error: "member_id required" }, { status: 400 })
+
+    const err = validateUsername(username)
+    if (err) return NextResponse.json({ error: err }, { status: 400 })
+
+    const { data: target } = await supabaseAdmin
+      .from("members").select("id, username").eq("id", memberId).maybeSingle()
+    if (!target) return NextResponse.json({ error: "Account not found" }, { status: 404 })
+    if (target.username === username) return NextResponse.json({ ok: true, unchanged: true })
+
+    // testbot is the E2E fixture (protected from deletion by a DB trigger,
+    // migration 033). Renaming it would break CI just as quietly, so block it.
+    if (target.username === "testbot") {
+      return NextResponse.json({ error: "testbot is the automated-test account and cannot be renamed." }, { status: 400 })
+    }
+
+    const { data: clash } = await supabaseAdmin
+      .from("members").select("id").ilike("username", username).maybeSingle()
+    if (clash && clash.id !== memberId) {
+      return NextResponse.json({ error: "That username is already taken." }, { status: 409 })
+    }
+
+    const { error } = await supabaseAdmin
+      .from("members").update({ username }).eq("id", memberId)
+    if (error) {
+      const dup = /duplicate|unique/i.test(error.message || "")
+      return NextResponse.json({ error: dup ? "That username is already taken." : "Could not rename the account." }, { status: dup ? 409 : 500 })
+    }
+    return NextResponse.json({ ok: true, username, previous: target.username })
+  }
+
   if (action === "create_account") {
     const name = (body.name || "").trim()
     const username = (body.username || "").trim()
@@ -46,7 +86,8 @@ export async function POST(req) {
       .from("members").select("id").ilike("username", username).maybeSingle()
     if (existing) return NextResponse.json({ error: "That username is already taken." }, { status: 409 })
 
-    const fakeEmail = `${username.toLowerCase()}@thesocialhive.internal`
+    // Random and permanent -- see migration 066. Never derived from username.
+    const fakeEmail = newAuthEmail()
     const authPassword = toAuthPassword(pin)
 
     // Create Auth user (relinking a dangling orphan if the email already
@@ -75,7 +116,8 @@ export async function POST(req) {
     }
 
     const { data: member, error: insertErr } = await supabaseAdmin.from("members").insert({
-      name, username, pin, auth_id: authUserId, is_admin: false, status: "active",
+      name, username, pin, auth_id: authUserId, auth_email: fakeEmail,
+      is_admin: false, status: "active",
       joined_date: new Date().toISOString().split("T")[0],
     }).select("id").single()
 

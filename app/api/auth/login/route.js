@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
+import { ensureAuthEmail } from "@/lib/authEmail"
 
 
 // Supabase Auth requires 6+ char passwords — pin may be shorter, so we pad
@@ -17,7 +18,7 @@ export async function POST(request) {
     // Look up member
     const { data: member, error: memberError } = await supabaseAdmin
       .from('members')
-      .select('id, username, pin, auth_id, status')
+      .select('id, username, pin, auth_id, status, auth_email')
       .ilike('username', username.trim())
       .single()
 
@@ -31,7 +32,13 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 })
     }
 
-    const fakeEmail = `${member.username.toLowerCase()}@thesocialhive.internal`
+    // Read the stored Auth email; never rebuild it from the username, or a
+    // renamed member can no longer log in (migration 066). ensureAuthEmail
+    // heals any pre-066 row the backfill missed, once.
+    const fakeEmail = await ensureAuthEmail(supabaseAdmin, member)
+    if (!fakeEmail) {
+      return NextResponse.json({ error: 'Login failed' }, { status: 500 })
+    }
     const authPassword = toAuthPassword(member.pin)
 
     // Create Supabase Auth user if not yet linked
