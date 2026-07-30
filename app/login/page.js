@@ -18,8 +18,11 @@ function InactivityNotice({ onNotice }) {
 }
 
 export default function Login() {
-  const [tab, setTab]       = useState('signin')
-  const [notice, setNotice] = useState(null)
+  const [tab, setTab]         = useState('signin')
+  const [notice, setNotice]   = useState(null)
+  // Set when an admin-created account signs in for the first time. While it is
+  // set the tab switcher is hidden, so the change cannot be skipped.
+  const [forcePin, setForcePin] = useState(null)
   const router = useRouter()
 
   return (
@@ -47,6 +50,14 @@ export default function Login() {
         background: 'var(--surface)', borderRadius: '16px',
         padding: '1.5rem', boxShadow: 'var(--shadow)'
       }}>
+        {forcePin ? (
+          <div style={{ background:'#fef3c7', border:'1px solid #d97706', borderRadius:'10px',
+            padding:'0.75rem 1rem', marginBottom:'1.25rem', fontSize:'0.85rem', color:'#92400e' }}>
+            <strong>Please choose your own password.</strong><br />
+            This account was set up for you, so the password you were given has to be
+            replaced before you can use the app.
+          </div>
+        ) : (
         <div style={{
           display: 'flex', gap: '0.25rem', background: 'var(--surface2)',
           borderRadius: '10px', padding: '4px', marginBottom: '1.5rem'
@@ -60,16 +71,21 @@ export default function Login() {
             }}>{label}</button>
           ))}
         </div>
+        )}
 
-        {tab === 'signin' && <SignIn router={router} />}
-        {tab === 'register' && <Register onSuccess={() => setTab('signin')} />}
-        {tab === 'change' && <ChangePassword />}
+        {!forcePin && tab === 'signin' && <SignIn router={router}
+          onForcePinChange={(u) => { setForcePin(u); setTab('change'); setNotice(null) }} />}
+        {!forcePin && tab === 'register' && <Register onSuccess={() => setTab('signin')} />}
+        {(forcePin || tab === 'change') && (
+          <ChangePassword prefillUsername={forcePin || ''} lockUsername={!!forcePin}
+            onSuccess={forcePin ? () => { setForcePin(null); setTab('signin') } : undefined} />
+        )}
       </div>
     </div>
   )
 }
 
-function SignIn({ router }) {
+function SignIn({ router, onForcePinChange }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -93,6 +109,19 @@ function SignIn({ router }) {
       if (authError) { setError('Sign-in failed. Please try again.'); setLoading(false) }
       else {
         try { localStorage.setItem('shive_login_ts', Date.now().toString()) } catch {}
+        // Account created by an admin with a handed-over PIN: they don't get
+        // into the app until they've set a password only they know
+        // (migration 067). Self-registered users never see this.
+        if (data.mustChangePin) {
+          // Signed in, but not admitted: sign straight back out and hand them
+          // to the Change Password tab. Signing out matters -- otherwise a
+          // refresh would drop them into the app with the handed-over PIN
+          // still live.
+          await supabase.auth.signOut()
+          onForcePinChange(data.username || username.trim())
+          setLoading(false)
+          return
+        }
         router.replace('/home')
       }
     } catch { setError('Network error. Please try again.'); setLoading(false) }
@@ -144,8 +173,8 @@ function Register({ onSuccess }) {
   )
 }
 
-function ChangePassword() {
-  const [username, setUsername] = useState('')
+function ChangePassword({ prefillUsername = '', lockUsername = false, onSuccess }) {
+  const [username, setUsername] = useState(prefillUsername)
   const [current, setCurrent] = useState('')
   const [newPass, setNewPass] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -166,6 +195,7 @@ function ChangePassword() {
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Failed to change password'); setLoading(false); return }
       setSuccess(true)
+      onSuccess && onSuccess()
     } catch { setError('Network error. Please try again.'); setLoading(false) }
   }
 
@@ -177,8 +207,11 @@ function ChangePassword() {
 
   return (
     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <Field label="USERNAME" value={username} onChange={setUsername} placeholder="Your username" />
-      <Field label="CURRENT PASSWORD" value={current} onChange={setCurrent} placeholder="Current password" type="password" />
+      {lockUsername
+        ? <Field label="USERNAME" value={username} onChange={() => {}} placeholder="Your username" readOnly />
+        : <Field label="USERNAME" value={username} onChange={setUsername} placeholder="Your username" />}
+      <Field label="CURRENT PASSWORD" value={current} onChange={setCurrent}
+        placeholder={lockUsername ? 'The password you were given' : 'Current password'} type="password" />
       <Field label="NEW PASSWORD" value={newPass} onChange={setNewPass} placeholder="New password (min 4 chars)" type="password" />
       <Field label="CONFIRM NEW PASSWORD" value={confirm} onChange={setConfirm} placeholder="Confirm new password" type="password" />
       {error && <p style={errStyle}>{error}</p>}
@@ -187,7 +220,7 @@ function ChangePassword() {
   )
 }
 
-function Field({ label, value, onChange, placeholder, type = 'text' }) {
+function Field({ label, value, onChange, placeholder, type = 'text', readOnly = false }) {
   return (
     <div>
       <label style={{
@@ -198,7 +231,7 @@ function Field({ label, value, onChange, placeholder, type = 'text' }) {
       </label>
       <input
         type={type} value={value} onChange={e => onChange(e.target.value)}
-        placeholder={placeholder} required autoComplete="off"
+        placeholder={placeholder} required autoComplete="off" readOnly={readOnly}
         style={{
           width: '100%', padding: '0.85rem 1rem', boxSizing: 'border-box',
           background: 'var(--surface2)', border: '1px solid var(--border)',

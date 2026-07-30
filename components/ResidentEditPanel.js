@@ -261,13 +261,18 @@ export function CreateLoginForm({ defaultName = "", contactId = null, onCreated 
 function UsernameControl({ memberId, username, onSaved }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft]     = useState(username)
+  // Track the saved value locally. onSaved() refetches the LIST, but this
+  // panel keeps rendering the `member` object it was opened with, so without
+  // this the field snapped back to the old username until the sheet was closed
+  // and reopened (reported by Iain 2026-07-29).
+  const [current, setCurrent] = useState(username)
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState("")
   const [done, setDone]       = useState("")
 
   async function save() {
     const u = draft.trim()
-    if (u === username) { setEditing(false); return }
+    if (u === current) { setEditing(false); return }
     setSaving(true); setError(""); setDone("")
     const token = await getToken()
     const res = await fetch("/api/admin/accounts", {
@@ -278,6 +283,8 @@ function UsernameControl({ memberId, username, onSaved }) {
     const data = await res.json().catch(() => ({}))
     setSaving(false)
     if (!res.ok) { setError(data.error || "Could not rename"); return }
+    setCurrent(u)
+    setDraft(u)
     setDone(`Now logs in as ${u}`)
     setEditing(false)
     onSaved && onSaved()
@@ -294,7 +301,7 @@ function UsernameControl({ memberId, username, onSaved }) {
             tell them the new username or they won&apos;t be able to log in.
           </div>
           <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button onClick={() => { setEditing(false); setDraft(username); setError("") }}
+            <button onClick={() => { setEditing(false); setDraft(current); setError("") }}
               style={{ flex: 1, padding: "0.5rem", borderRadius: 8, border: "1px solid var(--border)",
                 background: "var(--surface2)", color: "var(--text)", fontWeight: 600,
                 fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
@@ -308,7 +315,7 @@ function UsernameControl({ memberId, username, onSaved }) {
         </>
       ) : (
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-          <div style={{ ...readOnlyStyle, flex: 1 }}>{username}</div>
+          <div style={{ ...readOnlyStyle, flex: 1 }}>{current}</div>
           <button onClick={() => { setEditing(true); setDone("") }}
             style={{ padding: "0.4rem 0.7rem", borderRadius: 8, border: "1px solid var(--border)",
               background: "var(--surface)", color: "var(--text)", fontWeight: 700,
@@ -328,6 +335,7 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
   // here. Practical driver -- plenty of residents will never set a phone or
   // house number themselves, and an admin had no way to complete the record.
   // Identity (name, username) stays self-service only.
+  const [name, setName]       = useState(member.name || "")
   const [email, setEmail]     = useState(member.email || "")
   const [house, setHouse]     = useState(member.house_number || "")
   const [phone, setPhone]     = useState(member.phone || "")
@@ -347,6 +355,7 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
       headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({
         member_id: member.id,
+        name: name.trim() || member.name,
         title: title.trim() || null,
         email: email.trim() || null,
         house_number: house.trim() || null,
@@ -367,8 +376,10 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
     <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
       <div>
         <label style={labelStyle}>Full name</label>
-        <div style={readOnlyStyle}>{member.name || "—"}</div>
-        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>Set from their profile — only they can change their own name.</div>
+        <input value={name} onChange={e => setName(e.target.value)} style={inputStyle} />
+        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>
+          The resident can also change this in their own profile — whichever was saved last wins.
+        </div>
       </div>
       {member.username && (
         <UsernameControl memberId={member.id} username={member.username} onSaved={onSaved} />

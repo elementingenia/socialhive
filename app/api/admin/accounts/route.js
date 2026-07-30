@@ -117,6 +117,9 @@ export async function POST(req) {
 
     const { data: member, error: insertErr } = await supabaseAdmin.from("members").insert({
       name, username, pin, auth_id: authUserId, auth_email: fakeEmail,
+      // Admin-created: the PIN is handed over, so force a change on first
+      // login (migration 067). Self-registration leaves this false.
+      must_change_pin: true,
       is_admin: false, status: "active",
       joined_date: new Date().toISOString().split("T")[0],
     }).select("id").single()
@@ -156,7 +159,10 @@ export async function POST(req) {
       const { error: authErr } = await supabaseAdmin.auth.admin.updateUserById(member.auth_id, { password: toAuthPassword(pin) })
       if (authErr) return NextResponse.json({ error: "Could not reset the PIN. Please try again." }, { status: 500 })
     }
-    const { error: pinErr } = await supabaseAdmin.from("members").update({ pin }).eq("id", memberId)
+    // An admin-set PIN is a handed-over credential, same as on creation, so
+    // the member must replace it on their next login (migration 067).
+    const { error: pinErr } = await supabaseAdmin.from("members")
+      .update({ pin, must_change_pin: true }).eq("id", memberId)
     if (pinErr) return NextResponse.json({ error: "Could not reset the PIN. Please try again." }, { status: 500 })
 
     return NextResponse.json({ ok: true })

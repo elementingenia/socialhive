@@ -45,7 +45,9 @@ export async function POST(request) {
     // Then update pin in members table
     const { error: pinError } = await supabaseAdmin
       .from('members')
-      .update({ pin: newPassword })
+      // Clearing must_change_pin is the whole point of the forced-change
+      // flow: the password is now one only the member knows (migration 067).
+      .update({ pin: newPassword, must_change_pin: false })
       .eq('id', member.id)
 
     if (pinError) {
