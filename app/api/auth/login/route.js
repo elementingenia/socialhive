@@ -18,7 +18,7 @@ export async function POST(request) {
     // Look up member
     const { data: member, error: memberError } = await supabaseAdmin
       .from('members')
-      .select('id, username, pin, auth_id, status, auth_email')
+      .select('id, username, pin, auth_id, status, auth_email, must_change_pin')
       .ilike('username', username.trim())
       .single()
 
@@ -55,7 +55,15 @@ export async function POST(request) {
       await supabaseAdmin.from('members').update({ auth_id: newUser.user.id }).eq('id', member.id)
     }
 
-    return NextResponse.json({ email: fakeEmail, authPassword })
+    // mustChangePin: this account's password was set by an admin and handed
+    // over, so the client sends them straight to Change Password and will not
+    // let them into the app until they've set their own (migration 067).
+    return NextResponse.json({
+      email: fakeEmail,
+      authPassword,
+      mustChangePin: !!member.must_change_pin,
+      username: member.username,
+    })
   } catch (err) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }

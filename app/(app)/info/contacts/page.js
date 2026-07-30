@@ -36,7 +36,7 @@ const inviteButtonStyle = {
 // on the compact line -- admins additionally get "Edit" alongside it, since
 // viewing details and editing them are different actions (2026-07-12,
 // clarified same day: Edit alone isn't a substitute for a quick "More").
-function ContactCard({ contact, badge, external = false, onEdit }) {
+function ContactCard({ contact, badge, external = false, isResident = true, onEdit }) {
   const hasMore = !!(contact.title || contact.phone || contact.email)
   // External contacts open with their details already showing. They can't be
   // messaged in the app, so the useful thing is their phone/email -- burying
@@ -55,7 +55,7 @@ function ContactCard({ contact, badge, external = false, onEdit }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
         <div style={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: "0.4rem", flexWrap: "wrap" }}>
           <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text)" }}>{contact.name}</span>
-          {contact.house_number && (
+          {isResident && contact.house_number && (
             <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>· #{contact.house_number}</span>
           )}
           {badge && (
@@ -523,7 +523,8 @@ export default function ContactsPage() {
         // Every active member is implicitly a Resident (migration 029), so a
         // member is never external.
         external: false,
-        badge: isAdmin && m.hide_name ? "Private" : null,
+        isResident: true,   // members are implicitly Residents (migration 029)
+      badge: isAdmin && m.hide_name ? "Private" : null,
       }
     })
     const contactEntries = displayContacts.map(c => ({
@@ -538,6 +539,10 @@ export default function ContactsPage() {
       // Lyn or Diane, is still a neighbour and is NOT marked external; they
       // just can't be messaged in-app.
       external: isExternalContact((c.contact_category_members || []).map(x => x.category_id), residentsId),
+      // House number is a resident's detail. A tradesperson or the Community
+      // Manager has one on file sometimes, but showing it implies they live
+      // here (Iain, 2026-07-29), so it is hidden unless they're a Resident.
+      isResident: !!residentsId && (c.contact_category_members || []).some(x => x.category_id === residentsId),
       badge: isAdmin && !c.active ? "Hidden" : null,
     }))
     return [...memberEntries, ...contactEntries].sort((a, b) => a.name.localeCompare(b.name))
@@ -565,9 +570,22 @@ export default function ContactsPage() {
   const categoryFiltered = activeFilter === "all"
     ? entries
     : entries.filter(e => e.categoryIds.includes(activeFilter))
-  const filtered = search.trim()
-    ? categoryFiltered.filter(e => e.name?.toLowerCase().includes(search.trim().toLowerCase()))
-    : categoryFiltered
+  // Searches name, title/role, phone, email and house number -- not just name
+  // (Iain, 2026-07-29). Phone matching ignores spaces and punctuation so
+  // "0412" finds "+61 412 ...", and house only counts for a Resident, matching
+  // what the card actually displays.
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return categoryFiltered
+    const digits = q.replace(/\D/g, "")
+    return categoryFiltered.filter(e => {
+      const haystack = [e.name, e.title, e.email, e.isResident ? e.house_number : null]
+        .filter(Boolean).join(" ").toLowerCase()
+      if (haystack.includes(q)) return true
+      if (digits && e.phone && e.phone.replace(/\D/g, "").includes(digits)) return true
+      return false
+    })
+  }, [categoryFiltered, search])
 
   const initializing = loading || activeFilter === null
 
@@ -624,7 +642,7 @@ export default function ContactsPage() {
       )}
 
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "1rem" }}>
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name…"
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
           style={{ ...inputStyle, flex: 1 }} />
         <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", whiteSpace: "nowrap" }}>{filtered.length}</span>
       </div>
@@ -645,7 +663,7 @@ export default function ContactsPage() {
         </div>
       ) : (
         filtered.map(e => (
-          <ContactCard key={e.key} contact={e} badge={e.badge} external={e.external}
+          <ContactCard key={e.key} contact={e} badge={e.badge} external={e.external} isResident={e.isResident}
             onEdit={isAdmin ? () => setSheet(e.isMember ? { type: "resident", member: e.member } : { type: "contact", contact: e.contact }) : null} />
         ))
       )}

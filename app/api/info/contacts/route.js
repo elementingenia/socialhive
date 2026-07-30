@@ -83,10 +83,19 @@ export async function PATCH(req) {
   // member-linked contacts row's own name/email/house_number are never trusted
   // or displayed -- the app always overlays live members.*. Writing them to
   // `contacts` would report success and change nothing on screen.
-  const MEMBER_OWNED = ['email', 'house_number', 'phone']
+  // `name` joins the dual-edit set (Iain, 2026-07-29). It was self-service only
+  // on the reasoning that a person owns their own name -- but that only holds
+  // when they typed it. With ~100 accounts being created FOR residents by an
+  // admin, the admin is the one who entered the name, and was left unable to
+  // correct their own typo. Same last-write-wins, no locking.
+  const MEMBER_OWNED = ['email', 'house_number', 'phone', 'name']
 
   // Standalone contact: every field, including name, lives on the contacts row.
   if (!member_id && name !== undefined) updates.name = name
+  // Member-linked: fold name into `updates` so the MEMBER_OWNED sweep below
+  // redirects it to the members table (writing it to the contacts row would
+  // report success and change nothing -- migration 030's overlay rule).
+  if (member_id && name !== undefined) updates.name = name
 
   let memberFieldUpdates = {}
   if (member_id) {
@@ -118,10 +127,8 @@ export async function PATCH(req) {
     )
   }
 
-  // Account flags -- admin-only, no Profile equivalent. `name` is still NOT
-  // accepted for a member_id target: it is identity, self-service only, and
-  // ResidentEditForm never sends it for a linked member (see FIELD OWNERSHIP
-  // above). Contact details are handled by memberFieldUpdates further up.
+  // Account flags -- admin-only, no Profile equivalent. Contact details
+  // (including name, as of 2026-07-29) are handled by memberFieldUpdates above.
   if (member_id && (is_admin !== undefined || hide_name !== undefined)) {
     const memberUpdates = {}
     if (is_admin !== undefined) memberUpdates.is_admin = is_admin
