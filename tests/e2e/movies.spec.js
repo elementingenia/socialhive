@@ -176,9 +176,21 @@ test.describe('Info > Contacts', () => {
     await expect(page.getByRole('button', { name: /Invite Code/i })).toBeVisible()
   })
 
-  test('Search filters the resident/contact list by name', async ({ page }) => {
-    await page.getByPlaceholder('Search by name…').fill('Test Bot')
+  // Placeholder is 'Search…' since 2026-07-29 -- it searches name, title/role,
+  // phone, email and house number, not just name, so 'by name' was misleading.
+  test('Search filters the resident/contact list', async ({ page }) => {
+    await page.getByPlaceholder('Search…').fill('Test Bot')
     await expect(page.getByText('Test Bot').first()).toBeVisible()
+  })
+
+  test('Search also matches a house number for a resident', async ({ page }) => {
+    const box = page.getByPlaceholder('Search…')
+    await box.fill('Test Bot')
+    await expect(page.getByText('Test Bot').first()).toBeVisible()
+    // A term that matches nobody must clear the list, proving the filter is
+    // actually applied rather than the page just always showing everyone.
+    await box.fill('zzzznobodymatchesthis')
+    await expect(page.getByText('No contacts in this category')).toBeVisible()
   })
 })
 
