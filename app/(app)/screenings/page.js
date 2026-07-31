@@ -139,12 +139,15 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   // changing it is a deliberate act, not something to do by brushing past a
   // dropdown (Iain, 2026-07-31).
   //
-  // The default is resolved from the locations table by NAME rather than a
-  // literal UUID pasted into source. A hardcoded id would be wrong in a
-  // rebuilt database (fresh uuids), wrong for a second community, and would not
-  // survive the wipe — the same trap as the old hardcoded CINEMA_NAME, but
-  // harder to spot. Migration 071's unique index makes the name lookup
-  // unambiguous.
+  // THE DEFAULT IS BOUND BY ID, not by name. Iain: "If the location Cinema is
+  // edited, as long as that edited name remains the default for movies, all
+  // good." A name lookup fails exactly that test — rename Cinema to anything
+  // else and the lookup finds nothing, so new screenings would default to no
+  // venue at all. The id is stored once in hub_settings.location_id (migration
+  // 073 pointed it at the Cinema) and survives any rename, because a rename
+  // does not change the row's identity.
+  //
+  // There is deliberately no admin UI for it: the default is set, not managed.
   const allVenues                     = useLocations()
   const [venueId, setVenueId]         = useState(event?.location_id || null)
   const [venueEditing, setVenueEditing] = useState(false)
@@ -155,12 +158,21 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [coordinator, setCoordinator] = useState(event?.coordinator?.id || null)
   const [saving, setSaving]           = useState(false)
   const [err, setErr]                 = useState(null)
-  // Default a NEW screening to the Cinema once the venue list has loaded. An
-  // existing screening keeps whatever it was saved with.
-  const defaultVenueId = allVenues.find(v => v.name?.trim().toLowerCase() === 'cinema')?.id || null
+  // Default a NEW screening to the Movies venue. An existing screening keeps
+  // whatever it was saved with. The name fallback only covers a database where
+  // 073 has not run.
   useEffect(() => {
-    if (defaultVenueId) setVenueId(v => v || defaultVenueId)
-  }, [defaultVenueId])
+    let alive = true
+    supabase.from('hub_settings').select('location_id').eq('hub_type', 'movies').maybeSingle()
+      .then(({ data }) => {
+        if (alive && data?.location_id) setVenueId(v => v || data.location_id)
+      })
+    return () => { alive = false }
+  }, [])
+  const fallbackVenueId = allVenues.find(v => v.name?.trim().toLowerCase() === 'cinema')?.id || null
+  useEffect(() => {
+    if (fallbackVenueId) setVenueId(v => v || fallbackVenueId)
+  }, [fallbackVenueId])
 
   const venue      = allVenues.find(v => v.id === venueId) || null
   const venueName  = venue?.name || null

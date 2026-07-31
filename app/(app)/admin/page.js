@@ -1991,7 +1991,8 @@ function LocationsTab() {
   const [openId, setOpenId]       = useState(null)
 
   const load = useCallback(() => {
-    supabase.from('locations').select('*').order('sort_order').order('name')
+    // A-Z to match the dropdowns — sort_order isn't editable anywhere in the UI
+    supabase.from('locations').select('*').order('name')
       .then(({ data }) => setLocations(data || []))
   }, [])
   useEffect(() => { load() }, [load])
