@@ -135,13 +135,19 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [time, setTime]               = useState(event?.event_time?.slice(0, 5) || '18:00')
   const [endTime, setEndTime]         = useState(event?.event_end_time?.slice(0, 5) || '20:00')
   const [maxSeats, setMaxSeats]       = useState(event?.max_seats || 20)
-  // Venue for THIS screening. Prefilled from the hub's nominated venue
-  // (hub_settings, migration 073) and rendered LOCKED — changing it is a
-  // deliberate act, not something to do by brushing past a dropdown.
+  // Venue for THIS screening. Defaults to the Cinema and renders LOCKED —
+  // changing it is a deliberate act, not something to do by brushing past a
+  // dropdown (Iain, 2026-07-31).
+  //
+  // The default is resolved from the locations table by NAME rather than a
+  // literal UUID pasted into source. A hardcoded id would be wrong in a
+  // rebuilt database (fresh uuids), wrong for a second community, and would not
+  // survive the wipe — the same trap as the old hardcoded CINEMA_NAME, but
+  // harder to spot. Migration 071's unique index makes the name lookup
+  // unambiguous.
   const allVenues                     = useLocations()
   const [venueId, setVenueId]         = useState(event?.location_id || null)
   const [venueEditing, setVenueEditing] = useState(false)
-  const [hubVenueId, setHubVenueId]   = useState(null)
   const [notes, setNotes]             = useState(event?.notes || '')
   const [cutoff, setCutoff]           = useState(cutoffToInputValue(event?.reservation_cutoff))
   const [allowGuests, setAllowGuests] = useState(event ? !!event.allow_nonresident_guests : true) // new events default to "Anyone" (2026-07-25)
@@ -149,18 +155,12 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [coordinator, setCoordinator] = useState(event?.coordinator?.id || null)
   const [saving, setSaving]           = useState(false)
   const [err, setErr]                 = useState(null)
-  // The hub's nominated venue is the default for a new screening. An existing
-  // screening keeps whatever it was saved with.
+  // Default a NEW screening to the Cinema once the venue list has loaded. An
+  // existing screening keeps whatever it was saved with.
+  const defaultVenueId = allVenues.find(v => v.name?.trim().toLowerCase() === 'cinema')?.id || null
   useEffect(() => {
-    let alive = true
-    supabase.from('hub_settings').select('location_id').eq('hub_type', 'movies').maybeSingle()
-      .then(({ data }) => {
-        if (!alive) return
-        setHubVenueId(data?.location_id || null)
-        setVenueId(v => v || data?.location_id || null)
-      })
-    return () => { alive = false }
-  }, [])
+    if (defaultVenueId) setVenueId(v => v || defaultVenueId)
+  }, [defaultVenueId])
 
   const venue      = allVenues.find(v => v.id === venueId) || null
   const venueName  = venue?.name || null
@@ -341,7 +341,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
                     </button>
                   ))}
                 </div>
-                <button type="button" onClick={() => { setVenueId(hubVenueId); setVenueEditing(false) }} style={{
+                <button type="button" onClick={() => { setVenueEditing(false) }} style={{
                   marginTop: '0.4rem', background: 'none', border: 'none', color: 'var(--text-dim)',
                   fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit', padding: 0,
                 }}>Cancel</button>
