@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
-import { findSameDateEvents, findSpaceConflict, needsSpaceValidation, spaceConflictMessage, resolveLocationId } from "@/lib/eventClash"
+import { findSameDateEvents, findSpaceConflict, needsSpaceValidation, spaceConflictMessage, fetchLocation } from "@/lib/eventClash"
 
 // Read-only pre-flight for the event form's save-time UX: any member can call
 // this (same visibility as the calendar) to populate the same-date warning (A)
@@ -21,13 +21,16 @@ export async function POST(req) {
   const { data: { user } } = await supabaseAdmin.auth.getUser(token)
   if (!user) return NextResponse.json({ error: "Unauthorised" }, { status: 401 })
 
-  const { event_date, event_time, event_end_time, location_type, location_name, exclude_event_id } = await req.json().catch(() => ({}))
+  const { event_date, event_time, event_end_time, location_type, location_id, exclude_event_id } = await req.json().catch(() => ({}))
+
+  // The client now sends the location ID, not its name — the name is read back
+  // from the row, so a renamed room still resolves (migration 071).
+  const loc = location_type === "onsite" ? await fetchLocation(supabaseAdmin, location_id) : null
 
   let spaceConflict = null
-  if (needsSpaceValidation({ location_type, locationName: location_name })) {
-    const location_id = await resolveLocationId(supabaseAdmin, location_name)
+  if (needsSpaceValidation({ location_type, bookable: loc?.bookable })) {
     const conflict = await findSpaceConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time, exclude_event_id })
-    if (conflict) spaceConflict = { ...conflict, message: spaceConflictMessage(location_name, conflict) }
+    if (conflict) spaceConflict = { ...conflict, message: spaceConflictMessage(loc?.name, conflict) }
   }
 
   const sameDateEvents = spaceConflict ? [] : await findSameDateEvents(supabaseAdmin, { event_date, exclude_event_id })

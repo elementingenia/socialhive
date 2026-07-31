@@ -2,7 +2,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyAllActiveMembers } from '@/lib/notifyAudience'
-import { needsSpaceValidation, findSpaceConflict, spaceConflictMessage, resolveLocationId } from '@/lib/eventClash'
+import { needsSpaceValidation, findSpaceConflict, spaceConflictMessage, fetchLocation } from '@/lib/eventClash'
 
 
 async function getAdminMember(req) {
@@ -37,7 +37,7 @@ function buildEventPayload(body, isInsert = false) {
     title, event_date, event_time, event_end_time, description, welcome_message,
     max_seats, max_seats_per_booking, cost, payment_required,
     show_attendee_names, is_public, has_bus, bus_driver_id,
-    location_type, location, has_dining, menu_type, menu_text, reservation_cutoff, payment_due_by, allow_nonresident_guests,
+    location_type, location, location_id, has_dining, menu_type, menu_text, reservation_cutoff, payment_due_by, allow_nonresident_guests,
     require_attendee_names,
   } = body
 
@@ -65,6 +65,10 @@ function buildEventPayload(body, isInsert = false) {
     has_bus:               !!has_bus,
     bus_driver_id:         (has_bus && bus_driver_id) ? bus_driver_id : null,
     location_type:         location_type || 'onsite',
+    // For onsite events both of these are overwritten by validateSpace() from
+    // the locations row — location_id is authoritative, location is its display
+    // copy. For offsite, `location` is deliberate free text and location_id null.
+    location_id:           location_id || null,
     location:              location || null,
     has_dining:            diningOn,
     menu_type:             menuTypeValue,
@@ -75,21 +79,30 @@ function buildEventPayload(body, isInsert = false) {
   }
 }
 
-// Event Clash / Space Booking (2026-07-23): validate end time + run the
-// space-conflict hard block for onsite events in a real common space (not
-// "Resident's Home"). Returns { error, status } on failure, or { location_id }
-// with the resolved FK to stamp onto the row (empty object = N/A -- off-site
-// or Resident's Home, no end time/location_id needed).
+// Event Clash / Space Booking (2026-07-23; reworked 2026-07-31).
+// The ID is the truth and the NAME is derived from it — the reverse of the
+// original design, which looked the id up from the name on every save and so
+// wrote location_id = NULL the first time an event was edited after its room was
+// renamed. Returns { location_id, location } to stamp onto the row, or
+// { error, status }. An empty object means "not applicable" (off-site).
 async function validateSpace(payload, excludeEventId) {
-  if (!needsSpaceValidation({ location_type: payload.location_type, locationName: payload.location })) return {}
+  if (payload.location_type !== 'onsite') return { location_id: null }
+
+  const loc = await fetchLocation(supabaseAdmin, payload.location_id)
+  if (!loc) return { error: 'Choose a venue for this on-site event', status: 400 }
+
+  // events.location is only a display copy now; always take it from the row so
+  // it can never disagree with the room it points at.
+  if (!needsSpaceValidation({ location_type: payload.location_type, bookable: loc.bookable }))
+    return { location_id: loc.id, location: loc.name }
+
   if (!payload.event_end_time) return { error: 'An end time is required for events in a common space', status: 400 }
-  const location_id = await resolveLocationId(supabaseAdmin, payload.location)
   const conflict = await findSpaceConflict(supabaseAdmin, {
-    location_id, event_date: payload.event_date, event_time: payload.event_time,
+    location_id: loc.id, event_date: payload.event_date, event_time: payload.event_time,
     event_end_time: payload.event_end_time, exclude_event_id: excludeEventId,
   })
-  if (conflict) return { error: spaceConflictMessage(payload.location, conflict), status: 409 }
-  return { location_id }
+  if (conflict) return { error: spaceConflictMessage(loc.name, conflict), status: 409 }
+  return { location_id: loc.id, location: loc.name }
 }
 
 export async function POST(req) {
@@ -106,6 +119,7 @@ export async function POST(req) {
   const space = await validateSpace(payload)
   if (space.error) return NextResponse.json({ error: space.error }, { status: space.status })
   payload.location_id = space.location_id || null
+  if (space.location) payload.location = space.location
 
   const { data: event, error } = await supabaseAdmin
     .from('events')
@@ -141,6 +155,7 @@ export async function PATCH(req) {
   const space = await validateSpace(payload, body.id)
   if (space.error) return NextResponse.json({ error: space.error }, { status: space.status })
   payload.location_id = space.location_id || null
+  if (space.location) payload.location = space.location
 
   const { data: before } = await supabaseAdmin
     .from('events').select('event_date, event_time, location').eq('id', body.id).single()
