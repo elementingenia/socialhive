@@ -8,10 +8,11 @@ import { computeFreeCost, normaliseService } from '@/lib/freeCost'
 import { PageTextsIcon, MoviesIcon, SocialIcon, ShedIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon } from '@/components/NavIcons'
 import RichEditor, { bbToHtml } from '@/components/RichEditor'
 import OwnersManager from '@/components/OwnersManager'
-import ResidentEditForm, { Sheet } from '@/components/ResidentEditPanel'
+import ResidentEditForm, { Sheet, labelStyle } from '@/components/ResidentEditPanel'
 import { CLUB_COLOURS, nextClubColour } from '@/lib/clubColours'
 import ClubWatermarkPicker from '@/components/ClubWatermarkPicker'
 import { BAR_ENABLED } from '@/lib/features'
+import { validateClosure, reasonRemaining, REASON_MAX } from '@/lib/spaces'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const HUB_TYPES = [
@@ -1964,14 +1965,25 @@ function ClubsTab() {
   )
 }
 
-// ── Locations tab — the shared, admin-managed venue list (migration 050) ─────
-// Replaces the hardcoded ONSITE_LOCATIONS array so adding or renaming a space
-// no longer needs a code deploy, and every hub/club shares one list.
+// ── Locations tab — the shared, admin-managed venue list ─────────────────────
+// Migration 050 created the list; migration 072 gave each venue its own
+// properties. Scope locked by Iain 2026-07-31:
+//   * Capacity — a numeric that SEEDS the default max_seats for events here.
+//     It does NOT restrict a larger number, so it warns and never blocks.
+//   * Open / Closed for bookings — closed is either "until further notice"
+//     (a start date only) or a From/To range, with a reason capped at 100 chars.
+//   * Admin only. No approval workflow, no per-space owners.
+//
+// The old version edited names through a native `prompt()`, which broke the
+// no-native-browser-controls standard and had nowhere to put the new fields.
+// Each venue is now an accordion row — closed by default, so twelve venues
+// still fit on one screen (vertical space is precious).
 function LocationsTab() {
   const [locations, setLocations] = useState(null)
   const [newName, setNewName]     = useState('')
   const [busy, setBusy]           = useState(false)
   const [error, setError]         = useState('')
+  const [openId, setOpenId]       = useState(null)
 
   const load = useCallback(() => {
     supabase.from('locations').select('*').order('sort_order').order('name')
@@ -1985,15 +1997,13 @@ function LocationsTab() {
     const maxSort = (locations || []).reduce((m, l) => Math.max(m, l.sort_order || 0), -1)
     const { error: e } = await supabase.from('locations').insert({ name: newName.trim(), sort_order: maxSort + 1 })
     setBusy(false)
-    if (e) { setError(e.message); return }
+    if (e) {
+      // migration 071 added a unique index on lower(trim(name))
+      setError(/duplicate key|locations_name_unique/.test(e.message)
+        ? `There is already a venue called "${newName.trim()}".` : e.message)
+      return
+    }
     setNewName(''); load()
-  }
-
-  async function rename(loc) {
-    const name = prompt('Rename venue', loc.name)
-    if (!name || !name.trim() || name === loc.name) return
-    await supabase.from('locations').update({ name: name.trim() }).eq('id', loc.id)
-    load()
   }
 
   async function toggleArchived(loc) {
@@ -2026,28 +2036,201 @@ function LocationsTab() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           {locations.map(l => (
-            <div key={l.id} style={{
-              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
-              padding: '0.7rem 0.9rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              gap: '0.5rem', opacity: l.archived ? 0.55 : 1,
-            }}>
-              <span style={{ fontWeight: 600, color: 'var(--text)' }}>
-                {l.name}{l.archived && <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginLeft: 6 }}>(hidden)</span>}
-              </span>
-              <span style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
-                <button onClick={() => rename(l)} style={{
-                  padding: '0.35rem 0.7rem', borderRadius: 8, border: '1px solid var(--border)',
-                  background: 'var(--surface2)', color: 'var(--text)', fontWeight: 600, fontSize: '0.8rem',
-                  cursor: 'pointer', fontFamily: 'inherit',
-                }}>Rename</button>
-                <button onClick={() => toggleArchived(l)} style={{
-                  padding: '0.35rem 0.7rem', borderRadius: 8, border: '1px solid var(--border)',
-                  background: 'var(--surface2)', color: 'var(--text-dim)', fontWeight: 600, fontSize: '0.8rem',
-                  cursor: 'pointer', fontFamily: 'inherit',
-                }}>{l.archived ? 'Show' : 'Hide'}</button>
-              </span>
-            </div>
+            <LocationRow
+              key={l.id} loc={l}
+              expanded={openId === l.id}
+              onToggle={() => setOpenId(openId === l.id ? null : l.id)}
+              onArchive={() => toggleArchived(l)}
+              onSaved={() => { setOpenId(null); load() }}
+            />
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// One venue: a summary row that expands into its settings.
+function LocationRow({ loc, expanded, onToggle, onArchive, onSaved }) {
+  const [form, setForm] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  // Reset the draft every time the row opens, so an abandoned edit never
+  // reappears later looking like saved state.
+  useEffect(() => {
+    if (!expanded) { setForm(null); setErr(''); return }
+    setForm({
+      name:           loc.name || '',
+      capacity:       loc.capacity ?? '',
+      booking_status: loc.booking_status || 'open',
+      closure_kind:   loc.closed_to ? 'range' : 'until',
+      closed_from:    loc.closed_from || '',
+      closed_to:      loc.closed_to || '',
+      closed_reason:  loc.closed_reason || '',
+    })
+  }, [expanded, loc])
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const closed = form?.booking_status === 'closed'
+
+  async function save() {
+    setErr('')
+    if (!form.name.trim()) { setErr('Name is required'); return }
+    if (form.capacity !== '' && (!Number.isFinite(Number(form.capacity)) || Number(form.capacity) < 1)) {
+      setErr('Capacity must be a whole number of 1 or more'); return
+    }
+    // Shared with the server and the database CHECK — one rule, three places.
+    const closureError = validateClosure({
+      booking_status: form.booking_status,
+      closed_from: form.closed_from || null,
+      closed_to: form.closure_kind === 'range' ? (form.closed_to || null) : null,
+      closed_reason: form.closed_reason || null,
+    })
+    if (closureError) { setErr(closureError); return }
+
+    setSaving(true)
+    const patch = {
+      name: form.name.trim(),
+      capacity: form.capacity === '' ? null : Number(form.capacity),
+      booking_status: form.booking_status,
+      // An open venue carries NO closure detail — the DB CHECK enforces this,
+      // so clearing the fields here keeps the save from being rejected.
+      closed_from:   closed ? form.closed_from : null,
+      closed_to:     closed && form.closure_kind === 'range' ? (form.closed_to || null) : null,
+      closed_reason: closed ? (form.closed_reason.trim() || null) : null,
+    }
+    const { error } = await supabase.from('locations').update(patch).eq('id', loc.id)
+    setSaving(false)
+    if (error) {
+      setErr(/duplicate key|locations_name_unique/.test(error.message)
+        ? `There is already a venue called "${form.name.trim()}".` : error.message)
+      return
+    }
+    onSaved()
+  }
+
+  const chip = (text, colour) => (
+    <span style={{
+      fontSize: '0.68rem', fontWeight: 700, padding: '0.12rem 0.45rem', borderRadius: 6,
+      background: colour + '1f', color: colour, whiteSpace: 'nowrap',
+    }}>{text}</span>
+  )
+
+  return (
+    <div style={{
+      background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
+      opacity: loc.archived ? 0.55 : 1, overflow: 'hidden',
+    }}>
+      <button type="button" onClick={onToggle} style={{
+        width: '100%', padding: '0.7rem 0.9rem', display: 'flex', alignItems: 'center', gap: '0.5rem',
+        background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left',
+      }}>
+        <span style={{ fontWeight: 600, color: 'var(--text)', flex: 1 }}>{loc.name}</span>
+        {/* Only render a chip when there is something to say — no empty slots. */}
+        {loc.archived && chip('Hidden', 'var(--text-dim)')}
+        {!loc.bookable && chip('Not bookable', 'var(--text-dim)')}
+        {loc.booking_status === 'closed' && chip('Closed', '#b45309')}
+        {loc.capacity ? chip(`${loc.capacity} seats`, 'var(--teal)') : null}
+        <span style={{
+          fontSize: '0.7rem', color: 'var(--text-dim)', flexShrink: 0,
+          transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s',
+        }}>▼</span>
+      </button>
+
+      {expanded && form && (
+        <div style={{ padding: '0 0.9rem 0.9rem', borderTop: '1px solid var(--border)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 7rem', gap: '0.5rem', margin: '0.75rem 0' }}>
+            <div>
+              <label style={labelStyle}>Name</label>
+              <input style={inputStyle} value={form.name} onChange={e => set('name', e.target.value)} />
+            </div>
+            <div>
+              <label style={labelStyle}>Capacity</label>
+              <input style={inputStyle} type="number" min="1" inputMode="numeric" placeholder="—"
+                value={form.capacity} onChange={e => set('capacity', e.target.value)} />
+            </div>
+          </div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '-0.4rem', marginBottom: '0.75rem' }}>
+            Capacity sets the default number of seats for events here. It doesn&apos;t stop anyone setting more.
+          </div>
+
+          <label style={labelStyle}>Bookings</label>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: closed ? '0.75rem' : 0 }}>
+            {[['open', 'Open'], ['closed', 'Closed']].map(([v, txt]) => (
+              <button key={v} type="button" onClick={() => set('booking_status', v)} style={{
+                flex: 1, padding: '0.5rem', borderRadius: 10, fontFamily: 'inherit', fontSize: '0.85rem',
+                fontWeight: 700, cursor: 'pointer', border: '2px solid',
+                borderColor: form.booking_status === v ? 'var(--amber)' : 'var(--border)',
+                background: form.booking_status === v ? 'var(--amber)18' : 'var(--surface)',
+                color: form.booking_status === v ? 'var(--amber-dark)' : 'var(--text-dim)',
+              }}>{txt}</button>
+            ))}
+          </div>
+
+          {/* Closure detail only exists when closed — nothing is rendered otherwise. */}
+          {closed && (
+            <>
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.6rem' }}>
+                {[['until', 'Until further notice'], ['range', 'From / to']].map(([v, txt]) => (
+                  <button key={v} type="button" onClick={() => set('closure_kind', v)} style={{
+                    flex: 1, padding: '0.45rem', borderRadius: 10, fontFamily: 'inherit', fontSize: '0.8rem',
+                    fontWeight: 600, cursor: 'pointer', border: '1.5px solid',
+                    borderColor: form.closure_kind === v ? 'var(--amber)' : 'var(--border)',
+                    background: form.closure_kind === v ? 'var(--amber)12' : 'var(--surface)',
+                    color: form.closure_kind === v ? 'var(--amber-dark)' : 'var(--text-dim)',
+                  }}>{txt}</button>
+                ))}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: form.closure_kind === 'range' ? '1fr 1fr' : '1fr', gap: '0.5rem', marginBottom: '0.6rem' }}>
+                <div>
+                  <label style={labelStyle}>From</label>
+                  <input style={inputStyle} type="date" value={form.closed_from}
+                    onClick={e => e.currentTarget.showPicker?.()}
+                    onChange={e => set('closed_from', e.target.value)} />
+                </div>
+                {form.closure_kind === 'range' && (
+                  <div>
+                    <label style={labelStyle}>To</label>
+                    <input style={inputStyle} type="date" value={form.closed_to}
+                      min={form.closed_from || undefined}
+                      onClick={e => e.currentTarget.showPicker?.()}
+                      onChange={e => set('closed_to', e.target.value)} />
+                  </div>
+                )}
+              </div>
+
+              <label style={labelStyle}>Reason</label>
+              <input style={inputStyle} value={form.closed_reason} maxLength={REASON_MAX}
+                placeholder="e.g. Floor resurfacing"
+                onChange={e => set('closed_reason', e.target.value)} />
+              <div style={{
+                fontSize: '0.72rem', textAlign: 'right', marginTop: '0.25rem',
+                color: reasonRemaining(form.closed_reason) <= 10 ? '#b45309' : 'var(--text-dim)',
+              }}>{reasonRemaining(form.closed_reason)} characters left</div>
+            </>
+          )}
+
+          {err && <div style={{ color: '#b91c1c', fontSize: '0.82rem', marginTop: '0.6rem' }}>{err}</div>}
+
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.9rem' }}>
+            <button onClick={save} disabled={saving} style={{
+              flex: 1, padding: '0.6rem', borderRadius: 10, border: 'none', background: 'var(--teal)',
+              color: '#fff', fontWeight: 700, fontFamily: 'inherit', fontSize: '0.9rem',
+              cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1,
+            }}>{saving ? 'Saving…' : 'Save'}</button>
+            <button onClick={onToggle} style={{
+              padding: '0.6rem 1rem', borderRadius: 10, border: '1px solid var(--border)',
+              background: 'var(--surface2)', color: 'var(--text)', fontWeight: 600,
+              fontFamily: 'inherit', fontSize: '0.9rem', cursor: 'pointer',
+            }}>Cancel</button>
+            <button onClick={onArchive} style={{
+              padding: '0.6rem 1rem', borderRadius: 10, border: '1px solid var(--border)',
+              background: 'var(--surface2)', color: 'var(--text-dim)', fontWeight: 600,
+              fontFamily: 'inherit', fontSize: '0.9rem', cursor: 'pointer',
+            }}>{loc.archived ? 'Show' : 'Hide'}</button>
+          </div>
         </div>
       )}
     </div>
