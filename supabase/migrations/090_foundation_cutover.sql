@@ -1,6 +1,15 @@
--- 069_foundation_cutover.sql
+-- 090_foundation_cutover.sql
 --
 -- FOUNDATION REBUILD, PART 2 OF 2 — the cutover.
+--
+-- ⚠ NUMBERED 090, NOT 069, ON PURPOSE. The gap is deliberate.
+-- This migration is a TERMINAL transformation: it drops `members`/`contacts` and
+-- repoints every person reference in the schema. Anything numbered after it must
+-- be written against the post-cutover world. Numbering it 069 meant migration
+-- 072 (spaces, written a day later) failed a numeric-order rebuild with
+-- `relation "members" does not exist`. Sorting the cutover last removes that
+-- whole class of problem instead of making every later migration defensive.
+-- Leave room above it; put ordinary feature migrations in the 0xx range.
 -- Scope: Social_Hive_Foundation_Scope.md (v4, approved by Iain 2026-07-30).
 -- Requires: 068_foundation_new_tables.sql already applied.
 --
@@ -16,7 +25,7 @@
 --   1. 068 (already applied — additive, done ahead of time)
 --   2. empty the data tables
 --   3. THIS FILE
---   4. 070_foundation_rls.sql
+--   4. 091_foundation_rls.sql
 --   5. Slice H: load people + occupancies from the reconciled dataset
 --
 -- Column coverage is not hand-typed: it was generated from the LIVE PostgREST
@@ -289,6 +298,46 @@ ALTER TABLE votes ADD CONSTRAINT votes_person_id_fkey FOREIGN KEY (person_id)
   REFERENCES people(id) ON DELETE CASCADE;
 
 
+-- ─── §2b TABLES CREATED AFTER THIS MIGRATION WAS WRITTEN ────────────────────
+-- 069 was written on 2026-07-30 against the 39 person-referencing columns that
+-- existed then. `space_bookings` (migration 072) arrived afterwards and carries
+-- its own FK to `members`, so running the migrations in numeric order used to
+-- fail at 072 with `relation "members" does not exist`.
+--
+-- Caught by applying every migration in order against a replica. Note that
+-- §4's check would NOT have caught it: dropping `members` CASCADE silently
+-- removes the dependent FK and leaves `booked_by` as a bare uuid column, so the
+-- damage is invisible rather than loud.
+--
+-- Guarded, because 069 may run on a database where 072 has not been applied.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+              WHERE table_schema='public' AND table_name='space_bookings') THEN
+
+    ALTER TABLE space_bookings ADD COLUMN IF NOT EXISTS community_id UUID;
+    UPDATE space_bookings SET community_id =
+      (SELECT id FROM communities WHERE slug='fullerton-cove') WHERE community_id IS NULL;
+    ALTER TABLE space_bookings ALTER COLUMN community_id SET NOT NULL;
+    ALTER TABLE space_bookings DROP CONSTRAINT IF EXISTS space_bookings_community_fk;
+    ALTER TABLE space_bookings ADD  CONSTRAINT space_bookings_community_fk
+      FOREIGN KEY (community_id) REFERENCES communities(id) ON DELETE CASCADE;
+    CREATE INDEX IF NOT EXISTS space_bookings_community_idx ON space_bookings (community_id);
+
+    -- booked_by already has its booked_by_name_at_time snapshot, so SET NULL
+    -- keeps the booking readable after a purge.
+    -- Column name stays `booked_by` in both orders; only the FK target moves.
+    ALTER TABLE space_bookings DROP CONSTRAINT IF EXISTS space_bookings_booked_by_fkey;
+    ALTER TABLE space_bookings ADD  CONSTRAINT space_bookings_booked_by_fkey
+      FOREIGN KEY (booked_by) REFERENCES people(id) ON DELETE SET NULL;
+
+    RAISE NOTICE 'space_bookings repointed onto people and scoped to the community.';
+  ELSE
+    RAISE NOTICE 'space_bookings does not exist yet - migration 072 will create it already-correct.';
+  END IF;
+END $$;
+
+
 -- ─── §3 RETIRE THE OLD MODEL ────────────────────────────────────────────────
 -- contact_categories is now a grouping of PEOPLE, not of contacts. Renaming it
 -- is not cosmetic: leaving 'contact_' in the schema is precisely how the
@@ -330,6 +379,26 @@ BEGIN
     RAISE EXCEPTION 'members/contacts still exist';
   END IF;
 
+  -- Any uuid column whose name says "person" but which points at NOTHING is an
+  -- orphan left behind by a DROP ... CASCADE. This is the check that would have
+  -- caught space_bookings.booked_by, and will catch the next one.
+  SELECT string_agg(c.table_name || '.' || c.column_name, ', ') INTO v_missing
+    FROM information_schema.columns c
+   WHERE c.table_schema = 'public'
+     AND c.data_type = 'uuid'
+     AND (c.column_name LIKE '%person_id' OR c.column_name IN
+          ('booked_by','created_by','added_by','suggested_by','uploaded_by',
+           'answered_by','recorded_by','updated_by','assigned_by','replaced_by',
+           'coordinator_id','bus_driver_id','payments_reconciled_by'))
+     AND NOT EXISTS (
+       SELECT 1 FROM pg_constraint fk
+         JOIN pg_class t ON t.oid = fk.conrelid
+         JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = ANY (fk.conkey)
+        WHERE fk.contype = 'f' AND t.relname = c.table_name AND a.attname = c.column_name);
+  IF v_missing IS NOT NULL THEN
+    RAISE EXCEPTION 'Person columns with no foreign key (orphaned by CASCADE): %', v_missing;
+  END IF;
+
   -- community_id present and NOT NULL everywhere it should be
   SELECT string_agg(t, ', ') INTO v_missing
     FROM unnest(ARRAY['bar_member_payments','bar_products','bar_reconciliations','bar_tabs','book_votes','booking_attendees','bookings','books','club_bring_categories','club_members','club_notices','clubs','categories','category_people','document_categories','documents','dvd_loans','event_coordinators','event_series','events','hub_followers','hub_settings','locations','movie_ownership','movies','notices','notifications','push_subscriptions','question_replies','questions','settings','space_owners','votes']) AS t
@@ -345,7 +414,9 @@ BEGIN
   SELECT count(*) INTO v_snaps
     FROM information_schema.columns
    WHERE table_schema='public' AND column_name LIKE '%_name_at_time'
-     AND table_name <> 'occupancies';   -- that one belongs to 068, not this migration
+     -- occupancies belongs to 068 and space_bookings to 072; neither snapshot
+     -- is created by this migration, so neither is counted here.
+     AND table_name NOT IN ('occupancies', 'space_bookings');
   IF v_snaps <> 21 THEN
     RAISE EXCEPTION 'Expected 21 snapshot columns, found %', v_snaps;
   END IF;
@@ -411,7 +482,7 @@ END $$;
 -- Dropping members cascaded away 39 RLS policies (verified in the sandbox: 25
 -- of 64 survive, and 13 tables end up RLS-enabled with ZERO policies, i.e.
 -- readable only by the service role). The app WILL be broken until
--- 070_foundation_rls.sql runs. Do not stop here.
+-- 091_foundation_rls.sql runs. Do not stop here.
 
 
 

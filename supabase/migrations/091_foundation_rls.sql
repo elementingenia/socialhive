@@ -1,4 +1,4 @@
--- 070_foundation_rls.sql
+-- 091_foundation_rls.sql
 --
 -- FOUNDATION REBUILD — Slice C: the community-scoped RLS rewrite.
 -- Requires: 068 and 069 already applied.
@@ -36,7 +36,7 @@ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables
               WHERE table_schema='public' AND table_name='members') THEN
     RAISE EXCEPTION
-      'REFUSING TO RUN: `members` still exists, so 069_foundation_cutover.sql has not been applied. These policies reference people.community_id and would drop every existing policy before failing.';
+      'REFUSING TO RUN: `members` still exists, so 090_foundation_cutover.sql has not been applied. These policies reference people.community_id and would drop every existing policy before failing.';
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.tables
                   WHERE table_schema='public' AND table_name='people') THEN
@@ -249,6 +249,19 @@ ALTER TABLE bar_reconciliations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY bar_reconciliations_community_read ON bar_reconciliations FOR SELECT TO authenticated
   USING (community_id = app_current_community());
 CREATE POLICY bar_reconciliations_admin_write ON bar_reconciliations FOR ALL TO authenticated
+  USING      (community_id = app_current_community() AND app_is_admin())
+  WITH CHECK (community_id = app_current_community() AND app_is_admin());
+
+-- space_bookings (migration 072). Left RLS-on-with-no-policies by 072 so it was
+-- invisible until the feature shipped; this is where it gets its policies.
+-- Everyone in the community can SEE what a room is booked for — that is the
+-- point of a shared calendar — but only admins write, per Iain's "admin only"
+-- call on space administration. Event-driven bookings are created server-side
+-- through the service role, which bypasses RLS entirely.
+ALTER TABLE space_bookings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY space_bookings_community_read ON space_bookings FOR SELECT TO authenticated
+  USING (community_id = app_current_community());
+CREATE POLICY space_bookings_admin_write ON space_bookings FOR ALL TO authenticated
   USING      (community_id = app_current_community() AND app_is_admin())
   WITH CHECK (community_id = app_current_community() AND app_is_admin());
 
