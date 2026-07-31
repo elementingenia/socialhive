@@ -8,7 +8,7 @@ import { computeFreeCost, normaliseService } from '@/lib/freeCost'
 import { PageTextsIcon, MoviesIcon, SocialIcon, ShedIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon } from '@/components/NavIcons'
 import RichEditor, { bbToHtml } from '@/components/RichEditor'
 import OwnersManager from '@/components/OwnersManager'
-import ResidentEditForm, { Sheet } from '@/components/ResidentEditPanel'
+import ResidentEditForm, { Sheet, labelStyle } from '@/components/ResidentEditPanel'
 import { CLUB_COLOURS, nextClubColour } from '@/lib/clubColours'
 import ClubWatermarkPicker from '@/components/ClubWatermarkPicker'
 import { BAR_ENABLED } from '@/lib/features'
@@ -1370,17 +1370,139 @@ function MoviesTab() {
       </div>
       {/* Sub-tabs */}
       <div style={{ display:'flex', gap:'0.4rem', marginBottom:'1rem', overflowX:'auto' }}>
-        {['Suggested', 'Ownership', 'Streaming'].map(s => (
+        {['Suggested', 'Ownership', 'Streaming', 'Venue'].map(s => (
           <button key={s} onClick={() => setSub(s)} style={subBtnStyle(sub === s)}>{s}</button>
         ))}
       </div>
       {sub === 'Suggested'  && <SuggestedMoviesView />}
       {sub === 'Ownership'  && <PrivateOwnershipTab addToast={addToast} />}
       {sub === 'Streaming'  && <StreamingServicesTab addToast={addToast} />}
+      {sub === 'Venue'      && <HubVenueTab addToast={addToast} />}
     </div>
   )
 }
 
+
+
+
+// ── Movies > Venue — the hub's nominated location (migration 073) ────────────
+// Iain, 2026-07-31: "The Movies Hub needs to have a nominated location which is
+// preset and locked with an edit location option (this just prevents accidental
+// changing) so Hub Owner/Admin can select if need be."
+//
+// So it renders READ-ONLY by default. Changing it takes a deliberate tap on
+// "Change venue" — every screening moves with it, which is not something to do
+// by brushing past a dropdown.
+//
+// Replaces the hardcoded CINEMA_NAME in api/screenings.
+function HubVenueTab({ addToast }) {
+  const HUB = 'movies'   // hub_settings spelling; events use 'movie'
+  const [locations, setLocations] = useState(null)
+  const [current, setCurrent]     = useState(null)
+  const [editing, setEditing]     = useState(false)
+  const [choice, setChoice]       = useState('')
+  const [saving, setSaving]       = useState(false)
+
+  const load = useCallback(async () => {
+    const [{ data: locs }, { data: hub }] = await Promise.all([
+      supabase.from('locations').select('id, name, bookable, booking_status').eq('archived', false).order('sort_order').order('name'),
+      supabase.from('hub_settings').select('location_id').eq('hub_type', HUB).maybeSingle(),
+    ])
+    setLocations(locs || [])
+    setCurrent(hub?.location_id || null)
+    setChoice(hub?.location_id || '')
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  async function save() {
+    setSaving(true)
+    // upsert: the hub may have no settings row yet
+    const { error } = await supabase.from('hub_settings')
+      .upsert({ hub_type: HUB, location_id: choice || null }, { onConflict: 'hub_type' })
+    setSaving(false)
+    if (error) { addToast(error.message, 'error'); return }
+    setEditing(false)
+    addToast('Venue updated — new and edited screenings will use it')
+    load()
+  }
+
+  const currentLoc = (locations || []).find(l => l.id === current)
+
+  return (
+    <div>
+      <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '1rem' }}>
+        Where screenings are held. Set once and locked, so it can&apos;t be changed by accident —
+        every new or edited screening books this space.
+      </div>
+
+      {locations === null ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><div className="spinner" /></div>
+      ) : !editing ? (
+        <div style={{
+          background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10,
+          padding: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.75rem',
+        }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 700, color: currentLoc ? 'var(--text)' : 'var(--danger)' }}>
+              {currentLoc ? currentLoc.name : 'No venue set'}
+            </div>
+            {/* Only say something when there IS something to say. */}
+            {currentLoc?.booking_status === 'closed' && (
+              <div style={{ fontSize: '0.75rem', color: '#b45309', marginTop: 2 }}>
+                This venue is currently closed for bookings.
+              </div>
+            )}
+            {!currentLoc && (
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: 2 }}>
+                Screenings fall back to a venue named &ldquo;Cinema&rdquo; if one exists.
+              </div>
+            )}
+          </div>
+          <button onClick={() => setEditing(true)} style={{
+            padding: '0.45rem 0.9rem', borderRadius: 8, border: '1px solid var(--border)',
+            background: 'var(--surface2)', color: 'var(--text)', fontWeight: 600,
+            fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+          }}>Change venue</button>
+        </div>
+      ) : (
+        <div>
+          <label style={labelStyle}>Venue</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.9rem' }}>
+            {locations.map(l => (
+              <button key={l.id} type="button" onClick={() => setChoice(l.id)} style={{
+                padding: '0.6rem 0.9rem', borderRadius: 10, textAlign: 'left', cursor: 'pointer',
+                fontFamily: 'inherit', fontSize: '0.9rem', border: '2px solid',
+                borderColor: choice === l.id ? 'var(--teal)' : 'var(--border)',
+                background: choice === l.id ? 'var(--teal)12' : 'var(--surface)',
+                color: choice === l.id ? 'var(--teal)' : 'var(--text)',
+                fontWeight: choice === l.id ? 700 : 500,
+                display: 'flex', alignItems: 'center', gap: '0.5rem',
+              }}>
+                <span style={{ flex: 1 }}>{l.name}</span>
+                {l.booking_status === 'closed' && (
+                  <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#b45309' }}>Closed</span>
+                )}
+                {choice === l.id && <span style={{ color: 'var(--teal)' }}>✓</span>}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button onClick={save} disabled={saving || !choice} style={{
+              flex: 1, padding: '0.6rem', borderRadius: 10, border: 'none', background: 'var(--teal)',
+              color: '#fff', fontWeight: 700, fontFamily: 'inherit', fontSize: '0.9rem',
+              cursor: (saving || !choice) ? 'not-allowed' : 'pointer', opacity: (saving || !choice) ? 0.6 : 1,
+            }}>{saving ? 'Saving…' : 'Save venue'}</button>
+            <button onClick={() => { setEditing(false); setChoice(current || '') }} style={{
+              padding: '0.6rem 1rem', borderRadius: 10, border: '1px solid var(--border)',
+              background: 'var(--surface2)', color: 'var(--text)', fontWeight: 600,
+              fontFamily: 'inherit', fontSize: '0.9rem', cursor: 'pointer',
+            }}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ── PAGE TEXTS TAB ────────────────────────────────────────────────────────────
 // ── Sub notice editor row ────────────────────────────────────────────────────
