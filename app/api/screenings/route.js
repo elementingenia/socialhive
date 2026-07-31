@@ -2,14 +2,17 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyHubFollowers } from '@/lib/notifyAudience'
-import { findSpaceConflict, spaceConflictMessage, resolveLocationByName } from '@/lib/eventClash'
+import { findSpaceConflict, spaceConflictMessage, hubLocation } from '@/lib/eventClash'
 
 // Movie screenings always run in the one dedicated common space -- there's no
 // location picker in the screening form, so every screening is auto-bound to
 // the "Cinema" location (Iain, 2026-07-23) and must carry an end time, same as
 // any other onsite event, so space-use management works consistently across
 // all three hubs.
+// The Movies hub nominates its venue in hub_settings (migration 073). This is
+// only the fallback for a hub that has not nominated one.
 const CINEMA_NAME = "Cinema"
+const MOVIES_HUB  = "movies"   // hub_settings spelling — events use "movie"
 
 // force-dynamic + the shared no-store supabaseAdmin (lib/supabaseAdmin.js) keep
 // this GET route reading LIVE data. Without it, Next's fetch cache once dropped a
@@ -219,8 +222,8 @@ export async function POST(req) {
   // Movies is the one caller that legitimately starts from a name — the Cinema
   // is hardcoded (CINEMA_NAME). Safe since migration 071 made location names
   // unique; before that two same-named rows made this silently resolve to null.
-  const cinema = await resolveLocationByName(supabaseAdmin, CINEMA_NAME)
-  if (!cinema) return NextResponse.json({ error: `The "${CINEMA_NAME}" venue is missing from Admin > Locations — a screening cannot be booked without it.` }, { status: 500 })
+  const cinema = await hubLocation(supabaseAdmin, MOVIES_HUB, CINEMA_NAME)
+  if (!cinema) return NextResponse.json({ error: `No venue is set for Movies. Choose one in Admin > Movies, or add a venue called "${CINEMA_NAME}" in Admin > Locations.` }, { status: 500 })
   const location_id = cinema.id
   const conflict = await findSpaceConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time })
   if (conflict) return NextResponse.json({ error: spaceConflictMessage(cinema.name, conflict) }, { status: 409 })
@@ -277,8 +280,8 @@ export async function PATCH(req) {
     }
   }
 
-  const cinema = await resolveLocationByName(supabaseAdmin, CINEMA_NAME)
-  if (!cinema) return NextResponse.json({ error: `The "${CINEMA_NAME}" venue is missing from Admin > Locations — a screening cannot be booked without it.` }, { status: 500 })
+  const cinema = await hubLocation(supabaseAdmin, MOVIES_HUB, CINEMA_NAME)
+  if (!cinema) return NextResponse.json({ error: `No venue is set for Movies. Choose one in Admin > Movies, or add a venue called "${CINEMA_NAME}" in Admin > Locations.` }, { status: 500 })
   const location_id = cinema.id
   const conflict = await findSpaceConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time, exclude_event_id: event_id })
   if (conflict) return NextResponse.json({ error: spaceConflictMessage(cinema.name, conflict) }, { status: 409 })
