@@ -2,7 +2,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyHubFollowers } from '@/lib/notifyAudience'
-import { findSpaceConflict, spaceConflictMessage, hubLocation } from '@/lib/eventClash'
+import { findSpaceConflict, spaceConflictMessage, hubLocation, fetchLocation } from '@/lib/eventClash'
 
 // Movie screenings always run in the one dedicated common space -- there's no
 // location picker in the screening form, so every screening is auto-bound to
@@ -200,7 +200,7 @@ export async function POST(req) {
   const member = await getMember(token)
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const { movie_id, event_date, event_time, event_end_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
+  const { movie_id, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
   if (!event_date || !event_time) {
     return NextResponse.json({ error: 'Date and time are required' }, { status: 400 })
   }
@@ -222,8 +222,12 @@ export async function POST(req) {
   // Movies is the one caller that legitimately starts from a name — the Cinema
   // is hardcoded (CINEMA_NAME). Safe since migration 071 made location names
   // unique; before that two same-named rows made this silently resolve to null.
-  const cinema = await hubLocation(supabaseAdmin, MOVIES_HUB, CINEMA_NAME)
-  if (!cinema) return NextResponse.json({ error: `No venue is set for Movies. Choose one in Admin > Movies, or add a venue called "${CINEMA_NAME}" in Admin > Locations.` }, { status: 500 })
+  // The form sends the venue chosen for THIS screening. Fall back to the hub's
+  // nominated venue when it doesn't (an older client, or the API called direct).
+  const cinema = bodyLocationId
+    ? await fetchLocation(supabaseAdmin, bodyLocationId)
+    : await hubLocation(supabaseAdmin, MOVIES_HUB, CINEMA_NAME)
+  if (!cinema) return NextResponse.json({ error: `That venue no longer exists. Pick another on the screening, or set the Movies venue in Admin > Movies.` }, { status: 500 })
   const location_id = cinema.id
   const conflict = await findSpaceConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time })
   if (conflict) return NextResponse.json({ error: spaceConflictMessage(cinema.name, conflict) }, { status: 409 })
@@ -264,7 +268,7 @@ export async function PATCH(req) {
   const member = await getMember(token)
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const { event_id, movie_id, event_date, event_time, event_end_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
+  const { event_id, movie_id, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
   if (!event_date || !event_time) return NextResponse.json({ error: 'Date and time are required' }, { status: 400 })
   if (!event_end_time) return NextResponse.json({ error: 'An end time is required -- every screening books the Cinema as a common space.' }, { status: 400 })
@@ -280,8 +284,12 @@ export async function PATCH(req) {
     }
   }
 
-  const cinema = await hubLocation(supabaseAdmin, MOVIES_HUB, CINEMA_NAME)
-  if (!cinema) return NextResponse.json({ error: `No venue is set for Movies. Choose one in Admin > Movies, or add a venue called "${CINEMA_NAME}" in Admin > Locations.` }, { status: 500 })
+  // The form sends the venue chosen for THIS screening. Fall back to the hub's
+  // nominated venue when it doesn't (an older client, or the API called direct).
+  const cinema = bodyLocationId
+    ? await fetchLocation(supabaseAdmin, bodyLocationId)
+    : await hubLocation(supabaseAdmin, MOVIES_HUB, CINEMA_NAME)
+  if (!cinema) return NextResponse.json({ error: `That venue no longer exists. Pick another on the screening, or set the Movies venue in Admin > Movies.` }, { status: 500 })
   const location_id = cinema.id
   const conflict = await findSpaceConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time, exclude_event_id: event_id })
   if (conflict) return NextResponse.json({ error: spaceConflictMessage(cinema.name, conflict) }, { status: 409 })
