@@ -1,5 +1,6 @@
 'use client'
 import EventCoordinators from "@/components/EventCoordinators"
+import { useLocations } from "@/lib/useLocations"
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { computeFreeCost } from '@/lib/freeCost'
@@ -134,6 +135,13 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [time, setTime]               = useState(event?.event_time?.slice(0, 5) || '18:00')
   const [endTime, setEndTime]         = useState(event?.event_end_time?.slice(0, 5) || '20:00')
   const [maxSeats, setMaxSeats]       = useState(event?.max_seats || 20)
+  // Venue for THIS screening. Prefilled from the hub's nominated venue
+  // (hub_settings, migration 073) and rendered LOCKED — changing it is a
+  // deliberate act, not something to do by brushing past a dropdown.
+  const allVenues                     = useLocations()
+  const [venueId, setVenueId]         = useState(event?.location_id || null)
+  const [venueEditing, setVenueEditing] = useState(false)
+  const [hubVenueId, setHubVenueId]   = useState(null)
   const [notes, setNotes]             = useState(event?.notes || '')
   const [cutoff, setCutoff]           = useState(cutoffToInputValue(event?.reservation_cutoff))
   const [allowGuests, setAllowGuests] = useState(event ? !!event.allow_nonresident_guests : true) // new events default to "Anyone" (2026-07-25)
@@ -141,6 +149,23 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [coordinator, setCoordinator] = useState(event?.coordinator?.id || null)
   const [saving, setSaving]           = useState(false)
   const [err, setErr]                 = useState(null)
+  // The hub's nominated venue is the default for a new screening. An existing
+  // screening keeps whatever it was saved with.
+  useEffect(() => {
+    let alive = true
+    supabase.from('hub_settings').select('location_id').eq('hub_type', 'movies').maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return
+        setHubVenueId(data?.location_id || null)
+        setVenueId(v => v || data?.location_id || null)
+      })
+    return () => { alive = false }
+  }, [])
+
+  const venue      = allVenues.find(v => v.id === venueId) || null
+  const venueName  = venue?.name || null
+  const venueClosed = venue?.booking_status === 'closed'
+
   const { ask: askSameDate, Modal: SameDateModal } = useSameDateWarning()
   const [open, setOpen]               = useState(false)
 
@@ -190,7 +215,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     } catch {}
 
     setSaving(true); setErr(null)
-    const body = { movie_id: pickedMovie?.id || null, event_date: date, event_time: time, event_end_time: endTime, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: allowGuests, require_attendee_names: requireNaming }
+    const body = { movie_id: pickedMovie?.id || null, location_id: venueId || null, event_date: date, event_time: time, event_end_time: endTime, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: allowGuests, require_attendee_names: requireNaming }
     if (isEdit) body.event_id = event.id
     const res = await authedFetch('/api/screenings', {
       method: isEdit ? 'PATCH' : 'POST',
@@ -274,8 +299,62 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
           <div style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Ends <span style={{ color: 'var(--danger)' }}>*</span></label>
             <TimeField value={endTime} onChange={setEndTime} colour={endTime ? 'var(--green)' : 'var(--danger)'} />
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.3rem' }}>Every screening books the Cinema as a common space, so an end time keeps it from double-booking.</div>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.3rem' }}>
+              Every screening books {venueName || 'the venue'} as a common space, so an end time keeps it from double-booking.
+            </div>
           </div>
+
+          {/* VENUE — locked by default. Preset to the hub's nominated venue;
+              "Edit" unlocks it for this screening only. Changing it here does
+              NOT change the hub default (Admin > Movies > Venue does that). */}
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={LABEL}>Venue</label>
+            {!venueEditing ? (
+              <div style={{
+                ...INPUT, display: 'flex', alignItems: 'center', gap: '0.5rem',
+                background: 'var(--surface2)', color: venueName ? 'var(--text)' : 'var(--danger)',
+              }}>
+                <span style={{ flex: 1, fontWeight: 600 }}>{venueName || 'No venue set'}</span>
+                <button type="button" onClick={() => setVenueEditing(true)} style={{
+                  background: 'none', border: 'none', color: 'var(--teal)', fontWeight: 700,
+                  fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'inherit', padding: 0,
+                }}>Edit</button>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  {allVenues.map(v => (
+                    <button key={v.id} type="button" onClick={() => { setVenueId(v.id); setVenueEditing(false) }} style={{
+                      padding: '0.55rem 0.8rem', borderRadius: 10, textAlign: 'left', cursor: 'pointer',
+                      fontFamily: 'inherit', fontSize: '0.88rem', border: '2px solid',
+                      borderColor: venueId === v.id ? 'var(--teal)' : 'var(--border)',
+                      background: venueId === v.id ? 'var(--teal)12' : 'var(--surface)',
+                      color: venueId === v.id ? 'var(--teal)' : 'var(--text)',
+                      fontWeight: venueId === v.id ? 700 : 500,
+                      display: 'flex', alignItems: 'center', gap: '0.5rem',
+                    }}>
+                      <span style={{ flex: 1 }}>{v.name}</span>
+                      {v.booking_status === 'closed' && (
+                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#b45309' }}>Closed</span>
+                      )}
+                      {venueId === v.id && <span>✓</span>}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" onClick={() => { setVenueId(hubVenueId); setVenueEditing(false) }} style={{
+                  marginTop: '0.4rem', background: 'none', border: 'none', color: 'var(--text-dim)',
+                  fontSize: '0.78rem', cursor: 'pointer', fontFamily: 'inherit', padding: 0,
+                }}>Cancel</button>
+              </>
+            )}
+            {/* Only warn when there IS something to warn about. */}
+            {venueClosed && (
+              <div style={{ fontSize: '0.72rem', color: '#b45309', marginTop: '0.3rem' }}>
+                {venueName} is currently closed for bookings.
+              </div>
+            )}
+          </div>
+
           <div style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Max Seats</label>
             <input type="number" value={maxSeats} onChange={e => setMaxSeats(e.target.value)} min={1} max={200} style={INPUT} />
