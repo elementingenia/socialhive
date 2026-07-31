@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyHubFollowers } from '@/lib/notifyAudience'
 import { findSpaceConflict, spaceConflictMessage, hubLocation, fetchLocation } from '@/lib/eventClash'
+import { titleFor } from '@/lib/showing'
 
 // Movie screenings always run in the one dedicated common space -- there's no
 // location picker in the screening form, so every screening is auto-bound to
@@ -200,7 +201,7 @@ export async function POST(req) {
   const member = await getMember(token)
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const { movie_id, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
+  const { movie_id, showing_title, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
   if (!event_date || !event_time) {
     return NextResponse.json({ error: 'Date and time are required' }, { status: 400 })
   }
@@ -208,13 +209,16 @@ export async function POST(req) {
     return NextResponse.json({ error: 'An end time is required -- every screening books the Cinema as a common space.' }, { status: 400 })
   }
 
-  let title = 'Movie Night'
+  // A Movies event is a SHOWING — a film is one kind, the AFL Grand Final is
+  // another. titleFor() keeps the old 'Movie Night' fallback so nothing that
+  // sends neither changes behaviour.
+  let title = titleFor({ freeText: showing_title })
   let movieSnapshot = null
   if (movie_id) {
     const { data: movie } = await supabaseAdmin
       .from('movies').select('title, director, poster_url, year').eq('id', movie_id).single()
     if (movie) {
-      title = movie.title
+      title = titleFor({ movieTitle: movie.title, freeText: showing_title })
       movieSnapshot = { title: movie.title, director: movie.director, poster_url: movie.poster_url, year: movie.year }
     }
   }
@@ -268,18 +272,21 @@ export async function PATCH(req) {
   const member = await getMember(token)
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const { event_id, movie_id, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
+  const { event_id, movie_id, showing_title, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
   if (!event_date || !event_time) return NextResponse.json({ error: 'Date and time are required' }, { status: 400 })
   if (!event_end_time) return NextResponse.json({ error: 'An end time is required -- every screening books the Cinema as a common space.' }, { status: 400 })
 
-  let title = 'Movie Night'
+  // A Movies event is a SHOWING — a film is one kind, the AFL Grand Final is
+  // another. titleFor() keeps the old 'Movie Night' fallback so nothing that
+  // sends neither changes behaviour.
+  let title = titleFor({ freeText: showing_title })
   let movieSnapshot = null
   if (movie_id) {
     const { data: movie } = await supabaseAdmin
       .from('movies').select('title, director, poster_url, year').eq('id', movie_id).single()
     if (movie) {
-      title = movie.title
+      title = titleFor({ movieTitle: movie.title, freeText: showing_title })
       movieSnapshot = { title: movie.title, director: movie.director, poster_url: movie.poster_url, year: movie.year }
     }
   }
@@ -317,5 +324,7 @@ export async function PATCH(req) {
       { excludeMemberId: member.id })
   }
 
-  return NextResponse.json({ ok: true })
+  // Return the id so the form can attach a poster to a brand-new free-text
+  // showing without closing and reopening the sheet.
+  return NextResponse.json({ ok: true, id: event.id })
 }

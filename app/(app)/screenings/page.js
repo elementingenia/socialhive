@@ -1,12 +1,14 @@
 'use client'
 import EventCoordinators from "@/components/EventCoordinators"
 import { useLocations } from "@/lib/useLocations"
+import EventImagePicker from "@/components/EventImagePicker"
+import { validateShowing, posterFor, posterPosition, posterAlt } from "@/lib/showing"
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { computeFreeCost } from '@/lib/freeCost'
 import EventSlideOut from '@/components/EventSlideOut'
 import { BusIcon } from '@/components/NavIcons'
-import { authedFetch } from '@/lib/getAuthToken'
+import { authedFetch, getAuthToken } from '@/lib/getAuthToken'
 import { cutoffToInputValue, cutoffFromInputValue } from '@/lib/booking'
 import TimeField from '@/components/TimeField'
 import { useSameDateWarning } from '@/components/SameDateWarning'
@@ -126,6 +128,14 @@ function CoordPicker({ members, value, onChange }) {
 // ── Add/Edit Screening Sheet (admin) ──────────────────────────────────────────
 function ScreeningSheet({ session, event, members, onClose, onSaved, addToast }) {
   const isEdit = !!event
+  // A Movies event is a SHOWING. A film is one kind; "AFL Grand Final" is
+  // another (Iain, 2026-07-31). Either way it books the venue — which is what
+  // makes booking a football night through Movies secure the Cinema.
+  const [showMode, setShowMode]       = useState(event && !event.movie_id ? 'other' : 'movie')
+  const [freeText, setFreeText]       = useState(event && !event.movie_id ? (event.title || '') : '')
+  // Set after a NEW showing is created, so the poster uploader (which needs an
+  // event to attach to) can appear without closing and reopening the sheet.
+  const [createdId, setCreatedId]     = useState(null)
   const [movies, setMovies]           = useState([])
   const [pickedMovie, setPickedMovie] = useState(null)
   const [movieOpen, setMovieOpen]     = useState(false)
@@ -217,7 +227,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event_date: date, event_time: time, event_end_time: endTime,
-          location_type: 'onsite', location_name: 'Cinema', exclude_event_id: isEdit ? event.id : null,
+          location_type: 'onsite', location_id: venueId, exclude_event_id: isEdit ? event.id : null,
         }),
       }).then(r => r.json()).catch(() => ({}))
       if (pre.spaceConflict) { setErr(pre.spaceConflict.message); return }
@@ -226,8 +236,13 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
       }
     } catch {}
 
+    const showErr = validateShowing({ mode: showMode, movieId: pickedMovie?.id, freeText })
+    if (showErr) { setErr(showErr); return }
+
     setSaving(true); setErr(null)
-    const body = { movie_id: pickedMovie?.id || null, location_id: venueId || null, event_date: date, event_time: time, event_end_time: endTime, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: allowGuests, require_attendee_names: requireNaming }
+    const body = { movie_id: showMode === 'movie' ? (pickedMovie?.id || null) : null,
+                   showing_title: showMode === 'other' ? freeText.trim() : null,
+                   location_id: venueId || null, event_date: date, event_time: time, event_end_time: endTime, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: allowGuests, require_attendee_names: requireNaming }
     if (isEdit) body.event_id = event.id
     const res = await authedFetch('/api/screenings', {
       method: isEdit ? 'PATCH' : 'POST',
@@ -237,8 +252,14 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     const data = await res.json()
     setSaving(false)
     if (!res.ok) { setErr(data.error || 'Failed'); addToast('Failed to save', 'error'); return }
-    addToast((isEdit ? 'Screening updated' : 'Screening added') + ' — ' + (pickedMovie?.title || 'Movie Night') + ' on ' + date, 'success')
-    onSaved(); handleClose()
+    const shownAs = showMode === 'other' ? freeText.trim() : (pickedMovie?.title || 'Movie Night')
+    addToast((isEdit ? 'Screening updated' : 'Screening added') + ' — ' + shownAs + ' on ' + date, 'success')
+    onSaved()
+    // A brand-new free-text showing has no poster yet, and the uploader needs an
+    // event id. Keep the sheet open so it can be added straight away — the same
+    // pattern Social uses after creating an event. Everything else closes as before.
+    if (!isEdit && showMode === 'other' && data?.id) { setCreatedId(data.id); return }
+    handleClose()
   }
 
   const INPUT = { width: '100%', padding: '0.65rem 0.85rem', border: '1.5px solid var(--border)', borderRadius: '10px', fontSize: '1rem', background: 'var(--surface2)', boxSizing: 'border-box', fontFamily: 'inherit', appearance: 'none', WebkitAppearance: 'none' }
@@ -255,6 +276,56 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
           <button onClick={handleClose} style={{ background: 'var(--surface2)', border: 'none', borderRadius: '50%', width: 36, height: 36, fontSize: 20, cursor: 'pointer', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
         </div>
         <div style={{ padding: '1.25rem' }}>
+          {/* WHAT'S SHOWING — a film, or anything else the Cinema is being used
+              for. Either way the venue is booked, which is the point. */}
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={LABEL}>Showing</label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              {[['movie', 'A movie'], ['other', 'Something else']].map(([v, txt]) => (
+                <button key={v} type="button" onClick={() => setShowMode(v)} style={{
+                  flex: 1, padding: '0.5rem', borderRadius: 10, fontFamily: 'inherit',
+                  fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', border: '2px solid',
+                  borderColor: showMode === v ? 'var(--teal)' : 'var(--border)',
+                  background: showMode === v ? 'var(--teal)18' : 'var(--surface)',
+                  color: showMode === v ? 'var(--teal)' : 'var(--text-dim)',
+                }}>{txt}</button>
+              ))}
+            </div>
+          </div>
+
+          {showMode === 'other' ? (
+            <>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={LABEL}>What&apos;s showing <span style={{ color: 'var(--danger)' }}>*</span></label>
+                <input value={freeText} onChange={e => setFreeText(e.target.value)} maxLength={80}
+                  placeholder="e.g. AFL Grand Final"
+                  style={{ ...INPUT, border: `1.5px solid ${freeText.trim() ? 'var(--green)' : 'var(--danger)'}` }} />
+              </div>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={LABEL}>Poster</label>
+                {/* Same uploader and focal-point picker Social and Clubs use, and
+                    it fills the exact slot a movie poster fills on the card.
+                    It needs an event to attach to, so on a NEW showing it
+                    appears once the screening has been saved — the form stays
+                    open after create for precisely this reason. */}
+                {isEdit || createdId ? (
+                  <EventImagePicker
+                    eventId={isEdit ? event.id : createdId}
+                    imageUrl={event?.image_url}
+                    focalX={event?.image_focal_x}
+                    focalY={event?.image_focal_y}
+                    colour="var(--teal)"
+                    getToken={getAuthToken}
+                    onUpdated={onSaved}
+                  />
+                ) : (
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', background: 'var(--surface2)', borderRadius: 10, padding: '0.7rem 0.85rem' }}>
+                    Save this showing first, then add a poster here. Without one the card shows the 🎬 placeholder.
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
           <div style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Movie</label>
             {pickedMovie ? (
@@ -292,6 +363,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
               </div>
             )}
           </div>
+          )}
           <div style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Coordinator (optional)</label>
             <CoordPicker members={members} value={coordinator} onChange={setCoordinator} />
@@ -467,8 +539,13 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit }) {
       style={{ background: 'var(--surface)', borderRadius: '12px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow)', cursor: 'pointer' }}>
 
       <div style={{ display: 'flex' }}>
-        {movie?.poster_url
-          ? <img src={movie.poster_url} alt={movie.title} style={{ width: 100, minHeight: 140, objectFit: 'cover', flexShrink: 0 }} />
+        {/* A film's poster, or the uploaded image for a free-text showing — the
+            same slot either way, so an AFL Grand Final card looks like a film's.
+            An uploaded photo honours its focal point; a movie poster is authored
+            art and stays centred. */}
+        {posterFor(ev, movie)
+          ? <img src={posterFor(ev, movie)} alt={posterAlt(ev, movie)}
+              style={{ width: 100, minHeight: 140, objectFit: 'cover', objectPosition: posterPosition(ev, movie), flexShrink: 0 }} />
           : <div style={{ width: 100, minHeight: 140, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', flexShrink: 0 }}>🎬</div>
         }
         <div style={{ flex: 1, padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
