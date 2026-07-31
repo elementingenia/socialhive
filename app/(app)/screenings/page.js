@@ -127,15 +127,19 @@ function CoordPicker({ members, value, onChange }) {
 
 // ── Add/Edit Screening Sheet (admin) ──────────────────────────────────────────
 function ScreeningSheet({ session, event, members, onClose, onSaved, addToast }) {
-  const isEdit = !!event
+  // The id of the event this sheet is editing. For a brand-new showing it is
+  // null until the first save, then it becomes the created event's id — so the
+  // sheet switches from "create" to "edit" and a SECOND press of Save PATCHES
+  // rather than creating a duplicate. (It would have: isEdit derived from the
+  // `event` prop, which never changes after create.)
+  const [savedId, setSavedId] = useState(null)
+  const eventId = event?.id || savedId
+  const isEdit  = !!eventId
   // A Movies event is a SHOWING. A film is one kind; "AFL Grand Final" is
   // another (Iain, 2026-07-31). Either way it books the venue — which is what
   // makes booking a football night through Movies secure the Cinema.
   const [showMode, setShowMode]       = useState(event && !event.movie_id ? 'other' : 'movie')
   const [freeText, setFreeText]       = useState(event && !event.movie_id ? (event.title || '') : '')
-  // Set after a NEW showing is created, so the poster uploader (which needs an
-  // event to attach to) can appear without closing and reopening the sheet.
-  const [createdId, setCreatedId]     = useState(null)
   const [movies, setMovies]           = useState([])
   const [pickedMovie, setPickedMovie] = useState(null)
   const [movieOpen, setMovieOpen]     = useState(false)
@@ -167,6 +171,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [requireNaming, setRequireNaming] = useState(!!event?.require_attendee_names)
   const [coordinator, setCoordinator] = useState(event?.coordinator?.id || null)
   const [saving, setSaving]           = useState(false)
+  const [justSaved, setJustSaved]     = useState(false)
   const [err, setErr]                 = useState(null)
   // Default a NEW screening to the Movies venue. An existing screening keeps
   // whatever it was saved with. The name fallback only covers a database where
@@ -227,7 +232,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event_date: date, event_time: time, event_end_time: endTime,
-          location_type: 'onsite', location_id: venueId, exclude_event_id: isEdit ? event.id : null,
+          location_type: 'onsite', location_id: venueId, exclude_event_id: eventId || null,
         }),
       }).then(r => r.json()).catch(() => ({}))
       if (pre.spaceConflict) { setErr(pre.spaceConflict.message); return }
@@ -243,7 +248,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     const body = { movie_id: showMode === 'movie' ? (pickedMovie?.id || null) : null,
                    showing_title: showMode === 'other' ? freeText.trim() : null,
                    location_id: venueId || null, event_date: date, event_time: time, event_end_time: endTime, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: allowGuests, require_attendee_names: requireNaming }
-    if (isEdit) body.event_id = event.id
+    if (eventId) body.event_id = eventId
     const res = await authedFetch('/api/screenings', {
       method: isEdit ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -253,12 +258,21 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     setSaving(false)
     if (!res.ok) { setErr(data.error || 'Failed'); addToast('Failed to save', 'error'); return }
     const shownAs = showMode === 'other' ? freeText.trim() : (pickedMovie?.title || 'Movie Night')
-    addToast((isEdit ? 'Screening updated' : 'Screening added') + ' — ' + shownAs + ' on ' + date, 'success')
+    const wasCreate = !eventId
+    addToast((wasCreate ? 'Screening added' : 'Screening updated') + ' — ' + shownAs + ' on ' + date, 'success')
     onSaved()
-    // A brand-new free-text showing has no poster yet, and the uploader needs an
-    // event id. Keep the sheet open so it can be added straight away — the same
-    // pattern Social uses after creating an event. Everything else closes as before.
-    if (!isEdit && showMode === 'other' && data?.id) { setCreatedId(data.id); return }
+
+    // A brand-new free-text showing has no poster yet and the uploader needs an
+    // event id, so the sheet stays open for it. It MUST be obvious that the save
+    // worked, or this looks exactly like a failure — which is what happened the
+    // first time out (Iain: "after saving then closing, the event was not
+    // created"; it had been, there was just no signal). Hence the banner, and
+    // switching to edit mode so the next Save updates instead of duplicating.
+    if (wasCreate && showMode === 'other' && data?.id) {
+      setSavedId(data.id)
+      setJustSaved(true)
+      return
+    }
     handleClose()
   }
 
@@ -276,6 +290,17 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
           <button onClick={handleClose} style={{ background: 'var(--surface2)', border: 'none', borderRadius: '50%', width: 36, height: 36, fontSize: 20, cursor: 'pointer', color: 'var(--text)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
         </div>
         <div style={{ padding: '1.25rem' }}>
+          {/* Saving a new showing keeps this sheet open so a poster can be
+              added — which looks identical to a failed save unless we say so. */}
+          {justSaved && (
+            <div style={{
+              background: 'rgba(21,128,61,0.10)', border: '1px solid rgba(21,128,61,0.35)',
+              color: '#15803d', borderRadius: 10, padding: '0.7rem 0.85rem',
+              marginBottom: '1rem', fontSize: '0.85rem', fontWeight: 600,
+            }}>
+              ✓ Showing saved. Add a poster below if you want one, then close — nothing else to do.
+            </div>
+          )}
           {/* WHAT'S SHOWING — a film, or anything else the Cinema is being used
               for. Either way the venue is booked, which is the point. */}
           <div style={{ marginBottom: '1rem' }}>
@@ -308,9 +333,9 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
                     It needs an event to attach to, so on a NEW showing it
                     appears once the screening has been saved — the form stays
                     open after create for precisely this reason. */}
-                {isEdit || createdId ? (
+                {eventId ? (
                   <EventImagePicker
-                    eventId={isEdit ? event.id : createdId}
+                    eventId={eventId}
                     imageUrl={event?.image_url}
                     focalX={event?.image_focal_x}
                     focalY={event?.image_focal_y}
