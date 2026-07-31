@@ -184,7 +184,13 @@ BEGIN
   END IF;
 
   -- PROVE the trigger fires, rather than trusting that it was created
-  SELECT id, name INTO probe_id, old_name FROM locations WHERE bookable = true LIMIT 1;
+  -- Use a throwaway room, not a real one. Previously this borrowed the first
+  -- bookable location and was wrapped in IF probe_id IS NOT NULL — so on a
+  -- database with no locations the entire trigger proof SKIPPED while the
+  -- migration still reported OK. Caught by running every migration in numeric
+  -- order. A verification that can quietly not run is worse than none.
+  INSERT INTO locations (name, sort_order) VALUES ('ZZ Trigger Probe Room', 9101)
+    RETURNING id, name INTO probe_id, old_name;
   IF probe_id IS NOT NULL THEN
     INSERT INTO events (title, event_date, event_time, location_type, location, location_id)
          VALUES ('ZZ Trigger Probe', CURRENT_DATE, '19:00', 'onsite', old_name, probe_id)
@@ -203,8 +209,11 @@ BEGIN
       RAISE EXCEPTION 'TRIGGER FAILED on the way back: event reads "%"', seen_name;
     END IF;
 
-    DELETE FROM events WHERE id = probe_ev;
+    DELETE FROM events    WHERE id = probe_ev;
+    DELETE FROM locations WHERE id = probe_id;
     RAISE NOTICE 'OK: rename cascade proven - event name followed the room in both directions.';
+  ELSE
+    RAISE EXCEPTION 'Could not create a probe location - the trigger was NOT verified';
   END IF;
 
   -- the exemption moved off the regex and onto the row
