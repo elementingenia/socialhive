@@ -1414,13 +1414,26 @@ function HubVenueTab({ addToast }) {
   }, [])
   useEffect(() => { load() }, [load])
 
+  // Goes through the server route, NOT supabase.from('hub_settings') directly.
+  // hub_settings' RLS policy (migration 015) compares members.id to auth.uid()
+  // instead of members.auth_id, so it can never be true — a client write is
+  // silently filtered to zero rows with no error at all. Page Texts uses the
+  // same route for the same reason.
   async function save() {
     setSaving(true)
-    // upsert: the hub may have no settings row yet
-    const { error } = await supabase.from('hub_settings')
-      .upsert({ hub_type: HUB, location_id: choice || null }, { onConflict: 'hub_type' })
+    const res = await fetch('/api/hub-settings', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + (await getAuthToken()),
+      },
+      body: JSON.stringify({ hub_type: HUB, location_id: choice || null }),
+    })
     setSaving(false)
-    if (error) { addToast(error.message, 'error'); return }
+    if (!res.ok) {
+      const { error } = await res.json().catch(() => ({}))
+      addToast(error || 'Could not save the venue', 'error'); return
+    }
     setEditing(false)
     addToast('Venue updated — new and edited screenings will use it')
     load()
@@ -1595,7 +1608,10 @@ function PageTextsTab() {
 
     await fetch('/api/hub-settings', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + (await getAuthToken()),
+      },
       body: JSON.stringify(body),
     })
     setData(d => ({

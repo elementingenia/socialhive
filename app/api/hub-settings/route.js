@@ -32,15 +32,33 @@ export async function GET() {
 }
 
 export async function PATCH(req) {
-  const { hub_type, welcome_text, sub_messages, user_id } = await req.json()
+  const { hub_type, welcome_text, sub_messages, location_id } = await req.json()
   if (!hub_type) return Response.json({ error: "hub_type required" }, { status: 400 })
 
-  const { data: member } = await supa.from("members").select("is_admin").eq("id", user_id).single()
+  // AUTH FROM THE TOKEN, not from the request body. This previously read a
+  // `user_id` out of the JSON and looked up that member's is_admin — so any
+  // caller could pass a known admin's id and edit every hub's text. The bearer
+  // token is the only thing the client cannot forge.
+  const token = req.headers.get("Authorization")?.replace("Bearer ", "")
+  if (!token) return Response.json({ error: "Unauthorised" }, { status: 401 })
+  const { data: { user } } = await supa.auth.getUser(token)
+  if (!user) return Response.json({ error: "Unauthorised" }, { status: 401 })
+  const { data: member } = await supa
+    .from("members").select("id, is_admin").eq("auth_id", user.id).maybeSingle()
   if (!member?.is_admin) return Response.json({ error: "Forbidden" }, { status: 403 })
 
-  const update = { updated_at: new Date().toISOString(), updated_by: user_id }
+  // This route exists BECAUSE hub_settings cannot be written from the client.
+  // Migration 015's policy is
+  //     USING (EXISTS (SELECT 1 FROM members WHERE id = auth.uid() ...))
+  // which compares members.id to the AUTH user id — it can never be true, so
+  // every client write is silently filtered to zero rows. The service role used
+  // here bypasses RLS. (The foundation RLS rewrite, migration 091, replaces
+  // that policy with app_is_admin(), which compares auth_id correctly.)
+  const update = { updated_at: new Date().toISOString(), updated_by: member.id }
   if (welcome_text !== undefined) update.welcome_text = welcome_text
   if (sub_messages !== undefined) update.sub_messages = sub_messages
+  // null is meaningful here — it clears the hub's nominated venue.
+  if (location_id !== undefined) update.location_id = location_id
 
   const { error } = await supa
     .from("hub_settings")
