@@ -125,7 +125,9 @@ CREATE TABLE IF NOT EXISTS space_bookings (
 
   -- SET NULL + snapshot, matching the foundation-rebuild convention: a booking
   -- is a record of an act and must stay readable after a person is purged.
-  booked_by            UUID REFERENCES members(id) ON DELETE SET NULL,
+  -- The FK is attached separately below, because which table holds people
+  -- depends on whether the foundation cutover (069) has run yet.
+  booked_by            UUID,
   booked_by_name_at_time TEXT,
 
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -136,6 +138,37 @@ CREATE TABLE IF NOT EXISTS space_bookings (
   -- without limit. Verified in the sandbox before writing this.
   CONSTRAINT space_bookings_sane_window CHECK (ends_at > starts_at)
 );
+
+-- ─── 2a. WHO BOOKED IT — target depends on migration order ─────────────────
+-- Before the foundation cutover (069) people live in `members`; after it they
+-- live in `people`. This migration has to work in BOTH worlds:
+--   * run today, pre-wipe        -> members
+--   * run in a fresh rebuild, after 069 has already dropped members -> people
+--
+-- Found by applying every migration in numeric order against a replica: a
+-- hardcoded `REFERENCES members(id)` failed with `relation "members" does not
+-- exist`, because 072 is numbered after 069. Resolving the target at run time
+-- removes the ordering dependency entirely rather than papering over it.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'space_bookings_booked_by_fkey') THEN
+    RETURN;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+              WHERE table_schema='public' AND table_name='people') THEN
+    ALTER TABLE space_bookings ADD CONSTRAINT space_bookings_booked_by_fkey
+      FOREIGN KEY (booked_by) REFERENCES people(id) ON DELETE SET NULL;
+    RAISE NOTICE 'booked_by -> people (post-cutover schema).';
+  ELSIF EXISTS (SELECT 1 FROM information_schema.tables
+                 WHERE table_schema='public' AND table_name='members') THEN
+    ALTER TABLE space_bookings ADD CONSTRAINT space_bookings_booked_by_fkey
+      FOREIGN KEY (booked_by) REFERENCES members(id) ON DELETE SET NULL;
+    RAISE NOTICE 'booked_by -> members (pre-cutover schema; 069 repoints it later).';
+  ELSE
+    RAISE EXCEPTION 'Neither people nor members exists - cannot attach booked_by';
+  END IF;
+END $$;
+
 
 -- ─── 2b. THE CONSTRAINT THAT MAKES DOUBLE-BOOKING IMPOSSIBLE ────────────────
 -- Not a check the app performs — a rule the database refuses to violate, no
@@ -188,11 +221,13 @@ DECLARE
   room_a UUID; room_b UUID; keep UUID; err TEXT;
   base  TIMESTAMPTZ := '2099-01-01 14:00:00+11';   -- far future, never real data
 BEGIN
-  SELECT id INTO room_a FROM locations ORDER BY sort_order LIMIT 1;
-  SELECT id INTO room_b FROM locations ORDER BY sort_order OFFSET 1 LIMIT 1;
-  IF room_a IS NULL OR room_b IS NULL THEN
-    RAISE EXCEPTION 'Need at least two locations to verify the constraint';
-  END IF;
+  -- Create two throwaway rooms rather than borrowing real ones. Two reasons:
+  -- the checks below must never touch live data, and a freshly-wiped database
+  -- has no locations at all — in which case borrowing would make the whole
+  -- verification silently skip. A check that can quietly not run is worthless
+  -- (the lesson from the testbot fixture, which failed CI silently for months).
+  INSERT INTO locations (name, sort_order) VALUES ('ZZ Verify Room A', 9001) RETURNING id INTO room_a;
+  INSERT INTO locations (name, sort_order) VALUES ('ZZ Verify Room B', 9002) RETURNING id INTO room_b;
 
   INSERT INTO space_bookings (location_id, starts_at, ends_at, purpose, title)
        VALUES (room_a, base, base + interval '2 hours', 'hold', 'ZZ verify base')
@@ -240,7 +275,7 @@ BEGIN
 
   DELETE FROM space_bookings WHERE title LIKE 'ZZ %';
 
-  -- 7. the closure rules hold together
+  -- 7. the closure rules hold together (on the throwaway room, never a real one)
   BEGIN
     UPDATE locations SET booking_status = 'closed', closed_from = NULL WHERE id = room_a;
     RAISE EXCEPTION 'FAIL: a closure with no start date was ACCEPTED';
@@ -255,6 +290,13 @@ BEGIN
     NULL;  -- expected
   END;
 
+  -- remove the throwaway rooms BEFORE asserting row counts, or the probes
+  -- themselves would trip the "row counts changed" check
+  DELETE FROM locations WHERE id IN (room_a, room_b);
+  IF EXISTS (SELECT 1 FROM locations WHERE name LIKE 'ZZ Verify Room%') THEN
+    RAISE EXCEPTION 'Verification rooms were not cleaned up';
+  END IF;
+
   -- nothing was left behind, and no existing data moved
   IF EXISTS (SELECT 1 FROM space_bookings) THEN
     RAISE EXCEPTION 'FAIL: verification rows were not cleaned up';
@@ -264,7 +306,7 @@ BEGIN
     RAISE EXCEPTION 'Row counts changed - this migration must not add or remove rows';
   END IF;
   IF EXISTS (SELECT 1 FROM locations WHERE booking_status <> 'open') THEN
-    RAISE EXCEPTION 'A location was left closed by the verification';
+    RAISE EXCEPTION 'A real location was left closed by the verification';
   END IF;
 
   RAISE NOTICE 'OK: overlap rejected, back-to-back allowed, other room allowed, cancelled frees the slot, zero-length and backwards rejected, closure rules enforced.';
