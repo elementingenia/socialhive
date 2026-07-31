@@ -362,9 +362,11 @@ function Toggle({ value, onChange, label }) {
 }
 
 // ── Fixed-list custom picker ──────────────────────────────────────────────────
+// `value` is a location ID; `options` are {id, name} rows from useLocations().
 function FixedListPicker({ value, onChange, options, placeholder = "Select…" }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
+  const selected = options.find(o => (o.id || o) === value) || null
 
   useEffect(() => {
     function handler(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
@@ -383,8 +385,13 @@ function FixedListPicker({ value, onChange, options, placeholder = "Select…" }
           borderColor: open ? "var(--terracotta)" : "var(--border)",
         }}
       >
-        <span style={{ color: value ? "var(--text)" : "var(--text-dim)" }}>
-          {value || placeholder}
+        {/* Show the name for the SELECTED ID. Previously this rendered the raw
+            stored value, so after a location was renamed the event's old name
+            appeared in the dropdown looking perfectly valid — and re-saving
+            wrote it straight back, wiping location_id. An id with no matching
+            option is now called out instead of being passed off as fine. */}
+        <span style={{ color: selected ? "var(--text)" : value ? "var(--danger)" : "var(--text-dim)" }}>
+          {selected ? selected.name : value ? "Venue no longer available — choose again" : placeholder}
         </span>
         <span style={{
           fontSize: "0.7rem", color: "var(--text-dim)",
@@ -402,21 +409,21 @@ function FixedListPicker({ value, onChange, options, placeholder = "Select…" }
         }}>
           {options.map((opt, i) => (
             <button
-              key={opt}
+              key={opt.id || opt}
               type="button"
-              onClick={() => { onChange(opt); setOpen(false) }}
+              onClick={() => { onChange(opt.id || opt); setOpen(false) }}
               style={{
                 width: "100%", padding: "0.75rem 1rem", textAlign: "left",
-                background: value === opt ? "var(--terracotta)12" : "transparent",
+                background: value === (opt.id || opt) ? "var(--terracotta)12" : "transparent",
                 border: "none", borderTop: i > 0 ? "1px solid var(--border)" : "none",
                 cursor: "pointer", fontFamily: "inherit", fontSize: "0.92rem",
-                color: value === opt ? "var(--terracotta)" : "var(--text)",
-                fontWeight: value === opt ? 700 : 400,
+                color: value === (opt.id || opt) ? "var(--terracotta)" : "var(--text)",
+                fontWeight: value === (opt.id || opt) ? 700 : 400,
                 display: "flex", alignItems: "center", justifyContent: "space-between",
               }}
             >
-              {opt}
-              {value === opt && <span style={{ color: "var(--terracotta)", fontSize: "0.85rem" }}>✓</span>}
+              {opt.name || opt}
+              {value === (opt.id || opt) && <span style={{ color: "var(--terracotta)", fontSize: "0.85rem" }}>✓</span>}
             </button>
           ))}
         </div>
@@ -426,7 +433,9 @@ function FixedListPicker({ value, onChange, options, placeholder = "Select…" }
 }
 
 // ── Location field ────────────────────────────────────────────────────────────
-function LocationField({ locationType, location, onTypeChange, onLocationChange }) {
+// Onsite works in location IDs; offsite stays free text, which is deliberate —
+// it is informational only, for the event and its attendees (Iain, 2026-07-31).
+function LocationField({ locationType, location, locationId, onTypeChange, onLocationChange, onLocationIdChange }) {
   const onsiteLocations = useLocations()
   return (
     <div style={FIELD}>
@@ -434,7 +443,7 @@ function LocationField({ locationType, location, onTypeChange, onLocationChange 
       {/* Onsite / Offsite toggle buttons */}
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.6rem" }}>
         {["onsite", "offsite"].map(t => (
-          <button key={t} type="button" onClick={() => { onTypeChange(t); onLocationChange("") }}
+          <button key={t} type="button" onClick={() => { onTypeChange(t); onLocationChange(""); onLocationIdChange(null) }}
             style={{
               flex: 1, padding: "0.55rem", borderRadius: "10px", fontFamily: "inherit",
               fontSize: "0.88rem", fontWeight: 700, cursor: "pointer", border: "2px solid",
@@ -449,8 +458,8 @@ function LocationField({ locationType, location, onTypeChange, onLocationChange 
 
       {locationType === "onsite" ? (
         <FixedListPicker
-          value={location}
-          onChange={onLocationChange}
+          value={locationId}
+          onChange={onLocationIdChange}
           options={onsiteLocations.length ? onsiteLocations : ONSITE_LOCATIONS_FALLBACK}
           placeholder="Select venue…"
         />
@@ -470,6 +479,7 @@ function LocationField({ locationType, location, onTypeChange, onLocationChange 
 // ── Social Event Form (slide-over) ────────────────────────────────────────────
 function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
   const editing = !!event
+  const allLocations = useLocations()
   const [form, setForm] = useState({
     title:                 event?.title               || "",
     event_date:            event?.event_date          || "",
@@ -486,6 +496,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     has_bus:               event?.has_bus             || false,
     location_type:         event?.location_type       || "onsite",
     location:              event?.location            || "",
+    location_id:           event?.location_id         || null,
     has_dining:            event?.has_dining          || false,
     menu_type:             event?.menu_type           || null,
     menu_text:             event?.menu_text           || "",
@@ -494,6 +505,11 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     allow_nonresident_guests: event ? !!event.allow_nonresident_guests : true, // new events default to "Anyone" (2026-07-25)
     require_attendee_names: !!event?.require_attendee_names,
   })
+
+  // The chosen room's own record. `bookable` decides whether an end time is
+  // required and whether this event is clash-checked — it is a property of the
+  // room now, not a regex on its name (migration 071).
+  const selectedLocation = allLocations.find(l => l.id === form.location_id) || null
 
   const [coordinators, setCoordinators] = useState([])
   const [busDriver,    setBusDriver]    = useState(null)
@@ -530,7 +546,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     if (!form.title.trim())    { setError("Title is required"); return }
     if (!form.event_date)      { setError("Date is required");  return }
     if (!coordinators.length)  { setEcError("At least one coordinator is required"); return }
-    if (needsSpaceValidation({ location_type: form.location_type, locationName: form.location }) && !form.event_end_time) {
+    if (needsSpaceValidation({ location_type: form.location_type, bookable: selectedLocation?.bookable }) && !form.event_end_time) {
       setError("An end time is required for events in a common space"); return
     }
 
@@ -543,7 +559,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
         method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (await getAuthToken()) },
         body: JSON.stringify({
           event_date: form.event_date, event_time: form.event_time, event_end_time: form.event_end_time,
-          location_type: form.location_type, location_name: form.location, exclude_event_id: activeId || null,
+          location_type: form.location_type, location_id: form.location_id, exclude_event_id: activeId || null,
         }),
       }).then(r => r.json()).catch(() => ({}))
       if (pre.spaceConflict) { setError(pre.spaceConflict.message); return }
@@ -674,14 +690,16 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
           <LocationField
             locationType={form.location_type}
             location={form.location}
+            locationId={form.location_id}
             onTypeChange={v => set("location_type", v)}
             onLocationChange={v => set("location", v)}
+            onLocationIdChange={v => set("location_id", v)}
           />
 
           {/* End time -- required for onsite events in a real common space (not
               "Resident's Home"), needed to keep the space-clash check working
               (Iain, 2026-07-23). */}
-          {needsSpaceValidation({ location_type: form.location_type, locationName: form.location }) && (
+          {needsSpaceValidation({ location_type: form.location_type, bookable: selectedLocation?.bookable }) && (
             <div style={FIELD}>
               <label style={LABEL}>Ends {"*"}</label>
               <TimeField value={form.event_end_time} onChange={v => set("event_end_time", v)} />

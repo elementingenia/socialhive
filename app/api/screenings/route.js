@@ -2,7 +2,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyHubFollowers } from '@/lib/notifyAudience'
-import { findSpaceConflict, spaceConflictMessage, resolveLocationId } from '@/lib/eventClash'
+import { findSpaceConflict, spaceConflictMessage, resolveLocationByName } from '@/lib/eventClash'
 
 // Movie screenings always run in the one dedicated common space -- there's no
 // location picker in the screening form, so every screening is auto-bound to
@@ -216,9 +216,14 @@ export async function POST(req) {
     }
   }
 
-  const location_id = await resolveLocationId(supabaseAdmin, CINEMA_NAME)
+  // Movies is the one caller that legitimately starts from a name — the Cinema
+  // is hardcoded (CINEMA_NAME). Safe since migration 071 made location names
+  // unique; before that two same-named rows made this silently resolve to null.
+  const cinema = await resolveLocationByName(supabaseAdmin, CINEMA_NAME)
+  if (!cinema) return NextResponse.json({ error: `The "${CINEMA_NAME}" venue is missing from Admin > Locations — a screening cannot be booked without it.` }, { status: 500 })
+  const location_id = cinema.id
   const conflict = await findSpaceConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time })
-  if (conflict) return NextResponse.json({ error: spaceConflictMessage(CINEMA_NAME, conflict) }, { status: 409 })
+  if (conflict) return NextResponse.json({ error: spaceConflictMessage(cinema.name, conflict) }, { status: 409 })
 
   const { data: event, error } = await supabaseAdmin
     .from('events')
@@ -230,7 +235,7 @@ export async function POST(req) {
       require_attendee_names: !!require_attendee_names,
       notes: notes || null, created_by: member.id,
       movie_snapshot: movieSnapshot,
-      location_type: 'onsite', location: CINEMA_NAME, location_id,
+      location_type: 'onsite', location: cinema.name, location_id,
     })
     .select().single()
 
@@ -272,16 +277,18 @@ export async function PATCH(req) {
     }
   }
 
-  const location_id = await resolveLocationId(supabaseAdmin, CINEMA_NAME)
+  const cinema = await resolveLocationByName(supabaseAdmin, CINEMA_NAME)
+  if (!cinema) return NextResponse.json({ error: `The "${CINEMA_NAME}" venue is missing from Admin > Locations — a screening cannot be booked without it.` }, { status: 500 })
+  const location_id = cinema.id
   const conflict = await findSpaceConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time, exclude_event_id: event_id })
-  if (conflict) return NextResponse.json({ error: spaceConflictMessage(CINEMA_NAME, conflict) }, { status: 409 })
+  if (conflict) return NextResponse.json({ error: spaceConflictMessage(cinema.name, conflict) }, { status: 409 })
 
   const { data: before } = await supabaseAdmin
     .from('events').select('event_date, event_time').eq('id', event_id).single()
 
   const { error } = await supabaseAdmin
     .from('events')
-    .update({ movie_id: movie_id || null, title, event_date, event_time, event_end_time, max_seats: max_seats || 20, notes: notes || null, movie_snapshot: movieSnapshot, reservation_cutoff: reservation_cutoff || null, allow_nonresident_guests: !!allow_nonresident_guests, require_attendee_names: !!require_attendee_names, location_type: 'onsite', location: CINEMA_NAME, location_id })
+    .update({ movie_id: movie_id || null, title, event_date, event_time, event_end_time, max_seats: max_seats || 20, notes: notes || null, movie_snapshot: movieSnapshot, reservation_cutoff: reservation_cutoff || null, allow_nonresident_guests: !!allow_nonresident_guests, require_attendee_names: !!require_attendee_names, location_type: 'onsite', location: cinema.name, location_id })
     .eq('id', event_id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

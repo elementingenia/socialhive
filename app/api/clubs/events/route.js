@@ -2,7 +2,7 @@ import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { notifyClubMembers } from "@/lib/notifyAudience"
 import { notifyEventAttendees } from "@/lib/notifyEventAttendees"
-import { needsSpaceValidation, findSpaceConflict, spaceConflictMessage, resolveLocationId } from "@/lib/eventClash"
+import { needsSpaceValidation, findSpaceConflict, spaceConflictMessage, fetchLocation } from "@/lib/eventClash"
 
 // Club event create/edit — moved server-side (2026-07-23) as part of the Event
 // Clash / Space Booking scope (Social_Hive_Event_Clash_Space_Booking_Scope.md,
@@ -45,16 +45,23 @@ async function resolve(req, clubId) {
   return { error: "Not allowed for this group/club", status: 403 }
 }
 
+// ID is the truth, name derived from it — see the note in app/api/social/route.js.
 async function validateSpace(payload, excludeEventId) {
-  if (!needsSpaceValidation({ location_type: payload.location_type, locationName: payload.location })) return { location_id: null }
+  if (payload.location_type !== "onsite") return { location_id: null }
+
+  const loc = await fetchLocation(supa, payload.location_id)
+  if (!loc) return { error: "Choose a venue for this on-site event", status: 400 }
+
+  if (!needsSpaceValidation({ location_type: payload.location_type, bookable: loc.bookable }))
+    return { location_id: loc.id, location: loc.name }
+
   if (!payload.event_end_time) return { error: "An end time is required for events in a common space", status: 400 }
-  const location_id = await resolveLocationId(supa, payload.location)
   const conflict = await findSpaceConflict(supa, {
-    location_id, event_date: payload.event_date, event_time: payload.event_time,
+    location_id: loc.id, event_date: payload.event_date, event_time: payload.event_time,
     event_end_time: payload.event_end_time, exclude_event_id: excludeEventId,
   })
-  if (conflict) return { error: spaceConflictMessage(payload.location, conflict), status: 409 }
-  return { location_id }
+  if (conflict) return { error: spaceConflictMessage(loc.name, conflict), status: 409 }
+  return { location_id: loc.id, location: loc.name }
 }
 
 const FIELDS = ["club_id", "event_date", "event_time", "event_end_time", "title", "is_public", "show_attendee_names",
@@ -79,6 +86,7 @@ export async function POST(req) {
   const space = await validateSpace(payload)
   if (space.error) return NextResponse.json({ error: space.error }, { status: space.status })
   payload.location_id = space.location_id
+  if (space.location) payload.location = space.location
 
   const { data: event, error: insErr } = await supa.from("events").insert(payload).select("id").single()
   if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
@@ -111,6 +119,7 @@ export async function PATCH(req) {
   const space = await validateSpace({ ...existing, ...payload }, event_id)
   if (space.error) return NextResponse.json({ error: space.error }, { status: space.status })
   payload.location_id = space.location_id
+  if (space.location) payload.location = space.location
 
   const { error: updErr } = await supa.from("events").update(payload).eq("id", event_id)
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
