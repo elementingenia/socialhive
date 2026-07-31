@@ -805,6 +805,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     max_seats:    event?.max_seats ?? 20,
     location_type: event?.location_type || "onsite",
     location:     event?.location || "",
+    location_id:  event?.location_id || null,
     max_seats_per_booking: event?.max_seats_per_booking ?? 2,
     allow_nonresident_guests: event ? !!event.allow_nonresident_guests : true, // new events default to "Anyone" (2026-07-25)
     require_attendee_names: !!event?.require_attendee_names,
@@ -820,6 +821,9 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     welcome_message: event?.welcome_message || "",
     coordinator_ids: (event?.event_coordinators || []).filter(ec => !ec.replaced_at).map(ec => ec.member_id),
   })
+  // bookable is a property of the room (migration 071), not a regex on its name.
+  // Declared after `form` — referencing it above the useState is a TDZ error.
+  const selectedLocation = onsiteLocations.find(l => l.id === form.location_id) || null
   const [selectedBook, setSelectedBook] = useState(event?.books || null)
   const [saving, setSaving] = useState(false)
   // Recurring events (scope §7a): schedule-defined clubs get a real series;
@@ -880,7 +884,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             start_date: form.event_date, event_time: form.event_time || "00:00",
             title: form.title.trim() || club?.name || "Group/Club Event",
             description: form.description, welcome_message: form.welcome_message,
-            location_type: form.location_type || "onsite", location: form.location || null,
+            location_type: form.location_type || "onsite", location: form.location || null, location_id: form.location_id || null,
             max_seats: Number(form.max_seats) || 20,
             max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
             allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
@@ -955,6 +959,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       max_seats:       Number(form.max_seats) || 20,
       location_type:   form.location_type || "onsite",
       location:        form.location || null,
+      location_id:     form.location_id || null,
       max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
       allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
       require_attendee_names: Number(form.max_seats_per_booking) > 1 ? !!form.require_attendee_names : false,
@@ -971,7 +976,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       coordinator_ids: form.coordinator_ids || [],
     }
 
-    if (needsSpaceValidation({ location_type: payload.location_type, locationName: payload.location }) && !payload.event_end_time) {
+    if (needsSpaceValidation({ location_type: payload.location_type, bookable: selectedLocation?.bookable }) && !payload.event_end_time) {
       setSaveError("An end time is required for events in a common space."); setSaving(false); return
     }
 
@@ -985,7 +990,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${precheckToken}` },
         body: JSON.stringify({
           event_date: payload.event_date, event_time: payload.event_time, event_end_time: payload.event_end_time,
-          location_type: payload.location_type, location_name: payload.location, exclude_event_id: event?.id || null,
+          location_type: payload.location_type, location_id: payload.location_id, exclude_event_id: event?.id || null,
         }),
       }).then(r => r.json()).catch(() => ({}))
       if (pre.spaceConflict) {
@@ -1130,7 +1135,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         <label style={labelStyle}>Location</label>
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           {["onsite", "offsite"].map(t => (
-            <button key={t} type="button" onClick={() => { set("location_type", t); set("location", "") }}
+            <button key={t} type="button" onClick={() => { set("location_type", t); set("location", ""); set("location_id", null) }}
               style={{ flex: 1, padding: "0.55rem", borderRadius: 10, fontFamily: "inherit", fontSize: "0.88rem",
                 fontWeight: 700, cursor: "pointer", border: "2px solid",
                 borderColor: form.location_type === t ? colour : "var(--border)",
@@ -1141,10 +1146,16 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
           ))}
         </div>
         {form.location_type === "onsite" ? (
-          <select value={form.location} onChange={e => set("location", e.target.value)}
+          // Bound to the location ID, not its name. An id with no matching row
+          // (venue archived or deleted) is called out rather than silently
+          // re-saved, which is how a renamed room used to wipe location_id.
+          <select value={form.location_id || ""} onChange={e => set("location_id", e.target.value || null)}
             style={{ ...inputStyle, cursor: "pointer" }}>
             <option value="">Select venue…</option>
-            {onsiteLocations.map(l => <option key={l} value={l}>{l}</option>)}
+            {form.location_id && !onsiteLocations.some(l => l.id === form.location_id) && (
+              <option value={form.location_id}>Venue no longer available — choose again</option>
+            )}
+            {onsiteLocations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
         ) : (
           <textarea value={form.location} onChange={e => set("location", e.target.value)} rows={3}
@@ -1152,7 +1163,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         )}
       </div>
 
-      {needsSpaceValidation({ location_type: form.location_type, locationName: form.location }) && (
+      {needsSpaceValidation({ location_type: form.location_type, bookable: selectedLocation?.bookable }) && (
         <div style={{ marginBottom: 12 }}>
           <label style={labelStyle}>Ends <span style={{ color: "var(--danger)" }}>*</span></label>
           <TimeField value={form.event_end_time} onChange={v => set("event_end_time", v)} colour={form.event_end_time ? "var(--green)" : "var(--danger)"} />
