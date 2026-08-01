@@ -23,7 +23,7 @@ const HUB_TYPES = [
 const HUB_COLOUR = { movie:'var(--teal)', social:'var(--terracotta)', bookclub:'var(--purple)' }
 const SECTIONS = [
   { key: 'PageTexts', label: 'Page Texts', Icon: PageTextsIcon },
-  { key: 'Movies',    label: 'Movies',     Icon: MoviesIcon },
+  { key: 'Movies',    label: 'Show Time', Icon: MoviesIcon },
   { key: 'BookClub',  label: 'Book Club',  Icon: BookClubIcon },
   { key: 'Clubs',     label: 'Groups & Clubs', Icon: ClubsIcon },
   { key: 'Owners',    label: 'Owners',     Icon: InfoIcon },
@@ -1427,15 +1427,15 @@ function PageTextsTab() {
       hint: 'Main announcement and sub-notices shown on the home screen.',
     },
     {
-      key: 'movies', label: 'Movies Home', colour: 'var(--teal)', hex: '#0d9488',
-      hasSubs: false, hint: 'Welcome message on the Movies landing page.',
+      key: 'movies', label: 'Show Time Home', colour: 'var(--teal)', hex: '#0d9488',
+      hasSubs: false, hint: 'Welcome message on the Show Time landing page.',
     },
     {
-      key: 'movies_suggestions', label: 'Movies — Suggestions', colour: 'var(--teal)', hex: '#0d9488',
+      key: 'movies_suggestions', label: 'Show Time — Suggestions', colour: 'var(--teal)', hex: '#0d9488',
       hasSubs: false, hint: 'Text shown at the top of the Suggestions page.',
     },
     {
-      key: 'movies_dvd', label: 'Movies — DVD Library', colour: 'var(--teal)', hex: '#0d9488',
+      key: 'movies_dvd', label: 'Show Time — DVD Library', colour: 'var(--teal)', hex: '#0d9488',
       hasSubs: false, hint: 'Text shown at the top of the DVD Library.',
     },
     {
@@ -1885,7 +1885,7 @@ function HubOwnersTab() {
       </div>
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: 'var(--teal)', marginBottom: '0.5rem' }}>
-          <MoviesIcon size={18} /> Movies
+          <MoviesIcon size={18} /> Show Time
         </div>
         <OwnersManager contextType="hub" contextKey="movie" />
       </div>

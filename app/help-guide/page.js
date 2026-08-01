@@ -63,9 +63,9 @@ const RAW_SECTIONS = [
     ],
   },
   {
-    id: "movies", num: 3, title: "Movies — Screenings, Booking & Library",
+    id: "movies", num: 3, title: "Show Time — Screenings, Booking & Library",
     subs: [
-      { title: "Movies Home layout",                         id: "sub-movies-home" },
+      { title: "Show Time Home layout",                       id: "sub-movies-home" },
       { title: "The Next Screening card",                    id: "sub-movies-nextcard" },
       { title: "IMDb & Rotten Tomatoes ratings",             id: "sub-movies-ratings" },
       { title: "Booking a seat",                             id: "sub-movies-booking" },
@@ -362,7 +362,7 @@ export default function HelpGuidePage() {
               </Step>
               <Step>
                 <strong>Centre — Current page name.</strong> This tells you which section of the app you
-                are in — for example "Movies", "Social Events", "Calendar", or "My Bookings". It updates
+                are in — for example "Show Time", "Social Events", "Calendar", or "My Bookings". It updates
                 automatically as you move around the app.
               </Step>
               <Step>
@@ -453,10 +453,10 @@ export default function HelpGuidePage() {
           </Section>
 
           {/* ── 3. MOVIES ── */}
-          <Section id="movies" num={secNum("movies")} title="Movies — Screenings, Booking & Library">
-            <Subsection id="sub-movies-home" title="Movies Home layout">
-              <Step img={IMG("06-movies.png")} alt="Movies Home screen">
-                The Movies Home screen is your central hub for everything related to community
+          <Section id="movies" num={secNum("movies")} title="Show Time — Screenings, Booking & Library">
+            <Subsection id="sub-movies-home" title="Show Time Home layout">
+              <Step img={IMG("06-movies.png")} alt="Show Time Home screen">
+                The Show Time Home screen is your central hub for everything related to community
                 screenings. It is divided into several panels stacked vertically on the page:
               </Step>
               <Step>
@@ -540,7 +540,7 @@ export default function HelpGuidePage() {
 
             <Subsection id="sub-movies-voting" title="Rating films — the community voting panel">
               <Step>
-                The voting panel appears on Movies Home when there are upcoming films waiting for your
+                The voting panel appears on Show Time Home when there are upcoming films waiting for your
                 rating. It shows the film title, how many films are in your queue (e.g. "3 of 5 to
                 rate"), and a grid of buttons numbered <strong>1 to 10</strong>, ranging from "Not
                 interested" to "Can't wait!".
@@ -555,7 +555,7 @@ export default function HelpGuidePage() {
 
             <Subsection id="sub-movies-scheduled" title="Scheduled screenings list">
               <Step img={IMG("07-screenings.png")} alt="Scheduled screenings">
-                Tap <strong>Scheduled</strong> from the Movies Home to see all upcoming screenings.
+                Tap <strong>Scheduled</strong> from the Show Time Home to see all upcoming screenings.
                 Each card shows the title, date and time, IMDb and Rotten Tomatoes scores, seats
                 available, and your booking status. Tap any card to open the booking panel.
               </Step>
@@ -593,7 +593,7 @@ export default function HelpGuidePage() {
             <Subsection id="sub-social-home" title="Social hub home">
               <Step img={IMG("11-social.png")} alt="Social hub home">
                 The Social hub is your home for community activities — dinners, day trips, outings,
-                themed evenings, and more. The layout mirrors the Movies Home: a <strong>Next Social
+                themed evenings, and more. The layout mirrors the Show Time Home: a <strong>Next Social
                 Event</strong> card at the top (terracotta header) with the nearest upcoming event,
                 followed by a <strong>My Bookings</strong> card for your social reservations.
               </Step>
@@ -706,7 +706,7 @@ export default function HelpGuidePage() {
           {/* ── CALENDAR ── */}
           <Section id="calendar" num={secNum("calendar")} title="Community Calendar">
             <Step img={IMG("17-calendar.png")} alt="Community calendar">
-              The Calendar brings every upcoming community event together in one view — Movies, Social
+              The Calendar brings every upcoming community event together in one view — Show Time, Social
               Events, and Book Club meetings all appear here without switching between sections.
             </Step>
             <Step>
@@ -720,7 +720,7 @@ export default function HelpGuidePage() {
           <Section id="bookings" num={secNum("bookings")} title="My Bookings">
             <Step img={IMG("18-bookings.png")} alt="My Bookings screen">
               My Bookings shows all your current reservations across every section of the app —
-              Movies, Social Events, and Book Club — in one place. Use the filter tabs at the top
+              Show Time, Social Events, and Book Club — in one place. Use the filter tabs at the top
               to narrow the list. Tap any card to open the event detail panel and manage your seat.
             </Step>
 

@@ -236,7 +236,7 @@ export async function POST(req) {
   const cinema = bodyLocationId
     ? await fetchLocation(supabaseAdmin, bodyLocationId)
     : await hubLocation(supabaseAdmin, MOVIES_HUB, CINEMA_NAME)
-  if (!cinema) return NextResponse.json({ error: `That venue no longer exists. Pick another on the screening, or set the Movies venue in Admin > Movies.` }, { status: 500 })
+  if (!cinema) return NextResponse.json({ error: `That venue no longer exists. Pick another on the screening, or set the Show Time venue in Admin > Show Time.` }, { status: 500 })
   const location_id = cinema.id
   const conflict = await findSpaceConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time })
   if (conflict) return NextResponse.json({ error: spaceConflictMessage(cinema.name, conflict) }, { status: 409 })
@@ -301,7 +301,7 @@ export async function PATCH(req) {
   const cinema = bodyLocationId
     ? await fetchLocation(supabaseAdmin, bodyLocationId)
     : await hubLocation(supabaseAdmin, MOVIES_HUB, CINEMA_NAME)
-  if (!cinema) return NextResponse.json({ error: `That venue no longer exists. Pick another on the screening, or set the Movies venue in Admin > Movies.` }, { status: 500 })
+  if (!cinema) return NextResponse.json({ error: `That venue no longer exists. Pick another on the screening, or set the Show Time venue in Admin > Show Time.` }, { status: 500 })
   const location_id = cinema.id
   const conflict = await findSpaceConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time, exclude_event_id: event_id })
   if (conflict) return NextResponse.json({ error: spaceConflictMessage(cinema.name, conflict) }, { status: 409 })

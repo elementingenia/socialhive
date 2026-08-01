@@ -12,12 +12,12 @@ const HUB_COLOURS = {
 }
 
 const HUB_LABELS = {
-  movie: "Movies", bookclub: "Book Club", social: "Social",
+  movie: "Show Time", bookclub: "Book Club", social: "Social",
 }
 
 const FILTERS = [
   { key: "all",      label: "All" },
-  { key: "movie",    label: "Movies" },
+  { key: "movie",    label: "Show Time" },
   { key: "club",     label: "Groups & Clubs" },
   { key: "social",   label: "Social" },
 ]

@@ -50,7 +50,7 @@ function hubKeyOf(ev) {
   return ev?.club_id ? "club" : ev?.hub_type
 }
 function hubLabel(hub_type) {
-  const labels = { movie: "Movie Night", bookclub: "Book Club", social: "Social", club: "Group/Club" }
+  const labels = { movie: "Show Time", bookclub: "Book Club", social: "Social", club: "Group/Club" }
   return labels[hub_type] || hub_type
 }
 // A club event shows its OWN club name and colour, so Dinner Club and Book
@@ -640,7 +640,7 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
       {/* Hub filters — tap to toggle */}
       <div style={{ display: "flex", gap: 8, padding: "8px 16px", overflowX: "auto", borderBottom: "1px solid var(--border)" }}>
         {[
-          { key: "movie",    label: "Movies", Icon: MoviesIcon },
+          { key: "movie",    label: "Show Time", Icon: MoviesIcon },
           { key: "social",   label: "Social", Icon: SocialIcon },
         ].map(({ key, label, Icon }) => {
           const on = activeHubs.includes(key)

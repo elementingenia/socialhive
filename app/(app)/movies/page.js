@@ -521,7 +521,7 @@ export default function MoviesHomePage() {
 
       <WelcomeBanner text={welcomeText} colour="var(--teal)" />
 
-      <ContactBar contextType="hub" contextKey="movie" contextLabel="Movies" colour="var(--teal)"
+      <ContactBar contextType="hub" contextKey="movie" contextLabel="Show Time" colour="var(--teal)"
         right={<FollowHubButton hubType="movie" colour="var(--teal)" />} style={{ margin: '-2px 0 12px' }} />
 
       {nextEvent ? (
