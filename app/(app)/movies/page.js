@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { FormattedText } from '@/lib/textFormatter'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { posterFor, posterPosition, posterAlt } from '@/lib/showing'
 import EventSlideOut from '@/components/EventSlideOut'
 import EventCoordinators from '@/components/EventCoordinators'
 import FollowHubButton from '@/components/FollowHubButton'
@@ -51,8 +52,8 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen })
         <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.78rem', fontWeight: 600 }}>{daysLabel} · Tap to book</span>
       </div>
       <div style={{ display: 'flex' }}>
-        {movie?.poster_url ? (
-          <img src={movie.poster_url} alt={movie.title} style={{ width: 100, objectFit: 'cover', flexShrink: 0 }} />
+        {posterFor(event, movie) ? (
+          <img src={posterFor(event, movie)} alt={posterAlt(event, movie)} style={{ width: 100, objectFit: 'cover', objectPosition: posterPosition(event, movie), flexShrink: 0 }} />
         ) : (
           <div style={{ width: 100, minHeight: 130, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', flexShrink: 0 }}>🎬</div>
         )}
@@ -149,8 +150,8 @@ function MyBookingsCard({ bookings, onViewAll, onOpenEvent }) {
           const movie = ev?.movies || ev?.movie_snapshot
           return (
             <div key={ev?.id} onClick={e => { e.stopPropagation(); onOpenEvent?.(ev?.id) }} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 1rem', borderTop: i > 0 ? '1px solid var(--border)' : 'none', cursor: 'pointer' }}>
-              {movie?.poster_url ? (
-                <img src={movie.poster_url} alt="" style={{ width: 40, height: 60, objectFit: 'cover', borderRadius: 4, flexShrink: 0 }} />
+              {posterFor(ev, movie) ? (
+                <img src={posterFor(ev, movie)} alt={posterAlt(ev, movie)} style={{ width: 40, height: 60, objectFit: 'cover', objectPosition: posterPosition(ev, movie), borderRadius: 4, flexShrink: 0 }} />
               ) : (
                 <div style={{ width: 40, height: 60, background: 'var(--surface2)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', flexShrink: 0 }}>🎬</div>
               )}
@@ -409,7 +410,7 @@ export default function MoviesHomePage() {
         .limit(1),
 
       supabase.from('bookings')
-        .select('id, event_id, status, seats, booked_at, events(id, event_date, event_time, title, hub_type, movies(id, title, poster_url, rating))')
+        .select('id, event_id, status, seats, booked_at, events(id, event_date, event_time, title, hub_type, image_url, image_focal_x, image_focal_y, movie_snapshot, movies(id, title, poster_url, rating))')
         .eq('member_id', memberData.id)
         .neq('status', 'cancelled'),
 
