@@ -324,9 +324,15 @@ export async function PATCH(req) {
       { excludeMemberId: member.id })
   }
 
-  // Return the id so the form can attach a poster to a brand-new free-text
-  // showing without closing and reopening the sheet.
-  return NextResponse.json({ ok: true, id: event.id })
+  // `event_id` — NOT `event.id`. There is no `event` variable in this handler;
+  // that belongs to POST. Referencing it threw AFTER the update had already
+  // committed, so the screening saved and then the route 500'd, which is why
+  // every Movies save appeared to hang (Iain, 2026-08-01).
+  //
+  // Neither lint nor build caught it: in a browser lint environment a bare
+  // `event` resolves to the deprecated window.event global, so no-undef stays
+  // quiet. On the server it is simply undefined.
+  return NextResponse.json({ ok: true, id: event_id })
 }
 
 
