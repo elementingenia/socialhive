@@ -231,13 +231,18 @@ test.describe('Waitlist confirmation', () => {
     await bookBtn.click()
 
     // Split-offer dialog must appear
-    await expect(page.getByText('No seats available')).toBeVisible({ timeout: 3000 })
-    await expect(page.getByRole('button', { name: 'Join waitlist' })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'No thanks' })).toBeVisible()
+    // Scope every assertion to the dialog. A page-wide 'Join waitlist' also
+    // matches the Movies Home tile when the next screening is FULL, which is
+    // a strict-mode violation that appears only when the data happens to be
+    // full — it broke CI the first time a screening sold out for real.
+    const dialog = page.getByTestId('split-offer-dialog')
+    await expect(dialog.getByText('No seats available')).toBeVisible({ timeout: 3000 })
+    await expect(dialog.getByRole('button', { name: 'Join waitlist' })).toBeVisible()
+    await expect(dialog.getByRole('button', { name: 'No thanks' })).toBeVisible()
 
     // Dismiss — dialog should disappear, no booking made
-    await page.getByRole('button', { name: 'No thanks' }).click()
-    await expect(page.getByText('No seats available')).not.toBeVisible()
+    await dialog.getByRole('button', { name: 'No thanks' }).click()
+    await expect(dialog).not.toBeVisible()
   })
 
   test('confirms waitlist placement when user accepts', async ({ page }) => {
@@ -267,10 +272,15 @@ test.describe('Waitlist confirmation', () => {
     await bookBtn.click()
 
     // Dialog appears
-    await expect(page.getByText('No seats available')).toBeVisible({ timeout: 3000 })
+    // Scope every assertion to the dialog. A page-wide 'Join waitlist' also
+    // matches the Movies Home tile when the next screening is FULL, which is
+    // a strict-mode violation that appears only when the data happens to be
+    // full — it broke CI the first time a screening sold out for real.
+    const dialog = page.getByTestId('split-offer-dialog')
+    await expect(dialog.getByText('No seats available')).toBeVisible({ timeout: 3000 })
 
     // Accept waitlist
-    await page.getByRole('button', { name: 'Join waitlist' }).click()
+    await dialog.getByRole('button', { name: 'Join waitlist' }).click()
 
     // Toast confirmation should appear
     await expect(page.getByText(/waitlist/i).first()).toBeVisible({ timeout: 4000 })

@@ -246,7 +246,14 @@ function SplitDialog({ offer, onAccept, onDecline }) {
     <Portal>
       <div onClick={onDecline} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 500,
         display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-        <div onClick={e => e.stopPropagation()} style={{ background: "var(--surface)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 340 }}>
+        {/* role=dialog + a stable test id so a test can scope to THIS dialog.
+            Without it, getByRole('button', {name:'Join waitlist'}) also matched
+            the Movies Home tile, which reads "Full · Join waitlist →" whenever
+            the next screening is full — a real strict-mode collision that only
+            appeared once a screening actually filled up. */}
+        <div onClick={e => e.stopPropagation()} role="dialog" aria-modal="true"
+          aria-label={title} data-testid="split-offer-dialog"
+          style={{ background: "var(--surface)", borderRadius: 16, padding: 24, width: "100%", maxWidth: 340 }}>
           <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 8 }}>{title}</div>
           <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 16, lineHeight: 1.5 }}>{body}</div>
           <div style={{ display: "flex", gap: 10 }}>
