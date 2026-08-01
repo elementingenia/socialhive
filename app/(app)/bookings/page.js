@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import { bookingStatusBadge } from "@/lib/payments"
+import { authedFetch } from "@/lib/getAuthToken"
 
 const HUB_COLOURS = {
   movie:    "var(--teal)",
@@ -113,6 +114,98 @@ function BookingCard({ group, waitlistPosition, onClick }) {
             {`⏳ ${waitlist} waitlisted${waitlistPosition ? ` (#${waitlistPosition})` : ''}`}
           </div>
         )}
+      </div>
+    </div>
+  )
+}
+
+// My Space Bookings — separate from the hub-bookings list above on purpose.
+// A space booking has no `events` row behind it (space_bookings.event_id is
+// null for a personal booking) and no EventSlideOut-compatible shape, so
+// rather than force it through the event-grouping pipeline built for
+// hub bookings, it gets its own small, self-contained section. Renders
+// nothing at all when there are no upcoming space bookings — never an empty
+// header or placeholder (standing UI rule: don't render a container for
+// content that isn't there).
+function fmtSpaceDate(iso) {
+  return new Date(iso).toLocaleDateString("en-AU", {
+    weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "Australia/Sydney",
+  })
+}
+function fmtSpaceTime(iso) {
+  return new Date(iso).toLocaleTimeString("en-AU", {
+    hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Australia/Sydney",
+  }).toLowerCase().replace(" ", "")
+}
+
+function MySpaceBookings() {
+  const [bookings, setBookings] = useState(null) // null = loading
+  const [cancellingId, setCancellingId] = useState(null)
+
+  const load = useCallback(async () => {
+    const res = await authedFetch("/api/spaces?mine=1")
+    if (!res.ok) { setBookings([]); return }
+    const data = await res.json()
+    setBookings((data.bookings || []).filter(b => b.status !== "cancelled"))
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  async function cancel(id) {
+    if (!window.confirm("Cancel this space booking?")) return
+    setCancellingId(id)
+    const res = await authedFetch("/api/spaces", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    })
+    setCancellingId(null)
+    if (res.ok) load()
+  }
+
+  if (bookings === null || bookings.length === 0) return null
+
+  return (
+    <div style={{ marginBottom: "1.5rem" }}>
+      <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-dim)",
+        textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.5rem" }}>
+        My Space Bookings
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+        {bookings.map(b => (
+          <div key={b.id} style={{
+            background: "var(--surface)", border: "1px solid var(--border)",
+            borderLeft: "4px solid var(--amber)", borderRadius: "14px",
+            padding: "0.9rem 1.1rem", display: "flex", alignItems: "flex-start",
+            justifyContent: "space-between", gap: "0.75rem",
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--amber-dark)",
+                textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "0.2rem" }}>
+                Space Booking
+              </div>
+              <div style={{ fontSize: "0.98rem", fontWeight: 700, color: "var(--text)", marginBottom: "0.22rem" }}>
+                {b.locations?.name || "Space"}
+              </div>
+              <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", marginBottom: "0.3rem" }}>
+                {fmtSpaceDate(b.starts_at)} · {fmtSpaceTime(b.starts_at)}–{fmtSpaceTime(b.ends_at)}
+              </div>
+              {b.title && <div style={{ fontSize: "0.82rem", color: "var(--text)" }}>{b.title}</div>}
+            </div>
+            <button
+              onClick={() => cancel(b.id)}
+              disabled={cancellingId === b.id}
+              style={{
+                flexShrink: 0, background: "var(--surface2)", border: "1px solid var(--border)",
+                borderRadius: 8, padding: "0.4rem 0.75rem", fontSize: "0.78rem", fontWeight: 600,
+                color: "var(--danger)", cursor: cancellingId === b.id ? "default" : "pointer",
+                opacity: cancellingId === b.id ? 0.6 : 1,
+              }}
+            >
+              {cancellingId === b.id ? "Cancelling…" : "Cancel"}
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   )
@@ -244,6 +337,8 @@ export default function BookingsPage() {
   return (
     <>
       <div style={{ padding: "1rem 1rem 6rem" }}>
+
+        <MySpaceBookings />
 
         {/* Filter strip */}
         <div style={{
