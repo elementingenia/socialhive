@@ -2,7 +2,8 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyHubFollowers } from '@/lib/notifyAudience'
-import { findSpaceConflict, spaceConflictMessage, hubLocation, fetchLocation } from '@/lib/eventClash'
+import { hubLocation, fetchLocation } from '@/lib/eventClash'
+import { findAnyRoomConflict } from '@/lib/spaceBookings'
 import { titleFor } from '@/lib/showing'
 
 // Movie screenings always run in the one dedicated common space -- there's no
@@ -238,8 +239,8 @@ export async function POST(req) {
     : await hubLocation(supabaseAdmin, MOVIES_HUB, CINEMA_NAME)
   if (!cinema) return NextResponse.json({ error: `That venue no longer exists. Pick another on the screening, or set the Show Time venue in Admin > Show Time.` }, { status: 500 })
   const location_id = cinema.id
-  const conflict = await findSpaceConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time })
-  if (conflict) return NextResponse.json({ error: spaceConflictMessage(cinema.name, conflict) }, { status: 409 })
+  const conflict = await findAnyRoomConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time, locationName: cinema.name })
+  if (conflict) return NextResponse.json({ error: conflict.message }, { status: 409 })
 
   const { data: event, error } = await supabaseAdmin
     .from('events')
@@ -303,8 +304,8 @@ export async function PATCH(req) {
     : await hubLocation(supabaseAdmin, MOVIES_HUB, CINEMA_NAME)
   if (!cinema) return NextResponse.json({ error: `That venue no longer exists. Pick another on the screening, or set the Show Time venue in Admin > Show Time.` }, { status: 500 })
   const location_id = cinema.id
-  const conflict = await findSpaceConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time, exclude_event_id: event_id })
-  if (conflict) return NextResponse.json({ error: spaceConflictMessage(cinema.name, conflict) }, { status: 409 })
+  const conflict = await findAnyRoomConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time, exclude_event_id: event_id, locationName: cinema.name })
+  if (conflict) return NextResponse.json({ error: conflict.message }, { status: 409 })
 
   const { data: before } = await supabaseAdmin
     .from('events').select('event_date, event_time').eq('id', event_id).single()

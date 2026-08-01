@@ -2,7 +2,8 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyAllActiveMembers } from '@/lib/notifyAudience'
-import { needsSpaceValidation, findSpaceConflict, spaceConflictMessage, fetchLocation } from '@/lib/eventClash'
+import { needsSpaceValidation, fetchLocation } from '@/lib/eventClash'
+import { findAnyRoomConflict } from '@/lib/spaceBookings'
 
 
 async function getAdminMember(req) {
@@ -97,11 +98,11 @@ async function validateSpace(payload, excludeEventId) {
     return { location_id: loc.id, location: loc.name }
 
   if (!payload.event_end_time) return { error: 'An end time is required for events in a common space', status: 400 }
-  const conflict = await findSpaceConflict(supabaseAdmin, {
+  const conflict = await findAnyRoomConflict(supabaseAdmin, {
     location_id: loc.id, event_date: payload.event_date, event_time: payload.event_time,
-    event_end_time: payload.event_end_time, exclude_event_id: excludeEventId,
+    event_end_time: payload.event_end_time, exclude_event_id: excludeEventId, locationName: loc.name,
   })
-  if (conflict) return { error: spaceConflictMessage(loc.name, conflict), status: 409 }
+  if (conflict) return { error: conflict.message, status: 409 }
   return { location_id: loc.id, location: loc.name }
 }
 
