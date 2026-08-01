@@ -269,14 +269,31 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
                    showing_title: showMode === 'other' ? freeText.trim() : null,
                    location_id: venueId || null, event_date: date, event_time: time, event_end_time: endTime, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: allowGuests, require_attendee_names: requireNaming }
     if (eventId) body.event_id = eventId
-    const res = await authedFetch('/api/screenings', {
-      method: isEdit ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    const data = await res.json()
-    setSaving(false)
-    if (!res.ok) { setErr(data.error || 'Failed'); addToast('Failed to save', 'error'); return }
+    // try/finally so the button can NEVER be left stuck on "Saving…". It just
+    // was: the route 500'd with an HTML body, res.json() threw, and
+    // setSaving(false) was never reached — the save had actually worked, which
+    // made it look like a hang rather than an error. A parse failure must not
+    // be able to strand the UI, whatever the server does.
+    let res, data
+    try {
+      res = await authedFetch('/api/screenings', {
+        method: isEdit ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      data = await res.json().catch(() => ({}))
+    } catch (e) {
+      setSaving(false)
+      setErr('Could not reach the server. Please try again.')
+      addToast('Failed to save', 'error')
+      return
+    } finally {
+      setSaving(false)
+    }
+    if (!res.ok) {
+      setErr(data.error || `Save failed (${res.status})`)
+      addToast('Failed to save', 'error'); return
+    }
     const shownAs = showMode === 'other' ? freeText.trim() : (pickedMovie?.title || 'Movie Night')
     const wasCreate = !eventId
     addToast((wasCreate ? 'Screening added' : 'Screening updated') + ' — ' + shownAs + ' on ' + date, 'success')
