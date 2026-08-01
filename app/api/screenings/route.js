@@ -328,3 +328,59 @@ export async function PATCH(req) {
   // showing without closing and reopening the sheet.
   return NextResponse.json({ ok: true, id: event.id })
 }
+
+
+// ── DELETE — cancel a screening ─────────────────────────────────────────────
+// Movies had NO way to remove an event at all (Iain, 2026-07-31: "the inability
+// to delete any movie event"). Clubs have had one since the series work; Movies
+// and Social never did.
+//
+// ARCHIVES rather than hard-deletes, matching Clubs exactly (api/series
+// cancel_occurrence): bookings, attendance and payment history stay intact and
+// auditable, and the screening simply leaves every list. A hard delete would
+// cascade those bookings away — Movies carries 43 of the app's 68 bookings — so
+// that is not a button worth putting in front of anyone.
+//
+// Anyone booked is notified, for the same reason Clubs notify: turning up to a
+// screening that was cancelled is the worst possible outcome.
+export async function DELETE(req) {
+  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+  if (!token) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  const { data: { user } } = await supabaseAdmin.auth.getUser(token)
+  if (!user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  const { data: member } = await supabaseAdmin
+    .from('members').select('id, is_admin').eq('auth_id', user.id).maybeSingle()
+  if (!member) return NextResponse.json({ error: 'Member not found' }, { status: 403 })
+
+  const { event_id } = await req.json().catch(() => ({}))
+  if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
+
+  const { data: ev } = await supabaseAdmin
+    .from('events').select('id, title, hub_type, archived').eq('id', event_id).maybeSingle()
+  if (!ev) return NextResponse.json({ error: 'Screening not found' }, { status: 404 })
+  // Scoped to Movies deliberately — this route owns screenings and nothing else.
+  if (ev.hub_type !== 'movie') {
+    return NextResponse.json({ error: 'Not a screening' }, { status: 400 })
+  }
+
+  // Admin, or a coordinator of THIS screening — the same shape as every other
+  // event-level permission in the app.
+  let allowed = member.is_admin
+  if (!allowed) {
+    const { data: ec } = await supabaseAdmin.from('event_coordinators')
+      .select('id').eq('event_id', event_id).eq('member_id', member.id).maybeSingle()
+    allowed = !!ec
+  }
+  if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  // Idempotent: cancelling twice must not notify twice.
+  if (ev.archived) return NextResponse.json({ ok: true, already: true })
+
+  const { error } = await supabaseAdmin.from('events').update({ archived: true }).eq('id', event_id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  await notifyEventAttendees(supabaseAdmin, event_id, 'event_cancelled',
+    `${ev.title || 'A screening you booked'} has been cancelled.`)
+
+  return NextResponse.json({ ok: true })
+}

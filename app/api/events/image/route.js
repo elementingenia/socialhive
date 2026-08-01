@@ -2,6 +2,20 @@ import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 
 
+// Which events carry their own image.
+//   social          — always has
+//   any club event  — always has
+//   Movies          — ONLY a free-text showing (no movie_id). A film screening
+//                     uses the film's poster, so an upload would be ignored.
+// Shared by POST and DELETE deliberately: when this lived inline in POST only,
+// the two could have drifted.
+function canCarryImage(event) {
+  if (!event) return false
+  if (event.hub_type === "social") return true
+  if (event.club_id) return true
+  return event.hub_type === "movie" && !event.movie_id
+}
+
 async function getAdminOrEC(token, eventId) {
   const { data: { user }, error } = await supa.auth.getUser(token)
   if (error || !user) return null
@@ -32,10 +46,16 @@ export async function POST(req) {
   if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
   // Social events and club events both carry an image (a club event's picture
-  // is its theme cue — Iain 2026-07-18). Movies use the film poster instead.
-  const { data: event } = await supa.from("events").select("hub_type, club_id, image_url").eq("id", eventId).single()
+  // is its theme cue — Iain 2026-07-18).
+  //
+  // Movies USED to be excluded here because a screening took its picture from
+  // the film poster. That stopped being true on 2026-07-31: a Movies event can
+  // now be a free-text SHOWING with no film — an AFL Grand Final — and its
+  // uploaded image IS the poster. A film screening is still excluded, because
+  // it has one already.
+  const { data: event } = await supa.from("events").select("hub_type, club_id, movie_id, image_url").eq("id", eventId).single()
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 })
-  if (event.hub_type !== "social" && !event.club_id) {
+  if (!canCarryImage(event)) {
     return NextResponse.json({ error: "Image upload isn't supported for this event type" }, { status: 400 })
   }
 
