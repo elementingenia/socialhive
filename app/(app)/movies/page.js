@@ -399,6 +399,10 @@ export default function MoviesHomePage() {
       supabase.from('events')
         .select('*, movies(id, title, poster_url, genre, runtime, year, rating, rating_imdb, rating_rt, imdb_id, plot)')
         .eq('hub_type', 'movie')
+        // Same omission as the Scheduled list — without this, a cancelled
+        // screening could be presented on Movies Home as the NEXT one, which is
+        // worse than showing it in a list.
+        .eq('archived', false)
         .gte('event_date', today)
         .order('event_date', { ascending: true })
         .order('event_time', { ascending: true })

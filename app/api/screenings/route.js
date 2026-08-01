@@ -41,6 +41,11 @@ export async function GET(req) {
     .from('events')
     .select('*, bus_driver:members!bus_driver_id(name, username), movies(id, title, poster_url, genre, plot, runtime, rating_imdb, rating_rt, imdb_id, tmdb_id, streaming_offers, we_own, actors, rating)')
     .eq('hub_type', 'movie')
+    // Cancelled screenings must not appear. This filter was simply absent, and
+    // nothing revealed it until Movies got a cancel button — before that,
+    // nothing could archive a Movies event, so no archived row ever existed to
+    // leak. Clubs has always had .eq("archived", false); Movies never did.
+    .eq('archived', false)
     .gte('event_date', today)
     .order('event_date')
     .order('event_time')
