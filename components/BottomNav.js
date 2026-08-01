@@ -17,7 +17,7 @@ const HUB_CONFIG = {
   movies: {
     colour: "var(--teal)",
     items: [
-      { path: "/movies",    label: "Movies Home", Icon: MoviesIcon },
+      { path: "/movies",    label: "Show Time Home", Icon: MoviesIcon },
       { path: "/screenings",label: "Scheduled",   Icon: CalendarIcon },
       { path: "/library",   label: "Suggestions", Icon: SuggestionsIcon },
       { path: "/dvd",       label: "DVDs",        Icon: DVDIcon },

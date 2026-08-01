@@ -452,7 +452,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
 
           {/* VENUE — locked by default. Preset to the hub's nominated venue;
               "Edit" unlocks it for this screening only. Changing it here does
-              NOT change the hub default (Admin > Movies > Venue does that). */}
+              NOT change the hub default (Admin > Show Time > Venue does that). */}
           <div style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Venue</label>
             {!venueEditing ? (

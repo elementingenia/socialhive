@@ -13,7 +13,7 @@ import AskQuestion from "@/components/AskQuestion"
 // (span 3). Shed is a Phase 3 build — shown now as a greyed "coming soon"
 // placeholder so the grid doesn't reflow when it lands.
 const HUBS = [
-  { key: "movies", label: "Movies", Icon: MoviesIcon, path: "/movies",        colour: "var(--teal)",       span: 2 },
+  { key: "movies", label: "Show Time", Icon: MoviesIcon, path: "/movies",      colour: "var(--teal)",       span: 2 },
   { key: "social", label: "Social", Icon: SocialIcon, path: "/social",        colour: "var(--terracotta)", span: 2 },
   { key: "shed",   label: "Shed",   Icon: ShedIcon,   path: null,             colour: "var(--text-dim)",   span: 2, comingSoon: true },
   { key: "clubs",  label: "Groups & Clubs",  Icon: ClubsIcon,  path: "/clubs",         colour: "var(--purple)",     span: 2 },
