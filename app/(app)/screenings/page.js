@@ -172,6 +172,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [coordinator, setCoordinator] = useState(event?.coordinator?.id || null)
   const [saving, setSaving]           = useState(false)
   const [justSaved, setJustSaved]     = useState(false)
+  const [cancelling, setCancelling]   = useState(false)
   const [err, setErr]                 = useState(null)
   // Default a NEW screening to the Movies venue. An existing screening keeps
   // whatever it was saved with. The name fallback only covers a database where
@@ -216,6 +217,25 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   }, [movieOpen])
 
   function handleClose() { setOpen(false); setTimeout(onClose, 280) }
+
+  async function cancelScreening() {
+    if (!eventId) return
+    if (!confirm('Cancel this screening? Anyone booked will be notified. It will be removed from the list.')) return
+    setCancelling(true); setErr(null)
+    const res = await authedFetch('/api/screenings', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_id: eventId }),
+    })
+    setCancelling(false)
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      setErr(d.error || 'Could not cancel this screening'); return
+    }
+    addToast('Screening cancelled', 'success')
+    onSaved(); handleClose()
+  }
+
 
   async function handleSubmit() {
     if (!date || !time) { setErr('Date and time are required'); return }
@@ -491,6 +511,20 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
             style={{ width: '100%', padding: '0.9rem', background: 'var(--teal)', color: '#fff', border: 'none', borderRadius: '12px', fontSize: '1rem', fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1 }}>
             {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Screening'}
           </button>
+
+          {/* Cancel a screening. Only once it exists, and visually separated
+              from Save so it can't be hit by accident. Archives rather than
+              hard-deletes — bookings and history survive — which is exactly
+              what Clubs does. */}
+          {eventId && (
+            <button onClick={cancelScreening} disabled={cancelling}
+              style={{ width: '100%', marginTop: '2rem', padding: '0.6rem', borderRadius: 8,
+                border: '1px solid #fca5a5', background: '#fee2e2', color: '#991b1b',
+                fontWeight: 700, fontSize: '0.8rem', fontFamily: 'inherit',
+                cursor: cancelling ? 'not-allowed' : 'pointer', opacity: cancelling ? 0.6 : 1 }}>
+              {cancelling ? 'Cancelling…' : 'Cancel this screening'}
+            </button>
+          )}
         </div>
       </div>
     </>
