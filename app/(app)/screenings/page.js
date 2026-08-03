@@ -14,6 +14,7 @@ import TimeField from '@/components/TimeField'
 import { useSameDateWarning } from '@/components/SameDateWarning'
 import AttendeeNamingPicker from '@/components/AttendeeNamingPicker'
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from '@/lib/formValidation'
+import { byOwnThenName } from '@/lib/sortNames'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -181,7 +182,6 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   // not validation order -- those had drifted apart here too (handleSubmit
   // checked date/time before "What's showing", even though Showing is the
   // first field on the page).
-  const [invalidFields, setInvalidFields] = useState([])
   const fieldRefs = useRef({})
   // Default a NEW screening to the Movies venue. An existing screening keeps
   // whatever it was saved with. The name fallback only covers a database where
@@ -247,28 +247,39 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
 
 
   const FIELD_ORDER = ['showing', 'date', 'time', 'endTime']
+  const FIELD_MESSAGES = {
+    date: 'Date is required',
+    time: 'Time is required',
+    endTime: 'An end time is required -- every screening books the Cinema as a common space',
+  }
+  // Live, recomputed every render -- not gated behind a Save click, so a
+  // field lights up (or clears) the instant its value changes (Iain,
+  // 2026-08-04). "showing" carries its own message from validateShowing()
+  // since it depends on which mode (movie/other) is picked.
+  function computeInvalidFields() {
+    const invalid = {}
+    const showErr = validateShowing({ mode: showMode, movieId: pickedMovie?.id, freeText })
+    if (showErr) invalid.showing = showErr
+    if (!date) invalid.date = FIELD_MESSAGES.date
+    if (!time) invalid.time = FIELD_MESSAGES.time
+    if (!endTime) invalid.endTime = FIELD_MESSAGES.endTime
+    return invalid
+  }
+  const invalidMap = computeInvalidFields()
+  const invalidFields = Object.keys(invalidMap)
 
   async function handleSubmit() {
     setErr(null)
-    // Checked in SCREEN order (Showing is the first field on the page) and
-    // all at once, not one-at-a-time in whatever order happened to be
-    // convenient to write -- see the field-tracking comment above. Iain,
-    // 2026-08-04: date/time used to be checked before "What's showing" even
-    // though Showing renders first, so on a blank form Save would name the
-    // wrong field first.
-    const invalid = []
-    const showErr = validateShowing({ mode: showMode, movieId: pickedMovie?.id, freeText })
-    if (showErr) invalid.push({ key: 'showing', message: showErr })
-    if (!date) invalid.push({ key: 'date', message: 'Date is required' })
-    if (!time) invalid.push({ key: 'time', message: 'Time is required' })
-    if (!endTime) invalid.push({ key: 'endTime', message: 'An end time is required -- every screening books the Cinema as a common space' })
-    if (invalid.length) {
-      setInvalidFields(invalid.map(i => i.key))
-      setErr(invalid[0].message)
-      scrollToFirstInvalid(fieldRefs, FIELD_ORDER, invalid.map(i => i.key))
+    // Checked in SCREEN order (Showing is the first field on the page) --
+    // Iain, 2026-08-04: date/time used to be checked before "What's showing"
+    // even though Showing renders first, so on a blank form Save would name
+    // the wrong field first.
+    if (invalidFields.length) {
+      const first = FIELD_ORDER.find(k => invalidFields.includes(k))
+      setErr(invalidMap[first])
+      scrollToFirstInvalid(fieldRefs, FIELD_ORDER, invalidFields)
       return
     }
-    setInvalidFields([])
 
     // Space hard block (B) checked FIRST -- if the Cinema is unavailable
     // that's the only message, never a soft warning clicked through just to
@@ -286,7 +297,6 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
       }).then(r => r.json()).catch(() => ({}))
       if (pre.spaceConflict) {
         setErr(pre.spaceConflict.message)
-        setInvalidFields(['endTime'])
         scrollToFirstInvalid(fieldRefs, FIELD_ORDER, ['endTime'])
         return
       }
@@ -388,14 +398,13 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
 
           {showMode === 'other' ? (
             <>
-              <div ref={el => (fieldRefs.current.showing = el)}
-                style={invalidFields.includes('showing') ? { marginBottom: '1rem', ...INVALID_FIELD_STYLE, padding: '0.75rem' } : { marginBottom: '1rem' }}>
+              <div ref={el => (fieldRefs.current.showing = el)} style={{ marginBottom: '1rem' }}>
                 <label style={LABEL}>What&apos;s showing <span style={{ color: 'var(--danger)' }}>*</span>
                   {invalidFields.includes('showing') && <span style={{ color: '#dc2626', fontWeight: 800, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>⚠ Required</span>}
                 </label>
                 <input value={freeText} onChange={e => setFreeText(e.target.value)} maxLength={80}
                   placeholder="e.g. AFL Grand Final"
-                  style={{ ...INPUT, border: `1.5px solid ${freeText.trim() ? 'var(--green)' : 'var(--danger)'}` }} />
+                  style={{ ...INPUT, ...(invalidFields.includes('showing') ? INVALID_FIELD_STYLE : { border: '1.5px solid var(--green)' }) }} />
               </div>
               <div style={{ marginBottom: '1rem' }}>
                 <label style={LABEL}>Poster</label>
@@ -422,8 +431,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
               </div>
             </>
           ) : (
-          <div ref={el => (fieldRefs.current.showing = el)}
-            style={invalidFields.includes('showing') ? { marginBottom: '1rem', ...INVALID_FIELD_STYLE, padding: '0.75rem' } : { marginBottom: '1rem' }}>
+          <div ref={el => (fieldRefs.current.showing = el)} style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Movie <span style={{ color: 'var(--danger)' }}>*</span>
               {invalidFields.includes('showing') && <span style={{ color: '#dc2626', fontWeight: 800, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>⚠ Required</span>}
             </label>
@@ -438,7 +446,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
               </div>
             ) : (
               <div ref={movieRef} style={{ position: 'relative' }}>
-                <button onClick={() => setMovieOpen(v => !v)} style={{ ...INPUT, cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: movieOpen ? '10px 10px 0 0' : '10px' }}>
+                <button onClick={() => setMovieOpen(v => !v)} style={{ ...INPUT, cursor: 'pointer', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderRadius: movieOpen ? '10px 10px 0 0' : '10px', ...(invalidFields.includes('showing') ? INVALID_FIELD_STYLE : {}) }}>
                   <span style={{ color: 'var(--text-dim)' }}>Select a movie…</span>
                   <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>{movieOpen ? '▲' : '▼'}</span>
                 </button>
@@ -467,30 +475,27 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
             <label style={LABEL}>Coordinator (optional)</label>
             <CoordPicker members={members} value={coordinator} onChange={setCoordinator} />
           </div>
-          <div ref={el => (fieldRefs.current.date = el)}
-            style={invalidFields.includes('date') ? { marginBottom: '1rem', ...INVALID_FIELD_STYLE, padding: '0.75rem' } : { marginBottom: '1rem' }}>
+          <div ref={el => (fieldRefs.current.date = el)} style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Date <span style={{ color: 'var(--danger)' }}>*</span>
               {invalidFields.includes('date') && <span style={{ color: '#dc2626', fontWeight: 800, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>⚠ Required</span>}
             </label>
             <input type="date" value={date} onChange={e => setDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
-              style={{ ...INPUT, border: `1.5px solid ${date ? 'var(--green)' : 'var(--danger)'}` }} />
+              style={{ ...INPUT, ...(invalidFields.includes('date') ? INVALID_FIELD_STYLE : { border: '1.5px solid var(--green)' }) }} />
             {date && <div style={{ fontSize: '0.75rem', color: 'var(--teal)', fontWeight: 600, marginTop: '0.3rem' }}>
               {new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'long' })}
             </div>}
           </div>
-          <div ref={el => (fieldRefs.current.time = el)}
-            style={invalidFields.includes('time') ? { marginBottom: '1rem', ...INVALID_FIELD_STYLE, padding: '0.75rem' } : { marginBottom: '1rem' }}>
+          <div ref={el => (fieldRefs.current.time = el)} style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Time <span style={{ color: 'var(--danger)' }}>*</span>
               {invalidFields.includes('time') && <span style={{ color: '#dc2626', fontWeight: 800, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>⚠ Required</span>}
             </label>
-            <TimeField value={time} onChange={setTime} colour={time ? 'var(--green)' : 'var(--danger)'} />
+            <TimeField value={time} onChange={setTime} colour={time ? 'var(--green)' : 'var(--danger)'} invalid={invalidFields.includes('time')} />
           </div>
-          <div ref={el => (fieldRefs.current.endTime = el)}
-            style={invalidFields.includes('endTime') ? { marginBottom: '1rem', ...INVALID_FIELD_STYLE, padding: '0.75rem' } : { marginBottom: '1rem' }}>
+          <div ref={el => (fieldRefs.current.endTime = el)} style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Ends <span style={{ color: 'var(--danger)' }}>*</span>
               {invalidFields.includes('endTime') && <span style={{ color: '#dc2626', fontWeight: 800, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>⚠ Required</span>}
             </label>
-            <TimeField value={endTime} onChange={setEndTime} colour={endTime ? 'var(--green)' : 'var(--danger)'} />
+            <TimeField value={endTime} onChange={setEndTime} colour={endTime ? 'var(--green)' : 'var(--danger)'} invalid={invalidFields.includes('endTime')} />
             <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.3rem' }}>
               Every screening books {venueName || 'the venue'} as a common space, so an end time keeps it from double-booking.
             </div>
@@ -651,8 +656,10 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit }) {
   const movie              = ev.movies
   const isFull             = ev.seats_remaining === 0
   // Own row always pinned to the top of the list, ahead of everyone else —
-  // consistent with the Coordinator View panel and every other attendee list.
-  const bySelfFirst = (a, b) => (b.isOwn === true) - (a.isOwn === true)
+  // consistent with the Coordinator View panel and every other attendee
+  // list -- then A-Z by name (Iain, 2026-08-04), same as this app's other
+  // standing A-Z rule for anything a user reads down a list.
+  const bySelfFirst = (a, b) => byOwnThenName(a.isOwn, b.isOwn, a.name, b.name)
   const confirmedAttendees = (ev.attendees || []).filter(a => a.status === 'confirmed').sort(bySelfFirst)
   const waitlistAttendees  = (ev.attendees || []).filter(a => a.status === 'waitlist').sort(bySelfFirst)
 

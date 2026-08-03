@@ -9,6 +9,7 @@ import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
 import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, sumUnpaidSeats, seatsCost, bookingStatusBadge } from "@/lib/payments"
+import { byOwnThenName } from "@/lib/sortNames"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
 import { clubCaps, clubColour } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
@@ -805,9 +806,15 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           else grouped[key].confirmed.push(b)
         }
         // Own row always pinned to the top — consistent with every other attendee
-        // list (Movies/Social inline lists, Book Club's own attendees list).
+        // list (Movies/Social inline lists, Book Club's own attendees list) —
+        // then A-Z by name (Iain, 2026-08-04). This is the admin/EC-only
+        // panel, always real names (never masked), so sorting on the
+        // displayed name is exact here.
         const attendeeGroups = Object.values(grouped)
-          .sort((a, b) => (b.member?.id === currentMember?.id) - (a.member?.id === currentMember?.id))
+          .sort((a, b) => byOwnThenName(
+            a.member?.id === currentMember?.id, b.member?.id === currentMember?.id,
+            a.member?.name || a.contact?.name, b.member?.name || b.contact?.name,
+          ))
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
             {attendeeGroups.map(({ member, contact, confirmed: confRows, waitlist: waitRows }) => {

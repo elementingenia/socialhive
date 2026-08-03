@@ -23,6 +23,7 @@ import { needsSpaceValidation } from "@/lib/eventClash"
 import { useSameDateWarning } from "@/components/SameDateWarning"
 import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
+import { byOwnThenName } from "@/lib/sortNames"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -148,7 +149,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
           }
         }),
       }
-    }).sort((a, b) => (b.isOwn === true) - (a.isOwn === true)))
+    }).sort((a, b) => byOwnThenName(a.isOwn, b.isOwn, a.name, b.name)))
   }
 
   async function toggleAttendees() {
@@ -493,7 +494,7 @@ function ClosedEventsAccordion({ events, myBookedIds, colour = "var(--purple)" }
 
 // ── Book Search (Google Books) ────────────────────────────────────────────────
 // BookPicker — selects from books already in the community suggestions table
-function BookPicker({ onSelect, initialBook, colour = "var(--purple)" }) {
+function BookPicker({ onSelect, initialBook, colour = "var(--purple)", invalid = false }) {
   const [allBooks, setAllBooks] = useState([])
   const [query,    setQuery]    = useState("")
   const [chosen,   setChosen]   = useState(initialBook || null)
@@ -567,7 +568,8 @@ function BookPicker({ onSelect, initialBook, colour = "var(--purple)" }) {
         onChange={e => setQuery(e.target.value)}
         style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: 10, border: `1px solid ${colour}`,
           background: "var(--surface)", color: "var(--text)", fontSize: "1rem",
-          boxSizing: "border-box", fontFamily: "inherit" }}
+          boxSizing: "border-box", fontFamily: "inherit",
+          ...(invalid ? { border: "2px solid #dc2626", background: "rgba(220, 38, 38, 0.10)" } : {}) }}
       />
       {allBooks.length === 0 && (
         <div style={{ fontSize: 12, color: "var(--text-dim)", padding: "4px 2px" }}>Loading books…</div>
@@ -629,7 +631,7 @@ function BookPicker({ onSelect, initialBook, colour = "var(--purple)" }) {
 }
 
 // ── Coordinator Typeahead Picker ─────────────────────────────────────────────
-function CoordPicker({ members, value, onChange, valid = false, colour = "var(--purple)" }) {
+function CoordPicker({ members, value, onChange, valid = false, colour = "var(--purple)", invalid = false }) {
   const chosen = members.find(m => m.id === value) || null
   const [query,  setQuery]  = useState("")
   const [open,   setOpen]   = useState(false)
@@ -658,7 +660,8 @@ function CoordPicker({ members, value, onChange, valid = false, colour = "var(--
           border: `1.5px solid ${borderCol}`, background: "var(--surface)",
           color: chosen ? "var(--text)" : "var(--text-dim)", fontSize: "0.95rem",
           boxSizing: "border-box", fontFamily: "inherit", cursor: "pointer",
-          display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          ...(invalid ? { border: "2px solid #dc2626", background: "rgba(220, 38, 38, 0.10)" } : {}) }}>
         <span>{chosen ? (chosen.name || chosen.username) : "— Select coordinator —"}</span>
         <span style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>▾</span>
       </div>
@@ -759,7 +762,7 @@ function BringCategoryPicker({ clubId, colour, value, onChange }) {
 }
 
 // ── Admin Inline Event Form ───────────────────────────────────────────────────
-function CoordMultiPicker({ members, value = [], onChange, colour = "var(--purple)", max = 3 }) {
+function CoordMultiPicker({ members, value = [], onChange, colour = "var(--purple)", max = 3, invalid = false }) {
   const chosen = value.map(id => members.find(m => m.id === id)).filter(Boolean)
   const available = members.filter(m => !value.includes(m.id))
   return (
@@ -776,7 +779,7 @@ function CoordMultiPicker({ members, value = [], onChange, colour = "var(--purpl
         </div>
       )}
       {value.length < max ? (
-        <CoordPicker members={available} value="" valid={value.length > 0} colour={colour}
+        <CoordPicker members={available} value="" valid={value.length > 0} colour={colour} invalid={invalid}
           onChange={id => { if (id) onChange([...value, id]) }} />
       ) : (
         <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Maximum {max} coordinators reached.</div>
@@ -868,10 +871,11 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   // Book was missing (the silent-failure pattern this app keeps tripping
   // over -- see Silent Failure Bugs in project memory), and Location/
   // Coordinators were never enforced at all despite Coordinators being
-  // labelled mandatory. FIELD_ORDER matches this form's actual screen order
-  // (title -> date -> location -> end time -> book -> coordinators), not the
-  // order these checks happen to run in below.
-  const [invalidFields, setInvalidFields] = useState([])
+  // labelled mandatory. Live -- computed fresh every render from current
+  // form state, not gated behind a Save click, so a field lights up (or
+  // clears) the instant its value changes. FIELD_ORDER matches this form's
+  // actual screen order (title -> date -> location -> end time -> book ->
+  // coordinators), not the order these checks happen to run in below.
   const fieldRefs = useRef({})
   const FIELD_ORDER = ["title", "event_date", "location", "event_end_time", "book", "coordinators"]
   function computeInvalidFields() {
@@ -885,6 +889,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     if (!form.coordinator_ids.length) invalid.push("coordinators")
     return invalid
   }
+  const invalidFields = computeInvalidFields()
   const FIELD_MESSAGES = {
     title: "Please give the event a name.",
     event_date: "Date is required.",
@@ -895,14 +900,11 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   }
 
   async function save() {
-    const invalid = computeInvalidFields()
-    if (invalid.length) {
-      setInvalidFields(invalid)
-      setSaveError(FIELD_MESSAGES[invalid[0]])
-      scrollToFirstInvalid(fieldRefs, FIELD_ORDER, invalid)
+    if (invalidFields.length) {
+      setSaveError(FIELD_MESSAGES[invalidFields[0]])
+      scrollToFirstInvalid(fieldRefs, FIELD_ORDER, invalidFields)
       return
     }
-    setInvalidFields([])
     setSaving(true)
     setSaveError(null)
 
@@ -1032,7 +1034,6 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       }).then(r => r.json()).catch(() => ({}))
       if (pre.spaceConflict) {
         setSaveError(pre.spaceConflict.message); setSaving(false)
-        setInvalidFields(["location"])
         scrollToFirstInvalid(fieldRefs, FIELD_ORDER, ["location"])
         return
       }
@@ -1147,23 +1148,21 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         {event ? `Edit ${club?.name || "Club"} Event` : `Add ${club?.name || "Club"} Event`}
       </div>
 
-      <div ref={el => (fieldRefs.current.title = el)}
-        style={invalidFields.includes("title") ? { marginBottom: 12, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : { marginBottom: 12 }}>
+      <div ref={el => (fieldRefs.current.title = el)} style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Event Name{!caps.hasBooks && <span style={{ color: "var(--danger)" }}> *</span>}
           {invalidFields.includes("title") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
         </label>
         <input value={form.title} onChange={e => set("title", e.target.value)}
           placeholder={caps.hasBooks ? "Leave blank to use the book title" : "e.g. Italian Night"}
-          style={inputStyle} />
+          style={{ ...inputStyle, ...(invalidFields.includes("title") ? INVALID_FIELD_STYLE : {}) }} />
       </div>
 
-      <div ref={el => (fieldRefs.current.event_date = el)}
-        style={invalidFields.includes("event_date") ? { marginBottom: 12, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : { marginBottom: 12 }}>
+      <div ref={el => (fieldRefs.current.event_date = el)} style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Date <span style={{ color: "var(--danger)" }}>*</span>
           {invalidFields.includes("event_date") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
         </label>
         <input type="date" autoFocus value={form.event_date} onChange={e => set("event_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
-          style={{ ...inputStyle, border: `1.5px solid ${form.event_date ? "var(--green)" : "var(--danger)"}` }} />
+          style={{ ...inputStyle, ...(invalidFields.includes("event_date") ? INVALID_FIELD_STYLE : { border: "1.5px solid var(--green)" }) }} />
       </div>
 
       <div style={{ marginBottom: 12 }}>
@@ -1177,8 +1176,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         </div>
       )}
 
-      <div ref={el => (fieldRefs.current.location = el)}
-        style={invalidFields.includes("location") ? { marginBottom: 12, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : { marginBottom: 12 }}>
+      <div ref={el => (fieldRefs.current.location = el)} style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Location <span style={{ color: "var(--danger)" }}>*</span>
           {invalidFields.includes("location") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
         </label>
@@ -1198,8 +1196,12 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
           // Bound to the location ID, not its name. An id with no matching row
           // (venue archived or deleted) is called out rather than silently
           // re-saved, which is how a renamed room used to wipe location_id.
+          // TODO(follow-up, flagged not fixed 2026-08-04): this is a native
+          // <select>, which app/globals.css's standing standard bans
+          // app-wide -- pre-existing, left alone here to keep this diff
+          // focused on mandatory-field enforcement.
           <select value={form.location_id || ""} onChange={e => set("location_id", e.target.value || null)}
-            style={{ ...inputStyle, cursor: "pointer" }}>
+            style={{ ...inputStyle, cursor: "pointer", ...(invalidFields.includes("location") ? INVALID_FIELD_STYLE : {}) }}>
             <option value="">Select venue…</option>
             {form.location_id && !onsiteLocations.some(l => l.id === form.location_id) && (
               <option value={form.location_id}>Venue no longer available — choose again</option>
@@ -1208,17 +1210,17 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
           </select>
         ) : (
           <textarea value={form.location} onChange={e => set("location", e.target.value)} rows={3}
-            placeholder="Enter venue name and address…" style={{ ...inputStyle, resize: "vertical" }} />
+            placeholder="Enter venue name and address…"
+            style={{ ...inputStyle, resize: "vertical", ...(invalidFields.includes("location") ? INVALID_FIELD_STYLE : {}) }} />
         )}
       </div>
 
       {needsSpaceValidation({ location_type: form.location_type, bookable: selectedLocation?.bookable }) && (
-        <div ref={el => (fieldRefs.current.event_end_time = el)}
-          style={invalidFields.includes("event_end_time") ? { marginBottom: 12, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : { marginBottom: 12 }}>
+        <div ref={el => (fieldRefs.current.event_end_time = el)} style={{ marginBottom: 12 }}>
           <label style={labelStyle}>Ends <span style={{ color: "var(--danger)" }}>*</span>
             {invalidFields.includes("event_end_time") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
           </label>
-          <TimeField value={form.event_end_time} onChange={v => set("event_end_time", v)} colour={form.event_end_time ? "var(--green)" : "var(--danger)"} />
+          <TimeField value={form.event_end_time} onChange={v => set("event_end_time", v)} colour={form.event_end_time ? "var(--green)" : "var(--danger)"} invalid={invalidFields.includes("event_end_time")} />
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 4 }}>Lets the app stop this space being double-booked by another event.</div>
         </div>
       )}
@@ -1353,25 +1355,24 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       )}
 
       {caps.hasBooks && (
-      <div ref={el => (fieldRefs.current.book = el)}
-        style={invalidFields.includes("book") ? { marginBottom: 12, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : { marginBottom: 12 }}>
+      <div ref={el => (fieldRefs.current.book = el)} style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Book <span style={{ color: "var(--danger)" }}>*</span>
           {invalidFields.includes("book") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
         </label>
-        <BookPicker onSelect={setSelectedBook} initialBook={event?.books || null} colour={colour} />
+        <BookPicker onSelect={setSelectedBook} initialBook={event?.books || null} colour={colour} invalid={invalidFields.includes("book")} />
       </div>
       )}
 
-      <div ref={el => (fieldRefs.current.coordinators = el)}
-        style={invalidFields.includes("coordinators") ? { marginBottom: 12, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : { marginBottom: 12 }}>
+      <div ref={el => (fieldRefs.current.coordinators = el)} style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Event Coordinator{form.coordinator_ids.length !== 1 ? "s" : ""} <span style={{ color: "var(--danger)" }}>*</span> <span style={{ textTransform: "none", fontWeight: 500, color: "var(--text-dim)" }}>(up to 3)</span>
           {invalidFields.includes("coordinators") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
         </label>
         <CoordMultiPicker
           members={members}
           value={form.coordinator_ids}
-          onChange={ids => { set("coordinator_ids", ids); setInvalidFields(f => f.filter(k => k !== "coordinators")) }}
+          onChange={ids => set("coordinator_ids", ids)}
           colour={colour}
+          invalid={invalidFields.includes("coordinators")}
         />
       </div>
 

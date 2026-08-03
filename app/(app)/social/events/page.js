@@ -17,6 +17,7 @@ import { needsSpaceValidation } from "@/lib/eventClash"
 import { useSameDateWarning } from "@/components/SameDateWarning"
 import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
+import { byOwnThenName } from "@/lib/sortNames"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -230,7 +231,7 @@ function MemberPicker({ members = [], value, onChange, placeholder = "Select mem
 }
 
 // ── EC multi-picker — prop-based, in-memory filter (matches Book Club CoordPicker) ──
-function ECPicker({ members = [], value, onChange, valid }) {
+function ECPicker({ members = [], value, onChange, valid, invalid = false }) {
   const [open,  setOpen]  = useState(false)
   const [query, setQuery] = useState("")
   const containerRef      = useRef(null)
@@ -255,7 +256,11 @@ function ECPicker({ members = [], value, onChange, valid }) {
   }
   function remove(id) { onChange(value.filter(m => m.id !== id)) }
 
-  // Border: green when valid (≥1 EC), red when not
+  // Border: green when valid (≥1 EC), red when not. `invalid` (Save was
+  // pressed / live-empty) also fills the trigger with the same light-red
+  // wash every other mandatory field uses (lib/formValidation.js) --
+  // otherwise this trigger's own opaque background would hide a wash
+  // applied only to a wrapping div.
   const triggerBorder = open
     ? "var(--terracotta)"
     : valid ? "var(--green)" : "var(--danger)"
@@ -289,6 +294,7 @@ function ECPicker({ members = [], value, onChange, valid }) {
             style={{
             ...INPUT, display: "flex", alignItems: "center", justifyContent: "space-between",
             cursor: "pointer", border: `1.5px solid ${triggerBorder}`,
+            ...(invalid ? { border: "2px solid #dc2626", background: "rgba(220, 38, 38, 0.10)" } : {}),
           }}>
             <span style={{ color: "var(--text-dim)" }}>
               {value.length === 0 ? "Select coordinator…" : "Add another coordinator…"}
@@ -364,7 +370,7 @@ function Toggle({ value, onChange, label }) {
 
 // ── Fixed-list custom picker ──────────────────────────────────────────────────
 // `value` is a location ID; `options` are {id, name} rows from useLocations().
-function FixedListPicker({ value, onChange, options, placeholder = "Select…" }) {
+function FixedListPicker({ value, onChange, options, placeholder = "Select…", invalid = false }) {
   const [open, setOpen] = useState(false)
   const ref = useRef(null)
   const selected = options.find(o => (o.id || o) === value) || null
@@ -384,6 +390,7 @@ function FixedListPicker({ value, onChange, options, placeholder = "Select…" }
           ...INPUT, display: "flex", alignItems: "center", justifyContent: "space-between",
           cursor: "pointer", textAlign: "left",
           borderColor: open ? "var(--terracotta)" : "var(--border)",
+          ...(invalid ? { border: "2px solid #dc2626", background: "rgba(220, 38, 38, 0.10)" } : {}),
         }}
       >
         {/* Show the name for the SELECTED ID. Previously this rendered the raw
@@ -439,7 +446,7 @@ function FixedListPicker({ value, onChange, options, placeholder = "Select…" }
 function LocationField({ locationType, location, locationId, onTypeChange, onLocationChange, onLocationIdChange, invalid }) {
   const onsiteLocations = useLocations()
   return (
-    <div style={invalid ? { ...FIELD, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : FIELD}>
+    <div style={FIELD}>
       <label style={LABEL}>Location <span style={{ color: "var(--danger)" }}>*</span>
         {invalid && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
       </label>
@@ -465,6 +472,7 @@ function LocationField({ locationType, location, locationId, onTypeChange, onLoc
           onChange={onLocationIdChange}
           options={onsiteLocations.length ? onsiteLocations : ONSITE_LOCATIONS_FALLBACK}
           placeholder="Select venue…"
+          invalid={invalid}
         />
       ) : (
         <textarea
@@ -472,7 +480,7 @@ function LocationField({ locationType, location, locationId, onTypeChange, onLoc
           onChange={e => onLocationChange(e.target.value)}
           rows={3}
           placeholder="Enter venue name and address…"
-          style={{ ...INPUT, resize: "vertical" }}
+          style={{ ...INPUT, resize: "vertical", ...(invalid ? { border: "2px solid #dc2626", background: "rgba(220, 38, 38, 0.10)" } : {}) }}
         />
       )}
     </div>
@@ -519,18 +527,19 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
   const [ecError,      setEcError]      = useState(null)
   const [saving,       setSaving]       = useState(false)
   const [error,        setError]        = useState(null)
-  // Mandatory-field tracking (Iain, 2026-08-04): which fields are still
-  // incomplete as of the last Save attempt, in the order they appear on
-  // screen -- drives both the ⚠ highlight (lib/formValidation.js) and which
-  // field Save scrolls to. Populated fresh on every save() attempt, not live
-  // per-keystroke, so a blank new-event form doesn't light up red before the
-  // user has touched anything.
-  const [invalidFields, setInvalidFields] = useState([])
+  // Mandatory-field tracking (Iain, 2026-08-04): computed fresh on every
+  // render from the current form state -- not gated behind a Save click --
+  // so a field lights up (or clears) the instant its value changes, same as
+  // Title/Date already behaved before this fix existed. Drives both the ⚠
+  // highlight (lib/formValidation.js) and which field Save scrolls to.
+  // FIELD_ORDER is screen order, not the order these checks happen to run
+  // in below (Time used to have no check at all -- Iain, 2026-08-04).
   const fieldRefs = useRef({})
-  const FIELD_ORDER = ["title", "event_date", "location", "event_end_time", "coordinators"]
+  const FIELD_ORDER = ["title", "event_date", "event_time", "location", "event_end_time", "coordinators"]
   const FIELD_MESSAGES = {
     title: "Title is required",
     event_date: "Date is required",
+    event_time: "Time is required",
     location: "Please choose a venue",
     event_end_time: "An end time is required for events in a common space",
     coordinators: "At least one coordinator is required",
@@ -539,12 +548,14 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     const invalid = []
     if (!form.title.trim()) invalid.push("title")
     if (!form.event_date) invalid.push("event_date")
+    if (!form.event_time) invalid.push("event_time")
     const venueMissing = form.location_type === "onsite" ? !form.location_id : !form.location.trim()
     if (venueMissing) invalid.push("location")
     if (needsSpaceValidation({ location_type: form.location_type, bookable: selectedLocation?.bookable }) && !form.event_end_time) invalid.push("event_end_time")
     if (!coordinators.length) invalid.push("coordinators")
     return invalid
   }
+  const invalidFields = computeInvalidFields()
   const { ask: askSameDate, Modal: SameDateModal } = useSameDateWarning()
   const [createdId,    setCreatedId]    = useState(null)
   const [justCreated,  setJustCreated]  = useState(false)
@@ -579,16 +590,13 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     // not once venue and coordinators were added, and never enforced venue
     // at all (Iain found this live, 2026-08-04: toggling On-site/Off-site
     // with no room picked saved fine).
-    const invalid = computeInvalidFields()
-    if (invalid.length) {
-      setInvalidFields(invalid)
-      const first = invalid[0]
+    if (invalidFields.length) {
+      const first = invalidFields[0]
       if (first === "coordinators") setEcError(FIELD_MESSAGES[first])
       else setError(FIELD_MESSAGES[first])
-      scrollToFirstInvalid(fieldRefs, FIELD_ORDER, invalid)
+      scrollToFirstInvalid(fieldRefs, FIELD_ORDER, invalidFields)
       return
     }
-    setInvalidFields([])
 
     // Space hard block (B) checked FIRST -- if the space is unavailable
     // that's the only message, never a soft warning clicked through just to
@@ -604,7 +612,6 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
       }).then(r => r.json()).catch(() => ({}))
       if (pre.spaceConflict) {
         setError(pre.spaceConflict.message)
-        setInvalidFields(["location"])
         scrollToFirstInvalid(fieldRefs, FIELD_ORDER, ["location"])
         return
       }
@@ -704,36 +711,36 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
         <div style={{ padding: "1.25rem 1.25rem 2rem" }}>
 
           {/* Title */}
-          <div ref={el => (fieldRefs.current.title = el)}
-            style={invalidFields.includes("title") ? { ...FIELD, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : FIELD}>
+          <div ref={el => (fieldRefs.current.title = el)} style={FIELD}>
             <label style={LABEL}>Event Name <span style={{ color: "var(--danger)" }}>*</span>
               {invalidFields.includes("title") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
             </label>
             <input value={form.title} onChange={e => set("title", e.target.value)}
               placeholder="e.g. Wine & Cheese Evening"
-              style={{ ...INPUT, border: `1.5px solid ${form.title.trim() ? "var(--green)" : "var(--danger)"}` }} />
+              style={{ ...INPUT, ...(invalidFields.includes("title") ? INVALID_FIELD_STYLE : { border: "1.5px solid var(--green)" }) }} />
           </div>
 
           {/* Date + Time */}
           <div style={{ ...FIELD, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-            <div ref={el => (fieldRefs.current.event_date = el)}
-              style={invalidFields.includes("event_date") ? { ...INVALID_FIELD_STYLE, padding: "0.6rem" } : undefined}>
+            <div ref={el => (fieldRefs.current.event_date = el)}>
               <label style={LABEL}>Date <span style={{ color: "var(--danger)" }}>*</span>
                 {invalidFields.includes("event_date") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
               </label>
               <input type="date" value={form.event_date}
                 onChange={e => set("event_date", e.target.value)}
                 onClick={e => e.currentTarget.showPicker?.()}
-                style={{ ...INPUT, border: `1.5px solid ${form.event_date ? "var(--green)" : "var(--danger)"}` }} />
+                style={{ ...INPUT, ...(invalidFields.includes("event_date") ? INVALID_FIELD_STYLE : { border: "1.5px solid var(--green)" }) }} />
               {form.event_date && (
                 <div style={{ fontSize: "0.75rem", color: "var(--terracotta)", fontWeight: 600, marginTop: "0.3rem" }}>
                   {localDate(form.event_date)?.toLocaleDateString("en-AU", { weekday: "long" })}
                 </div>
               )}
             </div>
-            <div>
-              <label style={LABEL}>Time</label>
-              <TimeField value={form.event_time} onChange={v => set("event_time", v)} />
+            <div ref={el => (fieldRefs.current.event_time = el)}>
+              <label style={LABEL}>Time <span style={{ color: "var(--danger)" }}>*</span>
+                {invalidFields.includes("event_time") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
+              </label>
+              <TimeField value={form.event_time} onChange={v => set("event_time", v)} invalid={invalidFields.includes("event_time")} />
             </div>
           </div>
 
@@ -754,12 +761,11 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
               "Resident's Home"), needed to keep the space-clash check working
               (Iain, 2026-07-23). */}
           {needsSpaceValidation({ location_type: form.location_type, bookable: selectedLocation?.bookable }) && (
-            <div ref={el => (fieldRefs.current.event_end_time = el)}
-              style={invalidFields.includes("event_end_time") ? { ...FIELD, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : FIELD}>
+            <div ref={el => (fieldRefs.current.event_end_time = el)} style={FIELD}>
               <label style={LABEL}>Ends <span style={{ color: "var(--danger)" }}>*</span>
                 {invalidFields.includes("event_end_time") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
               </label>
-              <TimeField value={form.event_end_time} onChange={v => set("event_end_time", v)} />
+              <TimeField value={form.event_end_time} onChange={v => set("event_end_time", v)} invalid={invalidFields.includes("event_end_time")} />
               <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>Lets the app stop this space being double-booked by another event.</div>
             </div>
           )}
@@ -874,12 +880,11 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
           </div>
 
           {/* EC — mandatory */}
-          <div ref={el => (fieldRefs.current.coordinators = el)}
-            style={invalidFields.includes("coordinators") ? { ...FIELD, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : FIELD}>
+          <div ref={el => (fieldRefs.current.coordinators = el)} style={FIELD}>
             <label style={LABEL}>Event Coordinator(s) <span style={{ color: "var(--danger)" }}>*</span> — max 3
               {invalidFields.includes("coordinators") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
             </label>
-            <ECPicker members={members} value={coordinators} onChange={v => { setCoordinators(v); setEcError(null); setInvalidFields(f => f.filter(k => k !== "coordinators")) }} valid={coordinators.length > 0} />
+            <ECPicker members={members} value={coordinators} onChange={v => { setCoordinators(v); setEcError(null) }} valid={coordinators.length > 0} invalid={invalidFields.includes("coordinators")} />
             {ecError && <div style={{ color: "var(--danger)", fontSize: "0.78rem", marginTop: "0.25rem" }}>{ecError}</div>}
           </div>
 
@@ -1008,8 +1013,13 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
   const isWaitlist  = myBooking?.status === "waitlist"
 
   // Own row always pinned to the top — consistent with the Coordinator View panel
-  // and every other attendee list (Movies, Book Club).
-  const bySelfFirst = (a, b) => (b.member_id === member?.id) - (a.member_id === member?.id)
+  // and every other attendee list (Movies, Book Club) — then A-Z by name
+  // (Iain, 2026-08-04), same as this app's other standing A-Z rule. Sorts on
+  // the real underlying name/username regardless of what's actually shown
+  // (masked entries all read "Resident"/"Guest" anyway, so their relative
+  // order among themselves is invisible to the viewer either way).
+  const attendeeName = b => b.member?.name || b.member?.username || b.contact?.name || ""
+  const bySelfFirst = (a, b) => byOwnThenName(a.member_id === member?.id, b.member_id === member?.id, attendeeName(a), attendeeName(b))
   const confirmedBookings = (event.bookings?.filter(b => b.status === "confirmed") || []).sort(bySelfFirst)
   const waitlistBookings  = (event.bookings?.filter(b => b.status === "waitlist") || []).sort(bySelfFirst)
   // Cancelled-but-was-paid bookings, split by whether the refund's been
