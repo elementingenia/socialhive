@@ -74,16 +74,35 @@ export async function GET(req) {
     }
   }
 
-  // Mode 4: admin list
+  // Mode 4: admin list -- every personal space booking AND every event that
+  // has claimed a room, combined, so Admin can see total room usage in one
+  // place rather than needing to check each hub separately (Iain, 2026-08-04:
+  // "an admin space to see all space bookings, both events and resident
+  // personal space bookings"). Optional ?location_id= narrows both halves to
+  // one room. Event rows are read-only here -- cancelling/editing an event's
+  // room stays in that event's own hub, this view is for visibility only.
   if (searchParams.get('admin') === '1') {
     if (!member.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-    const { data, error } = await supabaseAdmin
+    const locationFilter = searchParams.get('location_id')
+
+    let bookingsQ = supabaseAdmin
       .from('space_bookings')
       .select('id, location_id, starts_at, ends_at, title, purpose, status, booked_by, booked_by_name_at_time, created_at, locations(name)')
-      .is('event_id', null) // admin view is for PERSONAL/hold/maintenance rows; event-backed rows are managed from their own hub
-      .order('starts_at', { ascending: true })
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ bookings: data || [] })
+      .is('event_id', null) // admin view is for PERSONAL/hold/maintenance rows; event-backed rows come from `events` below instead
+    if (locationFilter) bookingsQ = bookingsQ.eq('location_id', locationFilter)
+    const { data: bookings, error: bookingsErr } = await bookingsQ.order('starts_at', { ascending: true })
+    if (bookingsErr) return NextResponse.json({ error: bookingsErr.message }, { status: 500 })
+
+    let eventsQ = supabaseAdmin
+      .from('events')
+      .select('id, title, hub_type, event_date, event_time, event_end_time, location_id, archived, locations(name)')
+      .not('location_id', 'is', null)
+      .eq('archived', false)
+    if (locationFilter) eventsQ = eventsQ.eq('location_id', locationFilter)
+    const { data: events, error: eventsErr } = await eventsQ.order('event_date', { ascending: true })
+    if (eventsErr) return NextResponse.json({ error: eventsErr.message }, { status: 500 })
+
+    return NextResponse.json({ bookings: bookings || [], events: events || [] })
   }
 
   // Mode 2: my bookings

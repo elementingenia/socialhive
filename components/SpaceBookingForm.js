@@ -4,6 +4,7 @@ import { createPortal } from "react-dom"
 import TimeField from "@/components/TimeField"
 import { authedFetch } from "@/lib/getAuthToken"
 import { BOOKING_REASON_MAX } from "@/lib/spaceBookings"
+import { useSameDateWarning } from "@/components/SameDateWarning"
 
 // Book a Space — Personal Space Booking. Scope:
 // Social_Hive_Personal_Space_Booking_Scope.md (decisions locked 2026-08-01).
@@ -47,7 +48,9 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
+  const [acknowledgedClash, setAcknowledgedClash] = useState(null) // same-date events the resident proceeded past, or null
   const fetchTag = useRef(0)
+  const { ask: askSameDate, Modal: SameDateModal } = useSameDateWarning()
 
   const today = new Date().toISOString().split("T")[0]
   const windowValid = !!(date && startTime && endTime && endTime > startTime)
@@ -59,6 +62,7 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
       setDate(""); setStartTime(""); setEndTime("")
       setLocations(null); setLocationId(""); setReason("")
       setError(""); setSuccess(false); setSubmitting(false)
+      setAcknowledgedClash(null)
     }
   }, [open])
 
@@ -96,6 +100,35 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
   async function handleSubmit() {
     if (!canSubmit) return
     setSubmitting(true); setError("")
+
+    // Soft same-day warning, in keeping with the event booking modal (Iain,
+    // 2026-08-04): another Hive event that day, in any room, was previously
+    // invisible here -- a resident could book the Lounge with no idea Show
+    // Time had the Cinema running that same evening. Reuses the exact same
+    // precheck endpoint and SameDateWarning UI that Social/Screenings/Clubs
+    // already use, rather than inventing a second version of this pattern.
+    // Only a soft heads-up -- it never blocks the booking, matching the
+    // existing "hard block first, soft warning second, never both" priority.
+    let clashEvents = null
+    try {
+      const pre = await authedFetch("/api/events/precheck", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_date: date, event_time: startTime, event_end_time: endTime,
+          location_type: "onsite", location_id: locationId,
+        }),
+      }).then(r => r.json()).catch(() => ({}))
+      if (pre.sameDateEvents?.length) {
+        if (!(await askSameDate(pre.sameDateEvents))) { setSubmitting(false); return }
+        clashEvents = pre.sameDateEvents
+      }
+    } catch {
+      // Precheck is advisory only -- if it fails, fall through to the real
+      // booking attempt rather than blocking on a check that isn't the
+      // actual source of truth (the POST below re-validates regardless).
+    }
+
     try {
       const res = await authedFetch("/api/spaces", {
         method: "POST",
@@ -104,7 +137,14 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || "Could not book that space"); setSubmitting(false); return }
+      setAcknowledgedClash(clashEvents)
       setSuccess(true)
+      // Bug fix (Iain, 2026-08-04 live-fire find): this used to never reset,
+      // which permanently disabled handleClose's `if (!submitting)` guard
+      // after every successful booking -- the X button (and the backdrop
+      // click) silently did nothing, and only "Done" (which calls onClose
+      // directly, bypassing the guard) could close the sheet.
+      setSubmitting(false)
       onBooked?.(data)
     } catch {
       setError("Could not book that space — check your connection")
@@ -115,6 +155,7 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
   function handleClose() { if (!submitting) onClose?.() }
 
   return (
+    <>
     <Portal>
       <div onClick={handleClose} style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300,
@@ -142,7 +183,12 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
             <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>✅</div>
             <div style={{ fontWeight: 700, fontSize: "1.05rem", marginBottom: "0.4rem" }}>Space booked</div>
             <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginBottom: "1.5rem" }}>
-              No clash with another Hive event or booking. Remember to check and book the space in the Ingenia app too.
+              {acknowledgedClash?.length ? (
+                <>Note: {acknowledgedClash.map(e => e.title).join(", ")} {acknowledgedClash.length === 1 ? "is" : "are"} also on
+                that day. Remember to check and book the space in the Ingenia app too.</>
+              ) : (
+                <>No other Hive event or booking clashes with this. Remember to check and book the space in the Ingenia app too.</>
+              )}
             </div>
             <button onClick={onClose} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10,
               padding: "0.8rem 1.5rem", fontWeight: 700, fontSize: "0.95rem", cursor: "pointer", width: "100%" }}>
@@ -258,5 +304,7 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
         )}
       </div>
     </Portal>
+    {SameDateModal}
+    </>
   )
 }

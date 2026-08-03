@@ -5,6 +5,7 @@ import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import { bookingStatusBadge } from "@/lib/payments"
 import { authedFetch } from "@/lib/getAuthToken"
+import { MoviesIcon, SocialIcon, ClubsIcon } from "@/components/NavIcons"
 
 const HUB_COLOURS = {
   movie:    "var(--teal)",
@@ -16,11 +17,17 @@ const HUB_LABELS = {
   movie: "Show Time", bookclub: "Book Club", social: "Social",
 }
 
+// Icon + colour per filter chip -- reusing the exact same components and
+// colour tokens Calendar's hub-filter pills use (components/CalendarView.js),
+// per the app's canonical-asset rule (Iain, 2026-07-27): a filter for the
+// same concept shown on two screens must look identical, not "close enough".
+// "All" has no hub icon/colour of its own -- amber matches the app's existing
+// neutral/default convention (e.g. CalendarView's view-toggle buttons).
 const FILTERS = [
-  { key: "all",      label: "All" },
-  { key: "movie",    label: "Show Time" },
-  { key: "club",     label: "Groups & Clubs" },
-  { key: "social",   label: "Social" },
+  { key: "all",    label: "All",             Icon: null,       colour: "var(--amber)" },
+  { key: "movie",  label: "Show Time",       Icon: MoviesIcon, colour: "var(--teal)" },
+  { key: "club",   label: "Groups & Clubs",  Icon: ClubsIcon,  colour: "var(--purple)" },
+  { key: "social", label: "Social",          Icon: SocialIcon, colour: "var(--terracotta)" },
 ]
 
 function fmtDate(str) {
@@ -340,33 +347,42 @@ export default function BookingsPage() {
 
         <MySpaceBookings />
 
-        {/* Filter strip */}
+        {/* Filter strip -- pixel-identical to Calendar's hub-filter pills
+            (components/CalendarView.js's "Hub filters" row): same padding,
+            border-radius, colour-tinted background when active, icon +
+            label in the hub's own colour, 0.55 opacity when inactive. */}
         <div style={{
-          display: "flex", gap: "0.4rem",
+          display: "flex", gap: 8,
           marginBottom: "1.25rem",
           overflowX: "auto", paddingBottom: 2,
         }}>
-          {FILTERS.map(f => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              style={{
-                padding: "0.45rem 1.05rem",
-                borderRadius: "20px",
-                border: "1px solid var(--border)",
-                background: filter === f.key ? "var(--teal)" : "var(--surface)",
-                color: filter === f.key ? "#fff" : "var(--text-dim)",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-                fontFamily: "inherit",
-                transition: "background 0.15s, color 0.15s",
-              }}
-            >
-              {f.label}
-            </button>
-          ))}
+          {FILTERS.map(({ key, label, Icon, colour }) => {
+            const on = filter === key
+            return (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                style={{
+                  display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
+                  padding: "4px 10px", borderRadius: 20,
+                  border: `1px solid ${on ? colour : "var(--border)"}`,
+                  background: on ? colour + "20" : "var(--surface2)",
+                  cursor: "pointer", fontFamily: "inherit",
+                  opacity: on ? 1 : 0.55,
+                  transition: "all 0.15s",
+                }}
+              >
+                {Icon && (
+                  <span style={{ display: "flex", color: on ? colour : "var(--text-dim)", flexShrink: 0 }}>
+                    <Icon size={14} />
+                  </span>
+                )}
+                <span style={{ fontSize: 12, fontWeight: 600, color: on ? colour : "var(--text-dim)", whiteSpace: "nowrap" }}>
+                  {label}
+                </span>
+              </button>
+            )
+          })}
         </div>
 
         {/* Upcoming */}
