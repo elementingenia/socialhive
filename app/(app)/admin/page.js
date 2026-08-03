@@ -2003,6 +2003,8 @@ function SpaceBookingsTab() {
   const [bookings, setBookings] = useState(null)
   const [cancellingId, setCancellingId] = useState(null)
   const [error, setError] = useState('')
+  const [cancelTarget, setCancelTarget] = useState(null) // booking pending confirmation
+  const [cancelNote, setCancelNote] = useState('')
 
   const load = useCallback(async () => {
     const res = await authedFetch('/api/spaces?admin=1')
@@ -2012,16 +2014,20 @@ function SpaceBookingsTab() {
   }, [])
   useEffect(() => { load() }, [load])
 
-  async function cancel(booking) {
-    const reason = window.prompt(
-      `Cancel this booking of ${booking.locations?.name || 'this space'}? The resident will be notified.\n\nOptional note to include:`,
-    )
-    if (reason === null) return // Cancelled the prompt itself, not the booking
+  function openCancel(booking) {
+    setCancelNote('')
+    setCancelTarget(booking)
+  }
+
+  async function confirmCancel() {
+    const booking = cancelTarget
+    if (!booking) return
+    setCancelTarget(null)
     setCancellingId(booking.id)
     const res = await authedFetch('/api/spaces', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: booking.id, admin_reason: reason || undefined }),
+      body: JSON.stringify({ id: booking.id, admin_reason: cancelNote.trim() || undefined }),
     })
     setCancellingId(null)
     if (res.ok) load()
@@ -2062,7 +2068,7 @@ function SpaceBookingsTab() {
                 </div>
               </div>
               <button
-                onClick={() => cancel(b)}
+                onClick={() => openCancel(b)}
                 disabled={cancellingId === b.id}
                 style={{
                   flexShrink: 0, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8,
@@ -2075,6 +2081,47 @@ function SpaceBookingsTab() {
             </div>
           ))}
         </div>
+      )}
+
+      {cancelTarget && (
+        <SlideOver title="Cancel this booking?" onClose={() => setCancelTarget(null)}>
+          <div style={{ fontSize: '0.88rem', marginBottom: '1rem' }}>
+            Cancel the booking of <strong>{cancelTarget.locations?.name || 'this space'}</strong>?
+            The resident will be notified.
+          </div>
+          <div style={labelStyle}>Optional note to include</div>
+          <textarea
+            value={cancelNote}
+            onChange={e => setCancelNote(e.target.value)}
+            rows={3}
+            placeholder="e.g. Needed for a maintenance job"
+            style={{
+              width: '100%', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid var(--border)',
+              background: 'var(--surface)', color: 'var(--text)', fontSize: '0.95rem', boxSizing: 'border-box',
+              fontFamily: 'inherit', resize: 'vertical', marginBottom: '1rem',
+            }}
+          />
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={() => setCancelTarget(null)}
+              style={{
+                flex: 1, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10,
+                padding: '0.75rem', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', cursor: 'pointer',
+              }}
+            >
+              Keep booking
+            </button>
+            <button
+              onClick={confirmCancel}
+              style={{
+                flex: 1, background: 'var(--danger)', border: 'none', borderRadius: 10,
+                padding: '0.75rem', fontSize: '0.9rem', fontWeight: 600, color: '#fff', cursor: 'pointer',
+              }}
+            >
+              Cancel booking
+            </button>
+          </div>
+        </SlideOver>
       )}
     </div>
   )

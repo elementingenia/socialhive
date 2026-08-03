@@ -79,6 +79,7 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
       const data = await res.json()
       if (tag !== fetchTag.current) return
       if (!res.ok) { setError(data.error || "Could not check availability"); setLocations([]); return }
+      setError("")
       setLocations(data.locations || [])
     } catch {
       if (tag === fetchTag.current) { setError("Could not check availability — check your connection"); setLocations([]) }
