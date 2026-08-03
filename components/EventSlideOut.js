@@ -9,6 +9,7 @@ import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
 import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, sumUnpaidSeats, seatsCost, bookingStatusBadge } from "@/lib/payments"
+import { byOwnThenName } from "@/lib/sortNames"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
 import { clubCaps, clubColour } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
@@ -403,8 +404,20 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   useEffect(() => { setAddNameParty(false); setAddParty([]) }, [selectedResident])
 
   const addPartyNeed = Math.max(0, addSeats - 1)
-  const addPartyValid = !addNameParty || (addParty.length === addPartyNeed &&
-    addParty.every(p => p.member_id || p.contact_id || (allowGuests && p.guest_name && p.guest_name.trim())))
+  // Mirrors BookingSection's requireNaming/partyValid (below) -- when the
+  // event has require_attendee_names on, a walk-up booking must name every
+  // extra seat the same as a self-service one; the "Skip naming" escape
+  // hatch only exists when naming is optional. Bug (Iain, 2026-08-04): this
+  // used to ignore event.require_attendee_names entirely, so the toggle had
+  // no effect on walk-up bookings even though the server-side check
+  // (app/api/coordinator/route.js -> validateParty) was already correct --
+  // the "Add Booking" button just silently allowed a submit that the server
+  // would reject with the party unnamed, rather than blocking it up front.
+  const requireAddNaming = !!event.require_attendee_names
+  const isAddRowFilled = p => !!(p.member_id || p.contact_id || (allowGuests && p.guest_name && p.guest_name.trim()))
+  const addPartyValid = requireAddNaming
+    ? (addParty.length === addPartyNeed && addParty.every(isAddRowFilled))
+    : (!addNameParty || (addParty.length === addPartyNeed && addParty.every(isAddRowFilled)))
   const addPartyToAttendees = (arr) => arr.map(p => ({
     ...(p.member_id ? { member_id: p.member_id } : p.contact_id ? { contact_id: p.contact_id } : { guest_name: (p.guest_name || "").trim() }),
   }))
@@ -474,7 +487,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           event_id: event.id, action: "add_booking",
           ...(selectedResident.type === "contact" ? { contact_id: selectedResident.id } : { member_id: selectedResident.id }),
           seats: addSeats, mark_paid: addMarkPaid,
-          ...(addNameParty ? { attendees: addPartyToAttendees(addParty) } : {}),
+          ...((requireAddNaming || addNameParty) ? { attendees: addPartyToAttendees(addParty) } : {}),
           ...(forceWaitlist ? { force_status: "waitlist" } : {}),
         }),
       })
@@ -716,7 +729,14 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
 
                 {!isBook && addSeats > 1 && (
                   <div style={{ marginBottom: 12 }}>
-                    {!addNameParty ? (
+                    {requireAddNaming ? (
+                      // Naming is mandatory for this event -- no "skip" escape hatch,
+                      // the picker is always shown and Add Booking stays disabled
+                      // (addPartyValid, above) until every extra seat is named.
+                      <PartyPicker count={addSeats - 1} allowGuests={allowGuests} members={allResidents}
+                        excludeIds={selectedResident ? [selectedResident.id] : []}
+                        value={addParty} onChange={setAddParty} taken={taken} required />
+                    ) : !addNameParty ? (
                       <button type="button" onClick={() => setAddNameParty(true)}
                         style={{ fontSize: 12, fontWeight: 600, color: clubInk(colour), background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0 }}>
                         + Name who the other {addSeats - 1 === 1 ? "seat is" : `${addSeats - 1} seats are`} for
@@ -786,9 +806,15 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           else grouped[key].confirmed.push(b)
         }
         // Own row always pinned to the top — consistent with every other attendee
-        // list (Movies/Social inline lists, Book Club's own attendees list).
+        // list (Movies/Social inline lists, Book Club's own attendees list) —
+        // then A-Z by name (Iain, 2026-08-04). This is the admin/EC-only
+        // panel, always real names (never masked), so sorting on the
+        // displayed name is exact here.
         const attendeeGroups = Object.values(grouped)
-          .sort((a, b) => (b.member?.id === currentMember?.id) - (a.member?.id === currentMember?.id))
+          .sort((a, b) => byOwnThenName(
+            a.member?.id === currentMember?.id, b.member?.id === currentMember?.id,
+            a.member?.name || a.contact?.name, b.member?.name || b.contact?.name,
+          ))
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
             {attendeeGroups.map(({ member, contact, confirmed: confRows, waitlist: waitRows }) => {
