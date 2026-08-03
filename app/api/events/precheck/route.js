@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
-import { findSameDateEvents, findSpaceConflict, needsSpaceValidation, spaceConflictMessage, fetchLocation } from "@/lib/eventClash"
+import { findSameDateEvents, needsSpaceValidation, fetchLocation } from "@/lib/eventClash"
+import { findAnyRoomConflict } from "@/lib/spaceBookings"
 
 // Read-only pre-flight for the event form's save-time UX: any member can call
 // this (same visibility as the calendar) to populate the same-date warning (A)
@@ -29,8 +30,8 @@ export async function POST(req) {
 
   let spaceConflict = null
   if (needsSpaceValidation({ location_type, bookable: loc?.bookable })) {
-    const conflict = await findSpaceConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time, exclude_event_id })
-    if (conflict) spaceConflict = { ...conflict, message: spaceConflictMessage(loc?.name, conflict) }
+    const conflict = await findAnyRoomConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time, exclude_event_id, locationName: loc?.name })
+    if (conflict) spaceConflict = conflict
   }
 
   const sameDateEvents = spaceConflict ? [] : await findSameDateEvents(supabaseAdmin, { event_date, exclude_event_id })

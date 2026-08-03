@@ -5,7 +5,7 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MoviesIcon, SocialIcon, ShedIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MoviesIcon, SocialIcon, ShedIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon } from '@/components/NavIcons'
 import RichEditor, { bbToHtml } from '@/components/RichEditor'
 import OwnersManager from '@/components/OwnersManager'
 import ResidentEditForm, { Sheet, labelStyle } from '@/components/ResidentEditPanel'
@@ -13,6 +13,7 @@ import { CLUB_COLOURS, nextClubColour } from '@/lib/clubColours'
 import ClubWatermarkPicker from '@/components/ClubWatermarkPicker'
 import { BAR_ENABLED } from '@/lib/features'
 import { validateClosure, reasonRemaining, REASON_MAX } from '@/lib/spaces'
+import { authedFetch } from '@/lib/getAuthToken'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const HUB_TYPES = [
@@ -30,6 +31,7 @@ const SECTIONS = [
   // Bar section parked (feature not in scope) — see lib/features.js
   ...(BAR_ENABLED ? [{ key: 'Bar', label: 'Bar', Icon: BarIcon }] : []),
   { key: 'Locations', label: 'Locations',  Icon: InfoIcon },
+  { key: 'SpaceBookings', label: 'Space Bookings', Icon: BookingsIcon },
   { key: 'Tools',     label: 'Tools',      Icon: ToolsIcon },
 ]
 
@@ -1632,6 +1634,7 @@ export default function AdminPage() {
         {tab === 'Owners'    && <HubOwnersTab />}
         {BAR_ENABLED && tab === 'Bar' && <BarTab />}
         {tab === 'Locations' && <LocationsTab />}
+        {tab === 'SpaceBookings' && <SpaceBookingsTab />}
         {tab === 'Tools'     && <ToolsTab />}
       </div>
     )
@@ -1983,6 +1986,147 @@ function ClubsTab() {
 // no-native-browser-controls standard and had nowhere to put the new fields.
 // Each venue is now an accordion row — closed by default, so twelve venues
 // still fit on one screen (vertical space is precious).
+// Admin > Space Bookings. Scope: Social_Hive_Personal_Space_Booking_Scope.md
+// (decisions locked 2026-08-01: "Admin needs an admin view so they can
+// overrule, cancel or challenge a booking of any space"). Lists every
+// PERSONAL space booking (event-backed room usage is managed from its own
+// hub, not here — the API's admin mode already excludes those via
+// `.is('event_id', null)`).
+function fmtSpaceDateTime(iso) {
+  return new Date(iso).toLocaleString('en-AU', {
+    weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
+    timeZone: 'Australia/Sydney',
+  })
+}
+
+function SpaceBookingsTab() {
+  const [bookings, setBookings] = useState(null)
+  const [cancellingId, setCancellingId] = useState(null)
+  const [error, setError] = useState('')
+  const [cancelTarget, setCancelTarget] = useState(null) // booking pending confirmation
+  const [cancelNote, setCancelNote] = useState('')
+
+  const load = useCallback(async () => {
+    const res = await authedFetch('/api/spaces?admin=1')
+    const data = await res.json()
+    if (!res.ok) { setError(data.error || 'Could not load space bookings'); setBookings([]); return }
+    setBookings(data.bookings || [])
+  }, [])
+  useEffect(() => { load() }, [load])
+
+  function openCancel(booking) {
+    setCancelNote('')
+    setCancelTarget(booking)
+  }
+
+  async function confirmCancel() {
+    const booking = cancelTarget
+    if (!booking) return
+    setCancelTarget(null)
+    setCancellingId(booking.id)
+    const res = await authedFetch('/api/spaces', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: booking.id, admin_reason: cancelNote.trim() || undefined }),
+    })
+    setCancellingId(null)
+    if (res.ok) load()
+  }
+
+  const active = (bookings || []).filter(b => b.status !== 'cancelled')
+
+  return (
+    <div>
+      <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '1rem' }}>
+        Every resident-made personal space booking — a room a resident has claimed for their own
+        use, independent of any hub or club. Cancelling here notifies the resident.
+      </div>
+
+      {error && <div style={{ color: '#b91c1c', fontSize: '0.85rem', marginBottom: '0.75rem' }}>{error}</div>}
+
+      {bookings === null ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><div className="spinner" /></div>
+      ) : active.length === 0 ? (
+        <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2rem' }}>No space bookings yet.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          {active.map(b => (
+            <div key={b.id} style={{
+              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
+              padding: '0.85rem 1rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem',
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: '0.15rem' }}>
+                  {b.locations?.name || 'Space'}
+                </div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginBottom: '0.25rem' }}>
+                  {fmtSpaceDateTime(b.starts_at)} – {fmtSpaceDateTime(b.ends_at).split(', ').pop()}
+                </div>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text)', marginBottom: '0.2rem' }}>{b.title}</div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                  Booked by {b.booked_by_name_at_time || 'a resident'}
+                </div>
+              </div>
+              <button
+                onClick={() => openCancel(b)}
+                disabled={cancellingId === b.id}
+                style={{
+                  flexShrink: 0, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8,
+                  padding: '0.4rem 0.75rem', fontSize: '0.78rem', fontWeight: 600, color: 'var(--danger)',
+                  cursor: cancellingId === b.id ? 'default' : 'pointer', opacity: cancellingId === b.id ? 0.6 : 1,
+                }}
+              >
+                {cancellingId === b.id ? 'Cancelling…' : 'Cancel'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {cancelTarget && (
+        <SlideOver title="Cancel this booking?" onClose={() => setCancelTarget(null)}>
+          <div style={{ fontSize: '0.88rem', marginBottom: '1rem' }}>
+            Cancel the booking of <strong>{cancelTarget.locations?.name || 'this space'}</strong>?
+            The resident will be notified.
+          </div>
+          <div style={labelStyle}>Optional note to include</div>
+          <textarea
+            value={cancelNote}
+            onChange={e => setCancelNote(e.target.value)}
+            rows={3}
+            placeholder="e.g. Needed for a maintenance job"
+            style={{
+              width: '100%', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid var(--border)',
+              background: 'var(--surface)', color: 'var(--text)', fontSize: '0.95rem', boxSizing: 'border-box',
+              fontFamily: 'inherit', resize: 'vertical', marginBottom: '1rem',
+            }}
+          />
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={() => setCancelTarget(null)}
+              style={{
+                flex: 1, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10,
+                padding: '0.75rem', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', cursor: 'pointer',
+              }}
+            >
+              Keep booking
+            </button>
+            <button
+              onClick={confirmCancel}
+              style={{
+                flex: 1, background: 'var(--danger)', border: 'none', borderRadius: 10,
+                padding: '0.75rem', fontSize: '0.9rem', fontWeight: 600, color: '#fff', cursor: 'pointer',
+              }}
+            >
+              Cancel booking
+            </button>
+          </div>
+        </SlideOver>
+      )}
+    </div>
+  )
+}
+
 function LocationsTab() {
   const [locations, setLocations] = useState(null)
   const [newName, setNewName]     = useState('')

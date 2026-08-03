@@ -3,11 +3,13 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import CalendarView from "@/components/CalendarView"
 import EventSlideOut from "@/components/EventSlideOut"
+import SpaceBookingForm from "@/components/SpaceBookingForm"
 
 export default function CalendarPage() {
   const [events, setEvents]   = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
+  const [bookingSpace, setBookingSpace] = useState(false)
   const loadRef = useRef(0)
 
   const loadEvents = useCallback(async () => {
@@ -61,6 +63,24 @@ export default function CalendarPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
+      {/* Book a Space — independent of every hub/club (Iain, 2026-08-01).
+          Calendar is the entry point: it's where a resident would already be
+          checking what's on before deciding when to book their own use of a
+          room. */}
+      <div style={{ padding: "12px 16px 0" }}>
+        <button
+          onClick={() => setBookingSpace(true)}
+          style={{
+            width: "100%", background: "var(--surface)", border: "1px dashed var(--border)",
+            borderRadius: 10, padding: "0.65rem 1rem", color: "var(--text)", fontWeight: 600,
+            fontSize: "0.88rem", cursor: "pointer", display: "flex", alignItems: "center",
+            justifyContent: "center", gap: "0.4rem",
+          }}
+        >
+          <span style={{ fontSize: "1.05rem", lineHeight: 1 }}>+</span> Book a Space
+        </button>
+      </div>
+
       {loading && events.length === 0 ? (
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "center",
@@ -87,6 +107,12 @@ export default function CalendarPage() {
         onClose={() => setSelected(null)}
         isAuthenticated={true}
         onRefresh={handleRefresh}
+      />
+
+      <SpaceBookingForm
+        open={bookingSpace}
+        onClose={() => setBookingSpace(false)}
+        onBooked={() => {}}
       />
     </div>
   )

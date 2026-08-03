@@ -10,7 +10,7 @@
 import {
   isClosedOn, closureMessage, validateClosure, reasonRemaining,
   defaultSeatsFor, capacityWarning, isOverlapError, overlapMessage,
-  availabilityCaveat, toInstant, REASON_MAX
+  availabilityCaveat, toInstant, sydneyOffsetMinutes, REASON_MAX
 } from '../../lib/spaces.js'
 
 let pass = 0, fail = 0
@@ -102,6 +102,27 @@ eq(toInstant('2026-08-01', '19:00', 660).toISOString(), '2026-08-01T08:00:00.000
 eq(toInstant(null, '19:00'), null, 'missing date => null')
 eq(toInstant('2026-08-01', null), null, 'missing time => null')
 eq(toInstant('not-a-date', '19:00'), null, 'garbage date => null')
+
+// ── sydneyOffsetMinutes (DST-aware, backs the space-booking timestamp math) ─
+eq(sydneyOffsetMinutes('2026-08-01'), 600, 'August (winter) => AEST, 600')
+eq(sydneyOffsetMinutes('2026-07-01'), 600, 'July (winter) => AEST, 600')
+eq(sydneyOffsetMinutes('2026-12-25'), 660, 'December (summer) => AEDT, 660')
+eq(sydneyOffsetMinutes('2026-01-15'), 660, 'January (summer) => AEDT, 660')
+// 2026-10-04 is the DST-start Sunday (clocks forward at 2am) -> already AEDT
+// by the noon anchor. 2026-04-05 is DST-end Sunday (clocks back at 3am) ->
+// already AEST by the noon anchor. Both prove the noon-anchor sidesteps the
+// transition-hour ambiguity rather than landing on the wrong side of it.
+eq(sydneyOffsetMinutes('2026-10-04'), 660, 'DST-start Sunday, noon anchor => already AEDT')
+eq(sydneyOffsetMinutes('2026-04-05'), 600, 'DST-end Sunday, noon anchor => already AEST')
+eq(sydneyOffsetMinutes(null), 600, 'null date => safe default 600')
+
+// toInstant composed WITH the correct seasonal offset gives the right UTC
+// instant in both seasons -- this is the bug a fixed default=600 alone would
+// have shipped: a summer booking would land an hour off in every comparison.
+eq(toInstant('2026-08-01', '14:00', sydneyOffsetMinutes('2026-08-01')).toISOString(),
+   '2026-08-01T04:00:00.000Z', 'winter 2pm AEST => 4am UTC')
+eq(toInstant('2026-12-25', '14:00', sydneyOffsetMinutes('2026-12-25')).toISOString(),
+   '2026-12-25T03:00:00.000Z', 'summer 2pm AEDT => 3am UTC (one hour earlier than AEST would give)')
 
 console.log(`spaces: ${pass} passed, ${fail} failed`)
 if (fail) process.exit(1)
