@@ -22,6 +22,7 @@ import TimeField from "@/components/TimeField"
 import { needsSpaceValidation } from "@/lib/eventClash"
 import { useSameDateWarning } from "@/components/SameDateWarning"
 import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
+import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -862,10 +863,46 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
 
   const [saveError, setSaveError] = useState(null)
+  // Mandatory-field tracking (Iain, 2026-08-04) -- this form's Save button
+  // used to just go quietly disabled with no explanation at all when Date or
+  // Book was missing (the silent-failure pattern this app keeps tripping
+  // over -- see Silent Failure Bugs in project memory), and Location/
+  // Coordinators were never enforced at all despite Coordinators being
+  // labelled mandatory. FIELD_ORDER matches this form's actual screen order
+  // (title -> date -> location -> end time -> book -> coordinators), not the
+  // order these checks happen to run in below.
+  const [invalidFields, setInvalidFields] = useState([])
+  const fieldRefs = useRef({})
+  const FIELD_ORDER = ["title", "event_date", "location", "event_end_time", "book", "coordinators"]
+  function computeInvalidFields() {
+    const invalid = []
+    if (!caps.hasBooks && !form.title.trim()) invalid.push("title")
+    if (!form.event_date) invalid.push("event_date")
+    const venueMissing = form.location_type === "onsite" ? !form.location_id : !form.location.trim()
+    if (venueMissing) invalid.push("location")
+    if (needsSpaceValidation({ location_type: form.location_type, bookable: selectedLocation?.bookable }) && !form.event_end_time) invalid.push("event_end_time")
+    if (caps.hasBooks && !selectedBook) invalid.push("book")
+    if (!form.coordinator_ids.length) invalid.push("coordinators")
+    return invalid
+  }
+  const FIELD_MESSAGES = {
+    title: "Please give the event a name.",
+    event_date: "Date is required.",
+    location: "Please choose a venue.",
+    event_end_time: "An end time is required for events in a common space.",
+    book: "Please choose a book.",
+    coordinators: "At least one coordinator is required.",
+  }
 
   async function save() {
-    if (!form.event_date || (caps.hasBooks && !selectedBook)) return
-    if (!caps.hasBooks && !form.title.trim()) { setSaveError("Please give the event a name."); return }
+    const invalid = computeInvalidFields()
+    if (invalid.length) {
+      setInvalidFields(invalid)
+      setSaveError(FIELD_MESSAGES[invalid[0]])
+      scrollToFirstInvalid(fieldRefs, FIELD_ORDER, invalid)
+      return
+    }
+    setInvalidFields([])
     setSaving(true)
     setSaveError(null)
 
@@ -994,7 +1031,10 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         }),
       }).then(r => r.json()).catch(() => ({}))
       if (pre.spaceConflict) {
-        setSaveError(pre.spaceConflict.message); setSaving(false); return
+        setSaveError(pre.spaceConflict.message); setSaving(false)
+        setInvalidFields(["location"])
+        scrollToFirstInvalid(fieldRefs, FIELD_ORDER, ["location"])
+        return
       }
       if (pre.sameDateEvents?.length) {
         if (!(await askSameDate(pre.sameDateEvents))) { setSaving(false); return }
@@ -1107,15 +1147,21 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         {event ? `Edit ${club?.name || "Club"} Event` : `Add ${club?.name || "Club"} Event`}
       </div>
 
-      <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Event Name{!caps.hasBooks && <span style={{ color: "var(--danger)" }}> *</span>}</label>
+      <div ref={el => (fieldRefs.current.title = el)}
+        style={invalidFields.includes("title") ? { marginBottom: 12, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : { marginBottom: 12 }}>
+        <label style={labelStyle}>Event Name{!caps.hasBooks && <span style={{ color: "var(--danger)" }}> *</span>}
+          {invalidFields.includes("title") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
+        </label>
         <input value={form.title} onChange={e => set("title", e.target.value)}
           placeholder={caps.hasBooks ? "Leave blank to use the book title" : "e.g. Italian Night"}
           style={inputStyle} />
       </div>
 
-      <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Date <span style={{ color: "var(--danger)" }}>*</span></label>
+      <div ref={el => (fieldRefs.current.event_date = el)}
+        style={invalidFields.includes("event_date") ? { marginBottom: 12, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : { marginBottom: 12 }}>
+        <label style={labelStyle}>Date <span style={{ color: "var(--danger)" }}>*</span>
+          {invalidFields.includes("event_date") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
+        </label>
         <input type="date" autoFocus value={form.event_date} onChange={e => set("event_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
           style={{ ...inputStyle, border: `1.5px solid ${form.event_date ? "var(--green)" : "var(--danger)"}` }} />
       </div>
@@ -1131,8 +1177,11 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         </div>
       )}
 
-      <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Location</label>
+      <div ref={el => (fieldRefs.current.location = el)}
+        style={invalidFields.includes("location") ? { marginBottom: 12, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : { marginBottom: 12 }}>
+        <label style={labelStyle}>Location <span style={{ color: "var(--danger)" }}>*</span>
+          {invalidFields.includes("location") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
+        </label>
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           {["onsite", "offsite"].map(t => (
             <button key={t} type="button" onClick={() => { set("location_type", t); set("location", ""); set("location_id", null) }}
@@ -1164,8 +1213,11 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       </div>
 
       {needsSpaceValidation({ location_type: form.location_type, bookable: selectedLocation?.bookable }) && (
-        <div style={{ marginBottom: 12 }}>
-          <label style={labelStyle}>Ends <span style={{ color: "var(--danger)" }}>*</span></label>
+        <div ref={el => (fieldRefs.current.event_end_time = el)}
+          style={invalidFields.includes("event_end_time") ? { marginBottom: 12, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : { marginBottom: 12 }}>
+          <label style={labelStyle}>Ends <span style={{ color: "var(--danger)" }}>*</span>
+            {invalidFields.includes("event_end_time") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
+          </label>
           <TimeField value={form.event_end_time} onChange={v => set("event_end_time", v)} colour={form.event_end_time ? "var(--green)" : "var(--danger)"} />
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 4 }}>Lets the app stop this space being double-booked by another event.</div>
         </div>
@@ -1301,18 +1353,24 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       )}
 
       {caps.hasBooks && (
-      <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Book <span style={{ color: "var(--danger)" }}>*</span></label>
+      <div ref={el => (fieldRefs.current.book = el)}
+        style={invalidFields.includes("book") ? { marginBottom: 12, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : { marginBottom: 12 }}>
+        <label style={labelStyle}>Book <span style={{ color: "var(--danger)" }}>*</span>
+          {invalidFields.includes("book") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
+        </label>
         <BookPicker onSelect={setSelectedBook} initialBook={event?.books || null} colour={colour} />
       </div>
       )}
 
-      <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Event Coordinator{form.coordinator_ids.length !== 1 ? "s" : ""} <span style={{ color: "var(--danger)" }}>*</span> <span style={{ textTransform: "none", fontWeight: 500, color: "var(--text-dim)" }}>(up to 3)</span></label>
+      <div ref={el => (fieldRefs.current.coordinators = el)}
+        style={invalidFields.includes("coordinators") ? { marginBottom: 12, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : { marginBottom: 12 }}>
+        <label style={labelStyle}>Event Coordinator{form.coordinator_ids.length !== 1 ? "s" : ""} <span style={{ color: "var(--danger)" }}>*</span> <span style={{ textTransform: "none", fontWeight: 500, color: "var(--text-dim)" }}>(up to 3)</span>
+          {invalidFields.includes("coordinators") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
+        </label>
         <CoordMultiPicker
           members={members}
           value={form.coordinator_ids}
-          onChange={ids => set("coordinator_ids", ids)}
+          onChange={ids => { set("coordinator_ids", ids); setInvalidFields(f => f.filter(k => k !== "coordinators")) }}
           colour={colour}
         />
       </div>
@@ -1371,11 +1429,16 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             borderRadius: 12, fontWeight: 700, fontSize: "0.9rem", cursor: "pointer", color: "var(--text)", fontFamily: "inherit" }}>
           Cancel
         </button>
-        <button onClick={save} disabled={saving || !form.event_date || (caps.hasBooks && !selectedBook)}
+        {/* Was previously disabled outright (with no explanation at all) when
+            Date or Book was missing -- the exact "silent failure" pattern
+            flagged repeatedly elsewhere in this app. Now always clickable
+            (bar the in-flight save) so pressing it always tells you what's
+            missing and jumps to it, same as every other event form. */}
+        <button onClick={save} disabled={saving}
           style={{ flex: 2, padding: "0.75rem", background: colour, border: "none",
             borderRadius: 12, fontWeight: 700, fontSize: "0.9rem", color: clubTextOn(colour),
-            cursor: (saving || !form.event_date || (caps.hasBooks && !selectedBook)) ? "not-allowed" : "pointer",
-            opacity: (saving || !form.event_date || (caps.hasBooks && !selectedBook)) ? 0.6 : 1, fontFamily: "inherit" }}>
+            cursor: saving ? "not-allowed" : "pointer",
+            opacity: saving ? 0.6 : 1, fontFamily: "inherit" }}>
           {saving ? "Saving…" : event ? "Save Changes" : "Create Event"}
         </button>
       </div>

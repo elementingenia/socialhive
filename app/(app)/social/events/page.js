@@ -16,6 +16,7 @@ import TimeField from "@/components/TimeField"
 import { needsSpaceValidation } from "@/lib/eventClash"
 import { useSameDateWarning } from "@/components/SameDateWarning"
 import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
+import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -435,11 +436,13 @@ function FixedListPicker({ value, onChange, options, placeholder = "Select…" }
 // ── Location field ────────────────────────────────────────────────────────────
 // Onsite works in location IDs; offsite stays free text, which is deliberate —
 // it is informational only, for the event and its attendees (Iain, 2026-07-31).
-function LocationField({ locationType, location, locationId, onTypeChange, onLocationChange, onLocationIdChange }) {
+function LocationField({ locationType, location, locationId, onTypeChange, onLocationChange, onLocationIdChange, invalid }) {
   const onsiteLocations = useLocations()
   return (
-    <div style={FIELD}>
-      <label style={LABEL}>Location *</label>
+    <div style={invalid ? { ...FIELD, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : FIELD}>
+      <label style={LABEL}>Location <span style={{ color: "var(--danger)" }}>*</span>
+        {invalid && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
+      </label>
       {/* Onsite / Offsite toggle buttons */}
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.6rem" }}>
         {["onsite", "offsite"].map(t => (
@@ -516,6 +519,32 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
   const [ecError,      setEcError]      = useState(null)
   const [saving,       setSaving]       = useState(false)
   const [error,        setError]        = useState(null)
+  // Mandatory-field tracking (Iain, 2026-08-04): which fields are still
+  // incomplete as of the last Save attempt, in the order they appear on
+  // screen -- drives both the ⚠ highlight (lib/formValidation.js) and which
+  // field Save scrolls to. Populated fresh on every save() attempt, not live
+  // per-keystroke, so a blank new-event form doesn't light up red before the
+  // user has touched anything.
+  const [invalidFields, setInvalidFields] = useState([])
+  const fieldRefs = useRef({})
+  const FIELD_ORDER = ["title", "event_date", "location", "event_end_time", "coordinators"]
+  const FIELD_MESSAGES = {
+    title: "Title is required",
+    event_date: "Date is required",
+    location: "Please choose a venue",
+    event_end_time: "An end time is required for events in a common space",
+    coordinators: "At least one coordinator is required",
+  }
+  function computeInvalidFields() {
+    const invalid = []
+    if (!form.title.trim()) invalid.push("title")
+    if (!form.event_date) invalid.push("event_date")
+    const venueMissing = form.location_type === "onsite" ? !form.location_id : !form.location.trim()
+    if (venueMissing) invalid.push("location")
+    if (needsSpaceValidation({ location_type: form.location_type, bookable: selectedLocation?.bookable }) && !form.event_end_time) invalid.push("event_end_time")
+    if (!coordinators.length) invalid.push("coordinators")
+    return invalid
+  }
   const { ask: askSameDate, Modal: SameDateModal } = useSameDateWarning()
   const [createdId,    setCreatedId]    = useState(null)
   const [justCreated,  setJustCreated]  = useState(false)
@@ -543,12 +572,23 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 
   async function save() {
     setError(null); setEcError(null)
-    if (!form.title.trim())    { setError("Title is required"); return }
-    if (!form.event_date)      { setError("Date is required");  return }
-    if (!coordinators.length)  { setEcError("At least one coordinator is required"); return }
-    if (needsSpaceValidation({ location_type: form.location_type, bookable: selectedLocation?.bookable }) && !form.event_end_time) {
-      setError("An end time is required for events in a common space"); return
+    // Check every mandatory field up front (not one-at-a-time) so Save can
+    // report AND jump to the first incomplete one in visual form order --
+    // previously this returned on the first failing check in validation
+    // order, which happened to line up with screen order for title/date but
+    // not once venue and coordinators were added, and never enforced venue
+    // at all (Iain found this live, 2026-08-04: toggling On-site/Off-site
+    // with no room picked saved fine).
+    const invalid = computeInvalidFields()
+    if (invalid.length) {
+      setInvalidFields(invalid)
+      const first = invalid[0]
+      if (first === "coordinators") setEcError(FIELD_MESSAGES[first])
+      else setError(FIELD_MESSAGES[first])
+      scrollToFirstInvalid(fieldRefs, FIELD_ORDER, invalid)
+      return
     }
+    setInvalidFields([])
 
     // Space hard block (B) checked FIRST -- if the space is unavailable
     // that's the only message, never a soft warning clicked through just to
@@ -562,7 +602,12 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
           location_type: form.location_type, location_id: form.location_id, exclude_event_id: activeId || null,
         }),
       }).then(r => r.json()).catch(() => ({}))
-      if (pre.spaceConflict) { setError(pre.spaceConflict.message); return }
+      if (pre.spaceConflict) {
+        setError(pre.spaceConflict.message)
+        setInvalidFields(["location"])
+        scrollToFirstInvalid(fieldRefs, FIELD_ORDER, ["location"])
+        return
+      }
       if (pre.sameDateEvents?.length) {
         if (!(await askSameDate(pre.sameDateEvents))) return
       }
@@ -659,8 +704,11 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
         <div style={{ padding: "1.25rem 1.25rem 2rem" }}>
 
           {/* Title */}
-          <div style={FIELD}>
-            <label style={LABEL}>Event Name <span style={{ color: "var(--danger)" }}>*</span></label>
+          <div ref={el => (fieldRefs.current.title = el)}
+            style={invalidFields.includes("title") ? { ...FIELD, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : FIELD}>
+            <label style={LABEL}>Event Name <span style={{ color: "var(--danger)" }}>*</span>
+              {invalidFields.includes("title") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
+            </label>
             <input value={form.title} onChange={e => set("title", e.target.value)}
               placeholder="e.g. Wine & Cheese Evening"
               style={{ ...INPUT, border: `1.5px solid ${form.title.trim() ? "var(--green)" : "var(--danger)"}` }} />
@@ -668,8 +716,11 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 
           {/* Date + Time */}
           <div style={{ ...FIELD, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-            <div>
-              <label style={LABEL}>Date <span style={{ color: "var(--danger)" }}>*</span></label>
+            <div ref={el => (fieldRefs.current.event_date = el)}
+              style={invalidFields.includes("event_date") ? { ...INVALID_FIELD_STYLE, padding: "0.6rem" } : undefined}>
+              <label style={LABEL}>Date <span style={{ color: "var(--danger)" }}>*</span>
+                {invalidFields.includes("event_date") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
+              </label>
               <input type="date" value={form.event_date}
                 onChange={e => set("event_date", e.target.value)}
                 onClick={e => e.currentTarget.showPicker?.()}
@@ -687,21 +738,27 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
           </div>
 
           {/* Location */}
-          <LocationField
-            locationType={form.location_type}
-            location={form.location}
-            locationId={form.location_id}
-            onTypeChange={v => set("location_type", v)}
-            onLocationChange={v => set("location", v)}
-            onLocationIdChange={v => set("location_id", v)}
-          />
+          <div ref={el => (fieldRefs.current.location = el)}>
+            <LocationField
+              locationType={form.location_type}
+              location={form.location}
+              locationId={form.location_id}
+              onTypeChange={v => set("location_type", v)}
+              onLocationChange={v => set("location", v)}
+              onLocationIdChange={v => set("location_id", v)}
+              invalid={invalidFields.includes("location")}
+            />
+          </div>
 
           {/* End time -- required for onsite events in a real common space (not
               "Resident's Home"), needed to keep the space-clash check working
               (Iain, 2026-07-23). */}
           {needsSpaceValidation({ location_type: form.location_type, bookable: selectedLocation?.bookable }) && (
-            <div style={FIELD}>
-              <label style={LABEL}>Ends {"*"}</label>
+            <div ref={el => (fieldRefs.current.event_end_time = el)}
+              style={invalidFields.includes("event_end_time") ? { ...FIELD, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : FIELD}>
+              <label style={LABEL}>Ends <span style={{ color: "var(--danger)" }}>*</span>
+                {invalidFields.includes("event_end_time") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
+              </label>
               <TimeField value={form.event_end_time} onChange={v => set("event_end_time", v)} />
               <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>Lets the app stop this space being double-booked by another event.</div>
             </div>
@@ -817,9 +874,12 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
           </div>
 
           {/* EC — mandatory */}
-          <div style={FIELD}>
-            <label style={LABEL}>Event Coordinator(s) <span style={{ color: "var(--danger)" }}>*</span> — max 3</label>
-            <ECPicker members={members} value={coordinators} onChange={v => { setCoordinators(v); setEcError(null) }} valid={coordinators.length > 0} />
+          <div ref={el => (fieldRefs.current.coordinators = el)}
+            style={invalidFields.includes("coordinators") ? { ...FIELD, ...INVALID_FIELD_STYLE, padding: "0.75rem" } : FIELD}>
+            <label style={LABEL}>Event Coordinator(s) <span style={{ color: "var(--danger)" }}>*</span> — max 3
+              {invalidFields.includes("coordinators") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
+            </label>
+            <ECPicker members={members} value={coordinators} onChange={v => { setCoordinators(v); setEcError(null); setInvalidFields(f => f.filter(k => k !== "coordinators")) }} valid={coordinators.length > 0} />
             {ecError && <div style={{ color: "var(--danger)", fontSize: "0.78rem", marginTop: "0.25rem" }}>{ecError}</div>}
           </div>
 
