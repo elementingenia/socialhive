@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { notify } from '@/lib/notify'
-import { isOverlapError, overlapMessage } from '@/lib/spaces'
+import { isOverlapError, overlapMessage, toInstant, sydneyOffsetMinutes } from '@/lib/spaces'
 import {
   listAvailableLocations, checkSpaceAvailability, validateSpaceBooking,
   toSpaceBookingWindow, BOOKING_REASON_MAX,
@@ -74,16 +74,48 @@ export async function GET(req) {
     }
   }
 
-  // Mode 4: admin list
+  // Mode 4: admin list -- every personal space booking AND every event that
+  // has claimed a room, combined, so Admin can see total room usage in one
+  // place rather than needing to check each hub separately (Iain, 2026-08-04:
+  // "an admin space to see all space bookings, both events and resident
+  // personal space bookings"). Optional ?location_id= narrows both halves to
+  // one room. Event rows are read-only here -- cancelling/editing an event's
+  // room stays in that event's own hub, this view is for visibility only.
   if (searchParams.get('admin') === '1') {
     if (!member.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-    const { data, error } = await supabaseAdmin
+    const locationFilter = searchParams.get('location_id')
+    // Optional Sydney-local date range (Iain, 2026-08-04: "Date needs to be
+    // a range From and To"). events.event_date is already a plain Sydney
+    // date so it filters directly; space_bookings.starts_at is a real
+    // instant, so the Sydney day boundaries are converted to instants with
+    // the same DST-aware helpers lib/spaces.js already uses elsewhere,
+    // rather than a loose UTC buffer that could over/under-match near
+    // midnight on a DST-change day.
+    const dateFrom = searchParams.get('date_from')
+    const dateTo = searchParams.get('date_to')
+
+    let bookingsQ = supabaseAdmin
       .from('space_bookings')
       .select('id, location_id, starts_at, ends_at, title, purpose, status, booked_by, booked_by_name_at_time, created_at, locations(name)')
-      .is('event_id', null) // admin view is for PERSONAL/hold/maintenance rows; event-backed rows are managed from their own hub
-      .order('starts_at', { ascending: true })
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ bookings: data || [] })
+      .is('event_id', null) // admin view is for PERSONAL/hold/maintenance rows; event-backed rows come from `events` below instead
+    if (locationFilter) bookingsQ = bookingsQ.eq('location_id', locationFilter)
+    if (dateFrom) bookingsQ = bookingsQ.gte('starts_at', toInstant(dateFrom, '00:00', sydneyOffsetMinutes(dateFrom)).toISOString())
+    if (dateTo) bookingsQ = bookingsQ.lte('starts_at', toInstant(dateTo, '23:59', sydneyOffsetMinutes(dateTo)).toISOString())
+    const { data: bookings, error: bookingsErr } = await bookingsQ.order('starts_at', { ascending: true })
+    if (bookingsErr) return NextResponse.json({ error: bookingsErr.message }, { status: 500 })
+
+    let eventsQ = supabaseAdmin
+      .from('events')
+      .select('id, title, hub_type, event_date, event_time, event_end_time, location_id, archived, locations(name)')
+      .not('location_id', 'is', null)
+      .eq('archived', false)
+    if (locationFilter) eventsQ = eventsQ.eq('location_id', locationFilter)
+    if (dateFrom) eventsQ = eventsQ.gte('event_date', dateFrom)
+    if (dateTo) eventsQ = eventsQ.lte('event_date', dateTo)
+    const { data: events, error: eventsErr } = await eventsQ.order('event_date', { ascending: true })
+    if (eventsErr) return NextResponse.json({ error: eventsErr.message }, { status: 500 })
+
+    return NextResponse.json({ bookings: bookings || [], events: events || [] })
   }
 
   // Mode 2: my bookings

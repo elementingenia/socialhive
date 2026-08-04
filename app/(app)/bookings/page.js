@@ -1,10 +1,13 @@
 "use client"
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import { bookingStatusBadge } from "@/lib/payments"
 import { authedFetch } from "@/lib/getAuthToken"
+import { MoviesIcon, SocialIcon } from "@/components/NavIcons"
+import ClubScopeDropdown from "@/components/ClubScopeDropdown"
+import { useMyClubs } from "@/lib/useMyClubs"
 
 const HUB_COLOURS = {
   movie:    "var(--teal)",
@@ -16,11 +19,24 @@ const HUB_LABELS = {
   movie: "Show Time", bookclub: "Book Club", social: "Social",
 }
 
-const FILTERS = [
-  { key: "all",      label: "All" },
-  { key: "movie",    label: "Show Time" },
-  { key: "club",     label: "Groups & Clubs" },
-  { key: "social",   label: "Social" },
+// Same shape Calendar filters on (components/CalendarView.js's hubKeyOf) --
+// a club-linked event keys as "club" regardless of hub_type, so Dinner Club
+// and Book Club fall under the one Groups & Clubs control rather than the
+// generic hub toggle.
+function hubKeyOf(ev) {
+  return ev?.club_id ? "club" : ev?.hub_type
+}
+
+// Icon + colour for the two independent toggle chips -- pixel-identical to
+// Calendar's hub-filter pills (components/CalendarView.js), per the app's
+// canonical-asset rule (Iain, 2026-07-27). Groups & Clubs isn't a toggle
+// chip here any more than it is on Calendar -- it's the shared
+// ClubScopeDropdown instead (Iain, 2026-08-04: "Make sure they are
+// identical in UI and function" -- matching the visual style wasn't enough,
+// the underlying multi-toggle + dropdown interaction model has to match too).
+const HUB_TOGGLES = [
+  { key: "movie",  label: "Show Time", Icon: MoviesIcon, colour: "var(--teal)" },
+  { key: "social", label: "Social",    Icon: SocialIcon, colour: "var(--terracotta)" },
 ]
 
 function fmtDate(str) {
@@ -236,7 +252,11 @@ export default function BookingsPage() {
   const { member }    = useUser()
   const [bookings,    setBookings]    = useState([])
   const [loading,     setLoading]     = useState(true)
-  const [filter,      setFilter]      = useState("all")
+  // Same default and shape as Calendar's activeHubs -- independent
+  // multi-toggle, not a single-select filter (Iain, 2026-08-04).
+  const [activeHubs,  setActiveHubs]  = useState(["movie", "club", "social"])
+  const [clubScope,   setClubScope]   = useState("all")
+  const { myClubIds } = useMyClubs()
   const [pastOpen,    setPastOpen]    = useState(false)
   const [selectedEvent,    setSelectedEvent]    = useState(null)
   const [loadingEvent,     setLoadingEvent]     = useState(false)
@@ -292,11 +312,33 @@ export default function BookingsPage() {
 
   const today = new Date(); today.setHours(0, 0, 0, 0)
 
-  const filtered = filter === "all"
-    ? bookings
-    : filter === "club"
-      ? bookings.filter(b => b.events?.club_id)
-      : bookings.filter(b => b.events?.hub_type === filter && !b.events?.club_id)
+  // Every club actually appearing in this member's bookings, for the
+  // dropdown's per-club options -- same derivation Calendar uses off
+  // `events`, just off `b.events` here (only club_id/clubs.name are
+  // selected on the booking query, so id comes from the FK, not a
+  // separate id column in the join).
+  const clubsInView = useMemo(() => {
+    const seen = new Map()
+    for (const b of bookings) {
+      const ev = b.events
+      if (ev?.club_id && ev?.clubs) seen.set(ev.club_id, { id: ev.club_id, name: ev.clubs.name })
+    }
+    return [...seen.values()].sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+  }, [bookings])
+
+  // Identical predicate to Calendar's filteredEvents (components/CalendarView.js).
+  const filtered = bookings.filter(b => {
+    const ev = b.events
+    if (!ev) return false
+    const key = hubKeyOf(ev)
+    if (!activeHubs.includes(key)) return false
+    if (key === "club") {
+      if (clubScope === "hide") return false
+      if (clubScope === "mine" && !myClubIds.has(ev.club_id)) return false
+      if (clubScope !== "all" && clubScope !== "mine" && ev.club_id !== clubScope) return false
+    }
+    return true
+  })
 
   // Group by event_id so split bookings (confirmed + waitlist) show as one tile
   function groupBookings(rows) {
@@ -340,33 +382,53 @@ export default function BookingsPage() {
 
         <MySpaceBookings />
 
-        {/* Filter strip */}
+        {/* Filter strip -- identical in UI AND function to Calendar's hub
+            filters (components/CalendarView.js): Show Time/Social are
+            independent toggle pills (tap to add/remove, not a single
+            select), and Groups & Clubs is the same shared ClubScopeDropdown
+            popover, not a third toggle chip (Iain, 2026-08-04). */}
         <div style={{
-          display: "flex", gap: "0.4rem",
+          display: "flex", gap: 8,
           marginBottom: "1.25rem",
           overflowX: "auto", paddingBottom: 2,
         }}>
-          {FILTERS.map(f => (
-            <button
-              key={f.key}
-              onClick={() => setFilter(f.key)}
-              style={{
-                padding: "0.45rem 1.05rem",
-                borderRadius: "20px",
-                border: "1px solid var(--border)",
-                background: filter === f.key ? "var(--teal)" : "var(--surface)",
-                color: filter === f.key ? "#fff" : "var(--text-dim)",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                whiteSpace: "nowrap",
-                fontFamily: "inherit",
-                transition: "background 0.15s, color 0.15s",
-              }}
-            >
-              {f.label}
-            </button>
-          ))}
+          {HUB_TOGGLES.map(({ key, label, Icon, colour }) => {
+            const on = activeHubs.includes(key)
+            return (
+              <button
+                key={key}
+                onClick={() => setActiveHubs(prev =>
+                  prev.includes(key) ? prev.filter(h => h !== key) : [...prev, key]
+                )}
+                style={{
+                  display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
+                  padding: "4px 10px", borderRadius: 20,
+                  border: `1px solid ${on ? colour : "var(--border)"}`,
+                  background: on ? colour + "20" : "var(--surface2)",
+                  cursor: "pointer", fontFamily: "inherit",
+                  opacity: on ? 1 : 0.55,
+                  transition: "all 0.15s",
+                }}
+              >
+                {Icon && (
+                  <span style={{ display: "flex", color: on ? colour : "var(--text-dim)", flexShrink: 0 }}>
+                    <Icon size={14} />
+                  </span>
+                )}
+                <span style={{ fontSize: 12, fontWeight: 600, color: on ? colour : "var(--text-dim)", whiteSpace: "nowrap" }}>
+                  {label}
+                </span>
+              </button>
+            )
+          })}
+
+          {(clubsInView.length > 0 || myClubIds.size > 0) && (
+            <ClubScopeDropdown
+              clubScope={clubScope}
+              setClubScope={setClubScope}
+              clubsInView={clubsInView}
+            />
+          )}
         </div>
 
         {/* Upcoming */}

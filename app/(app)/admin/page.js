@@ -13,6 +13,7 @@ import { CLUB_COLOURS, nextClubColour } from '@/lib/clubColours'
 import ClubWatermarkPicker from '@/components/ClubWatermarkPicker'
 import { BAR_ENABLED } from '@/lib/features'
 import { validateClosure, reasonRemaining, REASON_MAX } from '@/lib/spaces'
+import { useLocations } from '@/lib/useLocations'
 import { authedFetch } from '@/lib/getAuthToken'
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -31,7 +32,6 @@ const SECTIONS = [
   // Bar section parked (feature not in scope) — see lib/features.js
   ...(BAR_ENABLED ? [{ key: 'Bar', label: 'Bar', Icon: BarIcon }] : []),
   { key: 'Locations', label: 'Locations',  Icon: InfoIcon },
-  { key: 'SpaceBookings', label: 'Space Bookings', Icon: BookingsIcon },
   { key: 'Tools',     label: 'Tools',      Icon: ToolsIcon },
 ]
 
@@ -1634,7 +1634,6 @@ export default function AdminPage() {
         {tab === 'Owners'    && <HubOwnersTab />}
         {BAR_ENABLED && tab === 'Bar' && <BarTab />}
         {tab === 'Locations' && <LocationsTab />}
-        {tab === 'SpaceBookings' && <SpaceBookingsTab />}
         {tab === 'Tools'     && <ToolsTab />}
       </div>
     )
@@ -1988,31 +1987,197 @@ function ClubsTab() {
 // still fit on one screen (vertical space is precious).
 // Admin > Space Bookings. Scope: Social_Hive_Personal_Space_Booking_Scope.md
 // (decisions locked 2026-08-01: "Admin needs an admin view so they can
-// overrule, cancel or challenge a booking of any space"). Lists every
-// PERSONAL space booking (event-backed room usage is managed from its own
-// hub, not here — the API's admin mode already excludes those via
-// `.is('event_id', null)`).
-function fmtSpaceDateTime(iso) {
-  return new Date(iso).toLocaleString('en-AU', {
-    weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
-    timeZone: 'Australia/Sydney',
+// overrule, cancel or challenge a booking of any space"). Extended 2026-08-04
+// (Iain: "an admin space to see all space bookings, both events and resident
+// personal space bookings") to also list every EVENT that has claimed a room
+// -- Show Time, Social, Groups & Clubs -- alongside personal bookings, so
+// Admin sees total room usage in one place instead of checking each hub
+// separately. Event rows are read-only here; editing/cancelling an event's
+// room booking stays in that event's own hub -- this view is for visibility,
+// not a second place to manage the same booking (which would drift, per the
+// project's existing "one source of truth per field" lesson).
+const EVENT_HUB_META = {
+  movie:    { label: 'Show Time',      colour: 'var(--teal)',       Icon: MoviesIcon },
+  social:   { label: 'Social',         colour: 'var(--terracotta)', Icon: SocialIcon },
+  bookclub: { label: 'Book Club',      colour: 'var(--purple)',     Icon: BookClubIcon },
+  club:     { label: 'Groups & Clubs', colour: 'var(--purple)',     Icon: ClubsIcon },
+}
+
+// Personal bookings store starts_at/ends_at as a real timestamptz; events
+// store event_date/event_time as plain Sydney-local strings. Converting the
+// instant to Sydney-local date/time parts here puts both on the same
+// YYYY-MM-DD / HH:MM basis so they can be sorted and displayed together
+// without a duplicate DST-aware composer (lib/spaces.js's sydneyOffsetMinutes
+// goes local->instant; this is the reverse direction, instant->local, which
+// Intl already does correctly without needing that helper's DST table).
+function sydneyDateTimeParts(iso) {
+  const d = new Date(iso)
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Australia/Sydney', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
   })
+  const parts = Object.fromEntries(fmt.formatToParts(d).map(p => [p.type, p.value]))
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` }
+}
+
+function fmtUsageDate(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+// Compact form for the 2-line admin room-usage row -- no weekday, year only
+// when it isn't the current one (Iain, 2026-08-04: "Using a LOT of vertical
+// space in each tile - let's combine the information to make things more
+// compact").
+function fmtUsageDateShort(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const opts = { day: 'numeric', month: 'short' }
+  if (y !== new Date().getFullYear()) opts.year = 'numeric'
+  return new Date(y, m - 1, d).toLocaleDateString('en-AU', opts)
+}
+
+function fmtUsageTime(hhmm) {
+  if (!hhmm) return ''
+  const [h, m] = hhmm.split(':').map(Number)
+  const period = h >= 12 ? 'pm' : 'am'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return m === 0 ? `${h12}${period}` : `${h12}:${String(m).padStart(2, '0')}${period}`
+}
+
+// Space filter -- same custom button+popover shape as CalendarView's
+// ClubScopeDropdown (components/CalendarView.js), per the app's own
+// no-native-<select> standard. useLocations() is already A-Z sorted.
+function LocationFilterDropdown({ locations, value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [menuPos, setMenuPos] = useState(null)
+  const rootRef = useRef(null)
+  const btnRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDocClick(e) {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [open])
+
+  const options = [{ id: '', name: 'All spaces' }, ...locations]
+  const current = options.find(o => o.id === value) || options[0]
+
+  function toggle() {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect()
+      setMenuPos({ top: r.bottom + 4, left: r.left })
+    }
+    setOpen(o => !o)
+  }
+
+  return (
+    <div ref={rootRef} style={{ position: 'relative' }}>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={toggle}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 6, padding: '0.55rem 0.9rem',
+          borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)',
+          cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)',
+        }}
+      >
+        {current.name}
+        <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>▾</span>
+      </button>
+
+      {open && menuPos && (
+        <div style={{
+          position: 'fixed', top: menuPos.top, left: menuPos.left, zIndex: 400,
+          minWidth: 200, maxHeight: 300, overflowY: 'auto',
+          background: 'var(--surface)', border: '1px solid var(--border)',
+          borderRadius: 10, boxShadow: '0 4px 16px rgba(0,0,0,0.15)', padding: 4,
+        }}>
+          {options.map(o => (
+            <button
+              key={o.id || 'all'}
+              type="button"
+              onClick={() => { onChange(o.id); setOpen(false) }}
+              style={{
+                display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px',
+                borderRadius: 8, border: 'none',
+                background: o.id === value ? 'var(--surface2)' : 'transparent',
+                color: o.id === value ? 'var(--teal)' : 'var(--text)',
+                fontFamily: 'inherit', fontSize: 13, fontWeight: o.id === value ? 700 : 500, cursor: 'pointer',
+              }}
+            >{o.name}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Date/Space sort -- a 2-option styled button group, not a native select
+// (matches the app's type-toggle convention, e.g. CalendarView's Week/4
+// Weeks/Month row). "Space" is disabled once a single space is already
+// selected above -- sorting by the one thing already filtered to is a
+// no-op, so only Date sorting applies then (Iain, 2026-08-04).
+function SortToggle({ sortBy, setSortBy, disableSpace }) {
+  const OPTIONS = [{ key: 'date', label: 'Date' }, { key: 'space', label: 'Space' }]
+  return (
+    <div style={{ display: 'flex', gap: 6 }}>
+      {OPTIONS.map(opt => {
+        const isDisabled = disableSpace && opt.key === 'space'
+        const on = sortBy === opt.key
+        return (
+          <button
+            key={opt.key}
+            type="button"
+            disabled={isDisabled}
+            onClick={() => setSortBy(opt.key)}
+            style={{
+              padding: '0.5rem 0.9rem', borderRadius: 8, border: 'none',
+              background: on ? 'var(--amber)' : 'var(--surface2)',
+              color: on ? '#fff' : 'var(--text-dim)',
+              fontSize: '0.8rem', fontWeight: 600, fontFamily: 'inherit',
+              cursor: isDisabled ? 'not-allowed' : 'pointer',
+              opacity: isDisabled ? 0.4 : 1,
+            }}
+          >
+            {opt.label}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 function SpaceBookingsTab() {
+  const locations = useLocations()
   const [bookings, setBookings] = useState(null)
-  const [cancellingId, setCancellingId] = useState(null)
+  const [events, setEvents] = useState(null)
   const [error, setError] = useState('')
+  const [cancellingId, setCancellingId] = useState(null)
   const [cancelTarget, setCancelTarget] = useState(null) // booking pending confirmation
   const [cancelNote, setCancelNote] = useState('')
+  const [locationFilter, setLocationFilter] = useState('') // '' = all spaces
+  const [sortBy, setSortBy] = useState('date') // 'date' | 'space'
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   const load = useCallback(async () => {
-    const res = await authedFetch('/api/spaces?admin=1')
+    const params = new URLSearchParams({ admin: '1' })
+    if (locationFilter) params.set('location_id', locationFilter)
+    if (dateFrom) params.set('date_from', dateFrom)
+    if (dateTo) params.set('date_to', dateTo)
+    const res = await authedFetch(`/api/spaces?${params.toString()}`)
     const data = await res.json()
-    if (!res.ok) { setError(data.error || 'Could not load space bookings'); setBookings([]); return }
+    if (!res.ok) { setError(data.error || 'Could not load space bookings'); setBookings([]); setEvents([]); return }
     setBookings(data.bookings || [])
-  }, [])
+    setEvents(data.events || [])
+  }, [locationFilter, dateFrom, dateTo])
   useEffect(() => { load() }, [load])
+
+  useEffect(() => { if (locationFilter) setSortBy('date') }, [locationFilter])
 
   function openCancel(booking) {
     setCancelNote('')
@@ -2033,51 +2198,167 @@ function SpaceBookingsTab() {
     if (res.ok) load()
   }
 
-  const active = (bookings || []).filter(b => b.status !== 'cancelled')
+  const rows = useMemo(() => {
+    if (bookings === null || events === null) return null
+
+    const fromBookings = bookings
+      .filter(b => b.status !== 'cancelled')
+      .map(b => {
+        const start = sydneyDateTimeParts(b.starts_at)
+        const end = sydneyDateTimeParts(b.ends_at)
+        return {
+          key: `booking:${b.id}`, source: 'personal', raw: b,
+          location_name: b.locations?.name || 'Space',
+          date: start.date, timeLabel: `${fmtUsageTime(start.time)} – ${fmtUsageTime(end.time)}`,
+          sortKey: `${start.date}T${start.time}`,
+          title: b.title, subtitle: `Booked by ${b.booked_by_name_at_time || 'a resident'}`,
+          colour: 'var(--amber)', Icon: null,
+        }
+      })
+
+    const fromEvents = events.map(e => {
+      const meta = EVENT_HUB_META[e.hub_type] || { label: e.hub_type, colour: 'var(--amber)', Icon: null }
+      const time = e.event_time ? e.event_time.slice(0, 5) : null
+      const endTime = e.event_end_time ? e.event_end_time.slice(0, 5) : null
+      return {
+        key: `event:${e.id}`, source: 'event', raw: e,
+        location_name: e.locations?.name || 'Space',
+        date: e.event_date,
+        timeLabel: time ? (endTime ? `${fmtUsageTime(time)} – ${fmtUsageTime(endTime)}` : fmtUsageTime(time)) : 'Time TBC',
+        sortKey: `${e.event_date}T${time || '00:00'}`,
+        title: e.title, subtitle: meta.label,
+        colour: meta.colour, Icon: meta.Icon,
+      }
+    })
+
+    return [...fromBookings, ...fromEvents]
+  }, [bookings, events])
+
+  const sortedRows = useMemo(() => {
+    if (!rows) return null
+    if (sortBy === 'space') {
+      return [...rows].sort((a, b) =>
+        a.location_name.localeCompare(b.location_name) || a.sortKey.localeCompare(b.sortKey)
+      )
+    }
+    return [...rows].sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+  }, [rows, sortBy])
+
+  // One flat list when sorting by date; a section per space (A-Z, already
+  // guaranteed by the sort above) when sorting by space.
+  const grouped = useMemo(() => {
+    if (!sortedRows) return null
+    if (sortBy !== 'space') return [{ heading: null, rows: sortedRows }]
+    const groups = []
+    let current = null
+    for (const row of sortedRows) {
+      if (!current || current.heading !== row.location_name) {
+        current = { heading: row.location_name, rows: [] }
+        groups.push(current)
+      }
+      current.rows.push(row)
+    }
+    return groups
+  }, [sortedRows, sortBy])
 
   return (
     <div>
       <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '1rem' }}>
-        Every resident-made personal space booking — a room a resident has claimed for their own
-        use, independent of any hub or club. Cancelling here notifies the resident.
+        Every room booking across the app — Show Time, Social, and Groups &amp; Clubs events, plus
+        resident personal space bookings — in one place. Event bookings are managed from their own
+        hub; cancelling a personal booking here notifies the resident.
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '0.6rem', flexWrap: 'wrap' }}>
+        <LocationFilterDropdown locations={locations} value={locationFilter} onChange={setLocationFilter} />
+        <SortToggle sortBy={sortBy} setSortBy={setSortBy} disableSpace={!!locationFilter} />
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', marginBottom: '1rem', flexWrap: 'wrap' }}>
+        <div>
+          <label style={labelStyle}>From</label>
+          <input style={{ ...inputStyle, width: 'auto' }} type="date" value={dateFrom}
+            max={dateTo || undefined}
+            onClick={e => e.currentTarget.showPicker?.()}
+            onChange={e => setDateFrom(e.target.value)} />
+        </div>
+        <div>
+          <label style={labelStyle}>To</label>
+          <input style={{ ...inputStyle, width: 'auto' }} type="date" value={dateTo}
+            min={dateFrom || undefined}
+            onClick={e => e.currentTarget.showPicker?.()}
+            onChange={e => setDateTo(e.target.value)} />
+        </div>
+        {(dateFrom || dateTo) && (
+          <button onClick={() => { setDateFrom(''); setDateTo('') }} style={{
+            padding: '0.55rem 0.8rem', borderRadius: 10, border: '1px solid var(--border)',
+            background: 'var(--surface2)', color: 'var(--text-dim)', fontWeight: 600, fontSize: '0.82rem',
+            fontFamily: 'inherit', cursor: 'pointer',
+          }}>Clear dates</button>
+        )}
       </div>
 
       {error && <div style={{ color: '#b91c1c', fontSize: '0.85rem', marginBottom: '0.75rem' }}>{error}</div>}
 
-      {bookings === null ? (
+      {grouped === null ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><div className="spinner" /></div>
-      ) : active.length === 0 ? (
-        <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2rem' }}>No space bookings yet.</div>
+      ) : sortedRows.length === 0 ? (
+        <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '2rem' }}>No room bookings found.</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {active.map(b => (
-            <div key={b.id} style={{
-              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
-              padding: '0.85rem 1rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem',
-            }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: '0.15rem' }}>
-                  {b.locations?.name || 'Space'}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {grouped.map((group, gi) => (
+            <div key={group.heading || gi}>
+              {group.heading && (
+                <div style={{
+                  fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '0.5rem',
+                  textTransform: 'uppercase', letterSpacing: '0.04em',
+                }}>
+                  {group.heading}
                 </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginBottom: '0.25rem' }}>
-                  {fmtSpaceDateTime(b.starts_at)} – {fmtSpaceDateTime(b.ends_at).split(', ').pop()}
-                </div>
-                <div style={{ fontSize: '0.82rem', color: 'var(--text)', marginBottom: '0.2rem' }}>{b.title}</div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)' }}>
-                  Booked by {b.booked_by_name_at_time || 'a resident'}
-                </div>
+              )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                {group.rows.map(row => (
+                  <div key={row.key} style={{
+                    background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
+                    padding: '0.55rem 0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.6rem',
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Line 1: icon + date/space, time right-aligned and muted */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                          {row.Icon && (
+                            <span style={{ display: 'flex', color: row.colour, flexShrink: 0 }}>
+                              <row.Icon size={13} />
+                            </span>
+                          )}
+                          <span style={{ fontWeight: 700, fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {sortBy === 'space' ? fmtUsageDateShort(row.date) : `${row.location_name} · ${fmtUsageDateShort(row.date)}`}
+                          </span>
+                        </div>
+                        <span style={{ fontSize: '0.76rem', color: 'var(--text-dim)', fontWeight: 600, flexShrink: 0 }}>{row.timeLabel}</span>
+                      </div>
+                      {/* Line 2: colour-coded hub/booker label + title, combined */}
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: '0.15rem' }}>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: row.colour, flexShrink: 0 }}>{row.subtitle}</span>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.title}</span>
+                      </div>
+                    </div>
+                    {row.source === 'personal' && (
+                      <button
+                        onClick={() => openCancel(row.raw)}
+                        disabled={cancellingId === row.raw.id}
+                        style={{
+                          flexShrink: 0, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8,
+                          padding: '0.35rem 0.65rem', fontSize: '0.75rem', fontWeight: 600, color: 'var(--danger)',
+                          cursor: cancellingId === row.raw.id ? 'default' : 'pointer', opacity: cancellingId === row.raw.id ? 0.6 : 1,
+                        }}
+                      >
+                        {cancellingId === row.raw.id ? 'Cancelling…' : 'Cancel'}
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
-              <button
-                onClick={() => openCancel(b)}
-                disabled={cancellingId === b.id}
-                style={{
-                  flexShrink: 0, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8,
-                  padding: '0.4rem 0.75rem', fontSize: '0.78rem', fontWeight: 600, color: 'var(--danger)',
-                  cursor: cancellingId === b.id ? 'default' : 'pointer', opacity: cancellingId === b.id ? 0.6 : 1,
-                }}
-              >
-                {cancellingId === b.id ? 'Cancelling…' : 'Cancel'}
-              </button>
             </div>
           ))}
         </div>
@@ -2127,12 +2408,44 @@ function SpaceBookingsTab() {
   )
 }
 
+// Venues and their bookings belong together (Iain, 2026-08-04: "they belong
+// together") -- a simple 2-button sub-pill, same visual language as the
+// Open/Closed toggle inside each venue's own settings.
+function LocationsSubTabs({ view, setView }) {
+  return (
+    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+      {[['venues', 'Venues'], ['bookings', 'Bookings']].map(([v, txt]) => (
+        <button key={v} type="button" onClick={() => setView(v)} style={{
+          flex: 1, padding: '0.6rem', borderRadius: 10, fontFamily: 'inherit', fontSize: '0.88rem',
+          fontWeight: 700, cursor: 'pointer', border: '2px solid',
+          borderColor: view === v ? 'var(--amber)' : 'var(--border)',
+          background: view === v ? 'var(--amber)18' : 'var(--surface)',
+          color: view === v ? 'var(--amber-dark)' : 'var(--text-dim)',
+        }}>{txt}</button>
+      ))}
+    </div>
+  )
+}
+
 function LocationsTab() {
+  const [view, setView]           = useState('venues') // 'venues' | 'bookings'
   const [locations, setLocations] = useState(null)
   const [newName, setNewName]     = useState('')
   const [busy, setBusy]           = useState(false)
   const [error, setError]         = useState('')
   const [openId, setOpenId]       = useState(null)
+  // Which venues can safely be deleted -- Iain, 2026-08-04: "possible to
+  // delete a location as long as there are no historical bookings using
+  // that location". The DB's own FKs would NOT stop this: events.location_id
+  // is ON DELETE SET NULL and space_bookings.location_id is ON DELETE CASCADE
+  // (migrations 058/072), so an unguarded delete would silently erase a
+  // room's booking history rather than fail loudly -- this client-side check
+  // is the only thing standing in the way of that. Also blocks deleting a
+  // hub's currently-nominated venue (migration 073's hub_settings.location_id,
+  // also ON DELETE SET NULL) since that would silently break that hub's
+  // default room -- not literally "a booking", but the same silent-breakage
+  // shape, so it gets the same guard.
+  const [blockers, setBlockers] = useState(null)
 
   const load = useCallback(() => {
     // A-Z to match the dropdowns — sort_order isn't editable anywhere in the UI
@@ -2140,6 +2453,27 @@ function LocationsTab() {
       .then(({ data }) => setLocations(data || []))
   }, [])
   useEffect(() => { load() }, [load])
+
+  const loadBlockers = useCallback(async () => {
+    const [evRes, sbRes, hsRes] = await Promise.all([
+      supabase.from('events').select('location_id').not('location_id', 'is', null),
+      supabase.from('space_bookings').select('location_id'),
+      supabase.from('hub_settings').select('location_id').not('location_id', 'is', null),
+    ])
+    setBlockers({
+      eventIds: new Set((evRes.data || []).map(r => r.location_id)),
+      bookingIds: new Set((sbRes.data || []).map(r => r.location_id)),
+      nominatedIds: new Set((hsRes.data || []).map(r => r.location_id)),
+    })
+  }, [])
+  useEffect(() => { loadBlockers() }, [loadBlockers])
+
+  function deleteBlockReason(locId) {
+    if (!blockers) return 'Checking…'
+    if (blockers.nominatedIds.has(locId)) return "This is a hub's nominated venue — change that first."
+    if (blockers.eventIds.has(locId) || blockers.bookingIds.has(locId)) return 'Has historical bookings, so it can’t be deleted.'
+    return null
+  }
 
   async function add() {
     if (!newName.trim()) return
@@ -2153,7 +2487,7 @@ function LocationsTab() {
         ? `There is already a venue called "${newName.trim()}".` : e.message)
       return
     }
-    setNewName(''); load()
+    setNewName(''); load(); loadBlockers()
   }
 
   async function toggleArchived(loc) {
@@ -2161,8 +2495,25 @@ function LocationsTab() {
     load()
   }
 
+  async function deleteLocation(loc) {
+    const { error: e } = await supabase.from('locations').delete().eq('id', loc.id)
+    if (e) return e.message
+    setOpenId(null); load(); loadBlockers()
+    return null
+  }
+
+  if (view === 'bookings') {
+    return (
+      <div>
+        <LocationsSubTabs view={view} setView={setView} />
+        <SpaceBookingsTab />
+      </div>
+    )
+  }
+
   return (
     <div>
+      <LocationsSubTabs view={view} setView={setView} />
       <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '1rem' }}>
         On-site venues offered when creating any event, in any hub or club. Hiding a venue keeps it on
         past events but removes it from the picker.
@@ -2192,6 +2543,8 @@ function LocationsTab() {
               onToggle={() => setOpenId(openId === l.id ? null : l.id)}
               onArchive={() => toggleArchived(l)}
               onSaved={() => { setOpenId(null); load() }}
+              deleteBlockReason={deleteBlockReason(l.id)}
+              onDelete={() => deleteLocation(l)}
             />
           ))}
         </div>
@@ -2201,10 +2554,13 @@ function LocationsTab() {
 }
 
 // One venue: a summary row that expands into its settings.
-function LocationRow({ loc, expanded, onToggle, onArchive, onSaved }) {
+function LocationRow({ loc, expanded, onToggle, onArchive, onSaved, deleteBlockReason, onDelete }) {
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteErr, setDeleteErr] = useState('')
 
   // Reset the draft every time the row opens, so an abandoned edit never
   // reappears later looking like saved state.
@@ -2258,6 +2614,14 @@ function LocationRow({ loc, expanded, onToggle, onArchive, onSaved }) {
       return
     }
     onSaved()
+  }
+
+  async function doDelete() {
+    setDeleting(true); setDeleteErr('')
+    const err = await onDelete()
+    setDeleting(false)
+    if (err) { setDeleteErr(err); return }
+    setConfirmingDelete(false)
   }
 
   const chip = (text, colour) => (
@@ -2380,8 +2744,52 @@ function LocationRow({ loc, expanded, onToggle, onArchive, onSaved }) {
               background: 'var(--surface2)', color: 'var(--text-dim)', fontWeight: 600,
               fontFamily: 'inherit', fontSize: '0.9rem', cursor: 'pointer',
             }}>{loc.archived ? 'Show' : 'Hide'}</button>
+            <button
+              onClick={() => setConfirmingDelete(true)}
+              disabled={!!deleteBlockReason}
+              title={deleteBlockReason || ''}
+              style={{
+                padding: '0.6rem 1rem', borderRadius: 10, border: '1px solid var(--border)',
+                background: 'var(--surface2)', color: deleteBlockReason ? 'var(--text-dim)' : 'var(--danger)',
+                fontWeight: 600, fontFamily: 'inherit', fontSize: '0.9rem',
+                cursor: deleteBlockReason ? 'not-allowed' : 'pointer', opacity: deleteBlockReason ? 0.5 : 1,
+              }}>Delete</button>
           </div>
+          {deleteBlockReason && (
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.4rem' }}>{deleteBlockReason}</div>
+          )}
         </div>
+      )}
+
+      {confirmingDelete && (
+        <SlideOver title="Delete this venue?" onClose={() => setConfirmingDelete(false)}>
+          <div style={{ fontSize: '0.88rem', marginBottom: '1.25rem' }}>
+            Permanently delete <strong>{loc.name}</strong>? This can’t be undone.
+          </div>
+          {deleteErr && <div style={{ color: '#b91c1c', fontSize: '0.85rem', marginBottom: '1rem' }}>{deleteErr}</div>}
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={() => setConfirmingDelete(false)}
+              style={{
+                flex: 1, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10,
+                padding: '0.75rem', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', cursor: 'pointer',
+              }}
+            >
+              Keep venue
+            </button>
+            <button
+              onClick={doDelete}
+              disabled={deleting}
+              style={{
+                flex: 1, background: 'var(--danger)', border: 'none', borderRadius: 10,
+                padding: '0.75rem', fontSize: '0.9rem', fontWeight: 600, color: '#fff',
+                cursor: deleting ? 'default' : 'pointer', opacity: deleting ? 0.6 : 1,
+              }}
+            >
+              {deleting ? 'Deleting…' : 'Delete venue'}
+            </button>
+          </div>
+        </SlideOver>
       )}
     </div>
   )
