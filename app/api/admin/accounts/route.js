@@ -221,7 +221,7 @@ export async function POST(req) {
       ["question_replies", "member_id"],
     ]
     for (const [table, col] of HISTORY_TABLES) {
-      const { count, error } = await supabaseAdmin.from(table).select("id", { count: "exact", head: true }).eq(col, memberId)
+      const { count, error } = await supabaseAdmin.from(table).select(col, { count: "exact", head: true }).eq(col, memberId)
       if (error) return NextResponse.json({ error: `Could not verify account history (${table}).` }, { status: 500 })
       if (count > 0) {
         return NextResponse.json({
