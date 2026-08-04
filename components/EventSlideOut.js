@@ -1667,13 +1667,17 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
 
   if (!event) return null
 
-  // is_public now only controls server-side inclusion in the anonymous /cal
-  // feed (app/api/events/route.js) -- anything an anonymous viewer receives is
-  // shown as a locked stub full stop; an authenticated viewer always sees
-  // everything regardless of is_public.
-  const isPrivate = !isAuthenticated
-  const colour = isPrivate ? "#bbb"
-    : (event.club ? clubColour(event.club) : (HUB_COLOURS[event.hub_type] || "var(--amber)"))
+  // Public/private is now purely a data question, not a display question:
+  // is_public controls server-side inclusion in the anonymous /cal feed
+  // (app/api/events/route.js) -- an event this component is ever handed is
+  // always shown in full (title, image, date, location, coordinator,
+  // description). The ONLY thing gated on isAuthenticated is the ability to
+  // act on it -- book, modify, cancel, or manage as coordinator (Iain,
+  // 2026-08-04: "NO event is editable, bookable etc when showing on the
+  // public facing calendar... always pointed to login to book their seats").
+  // On the public /cal page, isAuthenticated is always forced false
+  // regardless of the visitor's real session -- see app/cal/page.js.
+  const colour = event.club ? clubColour(event.club) : (HUB_COLOURS[event.hub_type] || "var(--amber)")
 
   // Check if current user is a coordinator for this event
   const isEC = member && coordinators.some(ec => ec.member_id === member.id)
@@ -1730,9 +1734,8 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
           )}
 
           {/* Title */}
-          <h2 style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.3, marginBottom: 4,
-            fontStyle: isPrivate ? "italic" : "normal", color: isPrivate ? "#888" : "var(--text)" }}>
-            {isPrivate ? "Residents Only" : event.title}
+          <h2 style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.3, marginBottom: 4, color: "var(--text)" }}>
+            {event.title}
           </h2>
 
           {/* Date/time */}
@@ -1741,30 +1744,23 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
           </div>
 
           {/* Location — shown for social events */}
-          {!isPrivate && event.location && (
+          {event.location && (
             <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>
               📍 {event.location_type === "offsite" ? event.location.split("\n")[0] : event.location}
             </div>
           )}
 
           {/* EC names — on one line under location */}
-          {!isPrivate && <ECNames coordinators={coordinators} colour={colour} />}
+          <ECNames coordinators={coordinators} colour={colour} />
 
           {/* Bus driver — sits directly with Coordinator, social offsite only */}
-          {!isPrivate && event.has_bus && event.bus_driver && (
+          {event.has_bus && event.bus_driver && (
             <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
               <BusIcon size={14} /> <span>{event.bus_driver.name || event.bus_driver.username}</span>
             </div>
           )}
 
-          {isPrivate && (
-            <div style={{ background: "#f5f5f5", borderRadius: 10, padding: 14, fontSize: 13, color: "#888", lineHeight: 1.5, marginBottom: 12 }}>
-              This is a residents-only event. Login to see full details and book your place.
-            </div>
-          )}
-
-          {!isPrivate && (
-            <>
+          <>
               {/* Movie-specific */}
               {event.hub_type === "movie" && event.movie && (
                 <div style={{ marginBottom: 14 }}>
@@ -1863,9 +1859,6 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
                 <CoordinatorPanel event={event} colour={colour} onRefresh={onRefresh} currentMember={member} refreshKey={coordRefreshKey} />
               )}
             </>
-          )}
-
-          {isPrivate && !isAuthenticated && <div style={{ marginTop: 8 }}><LoginPrompt /></div>}
         </div>
       </div>
     </Portal>
