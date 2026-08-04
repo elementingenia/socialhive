@@ -344,8 +344,49 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
   const [hideName, setHideName]       = useState(member.hide_name)
   const [saving, setSaving]   = useState(false)
   const [error, setError]     = useState("")
+  const [removing, setRemoving] = useState(false)
+  const [removeError, setRemoveError] = useState("")
 
   const assignable = categories.filter(c => c.id !== residentsId)
+
+  // Deactivate -- safe, reversible: blocks login, keeps every row of history
+  // (bookings, coordinator credit, etc.) intact. This is the button to reach
+  // for by default.
+  async function deactivate() {
+    if (!confirm(`Deactivate ${member.name}? They won't be able to log in, and they'll drop off this Contacts list. Nothing else about their account is touched.`)) return
+    setRemoving(true); setRemoveError("")
+    const token = await getToken()
+    const res = await fetch("/api/admin/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: "set_member_status", member_id: member.id, status: "inactive" }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setRemoving(false)
+    if (!res.ok) { setRemoveError(data.error || "Could not deactivate this account."); return }
+    onSaved()
+    onClose()
+  }
+
+  // Delete -- genuinely irreversible. The server refuses if this member has
+  // any real history (bookings, coordinator assignments, votes, etc.) and
+  // says so -- that's the expected outcome for almost every real resident;
+  // this is really only for a duplicate/never-used account.
+  async function deleteMember() {
+    if (!confirm(`Permanently delete ${member.name}'s account? This cannot be undone. If they have any booking or activity history, this will be refused -- use Deactivate for that instead.`)) return
+    setRemoving(true); setRemoveError("")
+    const token = await getToken()
+    const res = await fetch("/api/admin/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: "delete_member", member_id: member.id }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setRemoving(false)
+    if (!res.ok) { setRemoveError(data.error || "Could not delete this account."); return }
+    onSaved()
+    onClose()
+  }
 
   async function save() {
     setSaving(true); setError("")
@@ -441,6 +482,25 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
           }}>{hideName ? "🔒 Private" : "Private"}</button>
         </div>
         <ResetPinControl memberId={member.id} username={member.username} />
+
+        <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem" }}>
+          <button type="button" onClick={deactivate} disabled={removing || isSelf} style={{
+            flex: 1, padding: "0.6rem", borderRadius: 10, border: "1px solid var(--border)",
+            background: "var(--surface2)", color: "var(--text)", fontWeight: 600, fontSize: "0.85rem",
+            cursor: (removing || isSelf) ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: isSelf ? 0.5 : 1,
+          }}>Deactivate</button>
+          <button type="button" onClick={deleteMember} disabled={removing || isSelf} style={{
+            flex: 1, padding: "0.6rem", borderRadius: 10, border: "1px solid #fca5a5",
+            background: "#fee2e2", color: "#991b1b", fontWeight: 600, fontSize: "0.85rem",
+            cursor: (removing || isSelf) ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: isSelf ? 0.5 : 1,
+          }}>Delete</button>
+        </div>
+        {isSelf && (
+          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>
+            You can't deactivate or delete your own account.
+          </div>
+        )}
+        {removeError && <div style={{ color: "var(--danger)", fontSize: "0.8rem", marginTop: "0.4rem" }}>{removeError}</div>}
       </div>
 
       {error && <div style={{ color: "#b91c1c", fontSize: "0.83rem" }}>{error}</div>}
