@@ -4,6 +4,7 @@ import { notifyClubMembers } from "@/lib/notifyAudience"
 import { notifyEventAttendees } from "@/lib/notifyEventAttendees"
 import { needsSpaceValidation, fetchLocation } from "@/lib/eventClash"
 import { findAnyRoomConflict } from "@/lib/spaceBookings"
+import { notifyRequestOnlySpace } from "@/lib/notifyRequestOnlySpace"
 
 // Club event create/edit — moved server-side (2026-07-23) as part of the Event
 // Clash / Space Booking scope (Social_Hive_Event_Clash_Space_Booking_Scope.md,
@@ -54,7 +55,7 @@ async function validateSpace(payload, excludeEventId) {
   if (!loc) return { error: "Choose a venue for this on-site event", status: 400 }
 
   if (!needsSpaceValidation({ location_type: payload.location_type, bookable: loc.bookable }))
-    return { location_id: loc.id, location: loc.name }
+    return { location_id: loc.id, location: loc.name, request_only: !!loc.request_only }
 
   if (!payload.event_end_time) return { error: "An end time is required for events in a common space", status: 400 }
   const conflict = await findAnyRoomConflict(supa, {
@@ -62,7 +63,7 @@ async function validateSpace(payload, excludeEventId) {
     event_end_time: payload.event_end_time, exclude_event_id: excludeEventId, locationName: loc.name,
   })
   if (conflict) return { error: conflict.message, status: 409 }
-  return { location_id: loc.id, location: loc.name }
+  return { location_id: loc.id, location: loc.name, request_only: !!loc.request_only }
 }
 
 const FIELDS = ["club_id", "event_date", "event_time", "event_end_time", "title", "is_public", "show_attendee_names",
@@ -96,6 +97,15 @@ export async function POST(req) {
     await supa.from("event_coordinators").insert(body.coordinator_ids.map(id => ({ event_id: event.id, member_id: id })))
   }
 
+  // "Request Only" (Iain, 2026-08-04): Admin/EC/club owner is trusted to
+  // have already talked to Ingenia, but gets a reminder to validate it.
+  if (space.request_only) {
+    await notifyRequestOnlySpace({
+      actingMemberId: member.id, eventId: event.id, eventTitle: payload.title || "event",
+      eventDate: payload.event_date, locationName: space.location,
+    })
+  }
+
   const { data: club } = await supa.from("clubs").select("name").eq("id", body.club_id).single()
   const when = payload.event_date ? new Date(payload.event_date + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }) : ""
   await notifyClubMembers(supa, body.club_id, event.id, "event_added",
@@ -110,7 +120,7 @@ export async function PATCH(req) {
   if (!event_id) return NextResponse.json({ error: "event_id required" }, { status: 400 })
 
   const { data: existing } = await supa.from("events")
-    .select("id, club_id, series_id, event_date, event_time, location, title").eq("id", event_id).single()
+    .select("id, club_id, series_id, event_date, event_time, location, location_id, title").eq("id", event_id).single()
   if (!existing) return NextResponse.json({ error: "Event not found" }, { status: 404 })
 
   const { error, status, member } = await resolve(req, existing.club_id)
@@ -124,6 +134,15 @@ export async function PATCH(req) {
 
   const { error: updErr } = await supa.from("events").update(payload).eq("id", event_id)
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
+
+  // "Request Only" (Iain, 2026-08-04): only nudge when the room actually
+  // changed onto a Request Only venue -- not on every unrelated edit.
+  if (space.request_only && existing.location_id !== payload.location_id) {
+    await notifyRequestOnlySpace({
+      actingMemberId: member.id, eventId: event_id, eventTitle: payload.title || existing.title || "event",
+      eventDate: payload.event_date || existing.event_date, locationName: space.location,
+    })
+  }
 
   if (Array.isArray(body.coordinator_ids)) {
     await supa.from("event_coordinators").update({ replaced_at: new Date().toISOString() }).eq("event_id", event_id).is("replaced_at", null)

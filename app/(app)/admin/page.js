@@ -2590,6 +2590,7 @@ function LocationRow({ loc, expanded, onToggle, onArchive, onSaved, deleteBlockR
       closed_from:    loc.closed_from || '',
       closed_to:      loc.closed_to || '',
       closed_reason:  loc.closed_reason || '',
+      request_only:   !!loc.request_only,
     })
   }, [expanded, loc])
 
@@ -2621,6 +2622,7 @@ function LocationRow({ loc, expanded, onToggle, onArchive, onSaved, deleteBlockR
       closed_from:   closed ? form.closed_from : null,
       closed_to:     closed && form.closure_kind === 'range' ? (form.closed_to || null) : null,
       closed_reason: closed ? (form.closed_reason.trim() || null) : null,
+      request_only:  !!form.request_only,
     }
     const { error } = await supabase.from('locations').update(patch).eq('id', loc.id)
     setSaving(false)
@@ -2661,6 +2663,7 @@ function LocationRow({ loc, expanded, onToggle, onArchive, onSaved, deleteBlockR
         {loc.archived && chip('Hidden', 'var(--text-dim)')}
         {!loc.bookable && chip('Not bookable', 'var(--text-dim)')}
         {loc.booking_status === 'closed' && chip('Closed', '#b45309')}
+        {loc.request_only && chip('Request Only', 'var(--amber-dark)')}
         {loc.capacity ? chip(`${loc.capacity} seats`, 'var(--teal)') : null}
         <span style={{
           fontSize: '0.7rem', color: 'var(--text-dim)', flexShrink: 0,
@@ -2683,6 +2686,24 @@ function LocationRow({ loc, expanded, onToggle, onArchive, onSaved, deleteBlockR
           </div>
           <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '-0.4rem', marginBottom: '0.75rem' }}>
             Capacity sets the default number of seats for events here. It doesn&apos;t stop anyone setting more.
+          </div>
+
+          <label style={labelStyle}>Request Only</label>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.35rem' }}>
+            {[[false, 'Anyone'], [true, 'Request Only']].map(([v, txt]) => (
+              <button key={String(v)} type="button" onClick={() => set('request_only', v)} style={{
+                flex: 1, padding: '0.5rem', borderRadius: 10, fontFamily: 'inherit', fontSize: '0.85rem',
+                fontWeight: 700, cursor: 'pointer', border: '2px solid',
+                borderColor: !!form.request_only === v ? 'var(--amber)' : 'var(--border)',
+                background: !!form.request_only === v ? 'var(--amber)18' : 'var(--surface)',
+                color: !!form.request_only === v ? 'var(--amber-dark)' : 'var(--text-dim)',
+              }}>{txt}</button>
+            ))}
+          </div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginBottom: '0.75rem' }}>
+            Request Only spaces need Ingenia&apos;s sign-off. Admins can still book them directly here (you&apos;ll
+            get a reminder to check with Ingenia); a resident booking one themselves via Book a Space has to
+            confirm they already have that sign-off.
           </div>
 
           <label style={labelStyle}>Bookings</label>

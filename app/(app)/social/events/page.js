@@ -15,6 +15,7 @@ import { useLocations } from "@/lib/useLocations"
 import TimeField from "@/components/TimeField"
 import { needsSpaceValidation } from "@/lib/eventClash"
 import { useSameDateWarning } from "@/components/SameDateWarning"
+import { useRequestOnlyAcknowledge } from "@/components/RequestOnlyAcknowledge"
 import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName } from "@/lib/sortNames"
@@ -430,7 +431,10 @@ function FixedListPicker({ value, onChange, options, placeholder = "Select…", 
                 display: "flex", alignItems: "center", justifyContent: "space-between",
               }}
             >
-              {opt.name || opt}
+              <span style={{ flex: 1 }}>{opt.name || opt}</span>
+              {opt.request_only && (
+                <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--amber-dark)", marginRight: "0.4rem" }}>Request Only</span>
+              )}
               {value === (opt.id || opt) && <span style={{ color: "var(--terracotta)", fontSize: "0.85rem" }}>✓</span>}
             </button>
           ))}
@@ -557,6 +561,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
   }
   const invalidFields = computeInvalidFields()
   const { ask: askSameDate, Modal: SameDateModal } = useSameDateWarning()
+  const { ask: askRequestOnly, Modal: RequestOnlyModal } = useRequestOnlyAcknowledge()
   const [createdId,    setCreatedId]    = useState(null)
   const [justCreated,  setJustCreated]  = useState(false)
   const [uploadingMenu, setUploadingMenu] = useState(false)
@@ -647,6 +652,13 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     setSaving(false)
     if (!res.ok) { setError(data.error || "Save failed"); return }
     onSaved()
+    // "Request Only" (Iain, 2026-08-04): a toast auto-dismissed and was
+    // still too easy to miss -- forces an explicit OK click instead, on
+    // top of the bell notification. Uses the venue the form already has in
+    // hand rather than a second round trip.
+    if (selectedLocation?.request_only) {
+      await askRequestOnly(selectedLocation.name)
+    }
     if (!activeId) {
       // First-time create: keep the form open so the coordinator can add a photo /
       // upload a menu file straight away, using the id we just got back.
@@ -689,6 +701,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
   return (
     <>
       {SameDateModal}
+      {RequestOnlyModal}
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 400 }} />
       <div style={{
         position: "fixed", top: 0, right: 0, bottom: 0,
@@ -1720,7 +1733,7 @@ export default function SocialEvents() {
       {showForm && session && (
         <SocialEventForm event={editEvent} session={session} members={allMembers}
           onClose={() => { setShowForm(false); setEditEvent(null) }}
-          onSaved={() => { load() }} />
+          onSaved={() => load()} />
       )}
     </div>
   )

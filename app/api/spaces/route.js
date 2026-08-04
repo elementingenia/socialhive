@@ -4,7 +4,7 @@ import { notify } from '@/lib/notify'
 import { isOverlapError, overlapMessage, toInstant, sydneyOffsetMinutes } from '@/lib/spaces'
 import {
   listAvailableLocations, checkSpaceAvailability, validateSpaceBooking,
-  toSpaceBookingWindow, BOOKING_REASON_MAX,
+  toSpaceBookingWindow, BOOKING_REASON_MAX, validateIngeniaConfirmation,
 } from '@/lib/spaceBookings'
 
 // Personal Space Booking. Scope: Social_Hive_Personal_Space_Booking_Scope.md
@@ -171,16 +171,27 @@ export async function POST(req) {
   const member = await getMember(token)
   if (!member) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
-  const { location_id, event_date, event_time, event_end_time, reason } = await req.json()
+  const { location_id, event_date, event_time, event_end_time, reason, ingenia_confirmed, ingenia_confirmed_by } = await req.json()
 
   const validationError = validateSpaceBooking({ location_id, event_date, event_time, event_end_time, reason })
   if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
 
   const { data: location, error: locError } = await supabaseAdmin
-    .from('locations').select('id, name, bookable, booking_status, closed_from, closed_to, closed_reason, archived')
+    .from('locations').select('id, name, bookable, booking_status, closed_from, closed_to, closed_reason, archived, request_only')
     .eq('id', location_id).maybeSingle()
   if (locError) return NextResponse.json({ error: locError.message }, { status: 500 })
   if (!location || location.archived) return NextResponse.json({ error: 'That space no longer exists' }, { status: 404 })
+
+  // "Request Only" (Iain, 2026-08-04): personal use, so EVERY booker --
+  // admin or not -- must self-declare Ingenia's sign-off before the
+  // booking is even accepted. No admin exemption here (that only applies
+  // to event creation, which is inherently community-based -- see
+  // lib/notifyRequestOnlySpace.js).
+  const ingeniaError = validateIngeniaConfirmation({
+    requestOnly: location.request_only,
+    ingeniaConfirmed: ingenia_confirmed, ingeniaConfirmedBy: ingenia_confirmed_by,
+  })
+  if (ingeniaError) return NextResponse.json({ error: ingeniaError }, { status: 400 })
 
   const window = toSpaceBookingWindow(event_date, event_time, event_end_time)
   if (!window) return NextResponse.json({ error: 'Invalid date or time' }, { status: 400 })
@@ -196,6 +207,10 @@ export async function POST(req) {
       location_id, event_id: null, starts_at: window.starts_at, ends_at: window.ends_at,
       purpose: 'private', title: reason.trim(), status: 'confirmed',
       booked_by: member.id, booked_by_name_at_time: member.name,
+      // The validation above already guarantees this is populated whenever
+      // location.request_only is true, for every booker regardless of role.
+      ingenia_confirmed: location.request_only ? !!ingenia_confirmed : false,
+      ingenia_confirmed_by: location.request_only && ingenia_confirmed ? (ingenia_confirmed_by || '').trim() : null,
     })
     .select().single()
 

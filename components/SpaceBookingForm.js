@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { createPortal } from "react-dom"
 import TimeField from "@/components/TimeField"
 import { authedFetch } from "@/lib/getAuthToken"
-import { BOOKING_REASON_MAX } from "@/lib/spaceBookings"
+import { BOOKING_REASON_MAX, INGENIA_CONFIRMED_BY_MAX } from "@/lib/spaceBookings"
 
 // Book a Space — Personal Space Booking. Scope:
 // Social_Hive_Personal_Space_Booking_Scope.md (decisions locked 2026-08-01).
@@ -142,6 +142,8 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
   const [locationsLoading, setLocationsLoading] = useState(false)
   const [locationId, setLocationId] = useState("")
   const [reason, setReason] = useState("")
+  const [ingeniaConfirmed, setIngeniaConfirmed] = useState(false)
+  const [ingeniaConfirmedBy, setIngeniaConfirmedBy] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
@@ -158,6 +160,7 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
     if (open) {
       setDate(""); setStartTime(""); setEndTime("")
       setLocations(null); setLocationId(""); setReason("")
+      setIngeniaConfirmed(false); setIngeniaConfirmedBy("")
       setError(""); setSuccess(false); setSubmitting(false)
       setAcknowledgedClash(null)
     }
@@ -175,6 +178,7 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
     const tag = ++fetchTag.current
     setLocationsLoading(true)
     setLocationId("")
+    setIngeniaConfirmed(false); setIngeniaConfirmedBy("")
     try {
       const res = await authedFetch(`/api/spaces?event_date=${date}&event_time=${startTime}&event_end_time=${endTime}`)
       const data = await res.json()
@@ -192,7 +196,15 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
   useEffect(() => { loadLocations() }, [loadLocations])
 
   const reasonTrimmed = reason.trim()
-  const canSubmit = windowValid && locationId && reasonTrimmed && reasonTrimmed.length <= BOOKING_REASON_MAX && !submitting
+  const selectedLocation = (locations || []).find(l => l.id === locationId) || null
+  // "Request Only" (Iain, 2026-08-04): personal use, so EVERY booker must
+  // self-declare Ingenia's sign-off before this can submit -- no admin
+  // exemption here (that only applies to creating a community EVENT, not
+  // booking a space for yourself).
+  const needsIngeniaConfirmation = !!selectedLocation?.request_only
+  const ingeniaConfirmedByTrimmed = ingeniaConfirmedBy.trim()
+  const ingeniaValid = !needsIngeniaConfirmation || (ingeniaConfirmed && ingeniaConfirmedByTrimmed && ingeniaConfirmedByTrimmed.length <= INGENIA_CONFIRMED_BY_MAX)
+  const canSubmit = windowValid && locationId && reasonTrimmed && reasonTrimmed.length <= BOOKING_REASON_MAX && ingeniaValid && !submitting
 
   async function handleSubmit() {
     if (!canSubmit) return
@@ -232,7 +244,11 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
       const res = await authedFetch("/api/spaces", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ location_id: locationId, event_date: date, event_time: startTime, event_end_time: endTime, reason: reasonTrimmed }),
+        body: JSON.stringify({
+          location_id: locationId, event_date: date, event_time: startTime, event_end_time: endTime, reason: reasonTrimmed,
+          ingenia_confirmed: needsIngeniaConfirmation ? ingeniaConfirmed : undefined,
+          ingenia_confirmed_by: needsIngeniaConfirmation ? ingeniaConfirmedByTrimmed : undefined,
+        }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || "Could not book that space"); setSubmitting(false); return }
@@ -352,8 +368,12 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
                         opacity: loc.available ? 1 : 0.55,
                       }}
                     >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>{loc.name}</span>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.4rem" }}>
+                        <span style={{ fontWeight: 600, fontSize: "0.9rem", flex: 1 }}>{loc.name}</span>
+                        {loc.request_only && (
+                          <span style={{ fontSize: "0.66rem", fontWeight: 700, padding: "0.12rem 0.4rem", borderRadius: 6,
+                            background: "var(--amber)1f", color: "var(--amber-dark)", whiteSpace: "nowrap" }}>Request Only</span>
+                        )}
                         {locationId === loc.id && <span style={{ color: "var(--teal)" }}>✓</span>}
                       </div>
                       {!loc.available && loc.reason && (
@@ -369,6 +389,33 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
                       Nothing's free for that window — try a different time.
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {needsIngeniaConfirmation && (
+            <div style={{ ...FIELD, background: "var(--amber)0f", border: "1px solid var(--amber)", borderRadius: 10, padding: "0.85rem 0.9rem" }}>
+              <div style={{ fontSize: "0.82rem", color: "var(--text)", marginBottom: "0.65rem", lineHeight: 1.4 }}>
+                <strong>{selectedLocation?.name}</strong> is Request Only. Ingenia decides based on whether this is
+                community-based rather than personal use — you'll need their OK before booking it.
+              </div>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", cursor: "pointer", marginBottom: ingeniaConfirmed ? "0.75rem" : 0 }}>
+                <input type="checkbox" checked={ingeniaConfirmed} onChange={e => setIngeniaConfirmed(e.target.checked)}
+                  style={{ marginTop: "0.15rem", width: 16, height: 16, flexShrink: 0 }} />
+                <span style={{ fontSize: "0.85rem", color: "var(--text)" }}>
+                  I've confirmed with the Ingenia Community Manager that I can book this space.
+                </span>
+              </label>
+              {ingeniaConfirmed && (
+                <div>
+                  <label style={LABEL}>Who confirmed this?</label>
+                  <input
+                    value={ingeniaConfirmedBy}
+                    onChange={e => setIngeniaConfirmedBy(e.target.value.slice(0, INGENIA_CONFIRMED_BY_MAX))}
+                    placeholder="e.g. Jane at Ingenia"
+                    style={INPUT}
+                  />
                 </div>
               )}
             </div>

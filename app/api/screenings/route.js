@@ -4,6 +4,7 @@ import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyHubFollowers } from '@/lib/notifyAudience'
 import { hubLocation, fetchLocation } from '@/lib/eventClash'
 import { findAnyRoomConflict } from '@/lib/spaceBookings'
+import { notifyRequestOnlySpace } from '@/lib/notifyRequestOnlySpace'
 import { titleFor } from '@/lib/showing'
 
 // Movie screenings always run in the one dedicated common space -- there's no
@@ -258,6 +259,15 @@ export async function POST(req) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // "Request Only" (Iain, 2026-08-04): Admin is trusted to have already
+  // talked to Ingenia, but gets a reminder to actually go validate it.
+  if (cinema.request_only) {
+    await notifyRequestOnlySpace({
+      actingMemberId: member.id, eventId: event.id, eventTitle: title,
+      eventDate: event_date, locationName: cinema.name,
+    })
+  }
+
   // Notify residents who follow Movies about the new screening (Iain 2026-07-18).
   const when = event_date ? new Date(event_date + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }) : ""
   await notifyHubFollowers(supabaseAdmin, "movie", event.id, "event_added",
@@ -308,7 +318,7 @@ export async function PATCH(req) {
   if (conflict) return NextResponse.json({ error: conflict.message }, { status: 409 })
 
   const { data: before } = await supabaseAdmin
-    .from('events').select('event_date, event_time').eq('id', event_id).single()
+    .from('events').select('event_date, event_time, location_id').eq('id', event_id).single()
 
   const { error } = await supabaseAdmin
     .from('events')
@@ -316,6 +326,15 @@ export async function PATCH(req) {
     .eq('id', event_id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // "Request Only" (Iain, 2026-08-04): only nudge when the room actually
+  // changed onto a Request Only venue -- not on every unrelated edit.
+  if (cinema.request_only && before?.location_id !== location_id) {
+    await notifyRequestOnlySpace({
+      actingMemberId: member.id, eventId: event_id, eventTitle: title,
+      eventDate: event_date, locationName: cinema.name,
+    })
+  }
 
   // Update coordinator — clear existing then insert new if provided
   await supabaseAdmin.from('event_coordinators').delete().eq('event_id', event_id)

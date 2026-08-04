@@ -12,6 +12,7 @@ import { authedFetch, getAuthToken } from '@/lib/getAuthToken'
 import { cutoffToInputValue, cutoffFromInputValue } from '@/lib/booking'
 import TimeField from '@/components/TimeField'
 import { useSameDateWarning } from '@/components/SameDateWarning'
+import { useRequestOnlyAcknowledge } from '@/components/RequestOnlyAcknowledge'
 import AttendeeNamingPicker from '@/components/AttendeeNamingPicker'
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from '@/lib/formValidation'
 import { byOwnThenName } from '@/lib/sortNames'
@@ -204,6 +205,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const venueClosed = venue?.booking_status === 'closed'
 
   const { ask: askSameDate, Modal: SameDateModal } = useSameDateWarning()
+  const { ask: askRequestOnly, Modal: RequestOnlyModal } = useRequestOnlyAcknowledge()
   const [open, setOpen]               = useState(false)
 
   useEffect(() => {
@@ -339,6 +341,12 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     const wasCreate = !eventId
     addToast((wasCreate ? 'Screening added' : 'Screening updated') + ' — ' + shownAs + ' on ' + date, 'success')
     onSaved()
+    // "Request Only" (Iain, 2026-08-04): a toast auto-dismissed and was
+    // still too easy to miss -- forces an explicit OK click instead, on
+    // top of the bell notification.
+    if (venue?.request_only) {
+      await askRequestOnly(venue.name)
+    }
 
     // A brand-new free-text showing has no poster yet and the uploader needs an
     // event id, so the sheet stays open for it. It MUST be obvious that the save
@@ -360,6 +368,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   return (
     <>
       {SameDateModal}
+      {RequestOnlyModal}
       <div onClick={handleClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, opacity: open ? 1 : 0, transition: 'opacity 0.25s' }} />
       <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 'min(420px, 100%)', background: 'var(--surface)', zIndex: 201, overflowY: 'auto', transform: open ? 'translateX(0)' : 'translateX(100%)', transition: 'transform 0.28s cubic-bezier(0.4,0,0.2,1)', boxShadow: '-8px 0 32px rgba(0,0,0,0.15)', paddingBottom: 32 }}>
         <div style={{ height: 4, background: 'var(--teal)' }} />
@@ -512,6 +521,9 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
                 background: 'var(--surface2)', color: venueName ? 'var(--text)' : 'var(--danger)',
               }}>
                 <span style={{ flex: 1, fontWeight: 600 }}>{venueName || 'No venue set'}</span>
+                {venue?.request_only && (
+                  <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--amber-dark)' }}>Request Only</span>
+                )}
                 <button type="button" onClick={() => setVenueEditing(true)} style={{
                   background: 'none', border: 'none', color: 'var(--teal)', fontWeight: 700,
                   fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'inherit', padding: 0,
@@ -531,6 +543,9 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
                       display: 'flex', alignItems: 'center', gap: '0.5rem',
                     }}>
                       <span style={{ flex: 1 }}>{v.name}</span>
+                      {v.request_only && (
+                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--amber-dark)' }}>Request Only</span>
+                      )}
                       {v.booking_status === 'closed' && (
                         <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#b45309' }}>Closed</span>
                       )}

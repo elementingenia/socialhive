@@ -21,6 +21,7 @@ import { cutoffToDateValue, cutoffFromDateValue } from "@/lib/booking"
 import TimeField from "@/components/TimeField"
 import { needsSpaceValidation } from "@/lib/eventClash"
 import { useSameDateWarning } from "@/components/SameDateWarning"
+import { useRequestOnlyAcknowledge } from "@/components/RequestOnlyAcknowledge"
 import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName } from "@/lib/sortNames"
@@ -41,11 +42,14 @@ function fmtYear(str) {
 }
 
 
-function Toast({ msg }) {
+function Toast({ msg, type }) {
   if (!msg) return null
+  // amber "warn" variant added 2026-08-04 for the Request Only reminder,
+  // matching the type-aware Toast already used in screenings/social.
+  const bg = type === "warn" ? "var(--amber-dark)" : "#15803d"
   return (
     <div style={{ position: "fixed", top: 70, left: "50%", transform: "translateX(-50%)", zIndex: 9999,
-      background: "#15803d", color: "#fff", padding: "10px 20px", borderRadius: 12, fontSize: 14,
+      background: bg, color: "#fff", padding: "10px 20px", borderRadius: 12, fontSize: 14,
       fontWeight: 600, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", maxWidth: "90vw", textAlign: "center" }}>{msg}</div>
   )
 }
@@ -857,6 +861,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   const [seriesScope, setSeriesScope] = useState("this")   // 'this' | 'future' (scope §6)
   const [occBusy, setOccBusy] = useState(false)
   const { ask: askSameDate, Modal: SameDateModal } = useSameDateWarning()
+  const { ask: askRequestOnly, Modal: RequestOnlyModal } = useRequestOnlyAcknowledge()
   useEffect(() => {
     if (recurMode !== "pattern" || !recur.enabled || !recur.rule_type) return
     const d = nextOccurrence({ rule_type: recur.rule_type, rule_config: recur.rule_config, start_date: todayStr, month_end_policy: recur.month_end_policy }, todayStr)
@@ -1093,6 +1098,12 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     // fine, the form just never closed / never returned to the club page.
     setSaving(false)
     onSave()
+    // "Request Only" (Iain, 2026-08-04): a toast auto-dismissed and was
+    // still too easy to miss -- forces an explicit OK click instead, on
+    // top of the bell notification.
+    if (selectedLocation?.request_only) {
+      await askRequestOnly(selectedLocation.name)
+    }
   }
 
   async function removeOccurrence() {
@@ -1142,6 +1153,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   return (
     <>
     {SameDateModal}
+    {RequestOnlyModal}
     <div style={{ background: "var(--surface)", borderRadius: 16, border: `2px solid ${colour}`,
       padding: "1.25rem", marginBottom: 16 }}>
       <div style={{ fontWeight: 800, fontSize: "1rem", color: clubInk(colour), marginBottom: 16 }}>
@@ -1206,7 +1218,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             {form.location_id && !onsiteLocations.some(l => l.id === form.location_id) && (
               <option value={form.location_id}>Venue no longer available — choose again</option>
             )}
-            {onsiteLocations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            {onsiteLocations.map(l => <option key={l.id} value={l.id}>{l.name}{l.request_only ? " (Request Only)" : ""}</option>)}
           </select>
         ) : (
           <textarea value={form.location} onChange={e => set("location", e.target.value)} rows={3}
@@ -1688,14 +1700,14 @@ export default function ClubHome({ club }) {
   const [myBookedIds, setMyBookedIds] = useState(new Set())  // past event ids user participated in
   const [members,     setMembers]     = useState([])
   const [loading,     setLoading]     = useState(true)
-  const [toast,       setToast]       = useState(null)
+  const [toast,       setToast]       = useState(null) // { msg, type } | null
   const [showForm,    setShowForm]    = useState(false)
   const [clubPattern, setClubPattern] = useState(null)  // content-defined clubs (§7a)
   const [editEvent,   setEditEvent]   = useState(null)
   const [slideOutEvent, setSlideOutEvent] = useState(null)
   const [outstandingBook, setOutstandingBook] = useState(null) // { book_id, title } — member's most recent unreturned book, if any
 
-  function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 3000) }
+  function showToast(msg, type = "success") { setToast({ msg, type }); setTimeout(() => setToast(null), 3000) }
 
   function toSlideOutShape(ev, myBooking) {
     // Block joining a different book while a previously-issued kit copy hasn't
@@ -1949,7 +1961,7 @@ export default function ClubHome({ club }) {
       {appearance.image_url && (
         <ClubPageWatermark imageUrl={appearance.image_url} posX={appearance.image_pos_x} posY={appearance.image_pos_y} zoom={appearance.image_zoom} />
       )}
-      <Toast msg={toast} />
+      <Toast msg={toast?.msg} type={toast?.type} />
 
       <ClubSocial club={{ ...club, ...appearance }} colour={colour} isAdmin={isAdmin} onAppearanceUpdated={patch => setAppearance(a => ({ ...a, ...patch }))} />
 
