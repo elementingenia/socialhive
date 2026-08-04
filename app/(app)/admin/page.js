@@ -32,7 +32,6 @@ const SECTIONS = [
   // Bar section parked (feature not in scope) — see lib/features.js
   ...(BAR_ENABLED ? [{ key: 'Bar', label: 'Bar', Icon: BarIcon }] : []),
   { key: 'Locations', label: 'Locations',  Icon: InfoIcon },
-  { key: 'SpaceBookings', label: 'Space Bookings', Icon: BookingsIcon },
   { key: 'Tools',     label: 'Tools',      Icon: ToolsIcon },
 ]
 
@@ -1635,7 +1634,6 @@ export default function AdminPage() {
         {tab === 'Owners'    && <HubOwnersTab />}
         {BAR_ENABLED && tab === 'Bar' && <BarTab />}
         {tab === 'Locations' && <LocationsTab />}
-        {tab === 'SpaceBookings' && <SpaceBookingsTab />}
         {tab === 'Tools'     && <ToolsTab />}
       </div>
     )
@@ -2027,6 +2025,17 @@ function fmtUsageDate(dateStr) {
   return new Date(y, m - 1, d).toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+// Compact form for the 2-line admin room-usage row -- no weekday, year only
+// when it isn't the current one (Iain, 2026-08-04: "Using a LOT of vertical
+// space in each tile - let's combine the information to make things more
+// compact").
+function fmtUsageDateShort(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const opts = { day: 'numeric', month: 'short' }
+  if (y !== new Date().getFullYear()) opts.year = 'numeric'
+  return new Date(y, m - 1, d).toLocaleDateString('en-AU', opts)
+}
+
 function fmtUsageTime(hhmm) {
   if (!hhmm) return ''
   const [h, m] = hhmm.split(':').map(Number)
@@ -2152,15 +2161,20 @@ function SpaceBookingsTab() {
   const [cancelNote, setCancelNote] = useState('')
   const [locationFilter, setLocationFilter] = useState('') // '' = all spaces
   const [sortBy, setSortBy] = useState('date') // 'date' | 'space'
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   const load = useCallback(async () => {
-    const qs = locationFilter ? `/api/spaces?admin=1&location_id=${locationFilter}` : '/api/spaces?admin=1'
-    const res = await authedFetch(qs)
+    const params = new URLSearchParams({ admin: '1' })
+    if (locationFilter) params.set('location_id', locationFilter)
+    if (dateFrom) params.set('date_from', dateFrom)
+    if (dateTo) params.set('date_to', dateTo)
+    const res = await authedFetch(`/api/spaces?${params.toString()}`)
     const data = await res.json()
     if (!res.ok) { setError(data.error || 'Could not load space bookings'); setBookings([]); setEvents([]); return }
     setBookings(data.bookings || [])
     setEvents(data.events || [])
-  }, [locationFilter])
+  }, [locationFilter, dateFrom, dateTo])
   useEffect(() => { load() }, [load])
 
   useEffect(() => { if (locationFilter) setSortBy('date') }, [locationFilter])
@@ -2255,9 +2269,33 @@ function SpaceBookingsTab() {
         hub; cancelling a personal booking here notifies the resident.
       </div>
 
-      <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '0.6rem', flexWrap: 'wrap' }}>
         <LocationFilterDropdown locations={locations} value={locationFilter} onChange={setLocationFilter} />
         <SortToggle sortBy={sortBy} setSortBy={setSortBy} disableSpace={!!locationFilter} />
+      </div>
+
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end', marginBottom: '1rem', flexWrap: 'wrap' }}>
+        <div>
+          <label style={labelStyle}>From</label>
+          <input style={{ ...inputStyle, width: 'auto' }} type="date" value={dateFrom}
+            max={dateTo || undefined}
+            onClick={e => e.currentTarget.showPicker?.()}
+            onChange={e => setDateFrom(e.target.value)} />
+        </div>
+        <div>
+          <label style={labelStyle}>To</label>
+          <input style={{ ...inputStyle, width: 'auto' }} type="date" value={dateTo}
+            min={dateFrom || undefined}
+            onClick={e => e.currentTarget.showPicker?.()}
+            onChange={e => setDateTo(e.target.value)} />
+        </div>
+        {(dateFrom || dateTo) && (
+          <button onClick={() => { setDateFrom(''); setDateTo('') }} style={{
+            padding: '0.55rem 0.8rem', borderRadius: 10, border: '1px solid var(--border)',
+            background: 'var(--surface2)', color: 'var(--text-dim)', fontWeight: 600, fontSize: '0.82rem',
+            fontFamily: 'inherit', cursor: 'pointer',
+          }}>Clear dates</button>
+        )}
       </div>
 
       {error && <div style={{ color: '#b91c1c', fontSize: '0.85rem', marginBottom: '0.75rem' }}>{error}</div>}
@@ -2278,28 +2316,32 @@ function SpaceBookingsTab() {
                   {group.heading}
                 </div>
               )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                 {group.rows.map(row => (
                   <div key={row.key} style={{
                     background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 12,
-                    padding: '0.85rem 1rem', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem',
+                    padding: '0.55rem 0.85rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.6rem',
                   }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: '0.15rem' }}>
-                        {row.Icon && (
-                          <span style={{ display: 'flex', color: row.colour, flexShrink: 0 }}>
-                            <row.Icon size={14} />
+                      {/* Line 1: icon + date/space, time right-aligned and muted */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                          {row.Icon && (
+                            <span style={{ display: 'flex', color: row.colour, flexShrink: 0 }}>
+                              <row.Icon size={13} />
+                            </span>
+                          )}
+                          <span style={{ fontWeight: 700, fontSize: '0.85rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {sortBy === 'space' ? fmtUsageDateShort(row.date) : `${row.location_name} · ${fmtUsageDateShort(row.date)}`}
                           </span>
-                        )}
-                        <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>
-                          {sortBy === 'space' ? fmtUsageDate(row.date) : row.location_name}
-                        </span>
+                        </div>
+                        <span style={{ fontSize: '0.76rem', color: 'var(--text-dim)', fontWeight: 600, flexShrink: 0 }}>{row.timeLabel}</span>
                       </div>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginBottom: '0.25rem' }}>
-                        {sortBy !== 'space' && `${fmtUsageDate(row.date)} · `}{row.timeLabel}
+                      {/* Line 2: colour-coded hub/booker label + title, combined */}
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: '0.15rem' }}>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: row.colour, flexShrink: 0 }}>{row.subtitle}</span>
+                        <span style={{ fontSize: '0.82rem', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.title}</span>
                       </div>
-                      <div style={{ fontSize: '0.82rem', color: 'var(--text)', marginBottom: '0.2rem' }}>{row.title}</div>
-                      <div style={{ fontSize: '0.72rem', color: row.colour, fontWeight: 600 }}>{row.subtitle}</div>
                     </div>
                     {row.source === 'personal' && (
                       <button
@@ -2307,7 +2349,7 @@ function SpaceBookingsTab() {
                         disabled={cancellingId === row.raw.id}
                         style={{
                           flexShrink: 0, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 8,
-                          padding: '0.4rem 0.75rem', fontSize: '0.78rem', fontWeight: 600, color: 'var(--danger)',
+                          padding: '0.35rem 0.65rem', fontSize: '0.75rem', fontWeight: 600, color: 'var(--danger)',
                           cursor: cancellingId === row.raw.id ? 'default' : 'pointer', opacity: cancellingId === row.raw.id ? 0.6 : 1,
                         }}
                       >
@@ -2366,12 +2408,44 @@ function SpaceBookingsTab() {
   )
 }
 
+// Venues and their bookings belong together (Iain, 2026-08-04: "they belong
+// together") -- a simple 2-button sub-pill, same visual language as the
+// Open/Closed toggle inside each venue's own settings.
+function LocationsSubTabs({ view, setView }) {
+  return (
+    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+      {[['venues', 'Venues'], ['bookings', 'Bookings']].map(([v, txt]) => (
+        <button key={v} type="button" onClick={() => setView(v)} style={{
+          flex: 1, padding: '0.6rem', borderRadius: 10, fontFamily: 'inherit', fontSize: '0.88rem',
+          fontWeight: 700, cursor: 'pointer', border: '2px solid',
+          borderColor: view === v ? 'var(--amber)' : 'var(--border)',
+          background: view === v ? 'var(--amber)18' : 'var(--surface)',
+          color: view === v ? 'var(--amber-dark)' : 'var(--text-dim)',
+        }}>{txt}</button>
+      ))}
+    </div>
+  )
+}
+
 function LocationsTab() {
+  const [view, setView]           = useState('venues') // 'venues' | 'bookings'
   const [locations, setLocations] = useState(null)
   const [newName, setNewName]     = useState('')
   const [busy, setBusy]           = useState(false)
   const [error, setError]         = useState('')
   const [openId, setOpenId]       = useState(null)
+  // Which venues can safely be deleted -- Iain, 2026-08-04: "possible to
+  // delete a location as long as there are no historical bookings using
+  // that location". The DB's own FKs would NOT stop this: events.location_id
+  // is ON DELETE SET NULL and space_bookings.location_id is ON DELETE CASCADE
+  // (migrations 058/072), so an unguarded delete would silently erase a
+  // room's booking history rather than fail loudly -- this client-side check
+  // is the only thing standing in the way of that. Also blocks deleting a
+  // hub's currently-nominated venue (migration 073's hub_settings.location_id,
+  // also ON DELETE SET NULL) since that would silently break that hub's
+  // default room -- not literally "a booking", but the same silent-breakage
+  // shape, so it gets the same guard.
+  const [blockers, setBlockers] = useState(null)
 
   const load = useCallback(() => {
     // A-Z to match the dropdowns — sort_order isn't editable anywhere in the UI
@@ -2379,6 +2453,27 @@ function LocationsTab() {
       .then(({ data }) => setLocations(data || []))
   }, [])
   useEffect(() => { load() }, [load])
+
+  const loadBlockers = useCallback(async () => {
+    const [evRes, sbRes, hsRes] = await Promise.all([
+      supabase.from('events').select('location_id').not('location_id', 'is', null),
+      supabase.from('space_bookings').select('location_id'),
+      supabase.from('hub_settings').select('location_id').not('location_id', 'is', null),
+    ])
+    setBlockers({
+      eventIds: new Set((evRes.data || []).map(r => r.location_id)),
+      bookingIds: new Set((sbRes.data || []).map(r => r.location_id)),
+      nominatedIds: new Set((hsRes.data || []).map(r => r.location_id)),
+    })
+  }, [])
+  useEffect(() => { loadBlockers() }, [loadBlockers])
+
+  function deleteBlockReason(locId) {
+    if (!blockers) return 'Checking…'
+    if (blockers.nominatedIds.has(locId)) return "This is a hub's nominated venue — change that first."
+    if (blockers.eventIds.has(locId) || blockers.bookingIds.has(locId)) return 'Has historical bookings, so it can’t be deleted.'
+    return null
+  }
 
   async function add() {
     if (!newName.trim()) return
@@ -2392,7 +2487,7 @@ function LocationsTab() {
         ? `There is already a venue called "${newName.trim()}".` : e.message)
       return
     }
-    setNewName(''); load()
+    setNewName(''); load(); loadBlockers()
   }
 
   async function toggleArchived(loc) {
@@ -2400,8 +2495,25 @@ function LocationsTab() {
     load()
   }
 
+  async function deleteLocation(loc) {
+    const { error: e } = await supabase.from('locations').delete().eq('id', loc.id)
+    if (e) return e.message
+    setOpenId(null); load(); loadBlockers()
+    return null
+  }
+
+  if (view === 'bookings') {
+    return (
+      <div>
+        <LocationsSubTabs view={view} setView={setView} />
+        <SpaceBookingsTab />
+      </div>
+    )
+  }
+
   return (
     <div>
+      <LocationsSubTabs view={view} setView={setView} />
       <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '1rem' }}>
         On-site venues offered when creating any event, in any hub or club. Hiding a venue keeps it on
         past events but removes it from the picker.
@@ -2431,6 +2543,8 @@ function LocationsTab() {
               onToggle={() => setOpenId(openId === l.id ? null : l.id)}
               onArchive={() => toggleArchived(l)}
               onSaved={() => { setOpenId(null); load() }}
+              deleteBlockReason={deleteBlockReason(l.id)}
+              onDelete={() => deleteLocation(l)}
             />
           ))}
         </div>
@@ -2440,10 +2554,13 @@ function LocationsTab() {
 }
 
 // One venue: a summary row that expands into its settings.
-function LocationRow({ loc, expanded, onToggle, onArchive, onSaved }) {
+function LocationRow({ loc, expanded, onToggle, onArchive, onSaved, deleteBlockReason, onDelete }) {
   const [form, setForm] = useState(null)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState('')
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteErr, setDeleteErr] = useState('')
 
   // Reset the draft every time the row opens, so an abandoned edit never
   // reappears later looking like saved state.
@@ -2497,6 +2614,14 @@ function LocationRow({ loc, expanded, onToggle, onArchive, onSaved }) {
       return
     }
     onSaved()
+  }
+
+  async function doDelete() {
+    setDeleting(true); setDeleteErr('')
+    const err = await onDelete()
+    setDeleting(false)
+    if (err) { setDeleteErr(err); return }
+    setConfirmingDelete(false)
   }
 
   const chip = (text, colour) => (
@@ -2619,8 +2744,52 @@ function LocationRow({ loc, expanded, onToggle, onArchive, onSaved }) {
               background: 'var(--surface2)', color: 'var(--text-dim)', fontWeight: 600,
               fontFamily: 'inherit', fontSize: '0.9rem', cursor: 'pointer',
             }}>{loc.archived ? 'Show' : 'Hide'}</button>
+            <button
+              onClick={() => setConfirmingDelete(true)}
+              disabled={!!deleteBlockReason}
+              title={deleteBlockReason || ''}
+              style={{
+                padding: '0.6rem 1rem', borderRadius: 10, border: '1px solid var(--border)',
+                background: 'var(--surface2)', color: deleteBlockReason ? 'var(--text-dim)' : 'var(--danger)',
+                fontWeight: 600, fontFamily: 'inherit', fontSize: '0.9rem',
+                cursor: deleteBlockReason ? 'not-allowed' : 'pointer', opacity: deleteBlockReason ? 0.5 : 1,
+              }}>Delete</button>
           </div>
+          {deleteBlockReason && (
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.4rem' }}>{deleteBlockReason}</div>
+          )}
         </div>
+      )}
+
+      {confirmingDelete && (
+        <SlideOver title="Delete this venue?" onClose={() => setConfirmingDelete(false)}>
+          <div style={{ fontSize: '0.88rem', marginBottom: '1.25rem' }}>
+            Permanently delete <strong>{loc.name}</strong>? This can’t be undone.
+          </div>
+          {deleteErr && <div style={{ color: '#b91c1c', fontSize: '0.85rem', marginBottom: '1rem' }}>{deleteErr}</div>}
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <button
+              onClick={() => setConfirmingDelete(false)}
+              style={{
+                flex: 1, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10,
+                padding: '0.75rem', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text)', cursor: 'pointer',
+              }}
+            >
+              Keep venue
+            </button>
+            <button
+              onClick={doDelete}
+              disabled={deleting}
+              style={{
+                flex: 1, background: 'var(--danger)', border: 'none', borderRadius: 10,
+                padding: '0.75rem', fontSize: '0.9rem', fontWeight: 600, color: '#fff',
+                cursor: deleting ? 'default' : 'pointer', opacity: deleting ? 0.6 : 1,
+              }}
+            >
+              {deleting ? 'Deleting…' : 'Delete venue'}
+            </button>
+          </div>
+        </SlideOver>
       )}
     </div>
   )

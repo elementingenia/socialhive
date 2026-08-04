@@ -4,7 +4,6 @@ import { createPortal } from "react-dom"
 import TimeField from "@/components/TimeField"
 import { authedFetch } from "@/lib/getAuthToken"
 import { BOOKING_REASON_MAX } from "@/lib/spaceBookings"
-import { useSameDateWarning } from "@/components/SameDateWarning"
 
 // Book a Space — Personal Space Booking. Scope:
 // Social_Hive_Personal_Space_Booking_Scope.md (decisions locked 2026-08-01).
@@ -19,6 +18,104 @@ import { useSameDateWarning } from "@/components/SameDateWarning"
 //
 // Any resident can book any bookable space for their own use, independent of
 // every hub/club — this form is deliberately NOT scoped to one.
+
+// Same hub-label convention Admin's room-usage view uses (EVENT_HUB_META in
+// app/(app)/admin/page.js) — kept as its own small copy here rather than a
+// shared import, since this file only needs the label text, not the icon.
+const HUB_LABEL = { movie: "Show Time", social: "Social", bookclub: "Book Club", club: "Groups & Clubs" }
+
+// Turns the precheck response's two independent lists (events, personal
+// bookings) into one flat list of same-day clashes for display — each item
+// carries what the space-booking clash requirement (Iain, 2026-08-04) asks
+// for: the space booked, a description, and who's responsible. Events show
+// their real hub/club name (already public); personal bookings are
+// anonymised to "A resident" unless it's the requester's own (labelled
+// "You"), per the confirmed privacy answer — never revealing another
+// resident's identity or their private reason for booking.
+function buildClashItems(sameDateEvents, sameDatePersonalBookings) {
+  const fromEvents = (sameDateEvents || []).map(e => ({
+    key: `event:${e.id}`,
+    space: e.locations?.name || null,
+    description: e.title || "An event",
+    responsible: HUB_LABEL[e.hub_type] || e.hub_type,
+  }))
+  const fromPersonal = (sameDatePersonalBookings || []).map((b, i) => ({
+    key: `personal:${i}`,
+    space: b.location_name,
+    description: b.title || "A personal booking",
+    responsible: b.is_own ? "You" : "A resident",
+  }))
+  return [...fromEvents, ...fromPersonal]
+}
+
+function ClashList({ items }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {items.map(it => (
+        <div key={it.key}>
+          <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "var(--text)" }}>{it.description}</div>
+          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
+            {[it.space, it.responsible].filter(Boolean).join(" · ")}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// A dedicated pre-submit warning for this form, deliberately NOT
+// SameDateWarning.js's shared useSameDateWarning() hook — that hook's Modal
+// only renders a titles-joined-by-commas sentence, which can't show the
+// richer per-item space/description/responsible-party breakdown this
+// requirement (Iain, 2026-08-04) asks for. Screenings/Social/Clubs keep
+// using the simple shared version unchanged; this form gets its own so
+// fixing its display can't regress theirs. Same ask()/Modal shape as the
+// shared hook otherwise, so the call site reads identically.
+function useSpaceClashWarning() {
+  const [items, setItems] = useState(null)
+  const resolveRef = useRef(null)
+
+  const ask = useCallback((clashItems) => new Promise((resolve) => {
+    resolveRef.current = resolve
+    setItems(clashItems)
+  }), [])
+
+  function respond(v) {
+    setItems(null)
+    resolveRef.current?.(v)
+    resolveRef.current = null
+  }
+
+  const Modal = !items ? null : (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 500,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}>
+      <div style={{ background: "var(--surface)", borderRadius: 16, padding: "1.25rem",
+        maxWidth: 380, width: "100%", boxShadow: "0 12px 40px rgba(0,0,0,0.25)" }}>
+        <div style={{ fontWeight: 800, fontSize: "1rem", marginBottom: 8 }}>Already something on this date</div>
+        <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginBottom: 14 }}>
+          You can still go ahead if that's fine — just check the space you want in the Ingenia app too.
+        </div>
+        <div style={{ marginBottom: 18 }}>
+          <ClashList items={items} />
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" onClick={() => respond(false)}
+            style={{ flex: 1, padding: "0.65rem", borderRadius: 10, border: "1px solid var(--border)",
+              background: "var(--surface)", color: "var(--text)", fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
+            Go back
+          </button>
+          <button type="button" onClick={() => respond(true)}
+            style={{ flex: 1, padding: "0.65rem", borderRadius: 10, border: "none",
+              background: "var(--danger)", color: "#fff", fontWeight: 700, fontFamily: "inherit", cursor: "pointer" }}>
+            Continue anyway
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
+  return { ask, Modal }
+}
 
 function Portal({ children }) {
   const [mounted, setMounted] = useState(false)
@@ -48,9 +145,9 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
-  const [acknowledgedClash, setAcknowledgedClash] = useState(null) // same-date events the resident proceeded past, or null
+  const [acknowledgedClash, setAcknowledgedClash] = useState(null) // clash items the resident proceeded past, or null
   const fetchTag = useRef(0)
-  const { ask: askSameDate, Modal: SameDateModal } = useSameDateWarning()
+  const { ask: askSameDate, Modal: SameDateModal } = useSpaceClashWarning()
 
   const today = new Date().toISOString().split("T")[0]
   const windowValid = !!(date && startTime && endTime && endTime > startTime)
@@ -102,14 +199,14 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
     setSubmitting(true); setError("")
 
     // Soft same-day warning, in keeping with the event booking modal (Iain,
-    // 2026-08-04): another Hive event that day, in any room, was previously
-    // invisible here -- a resident could book the Lounge with no idea Show
-    // Time had the Cinema running that same evening. Reuses the exact same
-    // precheck endpoint and SameDateWarning UI that Social/Screenings/Clubs
-    // already use, rather than inventing a second version of this pattern.
-    // Only a soft heads-up -- it never blocks the booking, matching the
-    // existing "hard block first, soft warning second, never both" priority.
-    let clashEvents = null
+    // 2026-08-04): another Hive event OR another resident's personal booking
+    // that day, in any room, was previously invisible here. Reuses the same
+    // precheck endpoint Social/Screenings/Clubs already use, opted in via
+    // include_space_bookings so this is the only caller that also learns
+    // about other residents' personal space_bookings. Only a soft heads-up
+    // -- it never blocks the booking, matching the existing "hard block
+    // first, soft warning second, never both" priority.
+    let clashItems = null
     try {
       const pre = await authedFetch("/api/events/precheck", {
         method: "POST",
@@ -117,11 +214,13 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
         body: JSON.stringify({
           event_date: date, event_time: startTime, event_end_time: endTime,
           location_type: "onsite", location_id: locationId,
+          include_space_bookings: true,
         }),
       }).then(r => r.json()).catch(() => ({}))
-      if (pre.sameDateEvents?.length) {
-        if (!(await askSameDate(pre.sameDateEvents))) { setSubmitting(false); return }
-        clashEvents = pre.sameDateEvents
+      const items = buildClashItems(pre.sameDateEvents, pre.sameDatePersonalBookings)
+      if (items.length) {
+        if (!(await askSameDate(items))) { setSubmitting(false); return }
+        clashItems = items
       }
     } catch {
       // Precheck is advisory only -- if it fails, fall through to the real
@@ -137,7 +236,7 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || "Could not book that space"); setSubmitting(false); return }
-      setAcknowledgedClash(clashEvents)
+      setAcknowledgedClash(clashItems)
       setSuccess(true)
       // Bug fix (Iain, 2026-08-04 live-fire find): this used to never reset,
       // which permanently disabled handleClose's `if (!submitting)` guard
@@ -182,14 +281,23 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
           <div style={{ padding: "2rem 1.25rem", textAlign: "center" }}>
             <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>✅</div>
             <div style={{ fontWeight: 700, fontSize: "1.05rem", marginBottom: "0.4rem" }}>Space booked</div>
-            <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginBottom: "1.5rem" }}>
-              {acknowledgedClash?.length ? (
-                <>Note: {acknowledgedClash.map(e => e.title).join(", ")} {acknowledgedClash.length === 1 ? "is" : "are"} also on
-                that day. Remember to check and book the space in the Ingenia app too.</>
-              ) : (
-                <>No other Hive event or booking clashes with this. Remember to check and book the space in the Ingenia app too.</>
-              )}
-            </div>
+            {acknowledgedClash?.length ? (
+              <>
+                <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginBottom: "0.85rem" }}>
+                  There {acknowledgedClash.length === 1 ? "is" : "are"} also a clash that day:
+                </div>
+                <div style={{ textAlign: "left", background: "var(--surface2)", borderRadius: 12, padding: "0.9rem 1rem", marginBottom: "1.25rem" }}>
+                  <ClashList items={acknowledgedClash} />
+                </div>
+                <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "1.5rem" }}>
+                  Remember to check and book the space in the Ingenia app too.
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginBottom: "1.5rem" }}>
+                No other Hive event or booking clashes with this. Remember to check and book the space in the Ingenia app too.
+              </div>
+            )}
             <button onClick={onClose} style={{ background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10,
               padding: "0.8rem 1.5rem", fontWeight: 700, fontSize: "0.95rem", cursor: "pointer", width: "100%" }}>
               Done
