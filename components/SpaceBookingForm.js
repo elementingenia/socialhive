@@ -4,7 +4,6 @@ import { createPortal } from "react-dom"
 import TimeField from "@/components/TimeField"
 import { authedFetch } from "@/lib/getAuthToken"
 import { BOOKING_REASON_MAX, INGENIA_CONFIRMED_BY_MAX } from "@/lib/spaceBookings"
-import { useUser } from "@/lib/UserContext"
 
 // Book a Space — Personal Space Booking. Scope:
 // Social_Hive_Personal_Space_Booking_Scope.md (decisions locked 2026-08-01).
@@ -136,7 +135,6 @@ function addHour(time) {
 }
 
 export default function SpaceBookingForm({ open, onClose, onBooked }) {
-  const { isAdmin } = useUser()
   const [date, setDate] = useState("")
   const [startTime, setStartTime] = useState("")
   const [endTime, setEndTime] = useState("")
@@ -199,10 +197,11 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
 
   const reasonTrimmed = reason.trim()
   const selectedLocation = (locations || []).find(l => l.id === locationId) || null
-  // "Request Only" (Iain, 2026-08-04): a non-admin must self-declare Ingenia
-  // sign-off before this can submit. Admins skip the checkbox entirely --
-  // they get a reminder notification instead (server-side, after booking).
-  const needsIngeniaConfirmation = !!selectedLocation?.request_only && !isAdmin
+  // "Request Only" (Iain, 2026-08-04): personal use, so EVERY booker must
+  // self-declare Ingenia's sign-off before this can submit -- no admin
+  // exemption here (that only applies to creating a community EVENT, not
+  // booking a space for yourself).
+  const needsIngeniaConfirmation = !!selectedLocation?.request_only
   const ingeniaConfirmedByTrimmed = ingeniaConfirmedBy.trim()
   const ingeniaValid = !needsIngeniaConfirmation || (ingeniaConfirmed && ingeniaConfirmedByTrimmed && ingeniaConfirmedByTrimmed.length <= INGENIA_CONFIRMED_BY_MAX)
   const canSubmit = windowValid && locationId && reasonTrimmed && reasonTrimmed.length <= BOOKING_REASON_MAX && ingeniaValid && !submitting

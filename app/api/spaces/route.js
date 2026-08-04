@@ -6,7 +6,6 @@ import {
   listAvailableLocations, checkSpaceAvailability, validateSpaceBooking,
   toSpaceBookingWindow, BOOKING_REASON_MAX, validateIngeniaConfirmation,
 } from '@/lib/spaceBookings'
-import { notifyRequestOnlySpace } from '@/lib/notifyRequestOnlySpace'
 
 // Personal Space Booking. Scope: Social_Hive_Personal_Space_Booking_Scope.md
 // (decisions locked 2026-08-01). Any resident can book a common-area space
@@ -183,12 +182,13 @@ export async function POST(req) {
   if (locError) return NextResponse.json({ error: locError.message }, { status: 500 })
   if (!location || location.archived) return NextResponse.json({ error: 'That space no longer exists' }, { status: 404 })
 
-  // "Request Only" (Iain, 2026-08-04): a non-admin must self-declare Ingenia
-  // sign-off before the booking is even accepted. Admins are exempt here --
-  // they get a reminder notification instead, fired after a successful
-  // insert below.
+  // "Request Only" (Iain, 2026-08-04): personal use, so EVERY booker --
+  // admin or not -- must self-declare Ingenia's sign-off before the
+  // booking is even accepted. No admin exemption here (that only applies
+  // to event creation, which is inherently community-based -- see
+  // lib/notifyRequestOnlySpace.js).
   const ingeniaError = validateIngeniaConfirmation({
-    requestOnly: location.request_only, isAdmin: member.is_admin,
+    requestOnly: location.request_only,
     ingeniaConfirmed: ingenia_confirmed, ingeniaConfirmedBy: ingenia_confirmed_by,
   })
   if (ingeniaError) return NextResponse.json({ error: ingeniaError }, { status: 400 })
@@ -207,10 +207,8 @@ export async function POST(req) {
       location_id, event_id: null, starts_at: window.starts_at, ends_at: window.ends_at,
       purpose: 'private', title: reason.trim(), status: 'confirmed',
       booked_by: member.id, booked_by_name_at_time: member.name,
-      // Non-admins only ever reach here with a valid confirmation (checked
-      // above). Admins are exempt from the checkbox, so this is always
-      // false/null for them -- the CHECK constraint (migration 077) accepts
-      // that shape.
+      // The validation above already guarantees this is populated whenever
+      // location.request_only is true, for every booker regardless of role.
       ingenia_confirmed: location.request_only ? !!ingenia_confirmed : false,
       ingenia_confirmed_by: location.request_only && ingenia_confirmed ? (ingenia_confirmed_by || '').trim() : null,
     })
@@ -227,16 +225,6 @@ export async function POST(req) {
       return NextResponse.json({ error: overlapMessage(location.name) }, { status: 409 })
     }
     return NextResponse.json({ error: insertError.message }, { status: 500 })
-  }
-
-  // Admin used this form directly against a Request Only room -- same
-  // reminder an event-creation route fires, so the nudge is consistent
-  // regardless of which booking path an Admin used.
-  if (location.request_only && member.is_admin) {
-    await notifyRequestOnlySpace({
-      actingMemberId: member.id, eventId: null, eventTitle: reason.trim(),
-      eventDate: event_date, locationName: location.name,
-    })
   }
 
   return NextResponse.json(created)
