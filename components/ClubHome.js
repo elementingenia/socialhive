@@ -21,6 +21,7 @@ import { cutoffToDateValue, cutoffFromDateValue } from "@/lib/booking"
 import TimeField from "@/components/TimeField"
 import { needsSpaceValidation } from "@/lib/eventClash"
 import { useSameDateWarning } from "@/components/SameDateWarning"
+import { useRequestOnlyAcknowledge } from "@/components/RequestOnlyAcknowledge"
 import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName } from "@/lib/sortNames"
@@ -860,6 +861,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   const [seriesScope, setSeriesScope] = useState("this")   // 'this' | 'future' (scope §6)
   const [occBusy, setOccBusy] = useState(false)
   const { ask: askSameDate, Modal: SameDateModal } = useSameDateWarning()
+  const { ask: askRequestOnly, Modal: RequestOnlyModal } = useRequestOnlyAcknowledge()
   useEffect(() => {
     if (recurMode !== "pattern" || !recur.enabled || !recur.rule_type) return
     const d = nextOccurrence({ rule_type: recur.rule_type, rule_config: recur.rule_config, start_date: todayStr, month_end_policy: recur.month_end_policy }, todayStr)
@@ -1095,10 +1097,13 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     // still be truthy here and silently skip onSave() -- the event saved
     // fine, the form just never closed / never returned to the club page.
     setSaving(false)
-    // "Request Only" (Iain, 2026-08-04): surface it as a toast immediately,
-    // on top of the bell notification -- a silent notification alone was
-    // too easy to miss.
-    onSave(selectedLocation?.request_only ? selectedLocation.name : null)
+    onSave()
+    // "Request Only" (Iain, 2026-08-04): a toast auto-dismissed and was
+    // still too easy to miss -- forces an explicit OK click instead, on
+    // top of the bell notification.
+    if (selectedLocation?.request_only) {
+      await askRequestOnly(selectedLocation.name)
+    }
   }
 
   async function removeOccurrence() {
@@ -1148,6 +1153,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   return (
     <>
     {SameDateModal}
+    {RequestOnlyModal}
     <div style={{ background: "var(--surface)", borderRadius: 16, border: `2px solid ${colour}`,
       padding: "1.25rem", marginBottom: 16 }}>
       <div style={{ fontWeight: 800, fontSize: "1rem", color: clubInk(colour), marginBottom: 16 }}>
@@ -1990,10 +1996,7 @@ export default function ClubHome({ club }) {
           event={editEvent}
           clubPattern={clubPattern}
           members={members}
-          onSave={(requestOnlyName) => {
-            setShowForm(false); setEditEvent(null); load()
-            if (requestOnlyName) showToast(`${requestOnlyName} is Request Only — confirm with Ingenia if you haven't already.`, "warn")
-          }}
+          onSave={() => { setShowForm(false); setEditEvent(null); load() }}
           onClose={() => { setShowForm(false); setEditEvent(null) }}
         />
       )}

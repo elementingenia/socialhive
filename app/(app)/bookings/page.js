@@ -196,10 +196,10 @@ function MySpaceBookings() {
             justifyContent: "space-between", gap: "0.75rem",
           }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--amber-dark)",
-                textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: "0.2rem" }}>
-                Space Booking
-              </div>
+              {/* No per-tile "Space Booking" label -- the section header above
+                  (Iain, 2026-08-04: "the entire section has that label")
+                  already says it; repeating it on every tile just cost
+                  vertical space for nothing. */}
               <div style={{ fontSize: "0.98rem", fontWeight: 700, color: "var(--text)", marginBottom: "0.22rem" }}>
                 {b.locations?.name || "Space"}
               </div>
