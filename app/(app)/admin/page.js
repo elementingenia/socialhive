@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { supabase } from '@/lib/supabase'
 import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
@@ -51,8 +52,22 @@ function Badge({ label, colour }) {
 }
 
 // ── Slide-over shell ──────────────────────────────────────────────────────────
+// Portals to document.body (Iain, 2026-08-04: "Delete this venue" modal was
+// rendering behind BottomNav for any HIDDEN venue). Root cause: a hidden
+// venue's row wrapper has `opacity: 0.55` -- any opacity < 1 establishes a
+// new CSS stacking context, which trapped this modal's position:fixed
+// content inside it even though the modal's own z-index (201) is higher
+// than BottomNav's (100). z-index only resolves within a shared stacking
+// context, so the whole opacity-reduced subtree composited behind the nav
+// regardless. Portaling to document.body -- the same escape hatch
+// SpaceBookingForm already uses for exactly this bug class -- makes the
+// modal a direct child of <body>, outside any ancestor's stacking context,
+// so it can never be trapped like this again no matter what triggered it.
 function SlideOver({ title, onClose, children }) {
-  return (
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  if (!mounted) return null
+  return createPortal(
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.4)', zIndex:200 }} />
       <div style={{ position:'fixed', bottom:0, left:0, right:0, background:'var(--bg)', borderRadius:'20px 20px 0 0', zIndex:201, maxHeight:'92vh', display:'flex', flexDirection:'column' }}>
@@ -62,7 +77,8 @@ function SlideOver({ title, onClose, children }) {
         </div>
         <div style={{ overflowY:'auto', padding:'1.25rem', flex:1 }}>{children}</div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }
 
