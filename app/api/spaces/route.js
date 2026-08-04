@@ -4,8 +4,9 @@ import { notify } from '@/lib/notify'
 import { isOverlapError, overlapMessage, toInstant, sydneyOffsetMinutes } from '@/lib/spaces'
 import {
   listAvailableLocations, checkSpaceAvailability, validateSpaceBooking,
-  toSpaceBookingWindow, BOOKING_REASON_MAX,
+  toSpaceBookingWindow, BOOKING_REASON_MAX, validateIngeniaConfirmation,
 } from '@/lib/spaceBookings'
+import { notifyRequestOnlySpace } from '@/lib/notifyRequestOnlySpace'
 
 // Personal Space Booking. Scope: Social_Hive_Personal_Space_Booking_Scope.md
 // (decisions locked 2026-08-01). Any resident can book a common-area space
@@ -171,16 +172,26 @@ export async function POST(req) {
   const member = await getMember(token)
   if (!member) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
-  const { location_id, event_date, event_time, event_end_time, reason } = await req.json()
+  const { location_id, event_date, event_time, event_end_time, reason, ingenia_confirmed, ingenia_confirmed_by } = await req.json()
 
   const validationError = validateSpaceBooking({ location_id, event_date, event_time, event_end_time, reason })
   if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
 
   const { data: location, error: locError } = await supabaseAdmin
-    .from('locations').select('id, name, bookable, booking_status, closed_from, closed_to, closed_reason, archived')
+    .from('locations').select('id, name, bookable, booking_status, closed_from, closed_to, closed_reason, archived, request_only')
     .eq('id', location_id).maybeSingle()
   if (locError) return NextResponse.json({ error: locError.message }, { status: 500 })
   if (!location || location.archived) return NextResponse.json({ error: 'That space no longer exists' }, { status: 404 })
+
+  // "Request Only" (Iain, 2026-08-04): a non-admin must self-declare Ingenia
+  // sign-off before the booking is even accepted. Admins are exempt here --
+  // they get a reminder notification instead, fired after a successful
+  // insert below.
+  const ingeniaError = validateIngeniaConfirmation({
+    requestOnly: location.request_only, isAdmin: member.is_admin,
+    ingeniaConfirmed: ingenia_confirmed, ingeniaConfirmedBy: ingenia_confirmed_by,
+  })
+  if (ingeniaError) return NextResponse.json({ error: ingeniaError }, { status: 400 })
 
   const window = toSpaceBookingWindow(event_date, event_time, event_end_time)
   if (!window) return NextResponse.json({ error: 'Invalid date or time' }, { status: 400 })
@@ -196,6 +207,12 @@ export async function POST(req) {
       location_id, event_id: null, starts_at: window.starts_at, ends_at: window.ends_at,
       purpose: 'private', title: reason.trim(), status: 'confirmed',
       booked_by: member.id, booked_by_name_at_time: member.name,
+      // Non-admins only ever reach here with a valid confirmation (checked
+      // above). Admins are exempt from the checkbox, so this is always
+      // false/null for them -- the CHECK constraint (migration 077) accepts
+      // that shape.
+      ingenia_confirmed: location.request_only ? !!ingenia_confirmed : false,
+      ingenia_confirmed_by: location.request_only && ingenia_confirmed ? (ingenia_confirmed_by || '').trim() : null,
     })
     .select().single()
 
@@ -210,6 +227,16 @@ export async function POST(req) {
       return NextResponse.json({ error: overlapMessage(location.name) }, { status: 409 })
     }
     return NextResponse.json({ error: insertError.message }, { status: 500 })
+  }
+
+  // Admin used this form directly against a Request Only room -- same
+  // reminder an event-creation route fires, so the nudge is consistent
+  // regardless of which booking path an Admin used.
+  if (location.request_only && member.is_admin) {
+    await notifyRequestOnlySpace({
+      actingMemberId: member.id, eventId: null, eventTitle: reason.trim(),
+      eventDate: event_date, locationName: location.name,
+    })
   }
 
   return NextResponse.json(created)

@@ -35,6 +35,7 @@ function typeIcon(type) {
     case "question_answered":    return "💬"
     case "question_unanswered":  return "⏳"
     case "space_booking_cancelled": return "🚪"
+    case "space_request_validate":  return "📋"
     default:                  return "🔔"
   }
 }
@@ -60,6 +61,7 @@ function typeColour(type) {
     case "question_answered":    return "var(--teal)"
     case "question_unanswered":  return "var(--danger)"
     case "space_booking_cancelled": return "#e53e3e"
+    case "space_request_validate":  return "var(--amber-dark)"
     default:                  return "var(--text-dim)"
   }
 }

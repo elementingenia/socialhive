@@ -430,7 +430,10 @@ function FixedListPicker({ value, onChange, options, placeholder = "Select…", 
                 display: "flex", alignItems: "center", justifyContent: "space-between",
               }}
             >
-              {opt.name || opt}
+              <span style={{ flex: 1 }}>{opt.name || opt}</span>
+              {opt.request_only && (
+                <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--amber-dark)", marginRight: "0.4rem" }}>Request Only</span>
+              )}
               {value === (opt.id || opt) && <span style={{ color: "var(--terracotta)", fontSize: "0.85rem" }}>✓</span>}
             </button>
           ))}

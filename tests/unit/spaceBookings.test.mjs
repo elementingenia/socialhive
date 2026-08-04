@@ -6,7 +6,7 @@
 // here, same convention as findSpaceConflict in lib/eventClash.js — verified
 // live-fire against real data instead, not with a mocked db.
 
-import { spaceBookingConflictMessage, toSpaceBookingWindow, validateSpaceBooking, BOOKING_REASON_MAX } from '../../lib/spaceBookings.js'
+import { spaceBookingConflictMessage, toSpaceBookingWindow, validateSpaceBooking, BOOKING_REASON_MAX, validateIngeniaConfirmation, INGENIA_CONFIRMED_BY_MAX } from '../../lib/spaceBookings.js'
 
 let pass = 0, fail = 0
 const ok = (cond, msg) => { cond ? pass++ : (fail++, console.log('  ✗', msg)) }
@@ -73,6 +73,24 @@ ok(validateSpaceBooking({ ...validBooking, reason: '   ' }) === 'Say what the sp
 ok(validateSpaceBooking({ ...validBooking, reason: 'x'.repeat(BOOKING_REASON_MAX) }) === null, 'reason at exactly the cap is valid')
 ok(validateSpaceBooking({ ...validBooking, reason: 'x'.repeat(BOOKING_REASON_MAX + 1) })?.includes(String(BOOKING_REASON_MAX)),
    'reason one over the cap is rejected and the message names the limit')
+
+// ── validateIngeniaConfirmation ("Request Only" locations, 2026-08-04) ──────
+ok(validateIngeniaConfirmation({ requestOnly: false, isAdmin: false, ingeniaConfirmed: false, ingeniaConfirmedBy: '' }) === null,
+   'an ordinary (non-Request-Only) location never needs confirmation')
+ok(validateIngeniaConfirmation({ requestOnly: true, isAdmin: true, ingeniaConfirmed: false, ingeniaConfirmedBy: '' }) === null,
+   'an Admin is exempt from the checkbox entirely, even with nothing filled in')
+ok(validateIngeniaConfirmation({ requestOnly: true, isAdmin: false, ingeniaConfirmed: false, ingeniaConfirmedBy: '' }) !== null,
+   'a non-admin on a Request Only space with the box unchecked is rejected')
+ok(validateIngeniaConfirmation({ requestOnly: true, isAdmin: false, ingeniaConfirmed: true, ingeniaConfirmedBy: '' }) !== null,
+   'checked but no name given is still rejected')
+ok(validateIngeniaConfirmation({ requestOnly: true, isAdmin: false, ingeniaConfirmed: true, ingeniaConfirmedBy: '   ' }) !== null,
+   'whitespace-only name is rejected, same as a real reason field elsewhere in this app')
+ok(validateIngeniaConfirmation({ requestOnly: true, isAdmin: false, ingeniaConfirmed: true, ingeniaConfirmedBy: 'Jane at Ingenia' }) === null,
+   'checked + a real name is accepted')
+ok(validateIngeniaConfirmation({ requestOnly: true, isAdmin: false, ingeniaConfirmed: true, ingeniaConfirmedBy: 'x'.repeat(INGENIA_CONFIRMED_BY_MAX) }) === null,
+   'name at exactly the cap is valid')
+ok(validateIngeniaConfirmation({ requestOnly: true, isAdmin: false, ingeniaConfirmed: true, ingeniaConfirmedBy: 'x'.repeat(INGENIA_CONFIRMED_BY_MAX + 1) })?.includes(String(INGENIA_CONFIRMED_BY_MAX)),
+   'name one over the cap is rejected and the message names the limit')
 
 console.log(`spaceBookings: ${pass} passed, ${fail} failed`)
 if (fail) process.exit(1)

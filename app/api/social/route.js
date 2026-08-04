@@ -4,6 +4,7 @@ import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyAllActiveMembers } from '@/lib/notifyAudience'
 import { needsSpaceValidation, fetchLocation } from '@/lib/eventClash'
 import { findAnyRoomConflict } from '@/lib/spaceBookings'
+import { notifyRequestOnlySpace } from '@/lib/notifyRequestOnlySpace'
 
 
 async function getAdminMember(req) {
@@ -95,7 +96,7 @@ async function validateSpace(payload, excludeEventId) {
   // events.location is only a display copy now; always take it from the row so
   // it can never disagree with the room it points at.
   if (!needsSpaceValidation({ location_type: payload.location_type, bookable: loc.bookable }))
-    return { location_id: loc.id, location: loc.name }
+    return { location_id: loc.id, location: loc.name, request_only: !!loc.request_only }
 
   if (!payload.event_end_time) return { error: 'An end time is required for events in a common space', status: 400 }
   const conflict = await findAnyRoomConflict(supabaseAdmin, {
@@ -103,7 +104,7 @@ async function validateSpace(payload, excludeEventId) {
     event_end_time: payload.event_end_time, exclude_event_id: excludeEventId, locationName: loc.name,
   })
   if (conflict) return { error: conflict.message, status: 409 }
-  return { location_id: loc.id, location: loc.name }
+  return { location_id: loc.id, location: loc.name, request_only: !!loc.request_only }
 }
 
 export async function POST(req) {
@@ -132,6 +133,15 @@ export async function POST(req) {
 
   await writeCoordinators(event.id, body.coordinator_ids, member.id)
 
+  // "Request Only" (Iain, 2026-08-04): Admin is trusted to have already
+  // talked to Ingenia, but gets a reminder to actually go validate it.
+  if (space.request_only) {
+    await notifyRequestOnlySpace({
+      actingMemberId: member.id, eventId: event.id, eventTitle: body.title.trim(),
+      eventDate: body.event_date, locationName: space.location,
+    })
+  }
+
   // Social is community-wide: every active member is told about a new event
   // (Iain 2026-07-18). Amendments still notify only attendees (see PATCH).
   const when = body.event_date ? new Date(body.event_date + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }) : ""
@@ -159,7 +169,7 @@ export async function PATCH(req) {
   if (space.location) payload.location = space.location
 
   const { data: before } = await supabaseAdmin
-    .from('events').select('event_date, event_time, location').eq('id', body.id).single()
+    .from('events').select('event_date, event_time, location, location_id').eq('id', body.id).single()
 
   const { error } = await supabaseAdmin
     .from('events')
@@ -169,6 +179,15 @@ export async function PATCH(req) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   await writeCoordinators(body.id, body.coordinator_ids, member.id)
+
+  // "Request Only" (Iain, 2026-08-04): only nudge when the room actually
+  // changed onto a Request Only venue -- not on every unrelated edit.
+  if (space.request_only && before?.location_id !== payload.location_id) {
+    await notifyRequestOnlySpace({
+      actingMemberId: member.id, eventId: body.id, eventTitle: body.title.trim(),
+      eventDate: body.event_date, locationName: space.location,
+    })
+  }
 
   const dateChanged = before && (
     before.event_date !== body.event_date ||

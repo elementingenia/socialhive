@@ -1206,7 +1206,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             {form.location_id && !onsiteLocations.some(l => l.id === form.location_id) && (
               <option value={form.location_id}>Venue no longer available — choose again</option>
             )}
-            {onsiteLocations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+            {onsiteLocations.map(l => <option key={l.id} value={l.id}>{l.name}{l.request_only ? " (Request Only)" : ""}</option>)}
           </select>
         ) : (
           <textarea value={form.location} onChange={e => set("location", e.target.value)} rows={3}

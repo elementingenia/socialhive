@@ -512,6 +512,9 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
                 background: 'var(--surface2)', color: venueName ? 'var(--text)' : 'var(--danger)',
               }}>
                 <span style={{ flex: 1, fontWeight: 600 }}>{venueName || 'No venue set'}</span>
+                {venue?.request_only && (
+                  <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--amber-dark)' }}>Request Only</span>
+                )}
                 <button type="button" onClick={() => setVenueEditing(true)} style={{
                   background: 'none', border: 'none', color: 'var(--teal)', fontWeight: 700,
                   fontSize: '0.8rem', cursor: 'pointer', fontFamily: 'inherit', padding: 0,
@@ -531,6 +534,9 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
                       display: 'flex', alignItems: 'center', gap: '0.5rem',
                     }}>
                       <span style={{ flex: 1 }}>{v.name}</span>
+                      {v.request_only && (
+                        <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--amber-dark)' }}>Request Only</span>
+                      )}
                       {v.booking_status === 'closed' && (
                         <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#b45309' }}>Closed</span>
                       )}
