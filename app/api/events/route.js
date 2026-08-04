@@ -30,6 +30,14 @@ export async function GET(req) {
     }
   }
 
+  // Anonymous callers (the public /cal page) only ever get events flagged
+  // "Visible on public calendar" -- an is_public=false event must never reach
+  // an unauthenticated request. Authenticated callers see everything; the
+  // login-gated stub is applied purely client-side for whichever of these an
+  // anonymous viewer receives (Iain, 2026-08-04: off = absent from /cal
+  // entirely, on = shown as a stub requiring login for details).
+  const isAnonymous = !memberId
+
   // Fetch events with movie + book + coordinator joins
   let query = supabaseAdmin
     .from('events')
@@ -56,6 +64,7 @@ export async function GET(req) {
     .order('event_time', { ascending: true })
 
   if (hubType) query = query.eq('hub_type', hubType)
+  if (isAnonymous) query = query.eq('is_public', true)
 
   const { data: events, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -76,7 +76,9 @@ function getMondayOf(d) {
 // ── Event Chip ────────────────────────────────────────────────────────────────
 function EventChip({ event, onTap, compact = false, isAuthenticated = true }) {
   const colour = eventColour(event)
-  const isPrivate = event.is_public === false && !isAuthenticated
+  // Same convention as EventSlideOut.js: is_public is a server-side inclusion
+  // filter for anonymous /cal requests, not a per-viewer display rule here.
+  const isPrivate = !isAuthenticated
   const booked = event.bookings_count || 0
   const max = event.max_seats || 0
   const hasMyBooking = event.my_bookings?.some(b => b.status === "confirmed")
@@ -417,7 +419,7 @@ function MonthView({ events, onEventTap, isAuthenticated = true }) {
               }}>{day.getDate()}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 2, justifyContent: "center" }}>
                 {dayEvents.map(ev => {
-                  const evPrivate = ev.is_public === false && !isAuthenticated
+                  const evPrivate = !isAuthenticated
                   const colour = evPrivate ? "#bbb" : eventColour(ev)
                   return (
                     <div

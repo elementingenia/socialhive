@@ -157,6 +157,24 @@ export async function PATCH(req) {
 
   const body = await req.json()
   if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  // Cancel Event -- same soft-archive-and-notify pattern as Movies
+  // (app/api/screenings/route.js DELETE) and Clubs & Groups (app/api/series.js
+  // PATCH cancel_occurrence). Deliberately never a hard delete: it would
+  // cascade away booking/payment history. A dedicated action, bypassing the
+  // full edit validation below, since a cancel request carries only {id, action}.
+  if (body.action === 'cancel') {
+    const { data: ev } = await supabaseAdmin
+      .from('events').select('title, archived').eq('id', body.id).eq('hub_type', 'social').maybeSingle()
+    if (!ev) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    if (ev.archived) return NextResponse.json({ ok: true, already: true }) // idempotent
+    const { error } = await supabaseAdmin.from('events').update({ archived: true }).eq('id', body.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    await notifyEventAttendees(supabaseAdmin, body.id, 'event_cancelled',
+      `${ev.title || 'A Social event you booked'} has been cancelled.`)
+    return NextResponse.json({ ok: true })
+  }
+
   if (!body.title?.trim() || !body.event_date)
     return NextResponse.json({ error: 'Title and date are required' }, { status: 400 })
   if (!body.coordinator_ids?.length)

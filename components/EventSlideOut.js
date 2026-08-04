@@ -1667,7 +1667,11 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
 
   if (!event) return null
 
-  const isPrivate = event.is_public === false && !isAuthenticated
+  // is_public now only controls server-side inclusion in the anonymous /cal
+  // feed (app/api/events/route.js) -- anything an anonymous viewer receives is
+  // shown as a locked stub full stop; an authenticated viewer always sees
+  // everything regardless of is_public.
+  const isPrivate = !isAuthenticated
   const colour = isPrivate ? "#bbb"
     : (event.club ? clubColour(event.club) : (HUB_COLOURS[event.hub_type] || "var(--amber)"))
 
