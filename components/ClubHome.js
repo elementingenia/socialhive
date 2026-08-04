@@ -41,11 +41,14 @@ function fmtYear(str) {
 }
 
 
-function Toast({ msg }) {
+function Toast({ msg, type }) {
   if (!msg) return null
+  // amber "warn" variant added 2026-08-04 for the Request Only reminder,
+  // matching the type-aware Toast already used in screenings/social.
+  const bg = type === "warn" ? "var(--amber-dark)" : "#15803d"
   return (
     <div style={{ position: "fixed", top: 70, left: "50%", transform: "translateX(-50%)", zIndex: 9999,
-      background: "#15803d", color: "#fff", padding: "10px 20px", borderRadius: 12, fontSize: 14,
+      background: bg, color: "#fff", padding: "10px 20px", borderRadius: 12, fontSize: 14,
       fontWeight: 600, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", maxWidth: "90vw", textAlign: "center" }}>{msg}</div>
   )
 }
@@ -1092,7 +1095,10 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     // still be truthy here and silently skip onSave() -- the event saved
     // fine, the form just never closed / never returned to the club page.
     setSaving(false)
-    onSave()
+    // "Request Only" (Iain, 2026-08-04): surface it as a toast immediately,
+    // on top of the bell notification -- a silent notification alone was
+    // too easy to miss.
+    onSave(selectedLocation?.request_only ? selectedLocation.name : null)
   }
 
   async function removeOccurrence() {
@@ -1688,14 +1694,14 @@ export default function ClubHome({ club }) {
   const [myBookedIds, setMyBookedIds] = useState(new Set())  // past event ids user participated in
   const [members,     setMembers]     = useState([])
   const [loading,     setLoading]     = useState(true)
-  const [toast,       setToast]       = useState(null)
+  const [toast,       setToast]       = useState(null) // { msg, type } | null
   const [showForm,    setShowForm]    = useState(false)
   const [clubPattern, setClubPattern] = useState(null)  // content-defined clubs (§7a)
   const [editEvent,   setEditEvent]   = useState(null)
   const [slideOutEvent, setSlideOutEvent] = useState(null)
   const [outstandingBook, setOutstandingBook] = useState(null) // { book_id, title } — member's most recent unreturned book, if any
 
-  function showToast(msg) { setToast(msg); setTimeout(() => setToast(null), 3000) }
+  function showToast(msg, type = "success") { setToast({ msg, type }); setTimeout(() => setToast(null), 3000) }
 
   function toSlideOutShape(ev, myBooking) {
     // Block joining a different book while a previously-issued kit copy hasn't
@@ -1949,7 +1955,7 @@ export default function ClubHome({ club }) {
       {appearance.image_url && (
         <ClubPageWatermark imageUrl={appearance.image_url} posX={appearance.image_pos_x} posY={appearance.image_pos_y} zoom={appearance.image_zoom} />
       )}
-      <Toast msg={toast} />
+      <Toast msg={toast?.msg} type={toast?.type} />
 
       <ClubSocial club={{ ...club, ...appearance }} colour={colour} isAdmin={isAdmin} onAppearanceUpdated={patch => setAppearance(a => ({ ...a, ...patch }))} />
 
@@ -1984,7 +1990,10 @@ export default function ClubHome({ club }) {
           event={editEvent}
           clubPattern={clubPattern}
           members={members}
-          onSave={() => { setShowForm(false); setEditEvent(null); load() }}
+          onSave={(requestOnlyName) => {
+            setShowForm(false); setEditEvent(null); load()
+            if (requestOnlyName) showToast(`${requestOnlyName} is Request Only — confirm with Ingenia if you haven't already.`, "warn")
+          }}
           onClose={() => { setShowForm(false); setEditEvent(null) }}
         />
       )}

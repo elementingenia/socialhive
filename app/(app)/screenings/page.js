@@ -338,6 +338,12 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     const shownAs = showMode === 'other' ? freeText.trim() : (pickedMovie?.title || 'Movie Night')
     const wasCreate = !eventId
     addToast((wasCreate ? 'Screening added' : 'Screening updated') + ' — ' + shownAs + ' on ' + date, 'success')
+    // "Request Only" (Iain, 2026-08-04): surface it as a toast immediately,
+    // on top of the bell notification -- a silent notification alone was
+    // too easy to miss.
+    if (venue?.request_only) {
+      addToast(`${venue.name} is Request Only — confirm with Ingenia if you haven't already.`, 'warn')
+    }
     onSaved()
 
     // A brand-new free-text showing has no poster yet and the uploader needs an

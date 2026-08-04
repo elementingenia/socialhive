@@ -649,7 +649,10 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     const data = await res.json()
     setSaving(false)
     if (!res.ok) { setError(data.error || "Save failed"); return }
-    onSaved()
+    // "Request Only" (Iain, 2026-08-04): the bell notification alone was too
+    // easy to miss -- surface it immediately as a toast too, using the venue
+    // the form already has in hand rather than a second round trip.
+    onSaved(selectedLocation?.request_only ? selectedLocation.name : null)
     if (!activeId) {
       // First-time create: keep the form open so the coordinator can add a photo /
       // upload a menu file straight away, using the id we just got back.
@@ -1723,7 +1726,10 @@ export default function SocialEvents() {
       {showForm && session && (
         <SocialEventForm event={editEvent} session={session} members={allMembers}
           onClose={() => { setShowForm(false); setEditEvent(null) }}
-          onSaved={() => { load() }} />
+          onSaved={(requestOnlyName) => {
+              load()
+              if (requestOnlyName) showToast(`${requestOnlyName} is Request Only — confirm with Ingenia if you haven't already.`, "warn")
+            }} />
       )}
     </div>
   )
