@@ -99,7 +99,7 @@ export default function CalendarPage() {
           <div style={{ fontSize: 13 }}>Check back soon!</div>
         </div>
       ) : (
-        <CalendarView events={events} onEventTap={handleEventTap} />
+        <CalendarView events={events} onEventTap={handleEventTap} isAuthenticated={true} />
       )}
 
       <EventSlideOut

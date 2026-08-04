@@ -1667,9 +1667,9 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
 
   if (!event) return null
 
-  const colour = event.is_public === false ? "#bbb"
+  const isPrivate = event.is_public === false && !isAuthenticated
+  const colour = isPrivate ? "#bbb"
     : (event.club ? clubColour(event.club) : (HUB_COLOURS[event.hub_type] || "var(--amber)"))
-  const isPrivate = event.is_public === false
 
   // Check if current user is a coordinator for this event
   const isEC = member && coordinators.some(ec => ec.member_id === member.id)
