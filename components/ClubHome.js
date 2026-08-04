@@ -1763,7 +1763,7 @@ export default function ClubHome({ club }) {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("club_id", club.id)
       .eq("archived", false)
       .order("event_date", { ascending: true })
