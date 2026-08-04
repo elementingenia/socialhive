@@ -531,6 +531,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
   const [ecError,      setEcError]      = useState(null)
   const [saving,       setSaving]       = useState(false)
   const [error,        setError]        = useState(null)
+  const [cancelling,   setCancelling]   = useState(false)
   // Mandatory-field tracking (Iain, 2026-08-04): computed fresh on every
   // render from the current form state -- not gated behind a Save click --
   // so a field lights up (or clears) the instant its value changes, same as
@@ -667,6 +668,31 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
       return
     }
     onClose()
+  }
+
+  // Cancel Event -- Social had no way to remove an event at all (Iain,
+  // 2026-08-04: "not sure how after all this time it isn't possible to
+  // delete an event" -- confirmed in code, genuinely missing). Same
+  // soft-archive-and-notify pattern Movies (screenings DELETE) and Clubs &
+  // Groups (cancelSoloEvent/removeOccurrence) already use -- never a hard
+  // delete, since that would cascade away booking/payment history.
+  async function cancelEvent() {
+    if (!activeId) return
+    if (!confirm("Cancel this event? Anyone booked will be notified. This can't be undone.")) return
+    setCancelling(true)
+    try {
+      const res = await fetch("/api/social", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (await getAuthToken()) },
+        body: JSON.stringify({ id: activeId, action: "cancel" }),
+      })
+      if (!res.ok) { const data = await res.json().catch(() => ({})); setError(data.error || "Could not cancel this event."); setCancelling(false); return }
+      onSaved()
+      onClose()
+    } catch {
+      setError("Could not cancel this event.")
+      setCancelling(false)
+    }
   }
 
   async function getToken() { return session.access_token }
@@ -997,6 +1023,17 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
           )}
 
           {error && <div style={{ color: "var(--danger)", fontSize: "0.85rem", marginBottom: "1rem" }}>{error}</div>}
+
+          {editing && (
+            <div style={{ marginBottom: "1rem" }}>
+              <button type="button" onClick={cancelEvent} disabled={cancelling || saving}
+                style={{ width: "100%", padding: "0.6rem", borderRadius: 8, border: "1px solid #fca5a5",
+                  background: "#fee2e2", color: "#991b1b", fontWeight: 700, fontSize: "0.8rem",
+                  cursor: (cancelling || saving) ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+                {cancelling ? "Cancelling…" : "Cancel this event"}
+              </button>
+            </div>
+          )}
 
           <button onClick={save} disabled={saving} style={{
             width: "100%", padding: "0.9rem", background: "var(--terracotta)",
