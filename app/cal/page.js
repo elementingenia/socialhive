@@ -11,7 +11,13 @@ export default function PublicCalendarPage() {
   const [isAuthed, setIsAuthed] = useState(false)
   const loadRef = useRef(0)
 
-  // Detect auth state (public calendar works both ways)
+  // Auth state is used ONLY for the header's "Go to App" vs "Sign In" link --
+  // a convenience for a visitor who happens to already have a session. It
+  // must never influence what the calendar itself shows or does (Iain,
+  // 2026-08-04: the public page has to look and behave identically no
+  // matter who's viewing it -- read-only, never bookable/editable, always
+  // pointing to login). See the deliberately-unauthenticated fetch below and
+  // the hardcoded isAuthenticated={false} on CalendarView/EventSlideOut.
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setIsAuthed(!!session)
@@ -22,16 +28,15 @@ export default function PublicCalendarPage() {
     const tag = ++loadRef.current
     setLoading(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-
       const from = new Date().toISOString().split("T")[0]
       const toDate = new Date(); toDate.setDate(toDate.getDate() + 90)
       const to = toDate.toISOString().split("T")[0]
 
-      const res = await fetch(`/api/events?from=${from}&to=${to}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      // Deliberately anonymous -- no Authorization header, even if this
+      // browser has a real session. This is what makes is_public=false
+      // filtering (app/api/events/route.js) and the "no personal booking
+      // state on the public page" rule hold regardless of who's looking.
+      const res = await fetch(`/api/events?from=${from}&to=${to}`)
       if (!res.ok) throw new Error("Failed to load events")
       const data = await res.json()
       if (tag === loadRef.current) setEvents(data)
@@ -67,7 +72,7 @@ export default function PublicCalendarPage() {
         zIndex: 100,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 22 }}>🐝</span>
+          <img src="/logo_hex_bee.png" alt="The Social Hive" style={{ width: 34, height: 34, flexShrink: 0 }} />
           <div>
             <div style={{ fontWeight: 800, fontSize: 15, color: "var(--amber-dark)" }}>
               The Social Hive
@@ -119,13 +124,13 @@ export default function PublicCalendarPage() {
           <div style={{ fontSize: 13 }}>Check back soon</div>
         </div>
       ) : (
-        <CalendarView events={events} onEventTap={setSelected} defaultView="month" isAuthenticated={isAuthed} />
+        <CalendarView events={events} onEventTap={setSelected} defaultView="month" />
       )}
 
       <EventSlideOut
         event={selected}
         onClose={() => setSelected(null)}
-        isAuthenticated={isAuthed}
+        isAuthenticated={false}
         onRefresh={loadEvents}
       />
     </div>

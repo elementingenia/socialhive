@@ -74,11 +74,13 @@ function getMondayOf(d) {
 }
 
 // ── Event Chip ────────────────────────────────────────────────────────────────
-function EventChip({ event, onTap, compact = false, isAuthenticated = true }) {
+// Tiles always show the real event -- is_public only ever controls whether an
+// event reaches this component in the first place (server-side filtering in
+// app/api/events/route.js for anonymous /cal requests). What a viewer can DO
+// with it (book, modify, manage) is gated elsewhere, not here (Iain,
+// 2026-08-04).
+function EventChip({ event, onTap, compact = false }) {
   const colour = eventColour(event)
-  // Same convention as EventSlideOut.js: is_public is a server-side inclusion
-  // filter for anonymous /cal requests, not a per-viewer display rule here.
-  const isPrivate = !isAuthenticated
   const booked = event.bookings_count || 0
   const max = event.max_seats || 0
   const hasMyBooking = event.my_bookings?.some(b => b.status === "confirmed")
@@ -91,8 +93,8 @@ function EventChip({ event, onTap, compact = false, isAuthenticated = true }) {
         display: "block",
         width: "100%",
         textAlign: "left",
-        background: isPrivate ? "#f0f0f0" : colour + "18",
-        borderLeft: `4px solid ${isPrivate ? "#bbb" : colour}`,
+        background: colour + "18",
+        borderLeft: `4px solid ${colour}`,
         borderTop: "none",
         borderRight: "none",
         borderBottom: "none",
@@ -105,16 +107,15 @@ function EventChip({ event, onTap, compact = false, isAuthenticated = true }) {
       <div style={{
         fontWeight: compact ? 500 : 600,
         fontSize: compact ? 11 : 15,
-        color: isPrivate ? "#888" : "var(--text)",
+        color: "var(--text)",
         lineHeight: 1.2,
-        fontStyle: isPrivate ? "italic" : "normal",
         whiteSpace: compact ? "nowrap" : "normal",
         overflow: compact ? "hidden" : "visible",
         textOverflow: compact ? "ellipsis" : "unset",
       }}>
-        {isPrivate ? "Private" : event.title}
+        {event.title}
       </div>
-      {!compact && !isPrivate && (
+      {!compact && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3 }}>
           <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{fmtTime(event.event_time)}</span>
           <span style={{
@@ -139,7 +140,7 @@ function EventChip({ event, onTap, compact = false, isAuthenticated = true }) {
 }
 
 // ── Week View ─────────────────────────────────────────────────────────────────
-function WeekView({ days, eventsByDate, onEventTap, isAuthenticated = true }) {
+function WeekView({ days, eventsByDate, onEventTap }) {
   const today = toDateStr(new Date())
 
   return (
@@ -175,7 +176,7 @@ function WeekView({ days, eventsByDate, onEventTap, isAuthenticated = true }) {
               )}
             </div>
             {dayEvents.map(ev => (
-              <EventChip key={ev.id} event={ev} onTap={onEventTap} isAuthenticated={isAuthenticated} />
+              <EventChip key={ev.id} event={ev} onTap={onEventTap} />
             ))}
           </div>
         )
@@ -185,7 +186,7 @@ function WeekView({ days, eventsByDate, onEventTap, isAuthenticated = true }) {
 }
 
 // ── 4-Week View ───────────────────────────────────────────────────────────────
-function FourWeekView({ days, eventsByDate, onEventTap, isAuthenticated = true }) {
+function FourWeekView({ days, eventsByDate, onEventTap }) {
   const today = toDateStr(new Date())
   const weeks = []
   for (let i = 0; i < days.length; i += 7) {
@@ -208,13 +209,13 @@ function FourWeekView({ days, eventsByDate, onEventTap, isAuthenticated = true }
   return (
     <div style={{ padding: "0 16px 16px" }}>
       {/* Day-of-week header — always Mon–Sun since grid starts on Monday */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", marginBottom: 4 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", marginBottom: 4 }}>
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => (
           <div key={d} style={{ textAlign: "center", fontSize: 11, fontWeight: 600, color: "var(--text-dim)", padding: "4px 0" }}>{d}</div>
         ))}
       </div>
       {weeks.map((week, wi) => (
-        <div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3, marginBottom: 6 }}>
+        <div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 3, marginBottom: 6 }}>
           {week.map(day => {
             const key = toDateStr(day)
             const dayEvents = eventsByDate[key] || []
@@ -224,6 +225,8 @@ function FourWeekView({ days, eventsByDate, onEventTap, isAuthenticated = true }
             return (
               <div key={key} style={{
                 minHeight: 48,
+                minWidth: 0,
+                overflow: "hidden",
                 background: isToday ? "var(--amber-light)" : "var(--surface2)",
                 borderRadius: 8,
                 padding: "4px 3px",
@@ -240,7 +243,7 @@ function FourWeekView({ days, eventsByDate, onEventTap, isAuthenticated = true }
                   {day.getDate()}
                 </div>
                 {dayEvents.map(ev => (
-                  <EventChip key={ev.id} event={ev} onTap={onEventTap} compact isAuthenticated={isAuthenticated} />
+                  <EventChip key={ev.id} event={ev} onTap={onEventTap} compact />
                 ))}
               </div>
             )
@@ -259,7 +262,7 @@ function FourWeekView({ days, eventsByDate, onEventTap, isAuthenticated = true }
                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 5, paddingBottom: 3, borderBottom: "1px solid var(--border)" }}>
                   {fmtShortDate(localDate(dateStr))}
                 </div>
-                {evs.map(ev => <EventChip key={ev.id} event={ev} onTap={onEventTap} isAuthenticated={isAuthenticated} />)}
+                {evs.map(ev => <EventChip key={ev.id} event={ev} onTap={onEventTap} />)}
               </div>
             ))}
         </div>
@@ -321,7 +324,7 @@ function DayPickerOverlay({ date, events, onSelect, onClose }) {
 }
 
 // ── Month View ────────────────────────────────────────────────────────────────
-function MonthView({ events, onEventTap, isAuthenticated = true }) {
+function MonthView({ events, onEventTap }) {
   const [viewMonth, setViewMonth] = useState(() => {
     const d = new Date()
     return new Date(d.getFullYear(), d.getMonth(), 1)
@@ -382,14 +385,14 @@ function MonthView({ events, onEventTap, isAuthenticated = true }) {
       </div>
 
       {/* Day-of-week headers */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", marginBottom: 4 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", marginBottom: 4 }}>
         {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
           <div key={i} style={{ textAlign: "center", fontSize: 11, fontWeight: 600, color: "var(--text-dim)", padding: "4px 0" }}>{d}</div>
         ))}
       </div>
 
       {/* Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: 2 }}>
         {cells.map((day, i) => {
           if (!day) return <div key={i} />
           const key = toDateStr(day)
@@ -403,6 +406,8 @@ function MonthView({ events, onEventTap, isAuthenticated = true }) {
               onClick={() => handleDayTap(day, dayEvents)}
               style={{
                 minHeight: 44,
+                minWidth: 0,
+                overflow: "hidden",
                 background: isToday ? "var(--amber-light)" : hasEvents ? "var(--surface2)" : "transparent",
                 borderRadius: 8,
                 padding: "4px 3px",
@@ -419,12 +424,11 @@ function MonthView({ events, onEventTap, isAuthenticated = true }) {
               }}>{day.getDate()}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 2, justifyContent: "center" }}>
                 {dayEvents.map(ev => {
-                  const evPrivate = !isAuthenticated
-                  const colour = evPrivate ? "#bbb" : eventColour(ev)
+                  const colour = eventColour(ev)
                   return (
                     <div
                       key={ev.id}
-                      title={evPrivate ? "Private" : ev.title}
+                      title={ev.title}
                       style={{ width: 8, height: 8, borderRadius: "50%", background: colour }}
                     />
                   )
@@ -449,7 +453,7 @@ function MonthView({ events, onEventTap, isAuthenticated = true }) {
                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 5, paddingBottom: 3, borderBottom: "1px solid var(--border)" }}>
                   {fmtShortDate(localDate(dateStr))}
                 </div>
-                {evs.map(ev => <EventChip key={ev.id} event={ev} onTap={onEventTap} isAuthenticated={isAuthenticated} />)}
+                {evs.map(ev => <EventChip key={ev.id} event={ev} onTap={onEventTap} />)}
               </div>
             ))}
         </div>
@@ -469,7 +473,7 @@ function MonthView({ events, onEventTap, isAuthenticated = true }) {
 }
 
 // ── CalendarView (main export) ────────────────────────────────────────────────
-export default function CalendarView({ events = [], onEventTap, defaultView = "week", isAuthenticated = true }) {
+export default function CalendarView({ events = [], onEventTap, defaultView = "week" }) {
   const [view, setView] = useState(defaultView)
   const [activeHubs, setActiveHubs] = useState(["movie", "club", "social"])
   // Club filter: 'all' | 'mine' | a specific club id (Iain 2026-07-18).
@@ -599,9 +603,9 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
       </div>
       </div>
 
-      {view === "week"  && <WeekView     days={weekDays}   eventsByDate={eventsByDate} onEventTap={onEventTap} isAuthenticated={isAuthenticated} />}
-      {view === "4week" && <FourWeekView days={month4Days} eventsByDate={eventsByDate} onEventTap={onEventTap} isAuthenticated={isAuthenticated} />}
-      {view === "month" && <MonthView    events={filteredEvents}   onEventTap={onEventTap} isAuthenticated={isAuthenticated} />}
+      {view === "week"  && <WeekView     days={weekDays}   eventsByDate={eventsByDate} onEventTap={onEventTap} />}
+      {view === "4week" && <FourWeekView days={month4Days} eventsByDate={eventsByDate} onEventTap={onEventTap} />}
+      {view === "month" && <MonthView    events={filteredEvents}   onEventTap={onEventTap} />}
     </div>
   )
 }
