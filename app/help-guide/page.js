@@ -264,13 +264,13 @@ export default function HelpGuidePage() {
           <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem" }}>
             <img src="/logo_hex_bee.png" alt="" style={{ width: 52, height: 52, filter: "brightness(0) invert(1) opacity(0.9)" }} />
             <div>
-              <div style={{ fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.18em", opacity: 0.8, textTransform: "uppercase", marginBottom: 2 }}>The Social Hive</div>
+              <div style={{ fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.18em", opacity: 0.8, textTransform: "uppercase", marginBottom: 2 }}>Element Happenings</div>
               <div style={{ fontSize: "1.6rem", fontWeight: 900, lineHeight: 1.1 }}>User Guide</div>
             </div>
           </div>
 
           <p style={{ fontSize: "0.9rem", lineHeight: 1.65, opacity: 0.92, margin: 0, maxWidth: 560 }}>
-            Welcome to The Social Hive — the community app for Fullerton Cove residents. This guide
+            Welcome to Element Happenings — the community app for Fullerton Cove residents. This guide
             covers everything from signing in for the first time, to booking events, browsing
             movies{BAR_ENABLED ? ", tracking your bar tab," : ","} and more. Sections marked{" "}
             <strong>EC only</strong> are for Element Communities coordinators.
@@ -353,11 +353,11 @@ export default function HelpGuidePage() {
           <Section id="header" num="—" title="Getting Around — The App Header">
             <Subsection id="sub-header-bar" title="The header bar">
               <Step img={IMG("06-movies.png")} alt="App header bar">
-                Every page in The Social Hive has a header bar at the top of the screen. It has three
+                Every page in Element Happenings has a header bar at the top of the screen. It has three
                 parts:
               </Step>
               <Step>
-                <strong>Left — The Social Hive logo.</strong> Tapping the logo takes you directly back
+                <strong>Left — Element Happenings logo.</strong> Tapping the logo takes you directly back
                 to the Home page from anywhere in the app.
               </Step>
               <Step>
@@ -403,7 +403,7 @@ export default function HelpGuidePage() {
           <Section id="access" num={secNum("access")} title="Signing In, Registering & Changing Your Password">
             <Subsection id="sub-signin" title="Sign In">
               <Step img={IMG("01-login.png")} alt="Sign In screen">
-                When you open The Social Hive you will see the sign-in screen. Enter your{" "}
+                When you open Element Happenings you will see the sign-in screen. Enter your{" "}
                 <strong>username</strong> and <strong>password</strong>, then tap{" "}
                 <strong>Sign In</strong>. If you have previously signed in on this device, the app
                 may remember your username.
@@ -749,7 +749,7 @@ export default function HelpGuidePage() {
           }}>
             <img src="/logo_hex_bee.png" alt="" style={{ width: 36, height: 36, opacity: 0.4, marginBottom: "0.5rem" }} />
             <p style={{ fontSize: "0.8rem", color: muted, margin: 0, lineHeight: 1.6 }}>
-              The Social Hive — Fullerton Cove Community App<br />
+              Element Happenings — Fullerton Cove Community App<br />
               Need further help? Speak to your Element Communities coordinator.
             </p>
           </div>

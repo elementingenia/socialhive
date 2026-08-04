@@ -2,7 +2,7 @@ const { chromium } = require('@playwright/test')
 const path = require('path')
 const fs = require('fs')
 
-const BASE = 'https://www.thesocialhive.com.au'
+const BASE = 'https://www.elementhappenings.com.au'
 const OUT  = path.join(__dirname, '../public/help')
 const AUTH = path.join(__dirname, 'e2e/.auth/testbot.json')
 

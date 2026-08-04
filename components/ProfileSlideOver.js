@@ -85,7 +85,7 @@ function NotificationsToggle() {
         <div style={{ padding: "0.55rem 0" }}>
           <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "var(--text)" }}>Phone alerts</div>
           <div style={{ fontSize: "0.74rem", color: "var(--text-dim)", marginTop: "0.15rem", lineHeight: 1.4 }}>
-            Add Social Hive to your Home Screen first (Share → Add to Home Screen), then come back here to turn this on.
+            Add Element Happenings to your Home Screen first (Share → Add to Home Screen), then come back here to turn this on.
           </div>
         </div>
         <div style={{ borderTop: "1px solid var(--border)" }} />
@@ -99,7 +99,7 @@ function NotificationsToggle() {
         <div style={{ padding: "0.55rem 0" }}>
           <div style={{ fontWeight: 600, fontSize: "0.88rem", color: "var(--text)" }}>Phone alerts</div>
           <div style={{ fontSize: "0.74rem", color: "var(--text-dim)", marginTop: "0.15rem", lineHeight: 1.4 }}>
-            Notifications are blocked for Social Hive — enable them in your phone's Settings to turn this on.
+            Notifications are blocked for Element Happenings — enable them in your phone's Settings to turn this on.
           </div>
         </div>
         <div style={{ borderTop: "1px solid var(--border)" }} />

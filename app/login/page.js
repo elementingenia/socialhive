@@ -34,7 +34,7 @@ export default function Login() {
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
         <img
           src="/wordmark_final.png"
-          alt="The Social Hive"
+          alt="Element Happenings"
           style={{ width: '280px', maxWidth: '100%', height: 'auto', display: 'block', margin: '0 auto' }}
         />
       </div>

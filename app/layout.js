@@ -1,7 +1,7 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'The Social Hive',
+  title: 'Element Happenings',
   description: 'Community platform for Fullerton Cove residents',
   manifest: '/site.webmanifest',
   icons: {

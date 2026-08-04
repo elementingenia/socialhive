@@ -138,10 +138,9 @@ export default function Header() {
     return (
       <header style={{ position: "sticky", top: 0, zIndex: 50, background: "var(--surface)", borderBottom: "3px solid " + moduleColour, padding: "0.6rem 1rem", display: "flex", alignItems: "center", justifyContent: "space-between", boxShadow: "0 1px 8px rgba(0,0,0,0.07)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", minWidth: 0, overflow: "hidden" }}>
-          <img src="/logo_hex_bee.png" alt="The Social Hive" style={{ width: 46, height: 46, flexShrink: 0 }} />
+          <img src="/logo_hex_bee.png" alt="Element Happenings" style={{ width: 46, height: 46, flexShrink: 0 }} />
           <div style={{ lineHeight: 1 }}>
-            <div style={{ fontSize: "0.6rem", fontWeight: 700, letterSpacing: "0.14em", color: "var(--amber)", textTransform: "uppercase" }}>The</div>
-            <div style={{ fontSize: "1.25rem", fontWeight: 900, letterSpacing: "0.07em", color: "var(--amber)", textTransform: "uppercase" }}>Social Hive</div>
+            <div style={{ fontSize: "1.25rem", fontWeight: 900, letterSpacing: "0.07em", color: "var(--amber)", textTransform: "uppercase" }}>Element Happenings</div>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexShrink: 0 }}>
@@ -157,10 +156,9 @@ export default function Header() {
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 50, background: "var(--surface)", borderBottom: "3px solid " + moduleColour, padding: "0.45rem 1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", boxShadow: "0 1px 8px rgba(0,0,0,0.07)" }}>
       <a href="/home" style={{ display: "flex", alignItems: "center", gap: "0.5rem", textDecoration: "none", flexShrink: 0 }}>
-        <img src="/logo_hex_bee.png" alt="The Social Hive" style={{ width: 30, height: 30, flexShrink: 0 }} />
+        <img src="/logo_hex_bee.png" alt="Element Happenings" style={{ width: 30, height: 30, flexShrink: 0 }} />
         <div style={{ lineHeight: 1 }}>
-          <div style={{ fontSize: "0.4rem", fontWeight: 700, letterSpacing: "0.14em", color: "var(--amber)", textTransform: "uppercase" }}>The</div>
-          <div style={{ fontSize: "0.72rem", fontWeight: 900, letterSpacing: "0.07em", color: "var(--amber)", textTransform: "uppercase" }}>Social Hive</div>
+          <div style={{ fontSize: "0.72rem", fontWeight: 900, letterSpacing: "0.07em", color: "var(--amber)", textTransform: "uppercase" }}>Element Happenings</div>
         </div>
       </a>
 

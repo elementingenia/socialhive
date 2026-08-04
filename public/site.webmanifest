@@ -1,6 +1,6 @@
 {
-  "name": "The Social Hive",
-  "short_name": "Social Hive",
+  "name": "Element Happenings",
+  "short_name": "Happenings",
   "description": "Community platform for Fullerton Cove residents",
   "icons": [
     { "src": "/favicon-192x192.png", "sizes": "192x192", "type": "image/png" },
