@@ -31,12 +31,15 @@ export default function Login() {
       justifyContent: 'center', minHeight: '100vh', padding: '1.5rem',
       background: 'var(--bg)'
     }}>
-      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem', marginBottom: '2rem' }}>
         <img
-          src="/wordmark_final.png"
+          src="/logo_hex_bee.png"
           alt="Element Happenings"
-          style={{ width: '280px', maxWidth: '100%', height: 'auto', display: 'block', margin: '0 auto' }}
+          style={{ width: '72px', height: '72px' }}
         />
+        <div style={{ fontSize: '1.5rem', fontWeight: 900, letterSpacing: '0.02em', color: 'var(--amber-dark)', textTransform: 'uppercase', textAlign: 'center', lineHeight: 1.15 }}>
+          Element Happenings
+        </div>
       </div>
 
       <Suspense fallback={null}><InactivityNotice onNotice={setNotice} /></Suspense>
