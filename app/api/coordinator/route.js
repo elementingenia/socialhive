@@ -146,10 +146,18 @@ export async function PATCH(req) {
     // Fetch previous state first so we only notify on an actual Pending -> Confirmed
     // transition, not every toggle (e.g. Confirmed -> Pending if corrected by mistake)
     const { data: prevBk } = await supa
-      .from("bookings").select("payment_status, member_id").eq("id", booking_id).maybeSingle()
+      .from("bookings").select("payment_status, member_id, payment_submitted_at").eq("id", booking_id).maybeSingle()
+    // An EC un-confirming payment (-> "pending") must not silently discard a
+    // resident's own "I've Paid" self-report -- restore 'submitted' instead
+    // when one is on record (migration 076). Only applies to the "pending"
+    // direction; an explicit refund/not_required/etc is left as sent (Iain,
+    // 2026-08-04: "the setting back on my booking reverts to unpaid as well,
+    // but SHOULD remain as I set it, which was I've Paid").
+    const effectiveStatus = (payment_status === "pending" && prevBk?.payment_submitted_at)
+      ? "submitted" : payment_status
     const { error: pe } = await supa
       .from("bookings")
-      .update({ payment_status, updated_at: new Date().toISOString() })
+      .update({ payment_status: effectiveStatus, updated_at: new Date().toISOString() })
       .eq("id", booking_id)
       .eq("event_id", event_id)
     if (pe) return NextResponse.json({ error: pe.message }, { status: 500 })
@@ -157,7 +165,7 @@ export async function PATCH(req) {
       const { data: ev } = await supa.from("events").select("title").eq("id", event_id).single()
       await notify(prevBk.member_id, event_id, "payment_confirmed", `Your payment for ${ev?.title || "this event"} has been confirmed.`)
     }
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, payment_status: effectiveStatus })
   }
 
   // ── Close Out payments for an event (2026-07-12) ──────────────────────────────

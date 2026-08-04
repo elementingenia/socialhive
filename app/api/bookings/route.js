@@ -195,7 +195,14 @@ export async function PATCH(req) {
     }
 
     const { error: markErr } = await supabaseAdmin
-      .from('bookings').update({ payment_status: 'submitted', updated_at: new Date().toISOString() }).eq('id', booking.id)
+      .from('bookings').update({
+        payment_status: 'submitted', updated_at: new Date().toISOString(),
+        // Independent of payment_status (migration 076) -- lets an EC's
+        // later Paid -> Unpaid toggle restore 'submitted' instead of
+        // blindly wiping to 'pending', which would silently discard the
+        // resident's own self-report (Iain, 2026-08-04).
+        payment_submitted_at: new Date().toISOString(),
+      }).eq('id', booking.id)
     if (markErr) return NextResponse.json({ error: markErr.message }, { status: 500 })
 
     const { data: event } = await supabaseAdmin
