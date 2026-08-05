@@ -31,7 +31,7 @@ export default function Login() {
       justifyContent: 'center', minHeight: '100vh', padding: '1.5rem',
       background: 'var(--bg)'
     }}>
-      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.5rem', marginBottom: '2rem' }}>
         <img
           src="/logo_hex_bee.png"
           alt="Element Happenings"

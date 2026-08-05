@@ -137,7 +137,7 @@ export default function Header() {
   if (isHome) {
     return (
       <header style={{ position: "sticky", top: 0, zIndex: 50, background: "var(--surface)", borderBottom: "3px solid " + moduleColour, padding: "0.6rem 1rem", display: "flex", alignItems: "center", justifyContent: "space-between", boxShadow: "0 1px 8px rgba(0,0,0,0.07)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.65rem", minWidth: 0, overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", minWidth: 0, overflow: "hidden" }}>
           <img src="/logo_hex_bee.png" alt="Element Happenings" style={{ width: 46, height: 46, flexShrink: 0 }} />
           <div style={{ lineHeight: 1, minWidth: 0 }}>
             <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "0.36rem", fontWeight: 700, color: "#C08E43", whiteSpace: "nowrap", lineHeight: 1 }}>Element</div>
@@ -156,7 +156,7 @@ export default function Header() {
   // ── Sub-pages — compact stacked wordmark, links back to Home; page title still gets the room ──
   return (
     <header style={{ position: "sticky", top: 0, zIndex: 50, background: "var(--surface)", borderBottom: "3px solid " + moduleColour, padding: "0.45rem 1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", boxShadow: "0 1px 8px rgba(0,0,0,0.07)" }}>
-      <a href="/home" style={{ display: "flex", alignItems: "center", gap: "0.35rem", textDecoration: "none", flexShrink: 0 }}>
+      <a href="/home" style={{ display: "flex", alignItems: "center", gap: "0.2rem", textDecoration: "none", flexShrink: 0 }}>
         <img src="/logo_hex_bee.png" alt="Element Happenings — back to Home" style={{ width: 30, height: 30, flexShrink: 0 }} />
         <div style={{ lineHeight: 1 }}>
           <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "0.24rem", fontWeight: 700, color: "#C08E43", whiteSpace: "nowrap", lineHeight: 1 }}>Element</div>
