@@ -31,15 +31,15 @@ export default function Login() {
       justifyContent: 'center', minHeight: '100vh', padding: '1.5rem',
       background: 'var(--bg)'
     }}>
-      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.5rem', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.6rem', marginBottom: '2rem' }}>
         <img
           src="/logo_hex_bee.png"
           alt="Element Happenings"
-          style={{ width: '64px', height: '64px', flexShrink: 0 }}
+          style={{ width: '77px', height: '77px', flexShrink: 0 }}
         />
         <div style={{ lineHeight: 1 }}>
-          <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '0.5rem', fontWeight: 700, color: '#C08E43', lineHeight: 1 }}>Element</div>
-          <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '1.25rem', fontWeight: 900, color: '#C08E43', textTransform: 'uppercase', lineHeight: 1 }}>Happenings</div>
+          <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '0.6rem', fontWeight: 700, color: '#C08E43', lineHeight: 1 }}>Element</div>
+          <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '1.5rem', fontWeight: 900, color: '#C08E43', textTransform: 'uppercase', lineHeight: 1 }}>Happenings</div>
         </div>
       </div>
 
