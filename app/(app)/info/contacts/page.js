@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import ResidentEditForm, { Sheet, CategoryPicker, COLOUR, inputStyle, labelStyle, getToken, CreateLoginForm } from "@/components/ResidentEditPanel"
 import { isBuiltInCategory } from "@/lib/contactCategories"
+import { formatPhoneInput } from "@/lib/phone"
 import { isExternalContact, displayRecipientName } from "@/lib/categoryQuestions"
 import AskQuestion from "@/components/AskQuestion"
 
@@ -204,7 +205,7 @@ function ContactForm({ contact, categories, setCategories, members, onSaved, onC
       </div>
       <div>
         <label style={labelStyle}>Phone</label>
-        <input value={form.phone} onChange={e => set("phone", e.target.value)} type="tel" style={inputStyle} />
+        <input value={form.phone} onChange={e => set("phone", formatPhoneInput(e.target.value))} type="tel" inputMode="numeric" maxLength={12} placeholder="0400 000 000" style={inputStyle} />
       </div>
       <div>
         <label style={labelStyle}>Email</label>

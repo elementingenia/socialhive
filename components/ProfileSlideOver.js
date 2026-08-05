@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import { BAR_ENABLED } from "@/lib/features"
 import { isPushSupported, isIOS, isStandalone, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from "@/lib/pushClient"
+import { formatPhoneInput } from "@/lib/phone"
 
 // Clearance below the sticky header so the avatar pill stays visible
 const TOP_OFFSET = 72 // px — covers both home (~68px) and sub-page (~43px) headers
@@ -277,7 +278,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.3rem" }}>Phone <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>(optional)</span></label>
-                  <input value={phone} onChange={e => setPhone(e.target.value)} style={inputStyle} placeholder="e.g. 0400 000 000" type="tel" />
+                  <input value={phone} onChange={e => setPhone(formatPhoneInput(e.target.value))} style={inputStyle} placeholder="0400 000 000" type="tel" inputMode="numeric" maxLength={12} />
                 </div>
               </div>
 
