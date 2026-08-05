@@ -2,6 +2,7 @@
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { getAuthToken } from "@/lib/getAuthToken"
+import { formatPhoneInput } from "@/lib/phone"
 
 export const COLOUR = "#4e7aab"
 
@@ -438,7 +439,7 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
         </div>
         <div style={{ flex: 1 }}>
           <label style={labelStyle}>Phone</label>
-          <input value={phone} onChange={e => setPhone(e.target.value)} type="tel" style={inputStyle} />
+          <input value={phone} onChange={e => setPhone(formatPhoneInput(e.target.value))} type="tel" inputMode="numeric" maxLength={12} placeholder="0400 000 000" style={inputStyle} />
         </div>
       </div>
       <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "-0.5rem" }}>
