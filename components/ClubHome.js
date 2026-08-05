@@ -1393,6 +1393,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         <RichEditor
           initialValue={form.description}
           hubColour={colour}
+          bg="card"
           onChange={html => set("description", html)}
           placeholder="Any extra details about this meeting…"
         />
@@ -1584,7 +1585,7 @@ function ClubSocial({ club, colour, isAdmin, onAppearanceUpdated }) {
         (() => (
           <div style={{ marginBottom: 12, border: `1px solid ${colour}`, borderRadius: 12, padding: "0.75rem" }}>
             <RichEditor key="club-notice" initialValue="" hubColour={colour.startsWith("var(") ? undefined : colour}
-              onChange={setDraft} placeholder="Write a notice for this group/club's members…" />
+              bg="card" onChange={setDraft} placeholder="Write a notice for this group/club's members…" />
             <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
               <button onClick={() => { setComposing(false); setDraft("") }} style={{ flex: 1, padding: "0.6rem", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text)", fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>Cancel</button>
               <button onClick={postNotice} disabled={posting || !draft.trim()} style={{ flex: 2, padding: "0.6rem", borderRadius: 10, border: "none", background: colour, color: clubTextOn(colour), fontWeight: 700, fontFamily: "inherit", cursor: (posting || !draft.trim()) ? "not-allowed" : "pointer", opacity: (posting || !draft.trim()) ? 0.6 : 1 }}>{posting ? "Posting…" : "Post notice"}</button>

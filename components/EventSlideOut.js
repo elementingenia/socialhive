@@ -607,6 +607,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
               <RichEditor
                 initialValue={desc}
                 hubColour={colour}
+                bg="card"
                 onChange={html => setDesc(html)}
                 placeholder={isBook ? "Event details shown to members…" : "Event description shown to attendees…"}
               />

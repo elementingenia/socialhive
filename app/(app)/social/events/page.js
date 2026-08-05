@@ -850,6 +850,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
                 <RichEditor
                   initialValue={form.menu_text}
                   hubColour="var(--terracotta)"
+                  bg="card"
                   onChange={html => set("menu_text", html)}
                   placeholder="Type the menu shown to residents…"
                 />
