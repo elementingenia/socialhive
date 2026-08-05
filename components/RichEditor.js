@@ -1,5 +1,6 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
+import { clubTextOn } from "@/lib/clubColours"
 
 // ── Hub CSS custom properties → literal hex ──────────────────────────────────
 // document.execCommand('foreColor', ...) and the "colour + alpha suffix" string
@@ -41,17 +42,44 @@ export function bbToHtml(text, hubColour) {
 }
 
 // ── Shared rich text editor (contentEditable) ────────────────────────────────
-// Used by Page Texts (admin) and Event Description / Menu (EventSlideOut).
-// Expands while focused so there's room to see/edit longer passages, then
-// collapses back to its compact height on blur.
+// Used by Page Texts (admin), Club Landing Page Text, and Event Description /
+// Menu / Notes (EventSlideOut, Book Club, Social).
+//
+// The 3 colour-format buttons (Colour / Black / White) are NOT universally
+// safe — which two are legible depends entirely on what the text actually
+// renders against once saved, and that differs by caller:
+//
+//   bg="tile"  — text renders inside a coloured hub/club welcome banner whose
+//                background IS `hubColour` (ClubHome's Welcome tile, Movies/
+//                Social's WelcomeBanner via admin Page Texts). "Colour" would
+//                always be an exact match for that background — 0% contrast,
+//                not just "occasionally dumb" — so it's dropped entirely.
+//                Offers Black / White only, and the editable box previews the
+//                actual tile colour (instead of the hardcoded white editor
+//                surface) so White text is visible while typing, not just on
+//                the final page.
+//   bg="card"  — text renders on a plain/near-white card (Event Description,
+//                Notes, Menu text). White is invisible both while editing
+//                (the editor surface is always var(--surface) = #fff) and on
+//                the final near-white card, so it's dropped. Offers
+//                Black / Colour.
+//
+// Fixed 2026-08-05 after both failure modes were reported live: "Colour" on
+// the club Landing Page Text was indistinguishable from the welcome tile
+// background (always identical hex), and "White" was unreadable while typing
+// in every caller because the editor box was hardcoded white regardless of
+// where the text was headed.
 export default function RichEditor({
-  initialValue, hubColour = '#0d9488', subOnly = false, onChange,
+  initialValue, hubColour = '#0d9488', subOnly = false, bg = 'card', onChange,
   minHeight, expandedMinHeight, placeholder,
 }) {
   const ref = useRef(null)
   const initDone = useRef(false)
   const [focused, setFocused] = useState(false)
   const hex = resolveColour(hubColour)
+  const isTile = bg === 'tile'
+  const editorBg = isTile ? hex : 'var(--surface)'
+  const defaultTextColour = isTile ? clubTextOn(hex) : 'var(--text)'
 
   const compactHeight = minHeight ?? (subOnly ? 56 : 80)
   const expandedHeight = expandedMinHeight ?? (subOnly ? 140 : 220)
@@ -86,17 +114,19 @@ export default function RichEditor({
           style={{ ...btnBase, fontStyle: 'italic' }}>I</button>
         <button type="button" onMouseDown={e => { e.preventDefault(); exec('underline') }}
           style={{ ...btnBase, textDecoration: 'underline' }}>U</button>
+        {!subOnly && !isTile && (
+          <button type="button" onMouseDown={e => { e.preventDefault(); exec('foreColor', hex) }}
+            style={{ ...btnBase, background: hex + '22', color: hex, border: '1px solid ' + hex, fontWeight: 700 }}>
+            Colour
+          </button>
+        )}
         {!subOnly && (
-          <>
-            <button type="button" onMouseDown={e => { e.preventDefault(); exec('foreColor', hex) }}
-              style={{ ...btnBase, background: hex + '22', color: hex, border: '1px solid ' + hex, fontWeight: 700 }}>
-              Colour
-            </button>
-            <button type="button" onMouseDown={e => { e.preventDefault(); exec('foreColor', '#000000') }}
-              style={{ ...btnBase, color: '#000', fontWeight: 700 }}>Black</button>
-            <button type="button" onMouseDown={e => { e.preventDefault(); exec('foreColor', '#ffffff') }}
-              style={{ ...btnBase, background: '#444', color: '#fff', fontWeight: 700 }}>White</button>
-          </>
+          <button type="button" onMouseDown={e => { e.preventDefault(); exec('foreColor', '#000000') }}
+            style={{ ...btnBase, color: '#000', fontWeight: 700 }}>Black</button>
+        )}
+        {!subOnly && isTile && (
+          <button type="button" onMouseDown={e => { e.preventDefault(); exec('foreColor', '#ffffff') }}
+            style={{ ...btnBase, background: '#444', color: '#fff', fontWeight: 700 }}>White</button>
         )}
         <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginLeft: 4 }}>
           Select text then tap format
@@ -114,8 +144,8 @@ export default function RichEditor({
             minHeight: focused ? expandedHeight : compactHeight,
             transition: 'min-height 0.15s ease',
             border: '1px solid var(--border)', borderRadius: 10,
-            padding: '0.75rem 1rem', background: 'var(--surface)',
-            color: 'var(--text)', fontSize: '0.95rem', lineHeight: 1.55,
+            padding: '0.75rem 1rem', background: editorBg,
+            color: defaultTextColour, fontSize: '0.95rem', lineHeight: 1.55,
             outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
             wordBreak: 'break-word',
           }}
@@ -123,7 +153,8 @@ export default function RichEditor({
         {isEmpty && !focused && placeholder && (
           <div style={{
             position: 'absolute', top: '0.75rem', left: '1rem', pointerEvents: 'none',
-            color: 'var(--text-dim)', fontSize: '0.95rem', fontStyle: 'italic',
+            color: isTile ? defaultTextColour : 'var(--text-dim)', opacity: isTile ? 0.75 : 1,
+            fontSize: '0.95rem', fontStyle: 'italic',
           }}>{placeholder}</div>
         )}
       </div>

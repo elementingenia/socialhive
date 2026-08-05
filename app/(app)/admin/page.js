@@ -1414,6 +1414,7 @@ function SubRow({ item, hubColour, onChange, onDelete }) {
           initialValue={item.text}
           hubColour={hubColour}
           subOnly
+          bg="tile"
           onChange={html => onChange(item.id, html)}
         />
       </div>
@@ -1553,6 +1554,7 @@ function PageTextsTab() {
                   initialValue={draft[sec.key + '__text'] || ''}
                   hubColour={sec.hex}
                   subOnly={false}
+                  bg="tile"
                   onChange={html => setDraftField(sec.key + '__text', html)}
                 />
               </div>
@@ -1801,6 +1803,7 @@ function ClubForm({ club, existingColours = [], onSaved, onCancel }) {
           key={club?.id || 'new'}
           initialValue={form.welcome_text}
           hubColour={CLUB_COLOURS.find(c => c.value === form.colour)?.hex || (form.colour?.startsWith('#') ? form.colour : '#7c3aed')}
+          bg="tile"
           onChange={html => set('welcome_text', html)}
           placeholder="Shown in the coloured banner at the top of this group/club's page…"
         />
