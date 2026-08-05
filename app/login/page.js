@@ -31,12 +31,16 @@ export default function Login() {
       justifyContent: 'center', minHeight: '100vh', padding: '1.5rem',
       background: 'var(--bg)'
     }}>
-      <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '0.5rem', marginBottom: '2rem' }}>
         <img
-          src="/wordmark_final.png"
-          alt="The Social Hive"
-          style={{ width: '280px', maxWidth: '100%', height: 'auto', display: 'block', margin: '0 auto' }}
+          src="/logo_hex_bee.png"
+          alt="Element Happenings"
+          style={{ width: '64px', height: '64px', flexShrink: 0 }}
         />
+        <div style={{ lineHeight: 1 }}>
+          <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '0.5rem', fontWeight: 700, color: '#C08E43', lineHeight: 1 }}>Element</div>
+          <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '1.25rem', fontWeight: 900, color: '#C08E43', textTransform: 'uppercase', lineHeight: 1 }}>Happenings</div>
+        </div>
       </div>
 
       <Suspense fallback={null}><InactivityNotice onNotice={setNotice} /></Suspense>

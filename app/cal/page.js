@@ -72,10 +72,10 @@ export default function PublicCalendarPage() {
         zIndex: 100,
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <img src="/logo_hex_bee.png" alt="The Social Hive" style={{ width: 34, height: 34, flexShrink: 0 }} />
+          <img src="/logo_hex_bee.png" alt="Element Happenings" style={{ width: 34, height: 34, flexShrink: 0 }} />
           <div>
             <div style={{ fontWeight: 800, fontSize: 15, color: "var(--amber-dark)" }}>
-              The Social Hive
+              Element Happenings
             </div>
             <div style={{ fontSize: 11, color: "var(--text-dim)" }}>
               Fullerton Cove Events Calendar

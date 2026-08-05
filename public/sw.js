@@ -1,4 +1,4 @@
-// Social Hive service worker — Web Push only (2026-07-14). No offline/asset
+// Element Happenings service worker — Web Push only (2026-07-14). No offline/asset
 // caching yet; this exists purely so push notifications and the home-screen
 // app badge work when the app itself isn't open.
 
@@ -8,7 +8,7 @@ self.addEventListener("activate", event => event.waitUntil(self.clients.claim())
 self.addEventListener("push", event => {
   let data = {}
   try { data = event.data ? event.data.json() : {} } catch (_) {}
-  const title = data.title || "The Social Hive"
+  const title = data.title || "Element Happenings"
   const body = data.body || "You have a new notification"
   const url = data.url || "/home"
 
