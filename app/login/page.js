@@ -37,9 +37,9 @@ export default function Login() {
           alt="Element Happenings"
           style={{ width: '64px', height: '64px', flexShrink: 0 }}
         />
-        <div style={{ lineHeight: 1.05 }}>
-          <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '1rem', fontWeight: 700, color: '#C08E43' }}>Element</div>
-          <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '2.1rem', fontWeight: 900, color: '#C08E43', textTransform: 'uppercase' }}>Happenings</div>
+        <div style={{ lineHeight: 1 }}>
+          <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '0.5rem', fontWeight: 700, color: '#C08E43', lineHeight: 1 }}>Element</div>
+          <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: '1.25rem', fontWeight: 900, color: '#C08E43', textTransform: 'uppercase', lineHeight: 1 }}>Happenings</div>
         </div>
       </div>
 
