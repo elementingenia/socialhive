@@ -5,6 +5,7 @@ import { notifyEventAttendees } from "@/lib/notifyEventAttendees"
 import { needsSpaceValidation, fetchLocation } from "@/lib/eventClash"
 import { findAnyRoomConflict } from "@/lib/spaceBookings"
 import { notifyRequestOnlySpace } from "@/lib/notifyRequestOnlySpace"
+import { validateBringRequirement } from "@/lib/attendees"
 
 // Club event create/edit — moved server-side (2026-07-23) as part of the Event
 // Clash / Space Booking scope (Social_Hive_Event_Clash_Space_Booking_Scope.md,
@@ -85,6 +86,8 @@ export async function POST(req) {
   if (error) return NextResponse.json({ error }, { status })
 
   const payload = buildPayload(body, true)
+  const bringCheck = validateBringRequirement(payload)
+  if (!bringCheck.ok) return NextResponse.json({ error: bringCheck.error }, { status: 400 })
   const space = await validateSpace(payload)
   if (space.error) return NextResponse.json({ error: space.error }, { status: space.status })
   payload.location_id = space.location_id
@@ -120,13 +123,18 @@ export async function PATCH(req) {
   if (!event_id) return NextResponse.json({ error: "event_id required" }, { status: 400 })
 
   const { data: existing } = await supa.from("events")
-    .select("id, club_id, series_id, event_date, event_time, location, location_id, title").eq("id", event_id).single()
+    .select("id, club_id, series_id, event_date, event_time, location, location_id, title, bring_required, bring_category_ids").eq("id", event_id).single()
   if (!existing) return NextResponse.json({ error: "Event not found" }, { status: 404 })
 
   const { error, status, member } = await resolve(req, existing.club_id)
   if (error) return NextResponse.json({ error }, { status })
 
   const payload = buildPayload(body, false)
+  const bringCheck = validateBringRequirement({
+    bring_required: "bring_required" in payload ? payload.bring_required : existing.bring_required,
+    bring_category_ids: "bring_category_ids" in payload ? payload.bring_category_ids : existing.bring_category_ids,
+  })
+  if (!bringCheck.ok) return NextResponse.json({ error: bringCheck.error }, { status: 400 })
   const space = await validateSpace({ ...existing, ...payload }, event_id)
   if (space.error) return NextResponse.json({ error: space.error }, { status: space.status })
   payload.location_id = space.location_id

@@ -899,7 +899,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   // actual screen order (title -> date -> location -> end time -> book ->
   // coordinators), not the order these checks happen to run in below.
   const fieldRefs = useRef({})
-  const FIELD_ORDER = ["title", "event_date", "location", "event_end_time", "book", "coordinators"]
+  const FIELD_ORDER = ["title", "event_date", "location", "event_end_time", "book", "bring", "coordinators"]
   function computeInvalidFields() {
     const invalid = []
     if (!caps.hasBooks && !form.title.trim()) invalid.push("title")
@@ -908,6 +908,11 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     if (venueMissing) invalid.push("location")
     if (needsSpaceValidation({ location_type: form.location_type, bookable: selectedLocation?.bookable }) && !form.event_end_time) invalid.push("event_end_time")
     if (caps.hasBooks && !selectedBook) invalid.push("book")
+    // Bring Something: Required only makes sense once at least one category is
+    // chosen -- Iain, 2026-08-07, after catching the form letting Required
+    // stay ON with zero categories selected (stale state left over from
+    // picking a category, turning Required on, then deselecting it again).
+    if (caps.bringEnabled && form.bring_required && (form.bring_category_ids || []).length === 0) invalid.push("bring")
     if (!form.coordinator_ids.length) invalid.push("coordinators")
     return invalid
   }
@@ -918,6 +923,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     location: "Please choose a venue.",
     event_end_time: "An end time is required for events in a common space.",
     book: "Please choose a book.",
+    bring: "Bringing something is set to Required -- choose at least one category, or switch it to Optional.",
     coordinators: "At least one coordinator is required.",
   }
 
@@ -1380,25 +1386,25 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       )}
 
       {caps.bringEnabled && (
-      <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Attendees bring something</label>
+      <div ref={el => (fieldRefs.current.bring = el)} style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Attendees bring something
+          {invalidFields.includes("bring") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Select a category or turn off Required</span>}
+        </label>
         <BringCategoryPicker clubId={club?.id} colour={colour}
           value={form.bring_category_ids} onChange={v => set("bring_category_ids", v)} />
-        {(form.bring_category_ids || []).length > 0 && (
-          <div style={{ marginTop: 10 }}>
-            <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: 4 }}>Is bringing something required to book?</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              {[{ v: false, t: "Optional" }, { v: true, t: "Required" }].map(opt => (
-                <button key={String(opt.v)} type="button" onClick={() => set("bring_required", opt.v)}
-                  style={{ flex: 1, padding: "0.5rem", borderRadius: 10, fontSize: "0.82rem", fontFamily: "inherit", cursor: "pointer",
-                    border: `1.5px solid ${!!form.bring_required === opt.v ? colour : "var(--border)"}`,
-                    background: !!form.bring_required === opt.v ? colour : "var(--surface)",
-                    color: !!form.bring_required === opt.v ? "#fff" : "var(--text)",
-                    fontWeight: !!form.bring_required === opt.v ? 700 : 500 }}>{opt.t}</button>
-              ))}
-            </div>
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: 4 }}>Is bringing something required to book?</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {[{ v: false, t: "Optional" }, { v: true, t: "Required" }].map(opt => (
+              <button key={String(opt.v)} type="button" onClick={() => set("bring_required", opt.v)}
+                style={{ flex: 1, padding: "0.5rem", borderRadius: 10, fontSize: "0.82rem", fontFamily: "inherit", cursor: "pointer",
+                  border: `1.5px solid ${invalidFields.includes("bring") && opt.v ? "#dc2626" : !!form.bring_required === opt.v ? colour : "var(--border)"}`,
+                  background: !!form.bring_required === opt.v ? colour : "var(--surface)",
+                  color: !!form.bring_required === opt.v ? "#fff" : "var(--text)",
+                  fontWeight: !!form.bring_required === opt.v ? 700 : 500 }}>{opt.t}</button>
+            ))}
           </div>
-        )}
+        </div>
       </div>
       )}
 

@@ -5,6 +5,7 @@ import { generateSeriesEvents } from "@/lib/generateSeriesEvents"
 import { notifyEventAttendees } from "@/lib/notifyEventAttendees"
 import { RULE_TYPES } from "@/lib/recurrence"
 import { checkCancelPaymentGuard } from "@/lib/eventCancelGuard"
+import { validateBringRequirement } from "@/lib/attendees"
 
 // Recurring event series — create / end. Occurrences are materialised as real
 // events by generateSeriesEvents (scope §3). A series fires exactly ONE
@@ -65,6 +66,8 @@ export async function POST(req) {
     coordinator_ids: Array.isArray(body.coordinator_ids) ? body.coordinator_ids : [],
   }
   if (!row.start_date) return NextResponse.json({ error: "start_date required" }, { status: 400 })
+  const bringCheck = validateBringRequirement(row)
+  if (!bringCheck.ok) return NextResponse.json({ error: bringCheck.error }, { status: 400 })
 
   // Only one active pattern per club (Book Club, §7a): a new one supersedes the old.
   if (row.mode === "pattern") {
@@ -151,6 +154,14 @@ export async function PATCH(req) {
     const fromDate = body.from_date || today
     const patch = {}
     for (const k of PROPAGATE) if (k in body) patch[k] = body[k]
+    if ("bring_required" in patch || "bring_category_ids" in patch) {
+      const { data: seriesRow } = await supa.from("event_series").select("bring_required, bring_category_ids").eq("id", series_id).single()
+      const bringCheck = validateBringRequirement({
+        bring_required: "bring_required" in patch ? patch.bring_required : seriesRow?.bring_required,
+        bring_category_ids: "bring_category_ids" in patch ? patch.bring_category_ids : seriesRow?.bring_category_ids,
+      })
+      if (!bringCheck.ok) return NextResponse.json({ error: bringCheck.error }, { status: 400 })
+    }
     // Carry the activity image forward too — it's set on the edited event directly
     // (EventImagePicker PATCHes it), so read it server-side from the source event.
     if (event_id) {
