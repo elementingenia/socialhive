@@ -3,7 +3,7 @@
 //
 //   npm run test:unit
 
-import { validateParty, validateBring, resolveBringCategoryIds } from '../../lib/attendees.js'
+import { validateParty, validateBring, resolveBringCategoryIds, validateBringRequirement } from '../../lib/attendees.js'
 
 let pass = 0, fail = 0
 const ok = (cond, msg) => { cond ? pass++ : (fail++, console.log('  ✗', msg)) }
@@ -120,6 +120,17 @@ ok(resolveBringCategoryIds({ allowedCategoryIds: ['stale1','stale2'], currentCat
   ok(Array.isArray(r) && r.length === 1 && r[0] === 'a', 'partially stale narrowing => keeps only the still-valid ids')
 }
 ok(validateBring({ required: true, bringCategoryId: 'a', allowedCategoryIds: resolveBringCategoryIds({ allowedCategoryIds: ['a'], currentCategoryIds: [] }) }).ok === true, 'club has zero current categories => resolves to something validateBring treats as unrestricted, never a hard block')
+
+// validateBringRequirement -- event-level guard (2026-08-07): an event can't
+// be saved as Required with zero categories chosen. Catches the stale-state
+// bug where a category was picked, Required turned on, then the category
+// deselected again -- form.bring_required stayed true in memory with nothing
+// to actually require.
+ok(validateBringRequirement({ bring_required: true, bring_category_ids: [] }).ok === false, 'required + zero categories => rejected')
+ok(validateBringRequirement({ bring_required: true, bring_category_ids: null }).ok === false, 'required + null categories => rejected')
+ok(validateBringRequirement({ bring_required: true, bring_category_ids: ['cat1'] }).ok === true, 'required + at least one category => ok')
+ok(validateBringRequirement({ bring_required: false, bring_category_ids: [] }).ok === true, 'optional + zero categories => ok, not applicable')
+ok(validateBringRequirement({ bring_required: false, bring_category_ids: ['cat1'] }).ok === true, 'optional + categories chosen => ok')
 
 console.log(`\nlib/attendees.js validateParty: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
