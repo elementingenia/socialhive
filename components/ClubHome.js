@@ -1177,6 +1177,23 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   const labelStyle = { fontSize: "0.78rem", fontWeight: 700, color: "var(--text-dim)",
     textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4, display: "block" }
 
+  // Section headers -- Iain, 2026-08-07: the form was "a confused mess",
+  // every field the same weight with nothing marking where one topic ends
+  // and the next begins. This groups the ~20 fields into named clusters
+  // (Basics / Capacity & Cost / Visibility & Bookings / Extras /
+  // Coordination) with a heavier, coloured, uppercase header distinct from
+  // field labels, plus a rule -- typography and a border doing the work, no
+  // new interaction/state, so it costs nothing in vertical space beyond the
+  // header row itself. Dry run: Clubs only for now, pending Iain's review
+  // before mirroring to Social/Show Time.
+  const sectionHeader = (title, first) => (
+    <div style={{ marginTop: first ? 0 : 22, marginBottom: 12, paddingBottom: 6,
+      borderBottom: `2px solid ${colour}33` }}>
+      <span style={{ fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.07em",
+        textTransform: "uppercase", color: colour }}>{title}</span>
+    </div>
+  )
+
   return (
     <>
     {SameDateModal}
@@ -1187,6 +1204,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         {event ? `Edit ${club?.name || "Club"} Event` : `Add ${club?.name || "Club"} Event`}
       </div>
 
+      {sectionHeader("Basics", true)}
       <div ref={el => (fieldRefs.current.title = el)} style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Event Name{!caps.hasBooks && <span style={{ color: "var(--danger)" }}> *</span>}
           {invalidFields.includes("title") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
@@ -1264,6 +1282,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         </div>
       )}
 
+      {sectionHeader("Capacity & Cost")}
       <div style={{ marginBottom: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <div>
           <label style={labelStyle}>Total Seats</label>
@@ -1334,6 +1353,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       </div>
       )}
 
+      {sectionHeader("Visibility & Bookings")}
       <div style={{ marginBottom: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {[
           { k: "is_public",           label: "Public calendar" },
@@ -1357,6 +1377,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>Bookings stay open for all of this day, then residents see &ldquo;Bookings Closed&rdquo;. Leave blank to keep them open until the event.</div>
       </div>
 
+      {sectionHeader("Extras")}
       {event?.id && (
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Event Image</label>
@@ -1408,6 +1429,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       </div>
       )}
 
+      {sectionHeader("Coordination & Details")}
       {caps.hasBooks && (
       <div ref={el => (fieldRefs.current.book = el)} style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Book <span style={{ color: "var(--danger)" }}>*</span>

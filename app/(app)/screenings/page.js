@@ -152,6 +152,13 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [time, setTime]               = useState(event?.event_time?.slice(0, 5) || '18:00')
   const [endTime, setEndTime]         = useState(event?.event_end_time?.slice(0, 5) || '20:00')
   const [maxSeats, setMaxSeats]       = useState(event?.max_seats || 20)
+  // Total Seats + Max per Booking is the standard pattern elsewhere
+  // (Social, Clubs) -- Show Time never had a UI control for this, so every
+  // screening silently ran on the bare DB default (max_seats_per_booking
+  // DEFAULT 4, migration 003) with no way for an admin to see or change it.
+  // Iain, 2026-08-07: bring Show Time in line. Default stays 4 so existing
+  // screenings' actual live behaviour doesn't change on this deploy.
+  const [maxSeatsPerBooking, setMaxSeatsPerBooking] = useState(event?.max_seats_per_booking || 4)
   // Venue for THIS screening. Defaults to the Cinema and renders LOCKED —
   // changing it is a deliberate act, not something to do by brushing past a
   // dropdown (Iain, 2026-07-31).
@@ -310,7 +317,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     setSaving(true); setErr(null)
     const body = { movie_id: showMode === 'movie' ? (pickedMovie?.id || null) : null,
                    showing_title: showMode === 'other' ? freeText.trim() : null,
-                   location_id: venueId || null, event_date: date, event_time: time, event_end_time: endTime, max_seats: Number(maxSeats), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: allowGuests, require_attendee_names: requireNaming }
+                   location_id: venueId || null, event_date: date, event_time: time, event_end_time: endTime, max_seats: Number(maxSeats), max_seats_per_booking: Number(maxSeatsPerBooking), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: Number(maxSeatsPerBooking) > 1 ? allowGuests : false, require_attendee_names: Number(maxSeatsPerBooking) > 1 ? requireNaming : false }
     if (eventId) body.event_id = eventId
     // try/finally so the button can NEVER be left stuck on "Saving…". It just
     // was: the route 500'd with an HTML body, res.json() threw, and
@@ -567,19 +574,27 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
             )}
           </div>
 
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={LABEL}>Max Seats</label>
-            <input type="number" value={maxSeats} onChange={e => setMaxSeats(e.target.value)} min={1} max={200} style={INPUT} />
+          <div style={{ marginBottom: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+            <div>
+              <label style={LABEL}>Total Seats</label>
+              <input type="number" value={maxSeats} onChange={e => setMaxSeats(e.target.value)} min={1} max={200} style={INPUT} />
+            </div>
+            <div>
+              <label style={LABEL}>Max per Booking</label>
+              <input type="number" value={maxSeatsPerBooking} onChange={e => setMaxSeatsPerBooking(e.target.value)} min={1} max={10} style={INPUT} />
+            </div>
           </div>
-          <div style={{ marginBottom: '1rem' }}>
-            <AttendeeNamingPicker
-              allowGuests={allowGuests}
-              onAllowGuestsChange={setAllowGuests}
-              required={requireNaming}
-              onRequiredChange={setRequireNaming}
-              colour="var(--teal, #0d9488)"
-            />
-          </div>
+          {Number(maxSeatsPerBooking) > 1 && (
+            <div style={{ marginBottom: '1rem' }}>
+              <AttendeeNamingPicker
+                allowGuests={allowGuests}
+                onAllowGuestsChange={setAllowGuests}
+                required={requireNaming}
+                onRequiredChange={setRequireNaming}
+                colour="var(--teal, #0d9488)"
+              />
+            </div>
+          )}
           <div style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Bookings close (optional)</label>
             <input type="datetime-local" value={cutoff} onChange={e => setCutoff(e.target.value)} style={INPUT} />
