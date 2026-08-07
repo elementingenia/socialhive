@@ -1179,47 +1179,37 @@ function BookingSection({ event, onRefresh, onClose }) {
   const [members, setMembers] = useState([])
   const [party, setParty] = useState([])
   const [myAttendees, setMyAttendees] = useState([])
-  // Bring-a-dish: the club's categories, narrowed to those this event allows.
-  const bringEnabled = clubCaps(event.club).bringEnabled
+  // Bring-a-dish (reworked 2026-08-07, Iain): applicable to THIS event only
+  // when it actually has bring categories chosen -- club.bring_enabled is
+  // just the club-level capability switch, it no longer implies every event
+  // in the club uses it. Whether picking one is mandatory or just offered is
+  // the event's own bring_required column, a separate choice.
+  const bringApplicable = Array.isArray(event.bring_category_ids) && event.bring_category_ids.length > 0
+  const bringRequired = bringApplicable && !!event.bring_required
   const [bringCats, setBringCats] = useState([])
-  const [bringCatsLoaded, setBringCatsLoaded] = useState(false)
   const [myBring, setMyBring] = useState({ category_id: null, note: "" })
   useEffect(() => {
-    if (!bringEnabled || !event.club?.id) { setBringCats([]); setBringCatsLoaded(true); return }
-    setBringCatsLoaded(false)
+    if (!bringApplicable || !event.club?.id) { setBringCats([]); return }
     supabase.from("club_bring_categories").select("id, label, sort")
       .eq("club_id", event.club.id).order("sort")
       .then(({ data }) => {
         const all = data || []
         const allowed = event.bring_category_ids
-        let list = !allowed?.length ? all : all.filter(c => allowed.includes(c.id))
+        let list = all.filter(c => allowed.includes(c.id))
         // Defensive fallback (Iain hit this live 2026-07-24, Sydney Harbour
-        // Night): if an event narrowed its allowed categories but every one
-        // of those stored ids is now stale (e.g. Admin > Clubs re-saved the
-        // club and regenerated fresh row ids for unchanged categories --
-        // fixed at the source in ClubForm, but any event snapshot taken
-        // before that fix still has orphaned ids), showing NOTHING would
-        // silently disable Book Now for everyone with nothing they can do
-        // about it. Showing every current category is the safer failure —
-        // the original narrowing choice is unrecoverable once the ids are
-        // gone, but nobody should be blocked from booking because of it.
-        if (allowed?.length && list.length === 0 && all.length > 0) list = all
+        // Night): if an event's chosen categories are all now stale (e.g.
+        // Admin > Clubs re-saved the club and regenerated fresh row ids for
+        // unchanged categories -- fixed at the source in ClubForm, but any
+        // event snapshot taken before that fix still has orphaned ids),
+        // showing NOTHING would silently disable Book Now for everyone with
+        // nothing they can do about it. Showing every current category is
+        // the safer failure -- the original narrowing choice is
+        // unrecoverable once the ids are gone, but nobody should be blocked
+        // from booking because of it.
+        if (list.length === 0 && all.length > 0) list = all
         setBringCats(list)
-        setBringCatsLoaded(true)
       })
-  }, [bringEnabled, event.club?.id, event.id])
-
-  // Distinct from the stale-narrowing fallback above: the CLUB itself has
-  // bring_enabled on but has never had any club_bring_categories rows added
-  // at all (Iain hit this live 2026-08-07 -- Secret Men's Business could not
-  // be booked at all, on any event, since the club was created 2026-08-04).
-  // In that state bringCats is permanently empty, the picker never renders,
-  // and bringValid was silently false forever with no way for a resident
-  // (or Iain testing) to ever satisfy it -- a disabled button with zero
-  // explanation. Surfaced explicitly below instead of staying silent; only
-  // trusted once the fetch above has actually completed, so it doesn't
-  // flash true for a well-configured club during the initial load.
-  const bringMisconfigured = bringEnabled && bringCatsLoaded && bringCats.length === 0
+  }, [bringApplicable, event.club?.id, event.id])
 
   useEffect(() => {
     if (event.hub_type !== "bookclub" && (event.max_seats_per_booking || 1) > 1 && members.length === 0) {
@@ -1279,7 +1269,7 @@ function BookingSection({ event, onRefresh, onClose }) {
   const isRowFilled = p => !!(p.member_id || p.contact_id || (allowGuests && p.guest_name && p.guest_name.trim()))
   const partyNeed = Math.max(0, seats - 1)
   const partyValid = !requireNaming || (party.length === partyNeed && party.every(isRowFilled))
-  const bringValid = !bringEnabled || !!myBring.category_id
+  const bringValid = !bringRequired || !!myBring.category_id
   const partyToAttendees = (arr) => arr.map(p => ({
     ...(p.member_id ? { member_id: p.member_id } : p.contact_id ? { contact_id: p.contact_id } : { guest_name: (p.guest_name || "").trim() }),
     bring_category_id: p.bring_category_id || null,
@@ -1486,21 +1476,14 @@ function BookingSection({ event, onRefresh, onClose }) {
                   )}
                 </>
               )}
-              {bringMisconfigured && (
-                <div style={{ fontSize: 12.5, color: "var(--danger)", background: "rgba(220,38,38,0.08)",
-                  borderRadius: 10, padding: "0.6rem 0.8rem", marginBottom: 10, lineHeight: 1.4 }}>
-                  This group needs at least one "bring" option set up before anyone can sign up — ask an
-                  admin to add one in Admin &gt; Groups &amp; Clubs.
-                </div>
-              )}
-              {bringEnabled && bringCats.length > 0 && (
+              {bringApplicable && bringCats.length > 0 && (
                 <BringPicker cats={bringCats} categoryId={myBring.category_id} note={myBring.note}
-                  onChange={setMyBring} colour="var(--amber)" required label="What are you bringing?" />
+                  onChange={setMyBring} colour="var(--amber)" required={bringRequired} label="What are you bringing?" />
               )}
               {!isBookclubEvent && seats > 1 && (
                 <PartyPicker count={seats - 1} allowGuests={allowGuests} members={members}
                   excludeIds={me?.id ? [me.id] : []} value={party} onChange={setParty}
-                  bringCats={bringEnabled ? bringCats : []} taken={taken} required={requireNaming} />
+                  bringCats={bringApplicable ? bringCats : []} taken={taken} required={requireNaming} />
               )}
               <button onClick={() => handleBook()} disabled={loading || (seats > 1 && !partyValid) || !bringValid}
                 style={{ width: "100%", padding: "14px 0", background: "var(--amber)", color: "#fff", border: "none",
@@ -1541,7 +1524,7 @@ function BookingSection({ event, onRefresh, onClose }) {
             })()}
             {myWaitlist && <StatusPill label={`⏳ ${myWaitlist.seats} on waitlist${waitlistPos ? ` (#${waitlistPos})` : ""}`} colour="var(--amber-dark)" />}
           </div>
-          {myConfirmed && bringEnabled && (() => {
+          {myConfirmed && bringApplicable && (() => {
             const catLabel = (id) => bringCats.find(c => c.id === id)?.label
             const mine = myBring.category_id ? { label: catLabel(myBring.category_id), note: myBring.note } : null
             if (!mine && !myAttendees.length) return null
@@ -1602,21 +1585,14 @@ function BookingSection({ event, onRefresh, onClose }) {
               Can&apos;t increase seats on a split booking — cancel and rebook to request more seats.
             </div>
           )}
-          {bringMisconfigured && (
-            <div style={{ fontSize: 12.5, color: "var(--danger)", background: "rgba(220,38,38,0.08)",
-              borderRadius: 10, padding: "0.6rem 0.8rem", marginBottom: 10, lineHeight: 1.4 }}>
-              This group needs at least one "bring" option set up before anyone can sign up — ask an
-              admin to add one in Admin &gt; Groups &amp; Clubs.
-            </div>
-          )}
-          {bringEnabled && bringCats.length > 0 && (
+          {bringApplicable && bringCats.length > 0 && (
             <BringPicker cats={bringCats} categoryId={myBring.category_id} note={myBring.note}
-              onChange={setMyBring} colour="var(--amber)" required label="What are you bringing?" />
+              onChange={setMyBring} colour="var(--amber)" required={bringRequired} label="What are you bringing?" />
           )}
           {modifySeats > 1 && (
             <PartyPicker count={modifySeats - 1} allowGuests={allowGuests} members={members}
               excludeIds={me?.id ? [me.id] : []} value={modParty} onChange={setModParty}
-              bringCats={bringEnabled ? bringCats : []} taken={taken} required={requireNaming} />
+              bringCats={bringApplicable ? bringCats : []} taken={taken} required={requireNaming} />
           )}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={() => setModifying(false)}

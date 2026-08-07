@@ -731,6 +731,16 @@ function CoordPicker({ members, value, onChange, valid = false, colour = "var(--
 // The club defines the full list; each event chooses which are allowed, and an
 // attendee booking only sees the allowed ones (Iain 2026-07-18).
 // value === null means "all of them".
+// Which of the club's bring categories apply to THIS event -- and separately,
+// whether picking one is mandatory to book (see the Required toggle rendered
+// by the caller). Iain, 2026-08-07: previously a null/blank selection here
+// meant "every category applies" (and toggling every button back on
+// collapsed the value back to null) -- so a club with bring_enabled on had
+// NO way for an individual event to opt out of the requirement at all, and
+// "not configured yet" and "deliberately applies to everything" were the
+// same stored value. Now: nothing selected really means nothing selected --
+// bring simply isn't relevant to this event, even though the club supports
+// it and another event in the same club might use it.
 function BringCategoryPicker({ clubId, colour, value, onChange }) {
   const [cats, setCats] = useState([])
   useEffect(() => {
@@ -742,10 +752,9 @@ function BringCategoryPicker({ clubId, colour, value, onChange }) {
   if (!cats.length) {
     return <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>No categories set yet — add them in Admin &rsaquo; Clubs.</div>
   }
-  const selected = value === null || value === undefined ? cats.map(c => c.id) : value
+  const selected = Array.isArray(value) ? value : []
   const toggle = (id) => {
-    const next = selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id]
-    onChange(next.length === cats.length ? null : next)
+    onChange(selected.includes(id) ? selected.filter(x => x !== id) : [...selected, id])
   }
   return (
     <div>
@@ -763,7 +772,11 @@ function BringCategoryPicker({ clubId, colour, value, onChange }) {
           )
         })}
       </div>
-      <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Tap to choose which apply to this event — attendees pick one of these when they book.</div>
+      <div style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+        {selected.length === 0
+          ? "None selected — bringing something won't apply to this event."
+          : "Tap to choose which apply to this event — attendees can pick one of these when they book."}
+      </div>
     </div>
   )
 }
@@ -826,7 +839,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     is_public:    event?.is_public !== false,
     show_attendee_names: event?.show_attendee_names !== false,
     title:        event?.title || "",
-    bring_category_ids: event?.bring_category_ids || null,
+    bring_category_ids: event?.bring_category_ids || [],
+    bring_required: !!event?.bring_required,
     theme_name:   event?.theme_name || "",
     description:  event?.description || "",
     welcome_message: event?.welcome_message || "",
@@ -937,7 +951,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             require_attendee_names: Number(form.max_seats_per_booking) > 1 ? !!form.require_attendee_names : false,
             payment_required: caps.hasCost ? !!form.payment_required : false,
             cost: caps.hasCost && form.payment_required ? (Number(form.cost) || 0) : 0,
-            bring_category_ids: caps.bringEnabled ? (form.bring_category_ids || null) : null,
+            bring_category_ids: caps.bringEnabled ? (form.bring_category_ids || []) : [],
+            bring_required: caps.bringEnabled ? !!form.bring_required : false,
             theme_name: caps.hasTheme ? (form.theme_name.trim() || null) : null,
             is_public: form.is_public !== false, show_attendee_names: form.show_attendee_names !== false,
             coordinator_ids: form.coordinator_ids || [],
@@ -1012,7 +1027,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       payment_required: caps.hasCost ? !!form.payment_required : false,
       cost:            caps.hasCost && form.payment_required ? (Number(form.cost) || 0) : 0,
       payment_due_by:  caps.hasCost && form.payment_required ? (form.payment_due_by || null) : null,
-      bring_category_ids: caps.bringEnabled ? (form.bring_category_ids || null) : null,
+      bring_category_ids: caps.bringEnabled ? (form.bring_category_ids || []) : [],
+      bring_required:  caps.bringEnabled ? !!form.bring_required : false,
       theme_name:      caps.hasTheme ? (form.theme_name.trim() || null) : null,
       book_snapshot:   selectedBook ? {
         title:     selectedBook.title,
@@ -1368,6 +1384,21 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         <label style={labelStyle}>Attendees bring something</label>
         <BringCategoryPicker clubId={club?.id} colour={colour}
           value={form.bring_category_ids} onChange={v => set("bring_category_ids", v)} />
+        {(form.bring_category_ids || []).length > 0 && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: 4 }}>Is bringing something required to book?</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[{ v: false, t: "Optional" }, { v: true, t: "Required" }].map(opt => (
+                <button key={String(opt.v)} type="button" onClick={() => set("bring_required", opt.v)}
+                  style={{ flex: 1, padding: "0.5rem", borderRadius: 10, fontSize: "0.82rem", fontFamily: "inherit", cursor: "pointer",
+                    border: `1.5px solid ${!!form.bring_required === opt.v ? colour : "var(--border)"}`,
+                    background: !!form.bring_required === opt.v ? colour : "var(--surface)",
+                    color: !!form.bring_required === opt.v ? "#fff" : "var(--text)",
+                    fontWeight: !!form.bring_required === opt.v ? 700 : 500 }}>{opt.t}</button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       )}
 
@@ -1784,7 +1815,7 @@ export default function ClubHome({ club }) {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("club_id", club.id)
       .eq("archived", false)
       .order("event_date", { ascending: true })
