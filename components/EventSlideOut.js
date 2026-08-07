@@ -1182,9 +1182,11 @@ function BookingSection({ event, onRefresh, onClose }) {
   // Bring-a-dish: the club's categories, narrowed to those this event allows.
   const bringEnabled = clubCaps(event.club).bringEnabled
   const [bringCats, setBringCats] = useState([])
+  const [bringCatsLoaded, setBringCatsLoaded] = useState(false)
   const [myBring, setMyBring] = useState({ category_id: null, note: "" })
   useEffect(() => {
-    if (!bringEnabled || !event.club?.id) { setBringCats([]); return }
+    if (!bringEnabled || !event.club?.id) { setBringCats([]); setBringCatsLoaded(true); return }
+    setBringCatsLoaded(false)
     supabase.from("club_bring_categories").select("id, label, sort")
       .eq("club_id", event.club.id).order("sort")
       .then(({ data }) => {
@@ -1203,8 +1205,21 @@ function BookingSection({ event, onRefresh, onClose }) {
         // gone, but nobody should be blocked from booking because of it.
         if (allowed?.length && list.length === 0 && all.length > 0) list = all
         setBringCats(list)
+        setBringCatsLoaded(true)
       })
   }, [bringEnabled, event.club?.id, event.id])
+
+  // Distinct from the stale-narrowing fallback above: the CLUB itself has
+  // bring_enabled on but has never had any club_bring_categories rows added
+  // at all (Iain hit this live 2026-08-07 -- Secret Men's Business could not
+  // be booked at all, on any event, since the club was created 2026-08-04).
+  // In that state bringCats is permanently empty, the picker never renders,
+  // and bringValid was silently false forever with no way for a resident
+  // (or Iain testing) to ever satisfy it -- a disabled button with zero
+  // explanation. Surfaced explicitly below instead of staying silent; only
+  // trusted once the fetch above has actually completed, so it doesn't
+  // flash true for a well-configured club during the initial load.
+  const bringMisconfigured = bringEnabled && bringCatsLoaded && bringCats.length === 0
 
   useEffect(() => {
     if (event.hub_type !== "bookclub" && (event.max_seats_per_booking || 1) > 1 && members.length === 0) {
@@ -1471,6 +1486,13 @@ function BookingSection({ event, onRefresh, onClose }) {
                   )}
                 </>
               )}
+              {bringMisconfigured && (
+                <div style={{ fontSize: 12.5, color: "var(--danger)", background: "rgba(220,38,38,0.08)",
+                  borderRadius: 10, padding: "0.6rem 0.8rem", marginBottom: 10, lineHeight: 1.4 }}>
+                  This group needs at least one "bring" option set up before anyone can sign up — ask an
+                  admin to add one in Admin &gt; Groups &amp; Clubs.
+                </div>
+              )}
               {bringEnabled && bringCats.length > 0 && (
                 <BringPicker cats={bringCats} categoryId={myBring.category_id} note={myBring.note}
                   onChange={setMyBring} colour="var(--amber)" required label="What are you bringing?" />
@@ -1578,6 +1600,13 @@ function BookingSection({ event, onRefresh, onClose }) {
           {myWaitlist && (
             <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 8 }}>
               Can&apos;t increase seats on a split booking — cancel and rebook to request more seats.
+            </div>
+          )}
+          {bringMisconfigured && (
+            <div style={{ fontSize: 12.5, color: "var(--danger)", background: "rgba(220,38,38,0.08)",
+              borderRadius: 10, padding: "0.6rem 0.8rem", marginBottom: 10, lineHeight: 1.4 }}>
+              This group needs at least one "bring" option set up before anyone can sign up — ask an
+              admin to add one in Admin &gt; Groups &amp; Clubs.
             </div>
           )}
           {bringEnabled && bringCats.length > 0 && (
