@@ -7,6 +7,7 @@ import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import { ContactBar } from "@/components/OwnersManager"
 import ExpandableText from "@/components/ExpandableText"
 import { getToken } from "@/components/ResidentEditPanel"
+import { authedFetch } from "@/lib/getAuthToken"
 import { useOwners } from "@/lib/useOwners"
 import ClubAppearanceModal from "@/components/ClubAppearanceModal"
 import { clubCaps } from "@/lib/clubs"
@@ -166,12 +167,15 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
 
   async function toggleHasBook(bookingId, current) {
     setTogglingId(bookingId)
-    const token = await getToken()
-    await fetch("/api/coordinator", {
+    const res = await authedFetch("/api/coordinator", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event_id: event.id, action: "set_has_book", booking_id: bookingId, has_book: !current }),
     })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      showToast?.(data.error || "Could not update")
+    }
     await loadAttendees()
     setTogglingId(null)
   }
@@ -185,10 +189,9 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
   async function remindBookReturn(bookingId, name) {
     if (remindingId) return
     setRemindingId(bookingId)
-    const token = await getToken()
-    const res = await fetch("/api/coordinator", {
+    const res = await authedFetch("/api/coordinator", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event_id: event.id, action: "remind_book_return", booking_id: bookingId }),
     })
     setRemindingId(null)
@@ -917,10 +920,9 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     // The API generates the occurrences + fires one notification (scope §3/§9).
     if (!event && recurMode === "series" && recur.enabled && recur.rule_type) {
       try {
-        const token = await getToken()
-        const res = await fetch("/api/series", {
+        const res = await authedFetch("/api/series", {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             club_id: club.id, mode: "series",
             rule_type: recur.rule_type, rule_config: recur.rule_config,
@@ -1029,9 +1031,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     // just to get rejected anyway on save (Iain, 2026-07-23). Same-date soft
     // warning (A) only shows when there's no hard conflict.
     try {
-      const precheckToken = await getToken()
-      const pre = await fetch("/api/events/precheck", {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${precheckToken}` },
+      const pre = await authedFetch("/api/events/precheck", {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           event_date: payload.event_date, event_time: payload.event_time, event_end_time: payload.event_end_time,
           location_type: payload.location_type, location_id: payload.location_id, exclude_event_id: event?.id || null,
@@ -1052,10 +1053,9 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     // upsert above stays client-side; only the events row + coordinators +
     // notifications + series-scope propagation move server-side.
     let eventId = event?.id
-    const token = await getToken()
     if (eventId) {
-      const res = await fetch("/api/clubs/events", {
-        method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      const res = await authedFetch("/api/clubs/events", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           event_id: eventId, series_scope: seriesScope,
           recur_changed: !!event?.series_id && recurChanged(),
@@ -1069,8 +1069,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setSaveError(d.error || "Could not update event."); setSaving(false); return }
     } else {
-      const res = await fetch("/api/clubs/events", {
-        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      const res = await authedFetch("/api/clubs/events", {
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
       const d = await res.json().catch(() => ({}))
@@ -1082,8 +1082,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     // time (Book Club, §7a). Fire-and-forget; the single event is already saved.
     if (!event && recurMode === "pattern" && recur.enabled && recur.rule_type) {
       try {
-        const token = await getToken()
-        fetch("/api/series", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        authedFetch("/api/series", { method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ club_id: club.id, mode: "pattern", rule_type: recur.rule_type, rule_config: recur.rule_config,
             month_end_policy: recur.month_end_policy, horizon_months: recur.horizon_months, start_date: form.event_date, event_time: form.event_time || "00:00" }) }).catch(() => {})
       } catch {}
@@ -1111,11 +1110,13 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     if (!confirm("Remove just this date? Anyone booked on it will be notified.")) return
     setOccBusy(true)
     try {
-      const token = await getToken()
-      const res = await fetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      const res = await authedFetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "cancel_occurrence", event_id: event.id }) })
-      if (res.ok) { onSave() } else setSaveError("Could not remove this date.")
-    } catch (e) { setSaveError("Could not remove this date.") }
+      if (res.ok) { onSave() } else {
+        const d = await res.json().catch(() => ({}))
+        setSaveError(d.error || "Could not remove this date.")
+      }
+    } catch (e) { setSaveError("Could not remove this date -- check your connection and try again.") }
     setOccBusy(false)
   }
   async function endSeries() {
@@ -1123,11 +1124,13 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     if (!confirm("End this recurring series? Future dates that no one has booked will be removed; booked dates are kept.")) return
     setOccBusy(true)
     try {
-      const token = await getToken()
-      const res = await fetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      const res = await authedFetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "end", series_id: event.series_id }) })
-      if (res.ok) { onSave() } else setSaveError("Could not end the series.")
-    } catch (e) { setSaveError("Could not end the series.") }
+      if (res.ok) { onSave() } else {
+        const d = await res.json().catch(() => ({}))
+        setSaveError(d.error || "Could not end the series.")
+      }
+    } catch (e) { setSaveError("Could not end the series -- check your connection and try again.") }
     setOccBusy(false)
   }
   // Cancel a standalone event -- a solo one-off, or a mode:'pattern' event (Book
@@ -1139,11 +1142,13 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     if (!confirm("Cancel this event? Anyone booked will be notified. This can't be undone.")) return
     setOccBusy(true)
     try {
-      const token = await getToken()
-      const res = await fetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      const res = await authedFetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "cancel_occurrence", event_id: event.id }) })
-      if (res.ok) { onSave() } else setSaveError("Could not cancel this event.")
-    } catch (e) { setSaveError("Could not cancel this event.") }
+      if (res.ok) { onSave() } else {
+        const d = await res.json().catch(() => ({}))
+        setSaveError(d.error || "Could not cancel this event.")
+      }
+    } catch (e) { setSaveError("Could not cancel this event -- check your connection and try again.") }
     setOccBusy(false)
   }
 
@@ -1510,10 +1515,9 @@ function ClubSocial({ club, colour, isAdmin, onAppearanceUpdated }) {
   async function postNotice() {
     if (!draft.trim() || posting) return
     setPosting(true)
-    const token = await getToken()
-    const res = await fetch("/api/clubs/notices", {
+    const res = await authedFetch("/api/clubs/notices", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ club_id: club.id, content: draft }),
     })
     const data = await res.json()
@@ -1526,12 +1530,16 @@ function ClubSocial({ club, colour, isAdmin, onAppearanceUpdated }) {
 
   async function removeNotice(id) {
     if (!confirm("Remove this notice?")) return
-    const token = await getToken()
-    await fetch("/api/clubs/notices", {
+    const res = await authedFetch("/api/clubs/notices", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      setToast?.(d.error || "Could not remove notice")
+      setTimeout(() => setToast?.(null), 3000)
+    }
     loadNotices()
   }
 
@@ -1881,10 +1889,9 @@ export default function ClubHome({ club }) {
   useEffect(() => { if (member?.id !== undefined) load() }, [member?.id, isAdmin])
 
   async function signUp(event) {
-    const token = await getToken()
-    const res = await fetch("/api/bookings", {
+    const res = await authedFetch("/api/bookings", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event_id: event.id, seats: 1 }),
     })
     const d = await res.json()
@@ -1894,13 +1901,16 @@ export default function ClubHome({ club }) {
   }
 
   async function leave(event) {
-    const token = await getToken()
-    const res = await fetch("/api/bookings", {
+    const res = await authedFetch("/api/bookings", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event_id: event.id }),
     })
-    if (!res.ok) { showToast("Could not leave event"); return }
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      showToast("Could not leave event: " + (d.error || "unknown error"))
+      return
+    }
     showToast("Booking cancelled")
     await load()
   }
@@ -1942,11 +1952,13 @@ export default function ClubHome({ club }) {
   async function handleDeleteOccurrence(ev) {
     if (!confirm("Remove this date? Anyone booked on it will be notified. This can't be undone.")) return
     try {
-      const token = await getToken()
-      const res = await fetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      const res = await authedFetch("/api/series", { method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "cancel_occurrence", event_id: ev.id }) })
-      if (res.ok) load()
-    } catch (e) { /* best effort */ }
+      if (res.ok) { load() } else {
+        const d = await res.json().catch(() => ({}))
+        showToast?.(d.error || "Could not remove this date")
+      }
+    } catch (e) { showToast?.("Could not remove this date -- check your connection and try again.") }
   }
 
   if (loading) return (

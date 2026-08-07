@@ -6,6 +6,7 @@ import { hubLocation, fetchLocation } from '@/lib/eventClash'
 import { findAnyRoomConflict } from '@/lib/spaceBookings'
 import { notifyRequestOnlySpace } from '@/lib/notifyRequestOnlySpace'
 import { titleFor } from '@/lib/showing'
+import { checkCancelPaymentGuard } from '@/lib/eventCancelGuard'
 
 // Movie screenings always run in the one dedicated common space -- there's no
 // location picker in the screening form, so every screening is auto-bound to
@@ -406,6 +407,9 @@ export async function DELETE(req) {
 
   // Idempotent: cancelling twice must not notify twice.
   if (ev.archived) return NextResponse.json({ ok: true, already: true })
+
+  const guardMsg = await checkCancelPaymentGuard(supabaseAdmin, event_id)
+  if (guardMsg) return NextResponse.json({ error: guardMsg }, { status: 409 })
 
   const { error } = await supabaseAdmin.from('events').update({ archived: true }).eq('id', event_id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

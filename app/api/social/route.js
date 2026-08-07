@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyAllActiveMembers } from '@/lib/notifyAudience'
+import { checkCancelPaymentGuard } from '@/lib/eventCancelGuard'
 import { needsSpaceValidation, fetchLocation } from '@/lib/eventClash'
 import { findAnyRoomConflict } from '@/lib/spaceBookings'
 import { notifyRequestOnlySpace } from '@/lib/notifyRequestOnlySpace'
@@ -168,6 +169,8 @@ export async function PATCH(req) {
       .from('events').select('title, archived').eq('id', body.id).eq('hub_type', 'social').maybeSingle()
     if (!ev) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
     if (ev.archived) return NextResponse.json({ ok: true, already: true }) // idempotent
+    const guardMsg = await checkCancelPaymentGuard(supabaseAdmin, body.id)
+    if (guardMsg) return NextResponse.json({ error: guardMsg }, { status: 409 })
     const { error } = await supabaseAdmin.from('events').update({ archived: true }).eq('id', body.id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     await notifyEventAttendees(supabaseAdmin, body.id, 'event_cancelled',
