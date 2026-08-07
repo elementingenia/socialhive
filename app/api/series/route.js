@@ -4,6 +4,7 @@ import { notifyClubMembers } from "@/lib/notifyAudience"
 import { generateSeriesEvents } from "@/lib/generateSeriesEvents"
 import { notifyEventAttendees } from "@/lib/notifyEventAttendees"
 import { RULE_TYPES } from "@/lib/recurrence"
+import { checkCancelPaymentGuard } from "@/lib/eventCancelGuard"
 
 // Recurring event series — create / end. Occurrences are materialised as real
 // events by generateSeriesEvents (scope §3). A series fires exactly ONE
@@ -119,6 +120,8 @@ export async function PATCH(req) {
   if (action === "cancel_occurrence") {
     if (!event_id) return NextResponse.json({ error: "event_id required" }, { status: 400 })
     const { data: ev } = await supa.from("events").select("title").eq("id", event_id).single()
+    const guardMsg = await checkCancelPaymentGuard(supa, event_id)
+    if (guardMsg) return NextResponse.json({ error: guardMsg }, { status: 409 })
     await supa.from("events").update({ archived: true }).eq("id", event_id)
     // Only this occurrence's bookers are told (scope §6).
     await notifyEventAttendees(supa, event_id, "event_cancelled",
