@@ -504,7 +504,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
             <label style={LABEL}>Ends <span style={{ color: 'var(--danger)' }}>*</span>
               {invalidFields.includes('endTime') && <span style={{ color: '#dc2626', fontWeight: 800, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>⚠ Required</span>}
             </label>
-            <TimeField value={endTime} onChange={setEndTime} colour={endTime ? 'var(--green)' : 'var(--danger)'} invalid={invalidFields.includes('endTime')} />
+            <TimeField value={endTime} onChange={setEndTime} colour={endTime ? 'var(--green)' : 'var(--danger)'} invalid={invalidFields.includes('endTime')} minHour={time ? Number(time.split(':')[0]) : null} />
             <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.3rem' }}>
               Every screening books {venueName || 'the venue'} as a common space, so an end time keeps it from double-booking.
             </div>

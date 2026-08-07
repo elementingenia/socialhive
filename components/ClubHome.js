@@ -1232,7 +1232,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
           <label style={labelStyle}>Ends <span style={{ color: "var(--danger)" }}>*</span>
             {invalidFields.includes("event_end_time") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
           </label>
-          <TimeField value={form.event_end_time} onChange={v => set("event_end_time", v)} colour={form.event_end_time ? "var(--green)" : "var(--danger)"} invalid={invalidFields.includes("event_end_time")} />
+          <TimeField value={form.event_end_time} onChange={v => set("event_end_time", v)} colour={form.event_end_time ? "var(--green)" : "var(--danger)"} invalid={invalidFields.includes("event_end_time")} minHour={form.event_time ? Number(form.event_time.split(":")[0]) : null} />
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 4 }}>Lets the app stop this space being double-booked by another event.</div>
         </div>
       )}

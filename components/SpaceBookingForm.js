@@ -338,7 +338,7 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
             </div>
             <div style={{ ...FIELD, flex: 1 }}>
               <label style={LABEL}>End</label>
-              <TimeField value={endTime} onChange={setEndTime} colour={endTime && endTime > startTime ? "var(--green)" : "var(--danger)"} />
+              <TimeField value={endTime} onChange={setEndTime} colour={endTime && endTime > startTime ? "var(--green)" : "var(--danger)"} minHour={startTime ? Number(startTime.split(":")[0]) : null} />
             </div>
           </div>
           {startTime && endTime && endTime <= startTime && (

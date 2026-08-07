@@ -3,7 +3,9 @@
 // (Iain, 2026-07-23 — avoids am/pm confusion for a 55+ audience, and keeps
 // the space-clash overlap maths simple). Styled selects, no native controls,
 // matching the app's standing form-control convention.
-const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"))
+import { useEffect } from "react"
+
+const ALL_HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"))
 const MINUTES = ["00", "30"]
 
 // `invalid` (Iain, 2026-08-04) draws the same solid red border + light red
@@ -11,10 +13,24 @@ const MINUTES = ["00", "30"]
 // INVALID_FIELD_STYLE) directly on these two selects -- not on a wrapping
 // div, which is invisible behind their own opaque backgrounds. Takes
 // priority over `colour` when both are passed.
-export default function TimeField({ value, onChange, colour = "var(--border)", invalid = false }) {
+//
+// `minHour` (Iain, 2026-08-07) — pass the event's Start hour (0-23) when
+// this TimeField is an End Time picker, so the Hour dropdown only offers
+// hours strictly after it (e.g. start 18:30 -> end hour options 19-23).
+// Every End Time site in the app should pass this. If the currently
+// selected value becomes invalid because the start hour moved past it,
+// the field auto-clears rather than silently keeping an impossible value.
+export default function TimeField({ value, onChange, colour = "var(--border)", invalid = false, minHour = null }) {
   const [h, m] = String(value || "").split(":")
-  const hour = HOURS.includes(h) ? h : ""
+  const hour = ALL_HOURS.includes(h) ? h : ""
   const minute = MINUTES.includes(m) ? m : "00"
+
+  const HOURS = minHour == null ? ALL_HOURS : ALL_HOURS.filter(hh => Number(hh) > Number(minHour))
+
+  useEffect(() => {
+    if (hour && !HOURS.includes(hour)) onChange("")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minHour])
 
   function setHour(newH) { onChange(newH ? `${newH}:${minute}` : "") }
   function setMinute(newM) { onChange(`${hour || "00"}:${newM}`) }
