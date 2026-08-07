@@ -37,7 +37,7 @@ async function resolve(req, clubId) {
 // Never event_date (rule-driven) or book_id (per-occurrence, Book Club).
 const PROPAGATE = ["title","description","welcome_message","event_time","location_type","location",
   "max_seats","max_seats_per_booking","allow_nonresident_guests","require_attendee_names","payment_required","cost",
-  "bring_category_ids","theme_name","is_public","show_attendee_names"]
+  "bring_category_ids","bring_required","theme_name","is_public","show_attendee_names"]
 
 export async function POST(req) {
   const body = await req.json().catch(() => ({}))
@@ -60,7 +60,7 @@ export async function POST(req) {
     allow_nonresident_guests: !!body.allow_nonresident_guests,
     require_attendee_names: !!body.require_attendee_names,
     payment_required: !!body.payment_required, cost: body.payment_required ? (body.cost ?? 0) : 0,
-    bring_category_ids: body.bring_category_ids || null, theme_name: body.theme_name || null,
+    bring_category_ids: body.bring_category_ids || [], bring_required: !!body.bring_required, theme_name: body.theme_name || null,
     is_public: body.is_public !== false, show_attendee_names: body.show_attendee_names !== false,
     coordinator_ids: Array.isArray(body.coordinator_ids) ? body.coordinator_ids : [],
   }

@@ -35,7 +35,7 @@ export async function POST(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('id, max_seats, hub_type, book_id, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('id, max_seats, hub_type, book_id, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
 
   // Reservation cut-off (workstream B). Once past, no new bookings/waitlist
@@ -58,21 +58,28 @@ export async function POST(req) {
   })
   if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
 
-  // "Attendees bring something": mandatory for the booker, optional for guests.
-  const bringRequired = !!event.clubs?.bring_enabled
+  // "Attendees bring something" is now per-EVENT, not implied by the club's
+  // capability flag (Iain, 2026-08-07): applicable only when this event has
+  // at least one category actually chosen; mandatory-vs-optional is the
+  // event's own bring_required column. A club having the feature on doesn't
+  // make every one of its events require it.
+  const bringApplicable = Array.isArray(event.bring_category_ids) && event.bring_category_ids.length > 0
   let allowedCategoryIds = event.bring_category_ids
-  if (bringRequired && event.club_id) {
+  if (bringApplicable && event.club_id) {
     const { data: currentCats } = await supabaseAdmin
       .from('club_bring_categories').select('id').eq('club_id', event.club_id)
     allowedCategoryIds = resolveBringCategoryIds({ allowedCategoryIds: event.bring_category_ids, currentCategoryIds: (currentCats || []).map(c => c.id) })
   }
+  const bringRequired = bringApplicable && !!event.bring_required
   const bring = validateBring({
     required: bringRequired,
     bringCategoryId: body.bring_category_id,
     allowedCategoryIds,
   })
   if (!bring.ok) return NextResponse.json({ error: bring.error }, { status: 400 })
-  const bringFields = bringRequired
+  // Applicable-but-optional still needs to persist a voluntary pick, not
+  // just a mandatory one -- bringRequired alone would silently drop it.
+  const bringFields = bringApplicable
     ? { bring_category_id: body.bring_category_id || null, bring_note: body.bring_note || null }
     : {}
 
@@ -247,7 +254,7 @@ export async function PATCH(req) {
   const oldConfirmed = myConfirmed.seats || 1
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('max_seats, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('max_seats, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   const { data: confirmedRows } = await supabaseAdmin
     .from('bookings').select('seats')
     .eq('event_id', event_id).eq('status', 'confirmed').neq('id', myConfirmed.id)
@@ -274,13 +281,14 @@ export async function PATCH(req) {
   })
   if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
 
-  const bringRequired = !!event?.clubs?.bring_enabled
+  const bringApplicable = Array.isArray(event?.bring_category_ids) && event.bring_category_ids.length > 0
   let patchAllowedCategoryIds = event?.bring_category_ids
-  if (bringRequired && event?.club_id) {
+  if (bringApplicable && event?.club_id) {
     const { data: currentCats } = await supabaseAdmin
       .from('club_bring_categories').select('id').eq('club_id', event.club_id)
     patchAllowedCategoryIds = resolveBringCategoryIds({ allowedCategoryIds: event?.bring_category_ids, currentCategoryIds: (currentCats || []).map(c => c.id) })
   }
+  const bringRequired = bringApplicable && !!event?.bring_required
   const bring = validateBring({
     required: bringRequired,
     bringCategoryId: body.bring_category_id,
@@ -297,7 +305,7 @@ export async function PATCH(req) {
 
   const { error: updateErr } = await supabaseAdmin
     .from('bookings').update({ seats: newConfirmed, updated_at: new Date().toISOString(),
-      ...(bringRequired ? { bring_category_id: body.bring_category_id || null, bring_note: body.bring_note || null } : {}) }).eq('id', myConfirmed.id)
+      ...(bringApplicable ? { bring_category_id: body.bring_category_id || null, bring_note: body.bring_note || null } : {}) }).eq('id', myConfirmed.id)
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
 
   if (newConfirmed < oldConfirmed) {

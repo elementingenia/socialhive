@@ -97,6 +97,12 @@ ok(validateBring({ required: true, bringCategoryId: 'cat1' }).ok === true, 'requ
 ok(validateBring({ required: true, bringCategoryId: 'cat9', allowedCategoryIds: ['cat1','cat2'] }).ok === false, 'category not allowed for this event => rejected')
 ok(validateBring({ required: true, bringCategoryId: 'cat1', allowedCategoryIds: ['cat1','cat2'] }).ok === true, 'allowed category => ok')
 ok(validateBring({ required: true, bringCategoryId: 'cat1', allowedCategoryIds: [] }).ok === true, 'empty allowed list means all categories')
+// 2026-08-07: bring is now applicable-per-event (event.bring_category_ids
+// non-empty) with mandatory/optional (event.bring_required) as a separate
+// choice. An optional event should still validate a VOLUNTARY pick against
+// the allowed list, not wave through anything just because it's not required.
+ok(validateBring({ required: false, bringCategoryId: 'cat1', allowedCategoryIds: ['cat1','cat2'] }).ok === true, 'optional + valid voluntary pick => ok')
+ok(validateBring({ required: false, bringCategoryId: 'cat9', allowedCategoryIds: ['cat1','cat2'] }).ok === false, 'optional + invalid voluntary pick => still rejected, optional is not "anything goes"')
 
 // resolveBringCategoryIds -- reconciling a possibly-stale events.bring_category_ids
 // snapshot against the club's current live categories (2026-07-25 fix,
