@@ -487,10 +487,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
             )}
           </div>
           )}
-          <div style={{ marginBottom: '1rem' }}>
-            <label style={LABEL}>Coordinator (optional)</label>
-            <CoordPicker members={members} value={coordinator} onChange={setCoordinator} />
-          </div>
+
           <div ref={el => (fieldRefs.current.date = el)} style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Date <span style={{ color: 'var(--danger)' }}>*</span>
               {invalidFields.includes('date') && <span style={{ color: '#dc2626', fontWeight: 800, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>⚠ Required</span>}
@@ -501,20 +498,12 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
               {new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'long' })}
             </div>}
           </div>
+
           <div ref={el => (fieldRefs.current.time = el)} style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Time <span style={{ color: 'var(--danger)' }}>*</span>
               {invalidFields.includes('time') && <span style={{ color: '#dc2626', fontWeight: 800, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>⚠ Required</span>}
             </label>
             <TimeField value={time} onChange={setTime} colour={time ? 'var(--green)' : 'var(--danger)'} invalid={invalidFields.includes('time')} />
-          </div>
-          <div ref={el => (fieldRefs.current.endTime = el)} style={{ marginBottom: '1rem' }}>
-            <label style={LABEL}>Ends <span style={{ color: 'var(--danger)' }}>*</span>
-              {invalidFields.includes('endTime') && <span style={{ color: '#dc2626', fontWeight: 800, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>⚠ Required</span>}
-            </label>
-            <TimeField value={endTime} onChange={setEndTime} colour={endTime ? 'var(--green)' : 'var(--danger)'} invalid={invalidFields.includes('endTime')} minHour={time ? Number(time.split(':')[0]) : null} />
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.3rem' }}>
-              Every screening books {venueName || 'the venue'} as a common space, so an end time keeps it from double-booking.
-            </div>
           </div>
 
           {/* VENUE — locked by default. Preset to the hub's nominated venue;
@@ -574,6 +563,21 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
             )}
           </div>
 
+          <div ref={el => (fieldRefs.current.endTime = el)} style={{ marginBottom: '1rem' }}>
+            <label style={LABEL}>Ends <span style={{ color: 'var(--danger)' }}>*</span>
+              {invalidFields.includes('endTime') && <span style={{ color: '#dc2626', fontWeight: 800, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>⚠ Required</span>}
+            </label>
+            <TimeField value={endTime} onChange={setEndTime} colour={endTime ? 'var(--green)' : 'var(--danger)'} invalid={invalidFields.includes('endTime')} minHour={time ? Number(time.split(':')[0]) : null} />
+            <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.3rem' }}>
+              Every screening books {venueName || 'the venue'} as a common space, so an end time keeps it from double-booking.
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '1.5rem' }}>
+            <label style={LABEL}>Notes (optional)</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. Bring a chair! BYO drinks." rows={2} style={{ ...INPUT, resize: 'vertical' }} />
+          </div>
+
           <div style={{ marginBottom: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <div>
               <label style={LABEL}>Total Seats</label>
@@ -595,14 +599,16 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
               />
             </div>
           )}
+
           <div style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Bookings close (optional)</label>
             <input type="datetime-local" value={cutoff} onChange={e => setCutoff(e.target.value)} style={INPUT} />
             <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', marginTop: '0.35rem' }}>After this, residents see &ldquo;Bookings Closed&rdquo; instead of the booking button. Leave blank to keep bookings open until the screening.</div>
           </div>
-          <div style={{ marginBottom: '1.5rem' }}>
-            <label style={LABEL}>Notes (optional)</label>
-            <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. Bring a chair! BYO drinks." rows={2} style={{ ...INPUT, resize: 'vertical' }} />
+
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={LABEL}>Coordinator (optional)</label>
+            <CoordPicker members={members} value={coordinator} onChange={setCoordinator} />
           </div>
           {err && <div style={{ color: 'var(--danger)', fontSize: '0.85rem', marginBottom: '1rem' }}>{err}</div>}
           <button onClick={handleSubmit} disabled={saving}
