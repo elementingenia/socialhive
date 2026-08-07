@@ -899,7 +899,9 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   // actual screen order (title -> date -> location -> end time -> book ->
   // coordinators), not the order these checks happen to run in below.
   const fieldRefs = useRef({})
-  const FIELD_ORDER = ["title", "event_date", "location", "event_end_time", "book", "bring", "coordinators"]
+  // Order matches the form's actual screen order after the 2026-08-07
+  // regrouping (bring now renders before book, not after).
+  const FIELD_ORDER = ["title", "event_date", "location", "event_end_time", "bring", "book", "coordinators"]
   function computeInvalidFields() {
     const invalid = []
     if (!caps.hasBooks && !form.title.trim()) invalid.push("title")
@@ -1177,23 +1179,6 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   const labelStyle = { fontSize: "0.78rem", fontWeight: 700, color: "var(--text-dim)",
     textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4, display: "block" }
 
-  // Section headers -- Iain, 2026-08-07: the form was "a confused mess",
-  // every field the same weight with nothing marking where one topic ends
-  // and the next begins. This groups the ~20 fields into named clusters
-  // (Basics / Capacity & Cost / Visibility & Bookings / Extras /
-  // Coordination) with a heavier, coloured, uppercase header distinct from
-  // field labels, plus a rule -- typography and a border doing the work, no
-  // new interaction/state, so it costs nothing in vertical space beyond the
-  // header row itself. Dry run: Clubs only for now, pending Iain's review
-  // before mirroring to Social/Show Time.
-  const sectionHeader = (title, first) => (
-    <div style={{ marginTop: first ? 0 : 22, marginBottom: 12, paddingBottom: 6,
-      borderBottom: `2px solid ${colour}33` }}>
-      <span style={{ fontSize: "0.72rem", fontWeight: 800, letterSpacing: "0.07em",
-        textTransform: "uppercase", color: colour }}>{title}</span>
-    </div>
-  )
-
   return (
     <>
     {SameDateModal}
@@ -1204,7 +1189,6 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         {event ? `Edit ${club?.name || "Club"} Event` : `Add ${club?.name || "Club"} Event`}
       </div>
 
-      {sectionHeader("Basics", true)}
       <div ref={el => (fieldRefs.current.title = el)} style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Event Name{!caps.hasBooks && <span style={{ color: "var(--danger)" }}> *</span>}
           {invalidFields.includes("title") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
@@ -1282,7 +1266,22 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         </div>
       )}
 
-      {sectionHeader("Capacity & Cost")}
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Event Details</label>
+        <RichEditor
+          initialValue={form.description}
+          hubColour={colour}
+          bg="card"
+          onChange={html => set("description", html)}
+          placeholder="Any extra details about this meeting…"
+        />
+      </div>
+
+      {/* Attendees -- who's coming and what we need from them: capacity,
+          per-booking cap, guest/naming policy, and (if the club has it)
+          bring-a-dish. Grouped together per Iain, 2026-08-07 -- these were
+          previously split across "Capacity & Cost" and "Extras", which is
+          why Bring Something read as randomly placed. */}
       <div style={{ marginBottom: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <div>
           <label style={labelStyle}>Total Seats</label>
@@ -1308,6 +1307,31 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         />
       )}
 
+      {caps.bringEnabled && (
+      <div ref={el => (fieldRefs.current.bring = el)} style={{ marginBottom: 12, marginTop: 12 }}>
+        <label style={labelStyle}>Attendees bring something
+          {invalidFields.includes("bring") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Select a category or turn off Required</span>}
+        </label>
+        <BringCategoryPicker clubId={club?.id} colour={colour}
+          value={form.bring_category_ids} onChange={v => set("bring_category_ids", v)} />
+        <div style={{ marginTop: 10 }}>
+          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: 4 }}>Is bringing something required to book?</div>
+          <div style={{ display: "flex", gap: 8 }}>
+            {[{ v: false, t: "Optional" }, { v: true, t: "Required" }].map(opt => (
+              <button key={String(opt.v)} type="button" onClick={() => set("bring_required", opt.v)}
+                style={{ flex: 1, padding: "0.5rem", borderRadius: 10, fontSize: "0.82rem", fontFamily: "inherit", cursor: "pointer",
+                  border: `1.5px solid ${invalidFields.includes("bring") && opt.v ? "#dc2626" : !!form.bring_required === opt.v ? colour : "var(--border)"}`,
+                  background: !!form.bring_required === opt.v ? colour : "var(--surface)",
+                  color: !!form.bring_required === opt.v ? "#fff" : "var(--text)",
+                  fontWeight: !!form.bring_required === opt.v ? 700 : 500 }}>{opt.t}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+      )}
+
+      {/* Payment -- a different kind of decision (money, not who's coming),
+          kept out of Attendees on purpose. */}
       {caps.hasCost && (
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Paid event</label>
@@ -1334,6 +1358,17 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       </div>
       )}
 
+      {/* Lending -- what's being lent out for this event and when it's due
+          back, grouped with the Book picker rather than left near Capacity
+          (Iain, 2026-08-07). Book Club-style clubs only. */}
+      {caps.hasBooks && (
+      <div ref={el => (fieldRefs.current.book = el)} style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Book <span style={{ color: "var(--danger)" }}>*</span>
+          {invalidFields.includes("book") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
+        </label>
+        <BookPicker onSelect={setSelectedBook} initialBook={event?.books || null} colour={colour} invalid={invalidFields.includes("book")} />
+      </div>
+      )}
 
       {caps.hasKitReturn && (
       <div style={{ marginBottom: 12 }}>
@@ -1353,7 +1388,6 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       </div>
       )}
 
-      {sectionHeader("Visibility & Bookings")}
       <div style={{ marginBottom: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         {[
           { k: "is_public",           label: "Public calendar" },
@@ -1377,7 +1411,6 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>Bookings stay open for all of this day, then residents see &ldquo;Bookings Closed&rdquo;. Leave blank to keep them open until the event.</div>
       </div>
 
-      {sectionHeader("Extras")}
       {event?.id && (
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Event Image</label>
@@ -1406,39 +1439,6 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       </div>
       )}
 
-      {caps.bringEnabled && (
-      <div ref={el => (fieldRefs.current.bring = el)} style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Attendees bring something
-          {invalidFields.includes("bring") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Select a category or turn off Required</span>}
-        </label>
-        <BringCategoryPicker clubId={club?.id} colour={colour}
-          value={form.bring_category_ids} onChange={v => set("bring_category_ids", v)} />
-        <div style={{ marginTop: 10 }}>
-          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: 4 }}>Is bringing something required to book?</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            {[{ v: false, t: "Optional" }, { v: true, t: "Required" }].map(opt => (
-              <button key={String(opt.v)} type="button" onClick={() => set("bring_required", opt.v)}
-                style={{ flex: 1, padding: "0.5rem", borderRadius: 10, fontSize: "0.82rem", fontFamily: "inherit", cursor: "pointer",
-                  border: `1.5px solid ${invalidFields.includes("bring") && opt.v ? "#dc2626" : !!form.bring_required === opt.v ? colour : "var(--border)"}`,
-                  background: !!form.bring_required === opt.v ? colour : "var(--surface)",
-                  color: !!form.bring_required === opt.v ? "#fff" : "var(--text)",
-                  fontWeight: !!form.bring_required === opt.v ? 700 : 500 }}>{opt.t}</button>
-            ))}
-          </div>
-        </div>
-      </div>
-      )}
-
-      {sectionHeader("Coordination & Details")}
-      {caps.hasBooks && (
-      <div ref={el => (fieldRefs.current.book = el)} style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Book <span style={{ color: "var(--danger)" }}>*</span>
-          {invalidFields.includes("book") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
-        </label>
-        <BookPicker onSelect={setSelectedBook} initialBook={event?.books || null} colour={colour} invalid={invalidFields.includes("book")} />
-      </div>
-      )}
-
       <div ref={el => (fieldRefs.current.coordinators = el)} style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Event Coordinator{form.coordinator_ids.length !== 1 ? "s" : ""} <span style={{ color: "var(--danger)" }}>*</span> <span style={{ textTransform: "none", fontWeight: 500, color: "var(--text-dim)" }}>(up to 3)</span>
           {invalidFields.includes("coordinators") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
@@ -1449,17 +1449,6 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
           onChange={ids => set("coordinator_ids", ids)}
           colour={colour}
           invalid={invalidFields.includes("coordinators")}
-        />
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Event Details</label>
-        <RichEditor
-          initialValue={form.description}
-          hubColour={colour}
-          bg="card"
-          onChange={html => set("description", html)}
-          placeholder="Any extra details about this meeting…"
         />
       </div>
 
