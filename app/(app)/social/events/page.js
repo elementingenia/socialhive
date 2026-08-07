@@ -759,6 +759,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
               style={{ ...INPUT, ...(invalidFields.includes("title") ? INVALID_FIELD_STYLE : { border: "1.5px solid var(--green)" }) }} />
           </div>
 
+
           {/* Date + Time */}
           <div style={{ ...FIELD, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
             <div ref={el => (fieldRefs.current.event_date = el)}>
@@ -783,6 +784,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
             </div>
           </div>
 
+
           {/* Location */}
           <div ref={el => (fieldRefs.current.location = el)}>
             <LocationField
@@ -795,6 +797,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
               invalid={invalidFields.includes("location")}
             />
           </div>
+
 
           {/* End time -- required for onsite events in a real common space (not
               "Resident's Home"), needed to keep the space-clash check working
@@ -809,6 +812,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
             </div>
           )}
 
+
           {/* Description */}
           <div style={FIELD}>
             <label style={LABEL}>Description</label>
@@ -817,6 +821,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
               style={{ ...INPUT, resize: "vertical" }} />
           </div>
 
+
           {/* Welcome message */}
           <div style={FIELD}>
             <label style={LABEL}>Booking Message <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", fontWeight: 400 }}>(shown on booking form only)</span></label>
@@ -824,6 +829,61 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
               rows={2} placeholder="Optional greeting shown when residents open the booking…"
               style={{ ...INPUT, resize: "vertical" }} />
           </div>
+
+
+          {/* Capacity */}
+          <div style={{ ...FIELD, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+            <div>
+              <label style={LABEL}>Total Seats</label>
+              <input type="number" min={1} max={500} value={form.max_seats}
+                onChange={e => set("max_seats", e.target.value)}
+                onWheel={e => e.currentTarget.blur()} style={INPUT} />
+            </div>
+            <div>
+              <label style={LABEL}>Max per Booking</label>
+              <input type="number" min={1} max={10} value={form.max_seats_per_booking}
+                onChange={e => set("max_seats_per_booking", e.target.value)}
+                onWheel={e => e.currentTarget.blur()} style={INPUT} />
+            </div>
+          </div>
+
+          {Number(form.max_seats_per_booking) > 1 && (
+            <div style={FIELD}>
+              <AttendeeNamingPicker
+                allowGuests={form.allow_nonresident_guests}
+                onAllowGuestsChange={v => set("allow_nonresident_guests", v)}
+                required={form.require_attendee_names}
+                onRequiredChange={v => set("require_attendee_names", v)}
+                colour="var(--terracotta, #c2410c)"
+              />
+            </div>
+          )}
+
+
+          {/* Paid */}
+          <div style={FIELD}>
+            <Toggle value={form.payment_required} onChange={v => set("payment_required", v)} label="Paid event" />
+          </div>
+          {form.payment_required && (
+            <>
+            <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
+              <label style={LABEL}>Cost per person ($)</label>
+              <input type="number" min={0} step={1} value={form.cost}
+                onChange={e => set("cost", e.target.value)}
+                onWheel={e => e.currentTarget.blur()}
+                placeholder="e.g. 25" style={INPUT} />
+            </div>
+            <div style={FIELD}>
+              <label style={LABEL}>Payment due by <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", fontWeight: 400 }}>(optional)</span></label>
+              <input type="date" value={form.payment_due_by}
+                onChange={e => set("payment_due_by", e.target.value)} style={INPUT} />
+              <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>
+                Residents see this at booking. Anyone still unpaid on this day gets an automatic reminder. Their seat is kept either way.
+              </div>
+            </div>
+            </>
+          )}
+
 
           {/* Dining Option */}
           <div style={FIELD}>
@@ -900,6 +960,47 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
             </div>
           )}
 
+
+          {/* Bus — only relevant for offsite events */}
+          {form.location_type === "offsite" && (
+            <>
+              <div style={FIELD}>
+                <Toggle value={form.has_bus} onChange={v => { set("has_bus", v); if (!v) setBusDriver(null) }} label="Community bus" />
+              </div>
+              {form.has_bus && (
+                <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
+                  <label style={LABEL}>Bus Driver (optional)</label>
+                  <MemberPicker members={members} value={busDriver} onChange={setBusDriver}
+                    placeholder="Search for bus driver…"
+                    excludeIds={coordinators.map(m => m.id)} />
+                </div>
+              )}
+            </>
+          )}
+
+
+          {/* Booking cut-off */}
+          <div style={FIELD}>
+            <label style={LABEL}>Bookings close <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", fontWeight: 400 }}>(optional)</span></label>
+            <input type="datetime-local" value={form.reservation_cutoff}
+              onChange={e => set("reservation_cutoff", e.target.value)} style={INPUT} />
+            <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>
+              After this, residents see &ldquo;Bookings Closed&rdquo; instead of the booking button. Leave blank to keep bookings open until the event.
+            </div>
+          </div>
+
+
+          {/* Public */}
+          <div style={FIELD}>
+            <Toggle value={form.is_public} onChange={v => set("is_public", v)} label="Visible on public calendar" />
+          </div>
+
+
+          {/* Show attendees */}
+          <div style={FIELD}>
+            <Toggle value={form.show_attendee_names} onChange={v => set("show_attendee_names", v)} label="Show attendee names" />
+          </div>
+
           {/* Event Image */}
           <div style={FIELD}>
             <label style={LABEL}>Event Image</label>
@@ -919,6 +1020,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
             )}
           </div>
 
+
           {/* EC — mandatory */}
           <div ref={el => (fieldRefs.current.coordinators = el)} style={FIELD}>
             <label style={LABEL}>Event Coordinator(s) <span style={{ color: "var(--danger)" }}>*</span> — max 3
@@ -928,94 +1030,6 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
             {ecError && <div style={{ color: "var(--danger)", fontSize: "0.78rem", marginTop: "0.25rem" }}>{ecError}</div>}
           </div>
 
-          {/* Bus — only relevant for offsite events */}
-          {form.location_type === "offsite" && (
-            <>
-              <div style={FIELD}>
-                <Toggle value={form.has_bus} onChange={v => { set("has_bus", v); if (!v) setBusDriver(null) }} label="Community bus" />
-              </div>
-              {form.has_bus && (
-                <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
-                  <label style={LABEL}>Bus Driver (optional)</label>
-                  <MemberPicker members={members} value={busDriver} onChange={setBusDriver}
-                    placeholder="Search for bus driver…"
-                    excludeIds={coordinators.map(m => m.id)} />
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Capacity */}
-          <div style={{ ...FIELD, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-            <div>
-              <label style={LABEL}>Total Seats</label>
-              <input type="number" min={1} max={500} value={form.max_seats}
-                onChange={e => set("max_seats", e.target.value)}
-                onWheel={e => e.currentTarget.blur()} style={INPUT} />
-            </div>
-            <div>
-              <label style={LABEL}>Max per Booking</label>
-              <input type="number" min={1} max={10} value={form.max_seats_per_booking}
-                onChange={e => set("max_seats_per_booking", e.target.value)}
-                onWheel={e => e.currentTarget.blur()} style={INPUT} />
-            </div>
-          </div>
-
-          {Number(form.max_seats_per_booking) > 1 && (
-            <div style={FIELD}>
-              <AttendeeNamingPicker
-                allowGuests={form.allow_nonresident_guests}
-                onAllowGuestsChange={v => set("allow_nonresident_guests", v)}
-                required={form.require_attendee_names}
-                onRequiredChange={v => set("require_attendee_names", v)}
-                colour="var(--terracotta, #c2410c)"
-              />
-            </div>
-          )}
-
-          {/* Booking cut-off */}
-          <div style={FIELD}>
-            <label style={LABEL}>Bookings close <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", fontWeight: 400 }}>(optional)</span></label>
-            <input type="datetime-local" value={form.reservation_cutoff}
-              onChange={e => set("reservation_cutoff", e.target.value)} style={INPUT} />
-            <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>
-              After this, residents see &ldquo;Bookings Closed&rdquo; instead of the booking button. Leave blank to keep bookings open until the event.
-            </div>
-          </div>
-
-          {/* Paid */}
-          <div style={FIELD}>
-            <Toggle value={form.payment_required} onChange={v => set("payment_required", v)} label="Paid event" />
-          </div>
-          {form.payment_required && (
-            <>
-            <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
-              <label style={LABEL}>Cost per person ($)</label>
-              <input type="number" min={0} step={1} value={form.cost}
-                onChange={e => set("cost", e.target.value)}
-                onWheel={e => e.currentTarget.blur()}
-                placeholder="e.g. 25" style={INPUT} />
-            </div>
-            <div style={FIELD}>
-              <label style={LABEL}>Payment due by <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", fontWeight: 400 }}>(optional)</span></label>
-              <input type="date" value={form.payment_due_by}
-                onChange={e => set("payment_due_by", e.target.value)} style={INPUT} />
-              <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>
-                Residents see this at booking. Anyone still unpaid on this day gets an automatic reminder. Their seat is kept either way.
-              </div>
-            </div>
-            </>
-          )}
-
-          {/* Public */}
-          <div style={FIELD}>
-            <Toggle value={form.is_public} onChange={v => set("is_public", v)} label="Visible on public calendar" />
-          </div>
-
-          {/* Show attendees */}
-          <div style={FIELD}>
-            <Toggle value={form.show_attendee_names} onChange={v => set("show_attendee_names", v)} label="Show attendee names" />
-          </div>
 
           {justCreated && (
             <div style={{ fontSize: 13, color: "var(--green)", fontWeight: 600, marginBottom: "1rem" }}>

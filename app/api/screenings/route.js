@@ -209,7 +209,7 @@ export async function POST(req) {
   const member = await getMember(token)
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const { movie_id, showing_title, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
+  const { movie_id, showing_title, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
   if (!event_date || !event_time) {
     return NextResponse.json({ error: 'Date and time are required' }, { status: 400 })
   }
@@ -249,6 +249,7 @@ export async function POST(req) {
     .insert({
       hub_type: 'movie', title, movie_id: movie_id || null,
       event_date, event_time, event_end_time, max_seats: max_seats || 20,
+      max_seats_per_booking: max_seats_per_booking || 4,
       reservation_cutoff: reservation_cutoff || null,
       allow_nonresident_guests: !!allow_nonresident_guests,
       require_attendee_names: !!require_attendee_names,
@@ -289,7 +290,7 @@ export async function PATCH(req) {
   const member = await getMember(token)
   if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const { event_id, movie_id, showing_title, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
+  const { event_id, movie_id, showing_title, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
   if (!event_date || !event_time) return NextResponse.json({ error: 'Date and time are required' }, { status: 400 })
   if (!event_end_time) return NextResponse.json({ error: 'An end time is required -- every screening books the Cinema as a common space.' }, { status: 400 })
@@ -323,7 +324,7 @@ export async function PATCH(req) {
 
   const { error } = await supabaseAdmin
     .from('events')
-    .update({ movie_id: movie_id || null, title, event_date, event_time, event_end_time, max_seats: max_seats || 20, notes: notes || null, movie_snapshot: movieSnapshot, reservation_cutoff: reservation_cutoff || null, allow_nonresident_guests: !!allow_nonresident_guests, require_attendee_names: !!require_attendee_names, location_type: 'onsite', location: cinema.name, location_id })
+    .update({ movie_id: movie_id || null, title, event_date, event_time, event_end_time, max_seats: max_seats || 20, max_seats_per_booking: max_seats_per_booking || 4, notes: notes || null, movie_snapshot: movieSnapshot, reservation_cutoff: reservation_cutoff || null, allow_nonresident_guests: !!allow_nonresident_guests, require_attendee_names: !!require_attendee_names, location_type: 'onsite', location: cinema.name, location_id })
     .eq('id', event_id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
