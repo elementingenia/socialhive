@@ -3,8 +3,10 @@ import { NextResponse } from "next/server"
 import { promoteWaitlist } from "@/lib/promoteWaitlist"
 import { notify } from "@/lib/notify"
 import { validateParty } from "@/lib/attendees"
+import { bookingsClosed } from "@/lib/booking"
 import { fetchTakenResidentIds } from "@/lib/takenResidents"
 import { syncAttendees } from "@/lib/syncAttendees"
+import { maxSeatsPerBooking, planSeatModification } from "@/lib/modifyBooking"
 
 // force-dynamic + the shared no-store supabaseAdmin (lib/supabaseAdmin.js) keep
 // this GET route reading LIVE data. Without it, Next's fetch cache once dropped a
@@ -331,7 +333,6 @@ export async function PATCH(req) {
     const { member_id, contact_id, seats: rawSeats, mark_paid, force_status, attendees: rawAttendees } = body
     if (!member_id && !contact_id) return NextResponse.json({ error: "member_id or contact_id required" }, { status: 400 })
     if (member_id && contact_id) return NextResponse.json({ error: "Provide only one of member_id or contact_id" }, { status: 400 })
-    const seats = Math.min(4, Math.max(1, parseInt(rawSeats) || 1))
 
     let targetName
     if (member_id) {
@@ -347,9 +348,13 @@ export async function PATCH(req) {
     }
 
     const { data: ev } = await supa
-      .from("events").select("id, max_seats, hub_type, book_id, payment_required, title, allow_nonresident_guests, require_attendee_names")
+      .from("events").select("id, max_seats, max_seats_per_booking, hub_type, book_id, payment_required, title, allow_nonresident_guests, require_attendee_names")
       .eq("id", event_id).single()
     if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
+
+    // Cap reads the event's own max_seats_per_booking instead of a
+    // hardcoded 4 (2026-08-08) -- see lib/modifyBooking.js.
+    const seats = Math.min(maxSeatsPerBooking(ev), Math.max(1, parseInt(rawSeats) || 1))
 
     // Named party for this walk-up booking (2026-07-23), same identity rules
     // as self-service naming -- a resident (member or contact) or, only if
@@ -453,6 +458,106 @@ export async function PATCH(req) {
       await notify(bk.member_id, event_id, "booking_cancelled", `Your booking for ${ev?.title || "this event"} was cancelled.`, undefined, member.id)
     }
     return NextResponse.json({ ok: true })
+  }
+
+  // ── Add/remove seats on an existing booking, on the resident's behalf ─────
+  // Iain, 2026-08-08: an EC/admin previously could only Cancel a booking
+  // from this panel -- no way to amend it. This is the same rule set a
+  // resident gets modifying their own booking (lib/modifyBooking.js's
+  // planSeatModification, shared with self-service PATCH /api/bookings so
+  // the two can't drift the way promoteWaitlist once did), extended to also
+  // cover contact-owned walk-up bookings, which residents can never touch
+  // themselves since they have no login. If the booking is already split
+  // across confirmed + waitlist, growing it is refused outright -- the
+  // caller (EventSlideOut.js) is expected to tell the admin to cancel and
+  // rebook instead, same as the error message says.
+  if (action === "modify_booking") {
+    const { member_id: ownerId, contact_id: ownerContactId, seats: rawSeats, attendees: rawAttendees } = body
+    if (!ownerId && !ownerContactId) {
+      return NextResponse.json({ error: "member_id or contact_id required" }, { status: 400 })
+    }
+    if (ownerId && ownerContactId) {
+      return NextResponse.json({ error: "Provide only one of member_id or contact_id" }, { status: 400 })
+    }
+
+    const { data: ev } = await supa
+      .from("events").select("id, title, max_seats, max_seats_per_booking, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names")
+      .eq("id", event_id).single()
+    if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
+
+    let ownerQuery = supa.from("bookings").select("id, status, seats")
+      .eq("event_id", event_id).neq("status", "cancelled")
+    ownerQuery = ownerId ? ownerQuery.eq("member_id", ownerId) : ownerQuery.eq("contact_id", ownerContactId)
+    const { data: ownerBookings } = await ownerQuery
+    const myConfirmed = (ownerBookings || []).find(b => b.status === "confirmed")
+    const myWaitlist  = (ownerBookings || []).find(b => b.status === "waitlist")
+    if (!myConfirmed) return NextResponse.json({ error: "No confirmed booking found for this resident" }, { status: 404 })
+
+    const { data: confirmedRows } = await supa
+      .from("bookings").select("seats")
+      .eq("event_id", event_id).eq("status", "confirmed").neq("id", myConfirmed.id)
+    const othersConfirmed = (confirmedRows || []).reduce((s, b) => s + (b.seats || 1), 0)
+
+    const plan = planSeatModification({
+      event: ev, requestedSeats: rawSeats,
+      oldConfirmed: myConfirmed.seats || 1, oldWaitlisted: myWaitlist?.seats || 0,
+      othersConfirmed, closed: bookingsClosed(ev),
+    })
+    if (!plan.ok) {
+      return NextResponse.json({ error: plan.error, ...(plan.code === "bookings_closed" ? { bookings_closed: true } : {}) }, { status: 409 })
+    }
+
+    // Re-validate the named party against the new seat count -- same rule
+    // self-service gets, excluding this booking's own owner/party from the
+    // "already booked elsewhere on this event" check.
+    const { memberIds: takenMemberIds, contactIds: takenContactIds } = await fetchTakenResidentIds(event_id, {
+      excludeOwnerId: ownerId || null, excludeOwnerContactId: ownerContactId || null,
+    })
+    const party = validateParty({
+      seats: plan.seats, attendees: rawAttendees,
+      allowGuests: !!ev.allow_nonresident_guests,
+      ownerId: ownerId || null, ownerContactId: ownerContactId || null,
+      takenMemberIds, takenContactIds,
+      required: !!ev.require_attendee_names,
+    })
+    if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
+
+    if (myWaitlist) {
+      await supa.from("bookings").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", myWaitlist.id)
+    }
+
+    const { error: updErr } = await supa
+      .from("bookings").update({ seats: plan.newConfirmed, updated_at: new Date().toISOString() })
+      .eq("id", myConfirmed.id)
+    if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
+
+    if (plan.newConfirmed < (myConfirmed.seats || 1)) {
+      await promoteWaitlist(event_id)
+    }
+
+    if (plan.newWaitlisted > 0) {
+      const { error: insErr } = await supa.from("bookings").insert({
+        event_id, member_id: ownerId || null, contact_id: ownerContactId || null,
+        seats: plan.newWaitlisted, status: "waitlist", booked_at: new Date().toISOString(),
+        payment_status: ev.payment_required ? "pending" : "not_required",
+      })
+      if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
+    }
+
+    // rawAttendees is always sent by the panel (fully seeded from the
+    // existing party, same pattern as self-service Modify) so this always
+    // runs when the action succeeds -- mirrors PATCH /api/bookings, which
+    // does the same unconditionally.
+    await syncAttendees(event_id, { ownerId: ownerId || null, ownerContactId: ownerContactId || null }, party.attendees)
+
+    // No account to notify for a contact-owned (no-login) booking.
+    if (ownerId) {
+      await notify(ownerId, event_id, "booking_updated",
+        `Your booking for ${ev.title || "this event"} was changed to ${plan.seats} seat${plan.seats !== 1 ? "s" : ""} by an Event Coordinator.`,
+        undefined, member.id)
+    }
+
+    return NextResponse.json({ ok: true, seats: plan.seats, confirmed: plan.newConfirmed, waitlisted: plan.newWaitlisted })
   }
 
   // ── Update EC-editable event fields ──────────────────────────────────────────
