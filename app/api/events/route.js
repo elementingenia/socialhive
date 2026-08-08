@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
+import { sydneyTodayStr, sydneyDateStrPlusDays } from '@/lib/date'
 // force-dynamic + the shared no-store supabaseAdmin (lib/supabaseAdmin.js) keep
 // this GET route reading LIVE data. Without it, Next's fetch cache once dropped a
 // just-added screening from the calendar (2026-07-19).
@@ -9,9 +10,9 @@ export const dynamic = "force-dynamic"
 export async function GET(req) {
   const { searchParams } = new URL(req.url)
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = sydneyTodayStr()
   const defaultTo = (() => {
-    const d = new Date(); d.setDate(d.getDate() + 60); return d.toISOString().split('T')[0]
+    return sydneyDateStrPlusDays(60)
   })()
 
   const from    = searchParams.get('from') || today

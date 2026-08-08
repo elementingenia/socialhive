@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { newAuthEmail } from "@/lib/authEmail"
+import { sydneyTodayStr } from "@/lib/date"
 
 
 function toAuthPassword(pin) {
@@ -102,7 +103,7 @@ export async function POST(request) {
       auth_email: fakeEmail,
       is_admin: false,
       status: 'active',
-      joined_date: new Date().toISOString().split('T')[0]
+      joined_date: sydneyTodayStr()
     })
 
     if (insertError) {

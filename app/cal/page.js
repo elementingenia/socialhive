@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { supabase } from "@/lib/supabase"
 import CalendarView from "@/components/CalendarView"
 import EventSlideOut from "@/components/EventSlideOut"
+import { sydneyTodayStr, sydneyDateStrPlusDays } from "@/lib/date"
 
 export default function PublicCalendarPage() {
   const [events, setEvents]     = useState([])
@@ -28,9 +29,8 @@ export default function PublicCalendarPage() {
     const tag = ++loadRef.current
     setLoading(true)
     try {
-      const from = new Date().toISOString().split("T")[0]
-      const toDate = new Date(); toDate.setDate(toDate.getDate() + 90)
-      const to = toDate.toISOString().split("T")[0]
+      const from = sydneyTodayStr()
+      const to = sydneyDateStrPlusDays(90)
 
       // Deliberately anonymous -- no Authorization header, even if this
       // browser has a real session. This is what makes is_public=false

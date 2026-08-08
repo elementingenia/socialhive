@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { computeFreeCost } from '@/lib/freeCost'
 import VoteScoreGrid from '@/components/VoteScoreGrid'
+import { sydneyTodayStr } from '@/lib/date'
 function parseGenres(g) {
   if (!g) return []
   return g.split(/[,|\/]/).map(x => x.trim()).filter(Boolean)
@@ -651,7 +652,7 @@ export default function LibraryPage() {
   }
 
   const loadData = useCallback(async () => {
-    const today = new Date().toISOString().split('T')[0]
+    const today = sydneyTodayStr()
     const [{ data: moviesData }, { data: votesData }, { data: futureEventsData }, { data: pastEventsData }, { data: dvdData }, settingsRes, { data: ownData }] = await Promise.all([
       supabase.from('movies').select('*').order('title'),
       supabase.from('votes').select('movie_id, member_id, score'),

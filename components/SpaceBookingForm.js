@@ -4,6 +4,7 @@ import { createPortal } from "react-dom"
 import TimeField from "@/components/TimeField"
 import { authedFetch } from "@/lib/getAuthToken"
 import { BOOKING_REASON_MAX, INGENIA_CONFIRMED_BY_MAX } from "@/lib/spaceBookings"
+import { sydneyTodayStr } from "@/lib/date"
 
 // Book a Space — Personal Space Booking. Scope:
 // Social_Hive_Personal_Space_Booking_Scope.md (decisions locked 2026-08-01).
@@ -151,7 +152,7 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
   const fetchTag = useRef(0)
   const { ask: askSameDate, Modal: SameDateModal } = useSpaceClashWarning()
 
-  const today = new Date().toISOString().split("T")[0]
+  const today = sydneyTodayStr()
   const windowValid = !!(date && startTime && endTime && endTime > startTime)
 
   // Reset everything when the sheet is closed and reopened, so a stale

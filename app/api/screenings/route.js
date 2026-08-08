@@ -7,6 +7,7 @@ import { findAnyRoomConflict } from '@/lib/spaceBookings'
 import { notifyRequestOnlySpace } from '@/lib/notifyRequestOnlySpace'
 import { titleFor } from '@/lib/showing'
 import { checkCancelPaymentGuard } from '@/lib/eventCancelGuard'
+import { sydneyTodayStr } from '@/lib/date'
 
 // Movie screenings always run in the one dedicated common space -- there's no
 // location picker in the screening form, so every screening is auto-bound to
@@ -38,7 +39,7 @@ export async function GET(req) {
   const member = await getMember(token)
   if (!member) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = sydneyTodayStr()
 
   const { data: events, error } = await supabaseAdmin
     .from('events')

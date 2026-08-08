@@ -1,6 +1,7 @@
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { notify } from "@/lib/notify"
+import { sydneyTodayStr } from "@/lib/date"
 
 // This route reads back its own just-written rows on the next run, so it must
 // never be served stale. force-dynamic + the shared no-store supabaseAdmin
@@ -40,7 +41,7 @@ export async function GET(req) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 })
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10) // YYYY-MM-DD, matches events.book_return_date's date type
+  const todayStr = sydneyTodayStr() // YYYY-MM-DD, matches events.book_return_date's date type
 
   // Filtering on the joined event's date via a dotted-path PostgREST filter
   // (.lt("events.book_return_date", ...)) turned out not to be reliable from

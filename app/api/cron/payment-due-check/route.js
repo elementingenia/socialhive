@@ -2,6 +2,7 @@ import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { notify } from "@/lib/notify"
 import { paymentReminderDue } from "@/lib/payments"
+import { sydneyTodayStr } from "@/lib/date"
 
 // Daily safety-net reminder for paid events whose payment_due_by has arrived
 // with a confirmed booking still unpaid (feedback round 2026-07-16, workstream
@@ -32,7 +33,7 @@ export async function GET(req) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 })
   }
 
-  const todayStr = new Date().toISOString().slice(0, 10)
+  const todayStr = sydneyTodayStr()
 
   // Fetch confirmed bookings on paid events that have a due date set. Same
   // pragmatic approach as book-return-check: pull the (small) candidate set and

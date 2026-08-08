@@ -13,6 +13,7 @@ import ClubAppearanceModal from "@/components/ClubAppearanceModal"
 import { clubCaps } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
 import { WATERMARK_PAGE_OPACITY, computeWatermarkTransform } from "@/lib/clubWatermark"
+import { sydneyTodayStr } from "@/lib/date"
 import EventCoordinators from "@/components/EventCoordinators"
 import RecurrencePicker from "@/components/RecurrencePicker"
 import { nextOccurrence } from "@/lib/recurrence"
@@ -817,7 +818,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   const caps = clubCaps(club)
   const onsiteLocations = useLocations()
   const activeEC = event ? (event.event_coordinators || []).find(ec => !ec.replaced_at) : null
-  const todayStr = new Date().toISOString().split("T")[0]
+  const todayStr = sydneyTodayStr()
   const nowHour  = String(new Date().getHours()).padStart(2, "0") + ":00"
   const [form,   setForm]   = useState({
     event_date:   event?.event_date || todayStr,
@@ -1827,7 +1828,7 @@ export default function ClubHome({ club }) {
   async function load() {
     loadClubPattern()
     setLoading(true)
-    const today = new Date().toISOString().split("T")[0]
+    const today = sydneyTodayStr()
 
     // All non-archived BC events
     const { data: evs } = await supabase
@@ -1967,7 +1968,7 @@ export default function ClubHome({ club }) {
   // single event or a recurring series; recurring ones show ONE parent card (the
   // next occurrence) with their future dates nested beneath. Group upcoming events
   // by series; standalone events each stand alone.
-  const today = new Date().toISOString().split("T")[0]
+  const today = sydneyTodayStr()
   const upcoming = events.filter(e => e.event_date >= today)
     .sort((a, b) => a.event_date.localeCompare(b.event_date) || (a.event_time || "").localeCompare(b.event_time || ""))
 
