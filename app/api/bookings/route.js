@@ -6,6 +6,7 @@ import { bookingsClosed } from '@/lib/booking'
 import { validateParty, validateBring, resolveBringCategoryIds } from '@/lib/attendees'
 import { fetchTakenResidentIds } from '@/lib/takenResidents'
 import { syncAttendees } from '@/lib/syncAttendees'
+import { maxSeatsPerBooking, planSeatModification } from '@/lib/modifyBooking'
 
 
 async function getMember(token) {
@@ -30,13 +31,16 @@ export async function POST(req) {
 
   const body = await req.json()
   const { event_id, accept_split } = body
-  const requestedSeats = Math.min(4, Math.max(1, parseInt(body.seats) || 1))
 
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('id, max_seats, hub_type, book_id, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('id, max_seats, max_seats_per_booking, hub_type, book_id, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+
+  // Cap reads the event's own max_seats_per_booking (falls back to 4) --
+  // previously hardcoded, see lib/modifyBooking.js (2026-08-08).
+  const requestedSeats = Math.min(maxSeatsPerBooking(event), Math.max(1, parseInt(body.seats) || 1))
 
   // Reservation cut-off (workstream B). Once past, no new bookings/waitlist
   // joins -- authoritative gate; the UI's "Bookings Closed" state mirrors it.
@@ -240,8 +244,6 @@ export async function PATCH(req) {
     return NextResponse.json({ ok: true })
   }
 
-  const newSeats = Math.min(4, Math.max(1, parseInt(body.seats) || 1))
-
   const { data: allMine } = await supabaseAdmin
     .from('bookings').select('id, status, seats')
     .eq('event_id', event_id).eq('member_id', member.id).neq('status', 'cancelled')
@@ -254,20 +256,26 @@ export async function PATCH(req) {
   const oldConfirmed = myConfirmed.seats || 1
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('max_seats, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('max_seats, max_seats_per_booking, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   const { data: confirmedRows } = await supabaseAdmin
     .from('bookings').select('seats')
     .eq('event_id', event_id).eq('status', 'confirmed').neq('id', myConfirmed.id)
 
   const othersConfirmed = (confirmedRows || []).reduce((s, b) => s + (b.seats || 1), 0)
-  const maxCanConfirm   = (event?.max_seats || 0) - othersConfirmed
 
-  // Reservation cut-off (workstream B): can't grow a booking once closed,
-  // but shrinking it (freeing seats) stays allowed.
-  const currentTotal = oldConfirmed + (myWaitlist?.seats || 0)
-  if (newSeats > currentTotal && bookingsClosed(event)) {
-    return NextResponse.json({ error: 'Bookings for this event have closed — you can no longer add seats.', bookings_closed: true }, { status: 409 })
+  // Shared with the admin/EC "modify_booking" action (lib/modifyBooking.js,
+  // 2026-08-08) -- reservation cut-off still blocks growth (shrinking stays
+  // allowed), and a booking that's already split onto the waitlist can no
+  // longer grow at all (cancel + rebook instead).
+  const plan = planSeatModification({
+    event, requestedSeats: body.seats,
+    oldConfirmed, oldWaitlisted: myWaitlist?.seats || 0,
+    othersConfirmed, closed: bookingsClosed(event),
+  })
+  if (!plan.ok) {
+    return NextResponse.json({ error: plan.error, ...(plan.code === 'bookings_closed' ? { bookings_closed: true } : {}) }, { status: 409 })
   }
+  const newSeats = plan.seats
 
   // Re-validate the named party against the new seat count (workstream A).
   const { memberIds: takenMemberIds, contactIds: takenContactIds } = await fetchTakenResidentIds(event_id, { excludeOwnerId: member.id })
@@ -296,8 +304,8 @@ export async function PATCH(req) {
   })
   if (!bring.ok) return NextResponse.json({ error: bring.error }, { status: 400 })
 
-  const newConfirmed  = Math.min(newSeats, maxCanConfirm)
-  const newWaitlisted = newSeats - newConfirmed
+  const newConfirmed  = plan.newConfirmed
+  const newWaitlisted = plan.newWaitlisted
 
   if (myWaitlist) {
     await supabaseAdmin.from('bookings').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', myWaitlist.id)

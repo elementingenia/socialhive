@@ -13,6 +13,7 @@ import { byOwnThenName } from "@/lib/sortNames"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
 import { clubCaps, clubColour } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
+import { maxSeatsPerBooking } from "@/lib/modifyBooking"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -299,6 +300,16 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   const [saving,        setSaving]        = useState(false)
   const [cancelTarget,  setCancelTarget]  = useState(null)
   const [cancelling,    setCancelling]    = useState(false)
+  // Modify an existing booking's seat count on the resident's behalf
+  // (2026-08-08, Iain: "there needs to be a cancel AND modify option").
+  // Same rule set as a resident modifying their own booking -- see
+  // lib/modifyBooking.js, shared with PATCH /api/bookings.
+  const [modifyTarget,    setModifyTarget]    = useState(null)
+  const [modifySeats,     setModifySeats]     = useState(1)
+  const [modifyParty,     setModifyParty]     = useState([])
+  const [modifyNameParty, setModifyNameParty] = useState(false)
+  const [modifyTaken,     setModifyTaken]     = useState({ memberIds: new Set(), contactIds: new Set() })
+  const [modifySubmitting, setModifySubmitting] = useState(false)
   // Add Walk-up Booking (2026-07-13) — for residents who don't use the app
   const [showAddBooking,      setShowAddBooking]      = useState(false)
   const [allResidents,        setAllResidents]        = useState([])
@@ -472,6 +483,80 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       else showToast("Failed to cancel", "error")
     } finally {
       setCancelling(false)
+    }
+  }
+
+  // Seed the Modify editor from this resident's current booking(s) + named
+  // party, mirroring how self-service Modify (BookingSection, below) seeds
+  // itself from myAttendees -- fetched fresh here rather than reused from
+  // partyByOwner above, since that map only carries display labels, not the
+  // member_id/contact_id a PartyPicker needs to prefill correctly.
+  async function openModify(group) {
+    const ownerId = group.member?.id || null
+    const ownerContactId = !ownerId ? (group.contact?.id || null) : null
+    if (!ownerId && !ownerContactId) return
+    const currentTotal = group.confirmedSeats + group.waitlistSeats
+    setModifyNameParty(false)
+    setModifySeats(currentTotal || 1)
+    if (allResidents.length === 0) fetchResidentDirectory().then(setAllResidents)
+    const [{ data: attendeeRows }, takenIds] = await Promise.all([
+      supabase.from("booking_attendees")
+        .select("member_id, contact_id, guest_name, member:members!member_id(name), contact:contacts!contact_id(name)")
+        .eq("event_id", event.id)
+        .eq(ownerId ? "owner_id" : "owner_contact_id", ownerId || ownerContactId),
+      fetchTakenResidentIds(event.id, { excludeOwnerId: ownerId, excludeOwnerContactId: ownerContactId }),
+    ])
+    setModifyTaken(takenIds)
+    setModifyParty((attendeeRows || []).map(a => (a.member_id
+      ? { kind: "resident", member_id: a.member_id, contact_id: null, member_name: a.member?.name || "Resident", guest_name: "" }
+      : a.contact_id
+      ? { kind: "resident", member_id: null, contact_id: a.contact_id, member_name: a.contact?.name || "Resident", guest_name: "" }
+      : { kind: "guest", member_id: null, contact_id: null, member_name: "", guest_name: a.guest_name || "" })))
+    setModifyTarget({
+      ownerId, ownerContactId, currentTotal,
+      name: group.member?.name || group.member?.username || group.contact?.name || "Resident",
+      alreadySplit: group.waitlistSeats > 0,
+    })
+  }
+
+  function closeModify() {
+    setModifyTarget(null); setModifyParty([]); setModifyNameParty(false)
+  }
+
+  function changeModifySeats(next) {
+    setModifySeats(next)
+    const need = Math.max(0, next - 1)
+    setModifyParty(prev => {
+      const copy = prev.slice(0, need)
+      while (copy.length < need) copy.push({ kind: "resident", member_id: null, contact_id: null, member_name: "", guest_name: "" })
+      return copy
+    })
+  }
+
+  async function submitModify() {
+    if (!modifyTarget || modifySubmitting) return
+    setModifySubmitting(true)
+    try {
+      // Direct fetch (not patchAction) so a specific server reason -- e.g.
+      // "already split, cancel and rebook instead" -- reaches the toast
+      // instead of being collapsed to a generic "Failed" (same reasoning as
+      // submitAddBooking, just below).
+      const res = await authedFetch("/api/coordinator", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_id: event.id, action: "modify_booking",
+          ...(modifyTarget.ownerId ? { member_id: modifyTarget.ownerId } : { contact_id: modifyTarget.ownerContactId }),
+          seats: modifySeats,
+          attendees: addPartyToAttendees(modifyParty),
+        }),
+      })
+      const d = await res.json()
+      if (!res.ok) { showToast(d.error || "Update failed", "error"); return }
+      showToast(`${modifyTarget.name}'s booking updated`)
+      closeModify(); load(); onRefresh()
+    } finally {
+      setModifySubmitting(false)
     }
   }
 
@@ -913,13 +998,76 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                     </div>
                   )}
                   {!isOwnBooking && (
-                    <div style={{ textAlign: "center", marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
+                    <div style={{ textAlign: "center", marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)", display: "flex", gap: 8, justifyContent: "center" }}>
+                      {!isBook && (
+                        <button onClick={() => openModify({ member, contact, confirmedSeats, waitlistSeats })}
+                          style={{ fontSize: 12, padding: "5px 20px", borderRadius: 8, border: `1px solid ${colour}`, background: "none", color: clubInk(colour), cursor: "pointer", fontWeight: 600 }}>
+                          Modify
+                        </button>
+                      )}
                       <button onClick={() => setCancelTarget({ id: allIds[0], _allIds: allIds, members: member })}
                         style={{ fontSize: 12, padding: "5px 20px", borderRadius: 8, border: "1px solid var(--danger)", background: "none", color: "var(--danger)", cursor: "pointer", fontWeight: 600 }}>
                         Cancel Booking
                       </button>
                     </div>
                   )}
+                  {modifyTarget && (modifyTarget.ownerId ? modifyTarget.ownerId === member?.id : modifyTarget.ownerContactId === contact?.id) && (() => {
+                    const seatMax = modifyTarget.alreadySplit ? modifyTarget.currentTotal : maxPerBooking
+                    const need = Math.max(0, modifySeats - 1)
+                    const modifyPartyValid = requireAddNaming
+                      ? (modifyParty.length === need && modifyParty.every(isAddRowFilled))
+                      : (!modifyNameParty || (modifyParty.length === need && modifyParty.every(isAddRowFilled)))
+                    return (
+                      <div style={{ marginTop: 10, background: colour + "0d", border: `1px dashed ${colour}80`, borderRadius: 10, padding: 12 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: clubInk(colour), textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                          Modify {modifyTarget.name}'s Booking
+                        </div>
+                        <SeatSelector value={modifySeats} min={1} max={seatMax} onChange={changeModifySeats} />
+                        {modifyTarget.alreadySplit && (
+                          <div style={{ fontSize: 12, color: "var(--amber-dark)", background: "var(--amber-light)", borderRadius: 8, padding: "8px 10px", marginBottom: 10, lineHeight: 1.5 }}>
+                            This booking already has seats on the waitlist, so it can't be increased any further — that's why seats caps out at {modifyTarget.currentTotal} here. Cancel it and rebook instead if more are needed.
+                          </div>
+                        )}
+                        {need > 0 && (
+                          requireAddNaming ? (
+                            <PartyPicker count={need} allowGuests={allowGuests} members={allResidents}
+                              excludeIds={modifyTarget.ownerId ? [modifyTarget.ownerId] : modifyTarget.ownerContactId ? [modifyTarget.ownerContactId] : []}
+                              value={modifyParty} onChange={setModifyParty} taken={modifyTaken} required />
+                          ) : !modifyNameParty ? (
+                            <button type="button" onClick={() => setModifyNameParty(true)}
+                              style={{ fontSize: 12, fontWeight: 600, color: clubInk(colour), background: "none", border: "none", cursor: "pointer", textDecoration: "underline", padding: 0, marginBottom: 8 }}>
+                              + Name who the other {need === 1 ? "seat is" : `${need} seats are`} for
+                            </button>
+                          ) : (
+                            <>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text)" }}>Who else is coming?</span>
+                                <button type="button" onClick={() => { setModifyNameParty(false); setModifyParty([]) }}
+                                  style={{ fontSize: 12, color: "var(--text-dim)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                                  Skip naming
+                                </button>
+                              </div>
+                              <PartyPicker count={need} allowGuests={allowGuests} members={allResidents}
+                                excludeIds={modifyTarget.ownerId ? [modifyTarget.ownerId] : modifyTarget.ownerContactId ? [modifyTarget.ownerContactId] : []}
+                                value={modifyParty} onChange={setModifyParty} taken={modifyTaken} required={false} />
+                            </>
+                          )
+                        )}
+                        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                          <button onClick={closeModify} disabled={modifySubmitting}
+                            style={{ flex: 1, padding: "8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                            Cancel
+                          </button>
+                          <button onClick={submitModify} disabled={modifySubmitting || (need > 0 && !modifyPartyValid)}
+                            style={{ flex: 1, padding: "8px", borderRadius: 8, border: "none", background: colour, color: clubTextOn(colour),
+                              cursor: (modifySubmitting || (need > 0 && !modifyPartyValid)) ? "not-allowed" : "pointer",
+                              opacity: (modifySubmitting || (need > 0 && !modifyPartyValid)) ? 0.7 : 1, fontSize: 13, fontWeight: 700 }}>
+                            {modifySubmitting ? "Saving…" : "Save"}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })()}
                 </div>
               )
             })}
@@ -1294,7 +1442,7 @@ function BookingSection({ event, onRefresh, onClose }) {
   const booked = event.bookings_count
     ?? (event.bookings?.filter(b => b.status === 'confirmed').reduce((s, b) => s + (b.seats || 1), 0) || 0)
   const max = event.max_seats || 0
-  const maxPerBooking   = event.max_seats_per_booking || 4
+  const maxPerBooking   = maxSeatsPerBooking(event)
   const isMovieEvent    = event.hub_type === "movie"
   const availableSeats = Math.max(0, max - booked)
   const closed = bookingsClosed(event)
