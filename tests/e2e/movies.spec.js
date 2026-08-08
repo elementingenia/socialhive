@@ -140,7 +140,12 @@ test.describe('Admin panel', () => {
   })
 
   test('Admin card grid loads with expected sections', async ({ page }) => {
-    await expect(page.getByRole('button', { name: /Movies/i }).first()).toBeVisible()
+    // Card is labelled "Show Time" since the rename (PR #43, 2026-08-01) --
+    // its internal admin tab `key` is still 'Movies' (app/(app)/admin/page.js),
+    // but the visible button text this test asserts against is not. Was
+    // /Movies/i, which stopped matching anything the day of the rename and
+    // has been silently failing/untriaged since (see session_summary_2026-08-05.md).
+    await expect(page.getByRole('button', { name: /Show Time/i }).first()).toBeVisible()
     // Bar section is parked behind BAR_ENABLED (see lib/features.js) — not rendered while disabled.
     await expect(page.getByRole('button', { name: /^Bar$/i })).toHaveCount(0)
     // Members section folded into Info > Contacts (2026-07-12) — no longer a
@@ -149,7 +154,7 @@ test.describe('Admin panel', () => {
   })
 
   test('Movies section shows Suggested Movies', async ({ page }) => {
-    await page.getByRole('button', { name: /Movies/i }).first().click()
+    await page.getByRole('button', { name: /Show Time/i }).first().click()
     await page.waitForLoadState('networkidle')
     await expect(page.getByText('← Admin')).toBeVisible()
   })

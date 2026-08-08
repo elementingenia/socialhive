@@ -17,8 +17,18 @@ async function supaGet(path, key) {
   return res.json()
 }
 
+// Sydney's calendar date, not UTC's (2026-08-09 fix -- see lib/date.js's
+// sydneyTodayStr, which this mirrors; can't import it directly since this
+// file is CommonJS and lib/date.js is ESM). new Date().toISOString() is
+// UTC, and Sydney is UTC+10/+11, so the old version of this helper agreed
+// with the app's own former bug rather than catching it: both independently
+// computed "today" as the UTC date, so a screening from the previous Sydney
+// day (e.g. Ford v Ferrari, already screened) still passed as "next" to
+// both the test oracle and the app under test. Now that the app is fixed,
+// this has to be too, or the test asserts against a title the fixed app no
+// longer shows.
 function todayStr() {
-  return new Date().toISOString().slice(0, 10)
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Australia/Sydney' }).format(new Date())
 }
 
 // ── Date/time formatting — mirrors the app's own formatting functions so
