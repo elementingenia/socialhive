@@ -6,6 +6,7 @@ import { notifyEventAttendees } from "@/lib/notifyEventAttendees"
 import { RULE_TYPES } from "@/lib/recurrence"
 import { checkCancelPaymentGuard } from "@/lib/eventCancelGuard"
 import { validateBringRequirement } from "@/lib/attendees"
+import { sydneyTodayStr } from "@/lib/date"
 
 // Recurring event series — create / end. Occurrences are materialised as real
 // events by generateSeriesEvents (scope §3). A series fires exactly ONE
@@ -102,7 +103,7 @@ export async function POST(req) {
 export async function PATCH(req) {
   const body = await req.json().catch(() => ({}))
   const { action, series_id, event_id } = body
-  const today = new Date().toISOString().slice(0, 10)
+  const today = sydneyTodayStr()
 
   // Resolve the club (via series or event) for the role check.
   let clubId = null, series = null

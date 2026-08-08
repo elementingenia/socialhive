@@ -29,7 +29,15 @@ export default function TimeField({ value, onChange, colour = "var(--border)", i
 
   useEffect(() => {
     if (hour && !HOURS.includes(hour)) onChange("")
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Deliberately scoped to [minHour] only: this must fire when the Start
+    // hour moves and invalidates the current End hour selection, not on
+    // every keystroke that changes `hour`/`onChange` themselves (that would
+    // fight the user's own input). react-hooks/exhaustive-deps isn't
+    // actually enabled in this project's ESLint config (no
+    // eslint-plugin-react-hooks in .eslintrc.cjs) -- the disable-comment
+    // that used to be here referenced a rule ESLint can't resolve, which
+    // silently broke `npm run lint` (and therefore CI) for every PR since
+    // 2026-08-07 (PR #61). Removed rather than re-added.
   }, [minHour])
 
   function setHour(newH) { onChange(newH ? `${newH}:${minute}` : "") }

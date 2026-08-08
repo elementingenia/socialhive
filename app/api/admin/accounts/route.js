@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { newAuthEmail } from "@/lib/authEmail"
 import { validateNewAccount, validateUsername, validatePin } from "@/lib/accounts"
+import { sydneyTodayStr } from "@/lib/date"
 
 // Admin-only account management (2026-07-16). Fills two gaps: no way for an
 // admin to create a login for a resident who hasn't self-registered (and to
@@ -121,7 +122,7 @@ export async function POST(req) {
       // login (migration 067). Self-registration leaves this false.
       must_change_pin: true,
       is_admin: false, status: "active",
-      joined_date: new Date().toISOString().split("T")[0],
+      joined_date: sydneyTodayStr(),
     }).select("id").single()
 
     if (insertErr) {

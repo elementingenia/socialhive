@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase"
 import CalendarView from "@/components/CalendarView"
 import EventSlideOut from "@/components/EventSlideOut"
 import SpaceBookingForm from "@/components/SpaceBookingForm"
+import { sydneyTodayStr, sydneyDateStrPlusDays } from "@/lib/date"
 
 export default function CalendarPage() {
   const [events, setEvents]   = useState([])
@@ -20,9 +21,8 @@ export default function CalendarPage() {
       const token = session?.access_token
 
       // Load 90 days of events
-      const from = new Date().toISOString().split("T")[0]
-      const toDate = new Date(); toDate.setDate(toDate.getDate() + 90)
-      const to = toDate.toISOString().split("T")[0]
+      const from = sydneyTodayStr()
+      const to = sydneyDateStrPlusDays(90)
 
       const res = await fetch(`/api/events?from=${from}&to=${to}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},

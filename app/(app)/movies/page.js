@@ -4,6 +4,7 @@ import { FormattedText } from '@/lib/textFormatter'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { posterFor, posterPosition, posterAlt } from '@/lib/showing'
+import { sydneyTodayStr, isEventPast } from '@/lib/date'
 import EventSlideOut from '@/components/EventSlideOut'
 import EventCoordinators from '@/components/EventCoordinators'
 import FollowHubButton from '@/components/FollowHubButton'
@@ -389,7 +390,7 @@ export default function MoviesHomePage() {
     if (!memberData) { setLoading(false); return }
 
     setMemberId(memberData.id)
-    const today = new Date().toISOString().split('T')[0]
+    const today = sydneyTodayStr()
 
     const [
       { data: eventsData },
@@ -407,7 +408,11 @@ export default function MoviesHomePage() {
         .gte('event_date', today)
         .order('event_date', { ascending: true })
         .order('event_time', { ascending: true })
-        .limit(1),
+        // Fetch a few, not just 1: a same-day screening whose start time has
+        // already passed (e.g. 4pm today, it's now 9pm) still satisfies
+        // event_date >= today by date alone. isEventPast() below is what
+        // actually retires it, so we need candidates to fall through to.
+        .limit(5),
 
       supabase.from('bookings')
         .select('id, event_id, status, seats, booked_at, events(id, event_date, event_time, title, hub_type, image_url, image_focal_x, image_focal_y, movie_snapshot, movies(id, title, poster_url, rating))')
@@ -426,7 +431,7 @@ export default function MoviesHomePage() {
         .eq('member_id', memberData.id),
     ])
 
-    const nextEv = eventsData?.[0] || null
+    const nextEv = (eventsData || []).find(ev => !isEventPast(ev)) || null
     setNextEvent(nextEv)
     if (nextEv?.id) {
       supabase.from('event_coordinators').select('member_id, members!member_id(id, name, username)')

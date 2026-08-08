@@ -13,6 +13,7 @@ import { cutoffToInputValue, cutoffFromInputValue } from '@/lib/booking'
 import TimeField from '@/components/TimeField'
 import { useSameDateWarning } from '@/components/SameDateWarning'
 import { useRequestOnlyAcknowledge } from '@/components/RequestOnlyAcknowledge'
+import { sydneyTodayStr } from '@/lib/date'
 import AttendeeNamingPicker from '@/components/AttendeeNamingPicker'
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from '@/lib/formValidation'
 import { byOwnThenName } from '@/lib/sortNames'
@@ -492,7 +493,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
             <label style={LABEL}>Date <span style={{ color: 'var(--danger)' }}>*</span>
               {invalidFields.includes('date') && <span style={{ color: '#dc2626', fontWeight: 800, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>⚠ Required</span>}
             </label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} min={sydneyTodayStr()}
               style={{ ...INPUT, ...(invalidFields.includes('date') ? INVALID_FIELD_STYLE : { border: '1.5px solid var(--green)' }) }} />
             {date && <div style={{ fontSize: '0.75rem', color: 'var(--teal)', fontWeight: 600, marginTop: '0.3rem' }}>
               {new Date(date + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'long' })}

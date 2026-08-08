@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 export const dynamic = "force-dynamic"
 import { NextResponse } from 'next/server'
 import { notify } from '@/lib/notify'
+import { sydneyTodayStr } from '@/lib/date'
 
 
 function monthLabel(dateStr) {
@@ -163,8 +164,8 @@ export async function POST(req) {
 
   // Determine period bounds from the actual tab dates
   const dates = tabs.map(t => new Date(t.consumed_at))
-  const periodStart = new Date(Math.min(...dates)).toISOString().slice(0, 10)
-  const periodEnd   = new Date().toISOString().slice(0, 10)
+  const periodStart = sydneyTodayStr(new Date(Math.min(...dates)))
+  const periodEnd   = sydneyTodayStr()
 
   // Create reconciliation record
   const { data: recon, error: reconErr } = await supabaseAdmin

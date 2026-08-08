@@ -10,6 +10,7 @@ import { BusIcon } from "@/components/NavIcons"
 import { ContactBar } from "@/components/OwnersManager"
 import { FormattedText } from "@/lib/textFormatter"
 import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted } from "@/lib/payments"
+import { sydneyTodayStr, isEventPast } from "@/lib/date"
 
 const COLOUR = "var(--terracotta)"
 
@@ -329,8 +330,14 @@ export default function SocialHome() {
 
   const load = useCallback(async () => {
     if (!member?.id) return
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    const todayStr = today.toISOString().slice(0, 10)
+    // Was: local-midnight Date -> toISOString().slice(0,10), which converts
+    // Sydney local midnight to UTC and always truncates to the PREVIOUS UTC
+    // calendar day for a positive-offset timezone -- todayStr here was wrong
+    // by a full day, every single day, not just at certain hours. See
+    // lib/date.js's header comment. Also fetch a few candidates, not just 1:
+    // a same-day event whose start time has already passed still satisfies
+    // event_date >= today by date alone, isEventPast() below retires it.
+    const todayStr = sydneyTodayStr()
 
     const [eventsRes, myBookingsRes, hubRes] = await Promise.all([
       supabase
@@ -340,7 +347,7 @@ export default function SocialHome() {
         .gte("event_date", todayStr)
         .order("event_date", { ascending: true })
         .order("event_time", { ascending: true })
-        .limit(1),
+        .limit(5),
       supabase
         .from("bookings")
         .select("id, event_id, status, seats, payment_status, events(id, title, event_date, event_time, hub_type, payment_required, location_type, location)")
@@ -349,7 +356,7 @@ export default function SocialHome() {
       supabase.from("hub_settings").select("welcome_text").eq("hub_type", "social").single(),
     ])
 
-    const ev = eventsRes.data?.[0] || null
+    const ev = (eventsRes.data || []).find(e => !isEventPast(e)) || null
     setNextEvent(ev)
 
     if (ev) {
