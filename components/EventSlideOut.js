@@ -618,6 +618,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   )
 
   const bookings     = data?.bookings || []
+  const maxPerBooking = maxSeatsPerBooking(event)
   const bookedMemberIds  = new Set(bookings.map(b => b.members?.id).filter(Boolean))
   const bookedContactIds = new Set(bookings.map(b => b.contacts?.id).filter(Boolean))
   const refundPending = data?.refund_pending || []
