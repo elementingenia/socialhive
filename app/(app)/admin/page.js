@@ -881,6 +881,7 @@ function SuggestedMoviesView() {
   const [streamingSvcs,  setStreamingSvcs]  = useState([])
   const [ownershipRecs,  setOwnershipRecs]  = useState([])
   const [loading,        setLoading]        = useState(true)
+  const [search,         setSearch]         = useState('')
 
   useEffect(() => {
     async function load() {
@@ -901,6 +902,28 @@ function SuggestedMoviesView() {
     load()
   }, [])
 
+  // Searches title and lead actor -- matches the Info > Contacts search
+  // convention (2026-07-29): a plain substring match against the fields
+  // actually shown on the card, not a fuzzy/indexed search. This list has
+  // no category filter to fall back on like Contacts does, so with no
+  // matches we still say so explicitly rather than rendering nothing.
+  //
+  // MUST stay above the `if (loading) return` below -- hooks can never
+  // follow a conditional early return (Rules of Hooks: every render must
+  // call the same hooks in the same order). Caught live via an actual
+  // Chrome click-through on the deployed preview as a React error #310
+  // crash ("Rendered fewer hooks than expected") the moment `loading`
+  // flipped from true to false -- build/lint/unit tests all passed clean
+  // and none of them would have caught this, only a real render does.
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return movies
+    return movies.filter(m => {
+      const haystack = [m.title, m.year, m.actors].filter(Boolean).join(' ').toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [movies, search])
+
   if (loading) return <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)' }}>Loading…</div>
 
   const pillStyle = (free) => ({
@@ -913,8 +936,14 @@ function SuggestedMoviesView() {
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+      <div style={{ display:'flex', gap:'0.5rem', alignItems:'center', marginBottom:'0.25rem' }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
+          style={{ ...inputStyle, flex:1 }} />
+        <span style={{ fontSize:'0.78rem', color:'var(--text-dim)', whiteSpace:'nowrap' }}>{filtered.length}</span>
+      </div>
       {movies.length === 0 && <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)', fontSize:'0.9rem' }}>No suggested movies yet</div>}
-      {movies.map(m => {
+      {movies.length > 0 && filtered.length === 0 && <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)', fontSize:'0.9rem' }}>No movies match "{search}"</div>}
+      {filtered.map(m => {
         const { isFree, reasons } = computeFreeCost(m, { streamingServices: streamingSvcs, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecs })
         return (
           <div key={m.id} style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.65rem', overflow:'hidden' }}>
