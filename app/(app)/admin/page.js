@@ -881,6 +881,7 @@ function SuggestedMoviesView() {
   const [streamingSvcs,  setStreamingSvcs]  = useState([])
   const [ownershipRecs,  setOwnershipRecs]  = useState([])
   const [loading,        setLoading]        = useState(true)
+  const [search,         setSearch]         = useState('')
 
   useEffect(() => {
     async function load() {
@@ -911,10 +912,30 @@ function SuggestedMoviesView() {
   })
   const tagStyle = { background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'6px', padding:'0.15rem 0.45rem', fontSize:'0.68rem', color:'var(--text-dim)', whiteSpace:'nowrap' }
 
+  // Searches title and lead actor -- matches the Info > Contacts search
+  // convention (2026-07-29): a plain substring match against the fields
+  // actually shown on the card, not a fuzzy/indexed search. This list has
+  // no category filter to fall back on like Contacts does, so with no
+  // matches we still say so explicitly rather than rendering nothing.
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return movies
+    return movies.filter(m => {
+      const haystack = [m.title, m.year, m.actors].filter(Boolean).join(' ').toLowerCase()
+      return haystack.includes(q)
+    })
+  }, [movies, search])
+
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+      <div style={{ display:'flex', gap:'0.5rem', alignItems:'center', marginBottom:'0.25rem' }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
+          style={{ ...inputStyle, flex:1 }} />
+        <span style={{ fontSize:'0.78rem', color:'var(--text-dim)', whiteSpace:'nowrap' }}>{filtered.length}</span>
+      </div>
       {movies.length === 0 && <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)', fontSize:'0.9rem' }}>No suggested movies yet</div>}
-      {movies.map(m => {
+      {movies.length > 0 && filtered.length === 0 && <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)', fontSize:'0.9rem' }}>No movies match "{search}"</div>}
+      {filtered.map(m => {
         const { isFree, reasons } = computeFreeCost(m, { streamingServices: streamingSvcs, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecs })
         return (
           <div key={m.id} style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.65rem', overflow:'hidden' }}>
