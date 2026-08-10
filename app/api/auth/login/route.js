@@ -55,6 +55,19 @@ export async function POST(request) {
       await supabaseAdmin.from('members').update({ auth_id: newUser.user.id }).eq('id', member.id)
     }
 
+    // Refresh last_active_at at the moment of a successful sign-in -- not
+    // just via the (app) layout's 5-minute heartbeat. Fixes a real lockout
+    // loop (Iain, 2026-08-10, AnitaJ): a resident inactive 14+ days signs in
+    // successfully here (Supabase Auth confirms it -- last_sign_in_at
+    // updates), but app/(app)/layout.js's own inactivity guard checks
+    // last_active_at BEFORE the heartbeat ever gets a chance to refresh it,
+    // sees the still-stale pre-absence value, and immediately signs them
+    // back out to /login?reason=inactive -- with valid, just-verified
+    // credentials. No PIN/password reset can ever fix that loop, because
+    // credentials were never the problem. Updating it here, server-side, the
+    // instant a sign-in succeeds closes the gap regardless of client timing.
+    await supabaseAdmin.from('members').update({ last_active_at: new Date().toISOString() }).eq('id', member.id)
+
     // mustChangePin: this account's password was set by an admin and handed
     // over, so the client sends them straight to Change Password and will not
     // let them into the app until they've set their own (migration 067).
