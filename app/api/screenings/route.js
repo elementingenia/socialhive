@@ -8,6 +8,7 @@ import { notifyRequestOnlySpace } from '@/lib/notifyRequestOnlySpace'
 import { titleFor } from '@/lib/showing'
 import { checkCancelPaymentGuard } from '@/lib/eventCancelGuard'
 import { sydneyTodayStr } from '@/lib/date'
+import { requireAdminOrAreaOwner, requireEventManage } from '@/lib/areaAuth'
 
 // Movie screenings always run in the one dedicated common space -- there's no
 // location picker in the screening form, so every screening is auto-bound to
@@ -204,11 +205,9 @@ export async function GET(req) {
 }
 
 export async function POST(req) {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
-  if (!token) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
-
-  const member = await getMember(token)
-  if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+  // Admin, or Show Time's Owner (area-wide -- Iain, 2026-08-10; see lib/areaAuth.js).
+  const { error: authErr, status: authStatus, member } = await requireAdminOrAreaOwner(req, 'hub', 'movie')
+  if (authErr) return NextResponse.json({ error: authErr }, { status: authStatus })
 
   const { movie_id, showing_title, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
   if (!event_date || !event_time) {
@@ -285,14 +284,15 @@ export async function POST(req) {
 }
 
 export async function PATCH(req) {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
-  if (!token) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
-
-  const member = await getMember(token)
-  if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
-
   const { event_id, movie_id, showing_title, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
+
+  // Admin, Show Time's Owner (area-wide), or this screening's own EC
+  // (Iain, 2026-08-10; see lib/areaAuth.js) -- same shape PATCH/DELETE
+  // already used for EC, just extended to cover Owner too.
+  const { error: authErr, status: authStatus, member } = await requireEventManage(req, event_id)
+  if (authErr) return NextResponse.json({ error: authErr }, { status: authStatus })
+
   if (!event_date || !event_time) return NextResponse.json({ error: 'Date and time are required' }, { status: 400 })
   if (!event_end_time) return NextResponse.json({ error: 'An end time is required -- every screening books the Cinema as a common space.' }, { status: 400 })
 
@@ -397,15 +397,11 @@ export async function DELETE(req) {
     return NextResponse.json({ error: 'Not a screening' }, { status: 400 })
   }
 
-  // Admin, or a coordinator of THIS screening — the same shape as every other
-  // event-level permission in the app.
-  let allowed = member.is_admin
-  if (!allowed) {
-    const { data: ec } = await supabaseAdmin.from('event_coordinators')
-      .select('id').eq('event_id', event_id).eq('member_id', member.id).maybeSingle()
-    allowed = !!ec
-  }
-  if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  // Admin, Show Time's Owner (area-wide), or a coordinator of THIS
+  // screening -- the same shape as every other event-level permission in
+  // the app (Iain, 2026-08-10; see lib/areaAuth.js).
+  const manage = await requireEventManage(req, event_id)
+  if (manage.error) return NextResponse.json({ error: manage.error }, { status: manage.status })
 
   // Idempotent: cancelling twice must not notify twice.
   if (ev.archived) return NextResponse.json({ ok: true, already: true })

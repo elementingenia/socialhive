@@ -17,6 +17,7 @@ import { sydneyTodayStr } from '@/lib/date'
 import AttendeeNamingPicker from '@/components/AttendeeNamingPicker'
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from '@/lib/formValidation'
 import { byOwnThenName } from '@/lib/sortNames'
+import { useOwners } from '@/lib/useOwners'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -887,6 +888,12 @@ export default function Screenings() {
   const [dvdImdbIds,        setDvdImdbIds]        = useState(new Set())
   const [ownershipRecords,  setOwnershipRecords]  = useState([])
 
+  // Owner of the Show Time hub gets the same create/edit/manage options an
+  // admin has, scoped to this hub only (Iain, 2026-08-10).
+  const { owners: showTimeOwners } = useOwners('hub', 'movie')
+  const isOwner   = !!member?.id && showTimeOwners.some(o => o.id === member.id)
+  const canManage = !!(member?.is_admin || isOwner)
+
   function addToast(message, type = 'success') {
     const id = Date.now()
     setToasts(prev => [...prev, { id, message, type }])
@@ -949,7 +956,7 @@ export default function Screenings() {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
         <h1 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--teal)' }}>🎬 Upcoming Screenings</h1>
-        {member?.is_admin && (
+        {canManage && (
           <button onClick={() => setShowAdd(true)}
             style={{ background: 'var(--teal)', color: '#fff', border: 'none', borderRadius: '10px', padding: '0.5rem 1rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
             + Add
@@ -962,19 +969,19 @@ export default function Screenings() {
       ) : screenings.length === 0 ? (
         <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '3rem', fontSize: '0.9rem' }}>
           No upcoming screenings yet.
-          {member?.is_admin && <div style={{ marginTop: '0.5rem', fontSize: '0.82rem' }}>Use &quot;+ Add&quot; to schedule one.</div>}
+          {canManage && <div style={{ marginTop: '0.5rem', fontSize: '0.82rem' }}>Use &quot;+ Add&quot; to schedule one.</div>}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
           {screenings.map(ev => {
-            const freeCostData = member?.is_admin && ev.movies
+            const freeCostData = canManage && ev.movies
               ? computeFreeCost(ev.movies, { streamingServices, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecords.filter(o => o.movie_id === ev.movie_id) })
               : null
             return (
               <ScreeningCard
                 key={ev.id}
                 ev={ev}
-                isAdmin={member?.is_admin}
+                isAdmin={canManage}
                 freeCostData={freeCostData}
                 onOpen={() => openSlideOut(ev)}
                 onEdit={ev => setEditEvent(ev)}
