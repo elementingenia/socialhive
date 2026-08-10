@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { BAR_ENABLED } from "@/lib/features"
 
 const BASE = "https://tzzxwvbqszzrruxjrpcs.supabase.co/storage/v1/object/public/help-screenshots"
@@ -239,11 +239,105 @@ function InfoBox({ children }) {
   )
 }
 
+// Builds a searchable index of every Section/Subsection's real rendered text,
+// straight from the DOM -- no separate content duplicated to keep in sync.
+// Each Section's own entry excludes its Subsections' text (cloned + stripped)
+// so a match inside a subsection doesn't also surface its whole parent
+// section as a second, redundant result.
+function buildSearchIndex(sections) {
+  const index = []
+  for (const sec of sections) {
+    const secEl = typeof document !== "undefined" ? document.getElementById(sec.id) : null
+    if (secEl) {
+      const clone = secEl.cloneNode(true)
+      clone.querySelectorAll('[id^="sub-"]').forEach(n => n.remove())
+      const text = (clone.textContent || "").replace(/\s+/g, " ").trim()
+      if (text) index.push({ id: sec.id, title: sec.title, sectionTitle: sec.title, text })
+    }
+    for (const sub of sec.subs || []) {
+      const el = typeof document !== "undefined" ? document.getElementById(sub.id) : null
+      if (!el) continue
+      const text = (el.textContent || "").replace(/\s+/g, " ").trim()
+      index.push({ id: sub.id, title: sub.title, sectionTitle: sec.title, text })
+    }
+  }
+  return index
+}
+
+// Every query word must appear as a substring somewhere in the title or body
+// -- simple, forgiving of word order, and doesn't need an exact phrase match.
+// Title hits are ranked above body-only hits.
+function searchIndex(index, query) {
+  const words = query.toLowerCase().trim().split(/\s+/).filter(Boolean)
+  if (!words.length) return []
+  const results = []
+  for (const entry of index) {
+    const titleLc = entry.title.toLowerCase()
+    const textLc = entry.text.toLowerCase()
+    const inTitle = words.every(w => titleLc.includes(w))
+    const inBody  = words.every(w => titleLc.includes(w) || textLc.includes(w))
+    if (!inBody) continue
+    results.push({ ...entry, score: inTitle ? 2 : 1 })
+  }
+  results.sort((a, b) => b.score - a.score)
+  return results.slice(0, 8)
+}
+
+// A short preview centred on the first matched word, so the result shows WHY
+// it matched rather than just the start of the subsection.
+function snippetFor(entry, query) {
+  const words = query.toLowerCase().trim().split(/\s+/).filter(Boolean)
+  const textLc = entry.text.toLowerCase()
+  let hitAt = -1
+  for (const w of words) {
+    const i = textLc.indexOf(w)
+    if (i !== -1 && (hitAt === -1 || i < hitAt)) hitAt = i
+  }
+  const WINDOW = 70
+  let start = hitAt === -1 ? 0 : Math.max(0, hitAt - WINDOW)
+  let snippet = entry.text.slice(start, start + WINDOW * 2)
+  if (start > 0) snippet = "…" + snippet
+  if (start + WINDOW * 2 < entry.text.length) snippet = snippet + "…"
+
+  const re = new RegExp(`(${words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "ig")
+  const parts = snippet.split(re)
+  return parts.map((part, i) =>
+    words.some(w => part.toLowerCase() === w)
+      ? <mark key={i} style={{ background: "#cdeee9", color: text, borderRadius: 3, padding: "0 2px" }}>{part}</mark>
+      : <span key={i}>{part}</span>
+  )
+}
+
 export default function HelpGuidePage() {
   const [tocOpen, setTocOpen] = useState(true)
+  const [query, setQuery] = useState("")
+  const [searchReady, setSearchReady] = useState(false)
+  const indexRef = useRef([])
+
+  // Build once after the guide's full content has actually mounted -- every
+  // Section/Subsection needs to exist in the DOM first for textContent to be
+  // real. Content is static (no async data), so a one-off build on mount is
+  // enough; nothing here ever changes after first paint.
+  useEffect(() => {
+    indexRef.current = buildSearchIndex(SECTIONS)
+    setSearchReady(true)
+  }, [])
+
+  // 2-char minimum before showing results, matching the live-search convention
+  // used elsewhere in the app (Admin pickers) -- avoids a noisy result list
+  // while someone's still typing the first letter or two.
+  const results = useMemo(() => {
+    if (!searchReady || query.trim().length < 2) return []
+    return searchIndex(indexRef.current, query)
+  }, [query, searchReady])
 
   const scrollTo = (id) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }
+
+  const goToResult = (id) => {
+    scrollTo(id)
+    setQuery("")
   }
 
   const tocBtnStyle = {
@@ -298,6 +392,57 @@ export default function HelpGuidePage() {
             area's assigned Owner.
           </p>
         </header>
+
+        {/* ── Search ── */}
+        <div className="no-print" style={{ background: "#fff", borderBottom: `1px solid ${border}`, padding: "0.85rem 1.25rem", position: "relative" }}>
+          <input
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="🔍 Search the guide… (e.g. “bring a dish”, “PIN”, “Ingenia”)"
+            style={{
+              width: "100%",
+              padding: "0.65rem 0.9rem",
+              borderRadius: 10,
+              border: `1px solid ${border}`,
+              background: bg,
+              color: text,
+              fontSize: "0.88rem",
+              fontFamily: "inherit",
+              boxSizing: "border-box",
+            }}
+          />
+          {query.trim().length >= 2 && (
+            <div style={{
+              position: "absolute", left: "1.25rem", right: "1.25rem", top: "calc(100% - 0.4rem)",
+              background: "#fff", border: `1px solid ${border}`, borderRadius: 10,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 20, maxHeight: "60vh", overflowY: "auto",
+            }}>
+              {results.length === 0 ? (
+                <div style={{ padding: "1rem", fontSize: "0.85rem", color: muted }}>
+                  No matches for “{query}”. Try a different word, or browse the sections below.
+                </div>
+              ) : results.map(r => (
+                <button
+                  key={r.id}
+                  onClick={() => goToResult(r.id)}
+                  style={{
+                    display: "block", width: "100%", textAlign: "left",
+                    padding: "0.7rem 0.9rem", background: "none", border: "none",
+                    borderBottom: `1px solid ${border}`, cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  <div style={{ fontSize: "0.7rem", color: muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
+                    {r.sectionTitle}{r.title !== r.sectionTitle ? ` › ${r.title}` : ""}
+                  </div>
+                  <div style={{ fontSize: "0.82rem", color: "#444", lineHeight: 1.5 }}>
+                    {snippetFor(r, query)}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* ── Table of Contents ── */}
         <div style={{ background: "#fff", borderBottom: `1px solid ${border}` }}>
