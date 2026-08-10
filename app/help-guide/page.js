@@ -87,14 +87,32 @@ const RAW_SECTIONS = [
     ],
   },
   {
-    id: "bookclub", num: 5, title: "Book Club",
+    id: "clubs", num: 5, title: "Groups & Clubs — including Book Club",
     subs: [
-      { title: "Book Club home",       id: "sub-bookclub-home" },
-      { title: "Signing up & suggestions", id: "sub-bookclub-signup" },
+      { title: "Groups & Clubs home",                     id: "sub-clubs-home" },
+      { title: "A club's page — welcome, contact & Ask a Question", id: "sub-clubs-page" },
+      { title: "Signing up for a meeting or activity",     id: "sub-clubs-signup" },
+      { title: "Bringing something",                       id: "sub-clubs-bring" },
+      { title: "Book Club — current pick, suggestions & voting", id: "sub-clubs-bookclub" },
+      { title: "Coordinator & Owner panel (EC only)",       id: "sub-clubs-ec" },
     ],
   },
   {
-    id: "bar", num: 6, title: "My Bar — Honour Bar & Tab",
+    id: "info", num: 6, title: "Info — Contacts & Documents",
+    subs: [
+      { title: "Finding a contact",     id: "sub-info-contacts" },
+      { title: "Community documents",   id: "sub-info-documents" },
+    ],
+  },
+  {
+    id: "questions", num: 7, title: "Ask a Question",
+    subs: [
+      { title: "Asking a question",           id: "sub-questions-ask" },
+      { title: "Your questions & answering",  id: "sub-questions-mine" },
+    ],
+  },
+  {
+    id: "bar", num: 8, title: "My Bar — Honour Bar & Tab",
     subs: [
       { title: "The bar menu",              id: "sub-bar-menu" },
       { title: "Adding to your tab",        id: "sub-bar-add" },
@@ -103,11 +121,13 @@ const RAW_SECTIONS = [
     ],
   },
   {
-    id: "calendar", num: 7, title: "Community Calendar",
-    subs: [],
+    id: "calendar", num: 9, title: "Community Calendar & Booking a Space",
+    subs: [
+      { title: "Booking a common space",  id: "sub-calendar-space" },
+    ],
   },
   {
-    id: "bookings", num: 8, title: "My Bookings",
+    id: "bookings", num: 10, title: "My Bookings",
     subs: [
       { title: "Understanding booking status", id: "sub-bookings-status" },
     ],
@@ -271,9 +291,11 @@ export default function HelpGuidePage() {
 
           <p style={{ fontSize: "0.9rem", lineHeight: 1.65, opacity: 0.92, margin: 0, maxWidth: 560 }}>
             Welcome to Element Happenings — the community app for Fullerton Cove residents. This guide
-            covers everything from signing in for the first time, to booking events, browsing
-            movies{BAR_ENABLED ? ", tracking your bar tab," : ","} and more. Sections marked{" "}
-            <strong>EC only</strong> are for Element Communities coordinators.
+            covers everything from signing in for the first time, to booking screenings and social
+            events, joining Groups & Clubs, finding a contact or document, asking a question,
+            {BAR_ENABLED ? " tracking your bar tab," : ""} and booking a common space for your own use.
+            Sections marked <strong>EC only</strong> are for Element Communities coordinators and each
+            area's assigned Owner.
           </p>
         </header>
 
@@ -583,8 +605,14 @@ export default function HelpGuidePage() {
               <Step>
                 ECs see an additional <strong>Coordinator View</strong> section at the bottom of every
                 booking panel — a full attendee list with names, seat counts, and unpaid tallies. ECs
-                can cancel individual bookings and monitor waitlist numbers in real time.
+                can modify a resident's seat count, cancel individual bookings, and monitor waitlist
+                numbers in real time.
               </Step>
+              <InfoBox>
+                💡 If Show Time has an assigned <strong>Owner</strong>, they get this same Coordinator
+                view on every screening — not just the ones they're personally listed as coordinator
+                for.
+              </InfoBox>
             </Subsection>
           </Section>
 
@@ -630,32 +658,133 @@ export default function HelpGuidePage() {
             <Subsection id="sub-social-ec" title="Coordinator panel" ecOnly>
               <Step>
                 ECs see the full attendee list inside the event detail panel, with each resident's
-                name, seat count, and payment status. ECs can cancel individual bookings or update
-                event details directly from this view.
+                name, seat count, and payment status. ECs can modify a resident's seat count, cancel
+                individual bookings, or update event details directly from this view.
+              </Step>
+              <InfoBox>
+                💡 If Social has an assigned <strong>Owner</strong>, they get this same Coordinator
+                view on every social event — not just the ones they're personally listed as
+                coordinator for.
+              </InfoBox>
+            </Subsection>
+          </Section>
+
+          {/* ── 5. GROUPS & CLUBS (replaces the old standalone Book Club section —
+              Book Club now runs on this same shared engine, see app/(app)/bookclub/page.js
+              which just redirects to /clubs/book-club) ── */}
+          <Section id="clubs" num={secNum("clubs")} title="Groups & Clubs — including Book Club">
+            <Subsection id="sub-clubs-home" title="Groups & Clubs home">
+              <Step>
+                Tap <strong>Groups & Clubs</strong> from Home to see every club and interest group in
+                the community — Book Club, Dinner Club, Cards, and any others that have been set up.
+                Two tabs sit at the top: <strong>My Groups & Clubs</strong> (the ones you've joined —
+                shown by default) and <strong>All Groups & Clubs</strong> (everything on offer). Tap a
+                club's tile to open its page.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-clubs-page" title="A club's page — welcome, contact & Ask a Question">
+              <Step>
+                Every club page opens with a welcome message from its organiser, then a{" "}
+                <strong>Contact</strong> row. If the club has an assigned Owner or coordinator, their
+                name appears here — tap it to <strong>Ask a Question</strong> that goes straight to
+                them privately. If no one is assigned yet, you'll see a plain{" "}
+                <strong>💬 Ask a question</strong> link instead, which reaches the admin team.
+              </Step>
+              <Step>
+                Below that, upcoming meetings or activities are listed as cards — the next date first,
+                with any further dates for a recurring club (like weekly Cards) tucked into an{" "}
+                <strong>Upcoming dates</strong> accordion beneath. Tap a card to open the full event
+                panel and book your place, exactly like Show Time or Social.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-clubs-signup" title="Signing up for a meeting or activity">
+              <Step>
+                Tap a club's event card to open the booking panel, choose your seats, and confirm —
+                the same booking flow as Social. After booking, you'll see{" "}
+                <strong>Modify Seats</strong> and <strong>Cancel Booking</strong> options.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-clubs-bring" title="Bringing something">
+              <Step>
+                Some club activities ask attendees to bring something — a dish for Dinner Club, a game
+                for Games Night. If it applies to that event, a <strong>Bring Something</strong> picker
+                appears on the booking panel showing what's needed. It's marked either{" "}
+                <strong>Optional</strong> (choose one if you'd like) or{" "}
+                <strong>Required</strong> (you must choose a category before you can confirm your
+                booking).
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-clubs-bookclub" title="Book Club — current pick, suggestions & voting">
+              <Step>
+                Book Club works the same way as any other club, with a few extras on its page: the{" "}
+                <strong>current book</strong> is shown with its cover, title and author, and if you've
+                borrowed the club's copy, a reminder of when it's due back. Tap{" "}
+                <strong>Suggestions</strong> to browse books other residents have put forward for a
+                future pick — vote for ones you like, or add your own suggestion by searching for a
+                title.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-clubs-ec" title="Coordinator & Owner panel" ecOnly>
+              <Step>
+                ECs and the club's assigned <strong>Owner</strong> see the full Coordinator view on
+                every event in that club — attendee names, seat counts, payment status, and who's
+                bringing what. They can modify a resident's seat count, cancel bookings, and
+                create or edit the club's events and activities — the same options an admin has, just
+                restricted to their own club.
+              </Step>
+              <InfoBox>
+                💡 An Owner doesn't need to be individually added as coordinator on every event to get
+                this access — it applies automatically to everything in their club, or their hub if
+                they own Show Time or Social instead.
+              </InfoBox>
+            </Subsection>
+          </Section>
+
+          {/* ── 6. INFO ── */}
+          <Section id="info" num={secNum("info")} title="Info — Contacts & Documents">
+            <Subsection id="sub-info-contacts" title="Finding a contact">
+              <Step>
+                Tap <strong>Info</strong> from Home to browse community contacts — committee members,
+                Element Communities staff, and other useful people, organised into categories. Use the
+                category chips to filter, or the <strong>Search</strong> box to find someone by name.
+                Tap a contact to see their details and, where available, an{" "}
+                <strong>Ask a question</strong> option that routes your question to the right person or
+                category.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-info-documents" title="Community documents">
+              <Step>
+                Tap <strong>Documents</strong> (from the Info section) to browse shared community
+                files — meeting minutes, policies, forms and more — organised into categories. Use the
+                category filter or the <strong>Search</strong> box to find what you need, then tap a
+                document to view or download it.
               </Step>
             </Subsection>
           </Section>
 
-          {/* ── 5. BOOK CLUB ── */}
-          <Section id="bookclub" num={secNum("bookclub")} title="Book Club">
-            <Subsection id="sub-bookclub-home" title="Book Club home">
-              <Step img={IMG("14-bookclub.png")} alt="Book Club home">
-                The Book Club section shows the current book pick, upcoming meeting dates, and recent
-                suggestions from residents. The current read is displayed prominently at the top with
-                the cover, title, and author. If a meeting date has been set, it appears below.
+          {/* ── 7. QUESTIONS ── */}
+          <Section id="questions" num={secNum("questions")} title="Ask a Question">
+            <Subsection id="sub-questions-ask" title="Asking a question">
+              <Step>
+                You'll find an <strong>Ask a question</strong> link on most hub, club and event pages —
+                it goes privately to whoever is the right contact for that area (the Owner or
+                coordinator, or an admin if no one's assigned). Type your question and send it; the
+                other side gets notified and can reply.
               </Step>
             </Subsection>
 
-            <Subsection id="sub-bookclub-signup" title="Signing up & suggestions">
-              <Step img={IMG("15-bookclub-suggest.png")} alt="Book suggestions">
-                To attend the next Book Club meeting, tap <strong>Sign Up</strong> on the event card.
-                This registers your attendance — the coordinator will see your name on the attendee list.
-              </Step>
+            <Subsection id="sub-questions-mine" title="Your questions & answering">
               <Step>
-                Tap <strong>Suggestions</strong> to see books that other residents have put forward for
-                the next read. You can vote on suggestions you like, or tap{" "}
-                <strong>Add suggestion</strong> to propose your own book — search by title and your
-                suggestion is sent to the group straight away.
+                Tap <strong>Questions</strong> from Home to see every question you've asked or been
+                asked. Switch between <strong>Mine</strong> (questions you've sent) and questions routed
+                to you. Open a question to read the conversation and reply — you'll be notified as soon
+                as the other side answers or adds a follow-up.
               </Step>
             </Subsection>
           </Section>
@@ -704,16 +833,37 @@ export default function HelpGuidePage() {
           )}
 
           {/* ── CALENDAR ── */}
-          <Section id="calendar" num={secNum("calendar")} title="Community Calendar">
+          <Section id="calendar" num={secNum("calendar")} title="Community Calendar & Booking a Space">
             <Step img={IMG("17-calendar.png")} alt="Community calendar">
-              The Calendar brings every upcoming community event together in one view — Show Time, Social
-              Events, and Book Club meetings all appear here without switching between sections.
+              The Calendar brings every upcoming community event together in one view — Show Time,
+              Social Events, and every Group & Club (including Book Club) all appear here without
+              switching between sections.
             </Step>
             <Step>
               Use the filter buttons at the top to show or hide events by type. Switch between{" "}
               <strong>Month view</strong> and <strong>Week view</strong> using the view toggle. Tap
               any event to open its full detail panel and book your place directly from the calendar.
             </Step>
+
+            <Subsection id="sub-calendar-space" title="Booking a common space">
+              <Step>
+                Tap <strong>+ Book a Space</strong> at the top of the Calendar to reserve a common area
+                for your own personal use — separate from any hub or club event. Choose the date, start
+                and end time, and the space you want; the form checks for a clash against any other
+                Hive booking or event using that space before letting you confirm.
+              </Step>
+              <InfoBox>
+                💡 The Hive calendar only knows about Hive bookings. The Ingenia app manages the same
+                spaces too, so always check and book there as well — a space showing free here isn't a
+                guarantee it's free in the Ingenia app.
+              </InfoBox>
+              <Step>
+                Some spaces are marked <strong>Request Only</strong> — these need the Ingenia Community
+                Manager's sign-off before you use them. If you pick one, you'll be asked to tick a box
+                confirming you've already spoken to Ingenia, and to note who you spoke to, before the
+                booking can be submitted.
+              </Step>
+            </Subsection>
           </Section>
 
           {/* ── 8. MY BOOKINGS ── */}
