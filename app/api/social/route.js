@@ -6,17 +6,9 @@ import { checkCancelPaymentGuard } from '@/lib/eventCancelGuard'
 import { needsSpaceValidation, fetchLocation } from '@/lib/eventClash'
 import { findAnyRoomConflict } from '@/lib/spaceBookings'
 import { notifyRequestOnlySpace } from '@/lib/notifyRequestOnlySpace'
+import { requireAdminOrAreaOwner, requireEventManage } from '@/lib/areaAuth'
 
 
-async function getAdminMember(req) {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
-  if (!token) return null
-  const { data: { user } } = await supabaseAdmin.auth.getUser(token)
-  if (!user) return null
-  const { data } = await supabaseAdmin
-    .from('members').select('id, is_admin').eq('auth_id', user.id).single()
-  return data?.is_admin ? data : null
-}
 
 async function writeCoordinators(eventId, coordinatorIds, actorId) {
   await supabaseAdmin
@@ -109,8 +101,9 @@ async function validateSpace(payload, excludeEventId) {
 }
 
 export async function POST(req) {
-  const member = await getAdminMember(req)
-  if (!member) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  // Admin, or Social's Owner (area-wide -- Iain, 2026-08-10; see lib/areaAuth.js).
+  const { error: authErr, status: authStatus, member } = await requireAdminOrAreaOwner(req, 'hub', 'social')
+  if (authErr) return NextResponse.json({ error: authErr }, { status: authStatus })
 
   const body = await req.json()
   if (!body.title?.trim() || !body.event_date)
@@ -153,11 +146,14 @@ export async function POST(req) {
 }
 
 export async function PATCH(req) {
-  const member = await getAdminMember(req)
-  if (!member) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-
   const body = await req.json()
   if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  // Admin, Social's Owner (area-wide), or this event's own EC (Iain,
+  // 2026-08-10; see lib/areaAuth.js) -- covers both the edit path below and
+  // the cancel action, which previously required admin only.
+  const { error: authErr, status: authStatus, member } = await requireEventManage(req, body.id)
+  if (authErr) return NextResponse.json({ error: authErr }, { status: authStatus })
 
   // Cancel Event -- same soft-archive-and-notify pattern as Movies
   // (app/api/screenings/route.js DELETE) and Clubs & Groups (app/api/series.js

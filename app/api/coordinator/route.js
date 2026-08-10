@@ -7,41 +7,18 @@ import { bookingsClosed } from "@/lib/booking"
 import { fetchTakenResidentIds } from "@/lib/takenResidents"
 import { syncAttendees } from "@/lib/syncAttendees"
 import { maxSeatsPerBooking, planSeatModification } from "@/lib/modifyBooking"
+import { requireEventManage } from "@/lib/areaAuth"
 
 // force-dynamic + the shared no-store supabaseAdmin (lib/supabaseAdmin.js) keep
 // this GET route reading LIVE data. Without it, Next's fetch cache once dropped a
 // just-added screening from the calendar (2026-07-19).
 export const dynamic = "force-dynamic"
 
-// Helper: resolve calling member and verify they are an active EC for the event
+// Resolve calling member and verify they can manage this event: admin, this
+// event's own hub/club Owner (area-wide -- added 2026-08-10, see
+// lib/areaAuth.js), or an active EC for this specific event.
 async function resolveEC(req, eventId) {
-  const auth = req.headers.get("authorization") || ""
-  const token = auth.replace("Bearer ", "")
-  if (!token) return { error: "Unauthenticated", status: 401 }
-
-  const { data: { user }, error: ue } = await supa.auth.getUser(token)
-  if (ue || !user) return { error: "Unauthenticated", status: 401 }
-
-  const { data: member } = await supa
-    .from("members")
-    .select("id, is_admin")
-    .eq("auth_id", user.id)
-    .maybeSingle()
-  if (!member) return { error: "Member not found", status: 403 }
-
-  // Admins always pass; for ECs check junction table
-  if (!member.is_admin) {
-    const { data: ecRow } = await supa
-      .from("event_coordinators")
-      .select("id")
-      .eq("event_id", eventId)
-      .eq("member_id", member.id)
-      .is("replaced_at", null)
-      .maybeSingle()
-    if (!ecRow) return { error: "Not a coordinator for this event", status: 403 }
-  }
-
-  return { member }
+  return requireEventManage(req, eventId)
 }
 
 // ─── GET /api/coordinator?event_id=… ─────────────────────────────────────────

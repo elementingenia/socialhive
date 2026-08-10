@@ -85,6 +85,10 @@ function BookingStrip({ isJoined, seats = 1, hasBook, bookReturnDate, colour = "
 // ── Book Club Event Card ─────────────────────────────────────────────────────
 function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var(--purple)", showToast, club }) {
   const { member, isAdmin } = useUser()
+  // Club Owner gets the same manage/EC-view options an admin has, scoped to
+  // this club only (Iain, 2026-08-10).
+  const { owners: clubOwnersForCard } = useOwners("club", club?.id)
+  const isOwner = !!member?.id && clubOwnersForCard.some(o => o.id === member.id)
   const caps = clubCaps(club)
   const [summaryOpen,     setSummaryOpen]     = useState(false)
   const [attendeesOpen,   setAttendeesOpen]   = useState(false)
@@ -101,7 +105,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
   const activeECs = (event.event_coordinators || []).filter(ec => !ec.replaced_at)
   const coordinator = activeECs.map(ec => ec.members?.name || ec.members?.username).filter(Boolean).join(", ") || null
   const isEC = !!(member && activeECs.some(ec => ec.member_id === member.id))
-  const canManageBooks = isAdmin || isEC
+  const canManageBooks = isAdmin || isEC || isOwner
 
   async function loadAttendees() {
     const { data } = await supabase
@@ -217,7 +221,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
         <span style={{ color: clubTextOn(colour), fontWeight: 700, fontSize: "0.85rem" }}>{label}</span>
         <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
           <span style={{ color: clubTextOn(colour), opacity: 0.85, fontSize: "0.78rem", fontWeight: 600 }}>{fmtDate(event.event_date)}</span>
-          {onEdit && isAdmin && (
+          {onEdit && (isAdmin || isOwner) && (
             <button onClick={(e) => { e.stopPropagation(); onEdit() }}
               style={{ background: "rgba(255,255,255,0.9)", color: clubInk(colour), border: "none", borderRadius: 14,
                 padding: "3px 12px", fontWeight: 700, fontSize: "0.72rem", cursor: "pointer", fontFamily: "inherit" }}>✎ Edit</button>
@@ -1730,6 +1734,13 @@ function ClubPageWatermark({ imageUrl, posX, posY, zoom }) {
 
 export default function ClubHome({ club }) {
   const { member, isAdmin } = useUser()
+  // Club Owner gets the same create/edit/manage-events options an admin has,
+  // scoped to this club only (Iain, 2026-08-10) — the space_owners primitive
+  // already existed for Questions routing; this is the first place it's used
+  // to gate an actual permission rather than just display/routing.
+  const { owners: clubOwners } = useOwners("club", club?.id)
+  const isOwner   = !!member?.id && clubOwners.some(o => o.id === member.id)
+  const canManage = isAdmin || isOwner
   // Everything below is driven by the club's CONFIG, never by a hub name —
   // that's what lets Book Club and Dinner Club share this one page.
   const caps   = clubCaps(club)
@@ -1926,8 +1937,8 @@ export default function ClubHome({ club }) {
       setOutstandingBook(null)
     }
 
-    // Members for EC picker (admin only)
-    if (isAdmin) {
+    // Members for EC picker (admin or this club's Owner)
+    if (canManage) {
       const { data: mems } = await supabase.from("members").select("id, name, username").order("name")
       setMembers(mems || [])
     }
@@ -1935,7 +1946,7 @@ export default function ClubHome({ club }) {
     setLoading(false)
   }
 
-  useEffect(() => { if (member?.id !== undefined) load() }, [member?.id, isAdmin])
+  useEffect(() => { if (member?.id !== undefined) load() }, [member?.id, canManage])
 
   async function signUp(event) {
     const res = await authedFetch("/api/bookings", {
@@ -1995,7 +2006,7 @@ export default function ClubHome({ club }) {
 
   // One-at-a-time clubs (Book Club) block a second overlapping activity; groups
   // schedule as many activities as they like.
-  const canAdd = isAdmin && (!caps.oneEventAtATime || upcoming.length === 0)
+  const canAdd = canManage && (!caps.oneEventAtATime || upcoming.length === 0)
 
   // Delete a single future occurrence (EC-only): archives it + notifies its bookers.
   async function handleDeleteOccurrence(ev) {
@@ -2039,8 +2050,8 @@ export default function ClubHome({ club }) {
 
       <ContactBar contextType="club" contextKey={club?.id} contextLabel={club?.name} colour={colour} style={{ marginTop: -4, marginBottom: 16 }} />
 
-      {/* Admin: add a new activity (single event or recurring series) */}
-      {isAdmin && !showForm && canAdd && (
+      {/* Admin/Owner: add a new activity (single event or recurring series) */}
+      {canManage && !showForm && canAdd && (
         <div style={{ marginBottom: 16 }}>
           <button onClick={() => { setEditEvent(null); setShowForm(true) }}
             style={{ background: colour, color: clubTextOn(colour), border: "none", borderRadius: 20,
@@ -2072,13 +2083,13 @@ export default function ClubHome({ club }) {
             label={act.isSeries ? "Next date" : "Event"}
             booking={myBookings[act.parent.id]}
             onOpen={() => openSlideOut(act.parent)}
-            onEdit={isAdmin && !showForm ? () => { setEditEvent(act.parent); setShowForm(true) } : null}
+            onEdit={canManage && !showForm ? () => { setEditEvent(act.parent); setShowForm(true) } : null}
             colour={colour}
             club={club}
             showToast={showToast}
           />
           <UpcomingDatesAccordion events={act.children} myBookings={myBookings}
-            onOpen={openSlideOut} onEdit={isAdmin && !showForm ? (ev) => { setEditEvent(ev); setShowForm(true) } : null} colour={colour} />
+            onOpen={openSlideOut} onEdit={canManage && !showForm ? (ev) => { setEditEvent(ev); setShowForm(true) } : null} colour={colour} />
         </div>
       )) : (
         <div style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",

@@ -14,6 +14,7 @@ import { bookingsClosed, cutoffLabel } from "@/lib/booking"
 import { clubCaps, clubColour } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
 import { maxSeatsPerBooking } from "@/lib/modifyBooking"
+import { useOwners } from "@/lib/useOwners"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1786,6 +1787,14 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
   const [open, setOpen] = useState(false)
   const [coordinators, setCoordinators] = useState([])
   const [showMenu, setShowMenu] = useState(false)
+  // Owner of this event's own hub/club gets EC view area-wide, the same as
+  // admin -- Iain, 2026-08-10: "same options as admin ... just for that
+  // area". event.club_id is the truth for a club event; otherwise the
+  // event's own hub_type ('movie'/'social') is the area key OwnersManager
+  // already uses. Called unconditionally (before the `if (!event) return
+  // null` below) -- a hook can't follow a conditional early return, same
+  // Rules-of-Hooks class of bug fixed in PR #71 (2026-08-09).
+  const { owners: areaOwners } = useOwners(event?.club_id ? "club" : "hub", event?.club_id || event?.hub_type)
 
   useEffect(() => {
     if (event) {
@@ -1836,8 +1845,9 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
 
   // Check if current user is a coordinator for this event
   const isEC = member && coordinators.some(ec => ec.member_id === member.id)
+  const isAreaOwner = !!member?.id && areaOwners.some(o => o.id === member.id)
   // Also allow admins to see coordinator panel
-  const showCoordinatorPanel = isAuthenticated && (isEC || isAdmin)
+  const showCoordinatorPanel = isAuthenticated && (isEC || isAdmin || isAreaOwner)
 
   function handleClose() {
     setOpen(false)

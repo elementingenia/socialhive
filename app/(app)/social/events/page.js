@@ -19,6 +19,7 @@ import { useRequestOnlyAcknowledge } from "@/components/RequestOnlyAcknowledge"
 import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName } from "@/lib/sortNames"
+import { useOwners } from "@/lib/useOwners"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -1493,6 +1494,11 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function SocialEvents() {
   const { member }        = useUser()
+  // Owner of the Social hub gets the same create/edit/manage options an
+  // admin has, scoped to this hub only (Iain, 2026-08-10).
+  const { owners: socialOwners } = useOwners('hub', 'social')
+  const isOwner   = !!member?.id && socialOwners.some(o => o.id === member.id)
+  const canManage = !!(member?.is_admin || isOwner)
   const [events,          setEvents]        = useState([])
   const [coordinatorMap,  setCoordinatorMap] = useState({})
   const [bookings,        setBookings]       = useState({})
@@ -1711,7 +1717,7 @@ export default function SocialEvents() {
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
       {toast && <Toast msg={toast.msg} type={toast.type} />}
 
-      {member?.is_admin && (
+      {canManage && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "1rem" }}>
           <button onClick={() => { setEditEvent(null); setShowForm(true) }} style={{
             background: "var(--terracotta)", color: "#fff", border: "none",
@@ -1734,7 +1740,7 @@ export default function SocialEvents() {
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1.5rem" }}>
           {upcoming.map(e => (
             <EventCard key={e.id} event={e} coordinators={coordinatorMap[e.id] || []}
-              myBooking={bookings[e.id]} isAdmin={member?.is_admin}
+              myBooking={bookings[e.id]} isAdmin={canManage}
               onOpen={() => openEventSlideOut(e)}
               onEdit={() => { setEditEvent(e); setShowForm(true) }}
               onTogglePayment={handleTogglePayment} togglingId={togglingId}
@@ -1763,7 +1769,7 @@ export default function SocialEvents() {
               {past.map((e, i) => (
                 <div key={e.id} style={{ borderTop: i > 0 ? "1px solid var(--border)" : "none" }}>
                   <EventCard event={e} coordinators={coordinatorMap[e.id] || []}
-                    myBooking={bookings[e.id]} isAdmin={member?.is_admin}
+                    myBooking={bookings[e.id]} isAdmin={canManage}
                     onOpen={() => openEventSlideOut(e)}
                     onEdit={() => { setEditEvent(e); setShowForm(true) }}
                     onTogglePayment={handleTogglePayment} togglingId={togglingId}
