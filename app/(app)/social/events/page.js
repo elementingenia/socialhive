@@ -1757,6 +1757,30 @@ export default function SocialEvents() {
         const resultLabel = data.payment_status === "partial" ? "Partial payment recorded"
           : data.payment_status === "confirmed" ? "Marked as paid" : "Marked as unpaid"
         showToast(resultLabel)
+        // Patch local state with the server's actual written values BEFORE
+        // the full reload (2026-08-12, Iain -- Spring Ball): load() is four
+        // sequential Supabase round-trips, which on a real connection took
+        // long enough that the toggle/pill sat on the pre-save numbers for
+        // several seconds -- reading as "it didn't save" or "it reverted"
+        // even though the write had already succeeded (confirmed live: the
+        // DB was correct the whole time, only the on-screen state lagged).
+        // This makes the UI reflect the change the instant the request
+        // completes; load() still runs after for full reconciliation with
+        // anything else that may have changed server-side in the meantime.
+        if (data.payment_status !== undefined) {
+          setEvents(prev => prev.map(ev =>
+            ev.id !== eventId ? ev : {
+              ...ev,
+              bookings: (ev.bookings || []).map(b =>
+                b.id !== booking.id ? b : {
+                  ...b, payment_status: data.payment_status,
+                  amount_paid: data.amount_paid ?? b.amount_paid,
+                  refund_due: data.refund_due ?? b.refund_due,
+                }
+              ),
+            }
+          ))
+        }
         await load()
       } else {
         let msg = "Update failed"

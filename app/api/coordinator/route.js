@@ -217,7 +217,18 @@ export async function PATCH(req) {
       if (note) msg = msg ? `${msg} EC note: ${note}` : null
       if (msg) await notify(prevBk.member_id, event_id, type, msg)
     }
-    return NextResponse.json({ ok: true, payment_status: effectiveStatus })
+    // amount_paid/refund_due included (2026-08-12) so the client can patch its
+    // local state immediately with the real written values, instead of only
+    // knowing the new payment_status and having to wait for a full reload()
+    // round-trip (four sequential Supabase queries) to see the actual amount
+    // reflected -- see handleTogglePayment in social/events/page.js. Iain hit
+    // this directly: after Save, the toggle/pill sat on the pre-save numbers
+    // for several seconds while load() ran, which read as "it didn't work" /
+    // "it reverted" even though the write had already succeeded.
+    return NextResponse.json({
+      ok: true, payment_status: effectiveStatus,
+      amount_paid: patch.amount_paid, refund_due: patch.refund_due ?? 0,
+    })
   }
 
   // ── Close Out payments for an event (2026-07-12) ──────────────────────────────
