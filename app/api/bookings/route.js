@@ -223,16 +223,23 @@ export async function PATCH(req) {
     const { data: event } = await supabaseAdmin
       .from('events').select('title, cost').eq('id', event_id).single()
     const owed = amountOwing(event, booking.seats)
-    // Balance-based (2026-08-11 follow-up, Iain -- Spring Ball): `amount`
-    // is what the resident is paying IN THIS transaction, added to
-    // whatever's already on file -- not a new absolute total. Blank
-    // defaults to the outstanding balance, not the full amount owed, so
-    // a resident completing a partial payment sees (and the form
-    // defaults to) the actual $ still owing.
+    // amount_paid is the EC-CONFIRMED ledger, not a claim (2026-08-12
+    // follow-up, Iain -- Spring Ball 1): self-report used to write the
+    // resident's claimed new total straight into amount_paid, so by the
+    // time the EC opened the toggle to review it, the balance already
+    // read $0 of $0 -- the claim had silently "banked" itself before
+    // anyone confirmed it actually arrived. Now: self-report logs the
+    // CLAIMED amount to payment_notes (for the EC to see) and flips the
+    // status to 'submitted', but never touches amount_paid -- that stays
+    // exactly what it was until an EC genuinely confirms it via
+    // set_payment, at which point the normal balance/increment logic in
+    // coordinator/route.js applies it for real. Blank amount still
+    // defaults to the outstanding balance, purely for what's shown in
+    // the note/notification -- not written to the booking.
     const existingPaid = Number(booking.amount_paid) || 0
     const increment = (rawAmount !== undefined && rawAmount !== null && rawAmount !== '')
       ? Math.max(0, parseFloat(rawAmount) || 0) : Math.max(0, owed - existingPaid)
-    const amountPaid = existingPaid + increment
+    const claimedTotal = existingPaid + increment
 
     const patch = {
       payment_status: 'submitted', updated_at: new Date().toISOString(),
@@ -241,11 +248,11 @@ export async function PATCH(req) {
       // blindly wiping to 'pending', which would silently discard the
       // resident's own self-report (Iain, 2026-08-04).
       payment_submitted_at: new Date().toISOString(),
-      amount_paid: amountPaid,
     }
     if (note) {
-      // Logs the amount paid THIS transaction, not the resulting running
-      // total -- matches the EC-side ledger entry shape in coordinator/route.js.
+      // Logs the amount CLAIMED this transaction, not a running total --
+      // matches the EC-side ledger entry shape in coordinator/route.js,
+      // and is purely informational until an EC confirms it.
       patch.payment_notes = [...(booking.payment_notes || []),
         { amount: increment, note, recorded_by: member.id, recorded_at: new Date().toISOString() }]
     }
@@ -261,8 +268,8 @@ export async function PATCH(req) {
     const notifyIds = new Set([...(ecRows || []).map(r => r.member_id), ...(admins || []).map(a => a.id)])
 
     const owedStr = `$${owed.toFixed(2)}`
-    const paidStr = `$${amountPaid.toFixed(2)}`
-    const amountPhrase = amountPaid < owed ? `${paidStr} of ${owedStr}` : paidStr
+    const paidStr = `$${claimedTotal.toFixed(2)}`
+    const amountPhrase = claimedTotal < owed ? `${paidStr} of ${owedStr}` : paidStr
     let msg = `${member.name || 'A resident'} marked payment (${amountPhrase}) as submitted for ${event?.title || 'this event'} — please confirm.`
     if (note) msg += ` Note: ${note}`
     for (const id of notifyIds) {

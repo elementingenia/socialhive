@@ -7,7 +7,7 @@
 import {
   paymentReminderDue, isPartial, isPaid, amountOwing, derivePaymentStatus,
   bookingStatusBadge, paymentSummary, isRefundPending, isRefundIssued, refundsOutstandingTotal,
-  remainingBalance, wholeDollar, balancePhrase,
+  remainingBalance, wholeDollar, balancePhrase, paymentReminderPhrase,
 } from '../../lib/payments.js'
 
 let pass = 0, fail = 0
@@ -127,6 +127,13 @@ ok2(wholeDollar('30') === '$30', 'accepts a numeric string (as sent from a form 
 
 ok2(balancePhrase({ amount_paid: 30 }, balEvent, 1) === '$10 of $40', 'balance phrase: $10 still owing of $40 total')
 ok2(balancePhrase({ amount_paid: 0 }, balEvent, 1) === '$40 of $40', 'nothing paid yet: balance equals the full amount owed')
+
+// -- paymentReminderPhrase (2026-08-12 follow-up, Iain -- Spring Ball 2:
+//    a reminder used to always restate the FULL amount as still owing,
+//    even when some of it was already paid). -------------------------
+ok2(paymentReminderPhrase({ amount_paid: 0 }, balEvent, 1) === '$40 payment', 'nothing paid yet: plain amount, no balance language')
+ok2(paymentReminderPhrase({ amount_paid: 30 }, balEvent, 1) === '$10 balance to complete the $40 payment', '$30 of $40 already in: balance-aware phrase')
+ok2(paymentReminderPhrase({ amount_paid: 40 }, balEvent, 1) === '$40 payment', 'fully paid: falls back to plain amount (should not be reminded anyway)')
 
 console.log(`lib/payments.js (partial payments + refund ledger): ${pass2} passed, ${fail2} failed`)
 

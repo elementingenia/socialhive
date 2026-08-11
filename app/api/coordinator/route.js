@@ -8,7 +8,7 @@ import { fetchTakenResidentIds } from "@/lib/takenResidents"
 import { syncAttendees } from "@/lib/syncAttendees"
 import { maxSeatsPerBooking, planSeatModification } from "@/lib/modifyBooking"
 import { requireEventManage } from "@/lib/areaAuth"
-import { amountOwing, derivePaymentStatus } from "@/lib/payments"
+import { amountOwing, derivePaymentStatus, paymentReminderPhrase } from "@/lib/payments"
 
 // force-dynamic + the shared no-store supabaseAdmin (lib/supabaseAdmin.js) keep
 // this GET route reading LIVE data. Without it, Next's fetch cache once dropped a
@@ -236,16 +236,19 @@ export async function PATCH(req) {
     }
     const { data: confirmedRows } = await supa
       .from("bookings")
-      .select("id, member_id, seats, payment_status")
+      .select("id, member_id, seats, payment_status, amount_paid")
       .eq("event_id", event_id).eq("status", "confirmed")
 
     const unpaid = (confirmedRows || []).filter(b => b.payment_status !== "confirmed" && b.payment_status !== "refunded")
-    const cost = parseFloat(ev.cost) || 0
 
     for (const b of unpaid) {
-      const owed = (cost * (b.seats || 1)).toFixed(2)
+      // Balance-aware (2026-08-12 follow-up, Iain -- Spring Ball 2): don't
+      // restate the FULL amount as still owing if some of it is already
+      // in -- "$10 balance to complete the $40 payment", not "$40 is
+      // still owing" on a booking that's actually $30 in. No event title
+      // in the body -- the notification's own header already names it.
       await notify(b.member_id, event_id, "payment_reminder",
-        `Reminder: $${owed} is still owing for ${ev.title || "this event"}.`)
+        `Reminder: ${paymentReminderPhrase(b, ev, b.seats)} is still owing.`)
     }
 
     await supa.from("events").update({
@@ -269,7 +272,7 @@ export async function PATCH(req) {
       return NextResponse.json({ error: "This event doesn't require payment" }, { status: 400 })
     }
     const { data: bk } = await supa
-      .from("bookings").select("id, member_id, seats, status, payment_status")
+      .from("bookings").select("id, member_id, seats, status, payment_status, amount_paid")
       .eq("id", booking_id).eq("event_id", event_id).maybeSingle()
     if (!bk || bk.status !== "confirmed") {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 })
@@ -277,10 +280,10 @@ export async function PATCH(req) {
     if (bk.payment_status === "confirmed" || bk.payment_status === "refunded") {
       return NextResponse.json({ error: "This booking isn't awaiting payment" }, { status: 400 })
     }
-    const cost = parseFloat(ev.cost) || 0
-    const owed = (cost * (bk.seats || 1)).toFixed(2)
+    // Balance-aware (2026-08-12 follow-up) -- see close_out_payments above
+    // for why: don't restate the full amount if some is already paid.
     await notify(bk.member_id, event_id, "payment_reminder",
-      `Reminder: $${owed} is still owing for ${ev.title || "this event"}.`)
+      `Reminder: ${paymentReminderPhrase(bk, ev, bk.seats)} is still owing.`)
 
     return NextResponse.json({ ok: true })
   }
