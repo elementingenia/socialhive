@@ -9,7 +9,7 @@ import { BusIcon } from "@/components/NavIcons"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import EventImagePicker from "@/components/EventImagePicker"
 import ExpandableText from "@/components/ExpandableText"
-import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, isRefundPending, isRefundIssued, paymentSummary, reconciliationIsStale } from "@/lib/payments"
+import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, isRefundPending, isRefundIssued, paymentSummary, reconciliationIsStale, balancePhrase, remainingBalance, wholeDollar, amountOwing } from "@/lib/payments"
 import { cutoffToInputValue, cutoffFromInputValue } from "@/lib/booking"
 import { useLocations } from "@/lib/useLocations"
 import TimeField from "@/components/TimeField"
@@ -112,12 +112,21 @@ function BookingStrip({ myBooking, event, isFull }) {
     const badge = bookingStatusBadge(myBooking, event)
     const total = seatsCost(event, seats)
     const statusWord = badge.label.toLowerCase() // "booked" or "confirmed" — canonical, see lib/payments.js
-    const submitted = badge.label !== "Confirmed" && computeIsSubmitted(myBooking)
+    // Partial (2026-08-11 follow-up, Iain -- Spring Ball): this strip used
+    // to re-show the FULL amount owed on a partial booking ("1 seat
+    // partial - Unpaid $40" even though $30 was already in) -- the same
+    // bug as the coordinator amount-entry flow, just on the resident's own
+    // card. Show the actual remaining balance instead.
+    const isPartialBooking = badge.label === "Partial"
+    const balance = isPartialBooking ? balancePhrase(myBooking, event, seats) : null
+    const submitted = badge.label !== "Confirmed" && !isPartialBooking && computeIsSubmitted(myBooking)
     const label = badge.label === "Confirmed"
       ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Paid " + total : ""}`
-      : submitted
-        ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${total ? " " + total : ""}`
-        : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Unpaid " + total : ""}`
+      : isPartialBooking
+        ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid ${balance}`
+        : submitted
+          ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${total ? " " + total : ""}`
+          : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Unpaid " + total : ""}`
     const bg = badge.label === "Confirmed" ? "#f0fdf4" : submitted ? "#f0fdfa" : "#fffbeb"
     const border = badge.label === "Confirmed" ? "#bbf7d0" : submitted ? "#99f6e4" : "#fde68a"
     const textColour = badge.label === "Confirmed" ? badge.color : submitted ? "#0f766e" : badge.color
@@ -1332,6 +1341,16 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                     const partial = computeIsPartial(b)
                     const submitted = !paid && !partial && computeIsSubmitted(b)
                     const owed = seatsCost(event, b.seats || 1)
+                    // Balance-based (2026-08-11 follow-up, Iain -- Spring
+                    // Ball) -- the record form's amount input is what the
+                    // EC is recording IN THIS transaction, added to
+                    // whatever's already on file, so it should default to
+                    // the actual $ still owing, not the full amount (which
+                    // on a Partial booking would double-count the $30
+                    // already in) or the amount already paid (which would
+                    // record it a second time).
+                    const owedNum = amountOwing(event, b.seats || 1)
+                    const balanceNum = remainingBalance(b, event, b.seats || 1)
                     const isRecording = recordingId === b.id
                     return (
                       <div key={i} style={{ padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
@@ -1349,7 +1368,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                               point of tracking an amount instead of a binary flag. */}
                           {canManagePayments && partial && (
                             <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#075985", background: "#e0f2fe", border: "1px solid #7dd3fc", borderRadius: 8, padding: "0.05rem 0.35rem" }}>
-                              ${(parseFloat(b.amount_paid) || 0).toFixed(2)} of {owed}
+                              {wholeDollar(b.amount_paid)} of {wholeDollar(owedNum)} paid
                             </span>
                           )}
                           <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
@@ -1387,13 +1406,19 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                             // separate, explicitly-confirmed action inside the form
                             // (below), matching how every other destructive action in
                             // this app requires a confirm step, not a bare toggle.
+                            // Toggle POSITION now tracks `paid` only, not `isSettled`
+                            // (2026-08-11 follow-up, Iain -- Spring Ball): a Partial
+                            // booking isn't actually Paid yet, so the switch stays on
+                            // the Unpaid side -- it's the TRACK COLOUR (blue) that
+                            // signals "some money in", not the knob position. Only a
+                            // truly Confirmed booking moves the knob across.
                             return (
                               <button
                                 disabled={pending}
                                 onClick={e => {
                                   e.stopPropagation(); e.preventDefault()
                                   setRecordingId(b.id)
-                                  setRecordAmount(isSettled ? String(parseFloat(b.amount_paid) || 0) : (owed ? owed.replace("$", "") : ""))
+                                  setRecordAmount(String(Math.round(balanceNum)))
                                   setRecordNote("")
                                   setResetConfirmId(null)
                                 }}
@@ -1408,18 +1433,18 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                                     reads as an actionable switch rather than a status badge
                                     (Iain, 2026-07-12 -- the plain colour pill wasn't clearly
                                     tappable). */}
-                                <span style={{ fontSize: "0.62rem", fontWeight: 700, color: !isSettled ? "var(--amber-dark)" : "var(--text-dim)" }}>Unpaid</span>
+                                <span style={{ fontSize: "0.62rem", fontWeight: 700, color: partial ? "#0369a1" : !paid ? "var(--amber-dark)" : "var(--text-dim)" }}>Unpaid</span>
                                 <span style={{
                                   width: 32, height: 18, borderRadius: 9, position: "relative", flexShrink: 0,
                                   background: paid ? "var(--green)" : partial ? "#0369a1" : "var(--amber)", transition: "background 0.15s",
                                 }}>
                                   <span style={{
-                                    position: "absolute", top: 2, left: isSettled ? 16 : 2,
+                                    position: "absolute", top: 2, left: paid ? 16 : 2,
                                     width: 14, height: 14, borderRadius: "50%", background: "#fff",
                                     transition: "left 0.15s", boxShadow: "0 1px 2px rgba(0,0,0,.25)",
                                   }} />
                                 </span>
-                                <span style={{ fontSize: "0.62rem", fontWeight: 700, color: isSettled ? (paid ? "var(--green)" : "#0369a1") : "var(--text-dim)" }}>Paid</span>
+                                <span style={{ fontSize: "0.62rem", fontWeight: 700, color: paid ? "var(--green)" : "var(--text-dim)" }}>Paid</span>
                               </button>
                             )
                           })()}
@@ -1430,21 +1455,36 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                             a short payment or up for an overpayment), comment
                             optional. The server derives Partial/Confirmed from the
                             amount -- this never sends a status directly. */}
-                        {canManagePayments && isRecording && (
+                        {canManagePayments && isRecording && (() => {
+                          // Balance-based comment rule (2026-08-11 follow-up,
+                          // Iain -- Spring Ball): the amount typed here is
+                          // ADDED to whatever's already on file (`b.amount_paid`),
+                          // so "does this match what's owed" now means "does
+                          // it exactly complete the outstanding balance", not
+                          // "does it equal the full price" -- entering the
+                          // full $10 balance on a $30-of-$40 booking should
+                          // need no comment at all, it's just finishing the
+                          // payment off.
+                          const enteredAmt = recordAmount === "" ? null : (parseFloat(recordAmount) || 0)
+                          const willComplete = enteredAmt !== null && Math.round(enteredAmt) === Math.round(balanceNum)
+                          return (
                           <div onClick={e => e.stopPropagation()} style={{ marginTop: "0.4rem", padding: "0.5rem", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
                               <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Amount received</span>
-                              <input type="number" min="0" step="0.01" value={recordAmount} onChange={e => setRecordAmount(e.target.value)}
+                              <input type="number" min="0" step="1" value={recordAmount} onChange={e => setRecordAmount(e.target.value)}
                                 style={{ width: 90, padding: "0.3rem 0.5rem", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: "0.8rem", boxSizing: "border-box", fontFamily: "inherit" }} />
-                              <span style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>of {owed}</span>
+                              <span style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>of {wholeDollar(balanceNum)} balance</span>
                             </div>
-                            <textarea placeholder={parseFloat(recordAmount) !== parseFloat((owed || "$0").replace("$", "")) ? "Comment (required — amount doesn't match what's owed)" : "Comment (optional)"}
+                            {partial && (
+                              <div style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>Completes {owed} total</div>
+                            )}
+                            <textarea placeholder={willComplete ? "Comment (optional)" : "Comment (required — amount doesn't complete the balance owed)"}
                               value={recordNote} onChange={e => setRecordNote(e.target.value)} rows={2}
                               style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: "0.78rem", boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
                             <div style={{ display: "flex", gap: "0.4rem" }}>
                               <button onClick={() => { setRecordingId(null); setResetConfirmId(null) }} style={{ flex: 1, padding: "0.35rem", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600, fontFamily: "inherit" }}>Cancel</button>
                               <button
-                                disabled={togglingId === b.id || (recordAmount !== "" && parseFloat(recordAmount) !== parseFloat((owed || "$0").replace("$", "")) && !recordNote.trim())}
+                                disabled={togglingId === b.id || (!willComplete && !recordNote.trim())}
                                 onClick={() => { onTogglePayment(event.id, b, recordAmount, recordNote); setRecordingId(null) }}
                                 style={{ flex: 1, padding: "0.35rem", borderRadius: 8, border: "none", background: "var(--terracotta)", color: "#fff", cursor: "pointer", fontSize: "0.75rem", fontWeight: 700, fontFamily: "inherit" }}>Save</button>
                             </div>
@@ -1456,7 +1496,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                               resetConfirmId === b.id ? (
                                 <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.1rem" }}>
                                   <span style={{ fontSize: "0.68rem", color: "var(--amber-dark)", flex: 1 }}>
-                                    Clear the ${(parseFloat(b.amount_paid) || 0).toFixed(2)} on file and mark unpaid?
+                                    Clear the {wholeDollar(b.amount_paid)} on file and mark unpaid?
                                   </span>
                                   <button onClick={() => setResetConfirmId(null)}
                                     style={{ fontSize: "0.68rem", background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>No</button>
@@ -1474,7 +1514,8 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                               )
                             )}
                           </div>
-                        )}
+                          )
+                        })()}
                         {(() => {
                           const ownerKey = b.member_id ? `m:${b.member_id}` : b.contact_id ? `c:${b.contact_id}` : null
                           const party = ownerKey ? (partyByOwner[ownerKey] || []) : []

@@ -149,7 +149,7 @@ export async function PATCH(req) {
     // Fetch previous state first so we only notify on an actual transition,
     // not every toggle (e.g. Confirmed -> Pending if corrected by mistake).
     const { data: prevBk } = await supa
-      .from("bookings").select("payment_status, member_id, seats, payment_submitted_at, payment_notes")
+      .from("bookings").select("payment_status, member_id, seats, payment_submitted_at, payment_notes, amount_paid")
       .eq("id", booking_id).maybeSingle()
     if (!prevBk) return NextResponse.json({ error: "Booking not found" }, { status: 404 })
 
@@ -157,14 +157,27 @@ export async function PATCH(req) {
     if (payment_status === "confirmed") {
       const { data: ev } = await supa.from("events").select("cost").eq("id", event_id).single()
       owed = amountOwing(ev, prevBk.seats)
-      const amountPaid = (rawAmount !== undefined && rawAmount !== null && rawAmount !== "")
-        ? Math.max(0, parseFloat(rawAmount) || 0) : owed
+      // Balance-based (2026-08-11 follow-up, Iain -- Spring Ball): `amount`
+      // is the payment being recorded IN THIS transaction, not a new
+      // absolute total -- it gets ADDED to whatever's already on file.
+      // Blank defaults to the outstanding balance (owed - existing), not
+      // the full amount owed, so re-opening an already-partial booking's
+      // toggle offers the actual remaining $ rather than double-charging
+      // the amount already recorded. For a fresh booking (existing = 0)
+      // this is identical to the old "defaults to full owed" behaviour.
+      const existingPaid = Number(prevBk.amount_paid) || 0
+      const increment = (rawAmount !== undefined && rawAmount !== null && rawAmount !== "")
+        ? Math.max(0, parseFloat(rawAmount) || 0) : Math.max(0, owed - existingPaid)
+      const amountPaid = existingPaid + increment
       effectiveStatus = derivePaymentStatus(amountPaid, owed)
       patch = { payment_status: effectiveStatus, amount_paid: amountPaid, updated_at: new Date().toISOString() }
       if (amountPaid > owed) refundDelta = amountPaid - owed
       if (note) {
+        // Logs the amount recorded THIS transaction, not the resulting
+        // running total (amountPaid) -- each entry should read as "what
+        // happened", same as a bank statement line, not a repeated balance.
         patch.payment_notes = [...(prevBk.payment_notes || []),
-          { amount: amountPaid, note, recorded_by: member.id, recorded_at: new Date().toISOString() }]
+          { amount: increment, note, recorded_by: member.id, recorded_at: new Date().toISOString() }]
       }
     } else {
       // An EC un-confirming payment (-> "pending") must not silently discard a

@@ -9,7 +9,7 @@ import { bbToHtml } from "@/components/RichEditor"
 import { BusIcon } from "@/components/NavIcons"
 import { ContactBar } from "@/components/OwnersManager"
 import { FormattedText } from "@/lib/textFormatter"
-import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted } from "@/lib/payments"
+import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted, balancePhrase } from "@/lib/payments"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 
 const COLOUR = "var(--terracotta)"
@@ -191,12 +191,18 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
             const total = seatsCost(event, seats)
             const badge = bookingStatusBadge(myBooking, event)
             const statusWord = badge.label.toLowerCase() // "booked" or "confirmed" — never re-worded per screen
-            const submitted = badge.label !== "Confirmed" && computeIsSubmitted(myBooking)
+            // Partial (2026-08-11 follow-up) -- same balance-based fix as
+            // the Scheduled tab's card strip, see social/events/page.js.
+            const isPartialBooking = badge.label === "Partial"
+            const balance = isPartialBooking ? balancePhrase(myBooking, event, seats) : null
+            const submitted = badge.label !== "Confirmed" && !isPartialBooking && computeIsSubmitted(myBooking)
             const label = badge.label === "Confirmed"
               ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Paid " + total : ""}`
-              : submitted
-                ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${total ? " " + total : ""}`
-                : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Unpaid " + total : ""}`
+              : isPartialBooking
+                ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid ${balance}`
+                : submitted
+                  ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${total ? " " + total : ""}`
+                  : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Unpaid " + total : ""}`
             const pillBg = submitted ? "#f0fdfa" : badge.bg
             const pillColor = submitted ? "#0f766e" : badge.color
             return (

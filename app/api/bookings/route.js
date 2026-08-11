@@ -204,7 +204,7 @@ export async function PATCH(req) {
     // full amount owed, same as before this field existed.
     const { amount: rawAmount, note } = body
     const { data: booking } = await supabaseAdmin
-      .from('bookings').select('id, payment_status, seats, payment_notes')
+      .from('bookings').select('id, payment_status, seats, payment_notes, amount_paid')
       .eq('event_id', event_id).eq('member_id', member.id).eq('status', 'confirmed')
       .maybeSingle()
 
@@ -223,8 +223,16 @@ export async function PATCH(req) {
     const { data: event } = await supabaseAdmin
       .from('events').select('title, cost').eq('id', event_id).single()
     const owed = amountOwing(event, booking.seats)
-    const amountPaid = (rawAmount !== undefined && rawAmount !== null && rawAmount !== '')
-      ? Math.max(0, parseFloat(rawAmount) || 0) : owed
+    // Balance-based (2026-08-11 follow-up, Iain -- Spring Ball): `amount`
+    // is what the resident is paying IN THIS transaction, added to
+    // whatever's already on file -- not a new absolute total. Blank
+    // defaults to the outstanding balance, not the full amount owed, so
+    // a resident completing a partial payment sees (and the form
+    // defaults to) the actual $ still owing.
+    const existingPaid = Number(booking.amount_paid) || 0
+    const increment = (rawAmount !== undefined && rawAmount !== null && rawAmount !== '')
+      ? Math.max(0, parseFloat(rawAmount) || 0) : Math.max(0, owed - existingPaid)
+    const amountPaid = existingPaid + increment
 
     const patch = {
       payment_status: 'submitted', updated_at: new Date().toISOString(),
@@ -236,8 +244,10 @@ export async function PATCH(req) {
       amount_paid: amountPaid,
     }
     if (note) {
+      // Logs the amount paid THIS transaction, not the resulting running
+      // total -- matches the EC-side ledger entry shape in coordinator/route.js.
       patch.payment_notes = [...(booking.payment_notes || []),
-        { amount: amountPaid, note, recorded_by: member.id, recorded_at: new Date().toISOString() }]
+        { amount: increment, note, recorded_by: member.id, recorded_at: new Date().toISOString() }]
     }
     const { error: markErr } = await supabaseAdmin.from('bookings').update(patch).eq('id', booking.id)
     if (markErr) return NextResponse.json({ error: markErr.message }, { status: 500 })

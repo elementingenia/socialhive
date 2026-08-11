@@ -8,7 +8,7 @@ import { authedFetch } from "@/lib/getAuthToken"
 import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
-import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge } from "@/lib/payments"
+import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge, balancePhrase, remainingBalance, wholeDollar } from "@/lib/payments"
 import { byOwnThenName } from "@/lib/sortNames"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
 import { clubCaps, clubColour } from "@/lib/clubs"
@@ -976,7 +976,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                           background: isPaid ? "#16a34a20" : isPartial ? "#0369a120" : "var(--surface)",
                           color: isPaid ? "#16a34a" : isPartial ? "#0369a1" : "var(--text-dim)",
                           border: `1px solid ${isPaid ? "#16a34a" : isPartial ? "#0369a1" : "var(--border)"}`,
-                        }}>{isPaid ? "Paid" : isPartial ? `Partial · $${(parseFloat(firstConf?.amount_paid) || 0).toFixed(2)}` : "Unpaid"}</span>
+                        }}>{isPaid ? "Paid" : isPartial ? `Partial · ${wholeDollar(firstConf?.amount_paid)}` : "Unpaid"}</span>
                       )}
                       {paymentRequired && confirmedSeats > 0 && firstConf && isRefunded && (
                         <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12,
@@ -1679,16 +1679,24 @@ function BookingSection({ event, onRefresh, onClose }) {
               const totalCost = seatsCost(event, seats)
               const badge = bookingStatusBadge(myConfirmed, event)
               const statusWord = badge.label.toLowerCase() // "booked" or "confirmed" — canonical, see lib/payments.js
-              const submitted = event.payment_required && badge.label !== "Confirmed" && computeIsSubmitted(myConfirmed)
+              // Partial (2026-08-11 follow-up, Iain -- Spring Ball): this is
+              // the detail-screen mirror of the Scheduled card's strip --
+              // same bug (re-showing the full amount as if nothing had been
+              // paid), same fix (show the actual remaining balance).
+              const isPartialBooking = event.payment_required && badge.label === "Partial"
+              const balance = isPartialBooking ? balancePhrase(myConfirmed, event, seats) : null
+              const submitted = event.payment_required && !isPartialBooking && badge.label !== "Confirmed" && computeIsSubmitted(myConfirmed)
               const label = event.payment_required
                 ? (badge.label === "Confirmed"
                     ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Paid${totalCost ? " " + totalCost : ""}`
-                    : submitted
-                      ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${totalCost ? " " + totalCost : ""}`
-                      : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid${totalCost ? " " + totalCost : ""}`)
+                    : isPartialBooking
+                      ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid ${balance}`
+                      : submitted
+                        ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${totalCost ? " " + totalCost : ""}`
+                        : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid${totalCost ? " " + totalCost : ""}`)
                 : `✓ ${seats} seat${seats !== 1 ? "s" : ""} confirmed`
               const colour = event.payment_required
-                ? (badge.label === "Confirmed" ? "var(--green)" : submitted ? "#0f766e" : "#d97706")
+                ? (badge.label === "Confirmed" ? "var(--green)" : isPartialBooking ? "#0369a1" : submitted ? "#0f766e" : "#d97706")
                 : "var(--green)"
               return <StatusPill label={label} colour={colour} />
             })()}
@@ -1727,38 +1735,54 @@ function BookingSection({ event, onRefresh, onClose }) {
               <div style={{ fontSize: 12, color: "var(--teal)", lineHeight: 1.4 }}>
                 🧾 Payment submitted — your Event Coordinator will confirm it shortly.
               </div>
-            ) : showSelfReport ? (
-              // Amount/comment form (2026-08-11 follow-up) -- a resident
-              // reporting "I've paid" needs to say how much, same as an EC
-              // recording a payment on the other side. Pre-filled with the
-              // full amount owed (the common case), editable down if
-              // they've only added a further partial amount toward an
-              // existing "Partial" booking.
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, background: "var(--surface2)", borderRadius: 12 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 13, color: "var(--text-dim)" }}>Amount paid</span>
-                  <input type="number" min="0" step="0.01" value={selfAmount} onChange={e => setSelfAmount(e.target.value)}
-                    style={{ width: 100, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 14, boxSizing: "border-box", fontFamily: "inherit" }} />
-                  <span style={{ fontSize: 12, color: "var(--text-dim)" }}>of {seatsCost(event, myConfirmed.seats || 1)}</span>
+            ) : showSelfReport ? (() => {
+              // Balance-based (2026-08-11 follow-up, Iain -- Spring Ball):
+              // pre-filled with the outstanding BALANCE, not the full
+              // amount owed -- on a fresh (nothing paid yet) booking the
+              // two are identical, but on a Partial booking the resident
+              // should see "$10" (what's left), not "$40" (the whole
+              // thing, as if their earlier $30 didn't happen).
+              const seats = myConfirmed.seats || 1
+              const balanceNum = remainingBalance(myConfirmed, event, seats)
+              const owedPhrase = seatsCost(event, seats)
+              const isPartialBooking = computeIsPartial(myConfirmed)
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, background: "var(--surface2)", borderRadius: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 13, color: "var(--text-dim)" }}>Amount paid</span>
+                    <input type="number" min="0" step="1" value={selfAmount} onChange={e => setSelfAmount(e.target.value)}
+                      style={{ width: 100, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 14, boxSizing: "border-box", fontFamily: "inherit" }} />
+                    <span style={{ fontSize: 12, color: "var(--text-dim)" }}>of {wholeDollar(balanceNum)} balance</span>
+                  </div>
+                  {isPartialBooking && (
+                    <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Completes {owedPhrase} total</div>
+                  )}
+                  <textarea placeholder="Comment (optional) — e.g. how or when you paid" value={selfNote} onChange={e => setSelfNote(e.target.value)} rows={2}
+                    style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 13, boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => { setShowSelfReport(false); setSelfAmount(""); setSelfNote("") }} disabled={submitting}
+                      style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}>Cancel</button>
+                    <button onClick={() => handleMarkSubmitted(selfAmount, selfNote)} disabled={submitting}
+                      style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid var(--teal)", background: "var(--teal)", color: "#fff", cursor: submitting ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 700, fontFamily: "inherit", opacity: submitting ? 0.7 : 1 }}>
+                      {submitting ? "Marking…" : "Submit"}
+                    </button>
+                  </div>
                 </div>
-                <textarea placeholder="Comment (optional) — e.g. how or when you paid" value={selfNote} onChange={e => setSelfNote(e.target.value)} rows={2}
-                  style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 13, boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={() => { setShowSelfReport(false); setSelfAmount(""); setSelfNote("") }} disabled={submitting}
-                    style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}>Cancel</button>
-                  <button onClick={() => handleMarkSubmitted(selfAmount, selfNote)} disabled={submitting}
-                    style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid var(--teal)", background: "var(--teal)", color: "#fff", cursor: submitting ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 700, fontFamily: "inherit", opacity: submitting ? 0.7 : 1 }}>
-                    {submitting ? "Marking…" : "Submit"}
+              )
+            })() : (
+              (() => {
+                const seats = myConfirmed.seats || 1
+                const isPartialBooking = computeIsPartial(myConfirmed)
+                const balanceNum = remainingBalance(myConfirmed, event, seats)
+                return (
+                  <button
+                    onClick={() => { setShowSelfReport(true); setSelfAmount(String(Math.round(balanceNum))) }}
+                    disabled={submitting}
+                    style={{ width: "100%", padding: "12px 0", background: "transparent", border: "1px solid var(--teal)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", color: "var(--teal)", opacity: submitting ? 0.7 : 1 }}>
+                    {isPartialBooking ? `I've Paid the ${wholeDollar(balanceNum)} Balance — Mark as Submitted` : "I've Paid — Mark as Submitted"}
                   </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => { setShowSelfReport(true); setSelfAmount(seatsCost(event, myConfirmed.seats || 1)?.replace("$", "") || "") }}
-                disabled={submitting}
-                style={{ width: "100%", padding: "12px 0", background: "transparent", border: "1px solid var(--teal)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", color: "var(--teal)", opacity: submitting ? 0.7 : 1 }}>
-                {computeIsPartial(myConfirmed) ? "I've Paid the Rest — Mark as Submitted" : "I've Paid — Mark as Submitted"}
-              </button>
+                )
+              })()
             )
           )}
           {myConfirmed && !isBookclubEvent && !closed && (

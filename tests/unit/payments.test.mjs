@@ -7,6 +7,7 @@
 import {
   paymentReminderDue, isPartial, isPaid, amountOwing, derivePaymentStatus,
   bookingStatusBadge, paymentSummary, isRefundPending, isRefundIssued, refundsOutstandingTotal,
+  remainingBalance, wholeDollar, balancePhrase,
 } from '../../lib/payments.js'
 
 let pass = 0, fail = 0
@@ -106,6 +107,26 @@ ok2(s.partialCount === 1, 'exactly one partial booking')
 ok2(s.partialTotal === 30, 'partialTotal is the amount actually received on partial bookings')
 ok2(s.unpaidCount === 2, 'unpaid count = partial + pending (overpaid one is fully paid, excluded)')
 ok2(paymentSummary([], { payment_required: false, cost: 50 }, []) === null, 'payment not required => null, nothing to render')
+
+// -- remainingBalance / wholeDollar / balancePhrase (2026-08-11 follow-up,
+//    Iain -- Spring Ball: a Partial booking's screens were re-showing the
+//    FULL amount owed as "Unpaid $X" even though some money was already
+//    in, instead of the actual balance still owing). --------------------
+const balEvent = { cost: 40 }
+ok2(remainingBalance({ amount_paid: 30 }, balEvent, 1) === 10, '$30 paid of $40 owed => $10 balance')
+ok2(remainingBalance({ amount_paid: 0 }, balEvent, 1) === 40, 'nothing paid => balance is the full amount owed')
+ok2(remainingBalance({ amount_paid: 40 }, balEvent, 1) === 0, 'fully paid => $0 balance')
+ok2(remainingBalance({ amount_paid: 55 }, balEvent, 1) === 0, 'overpaid => balance floors at $0, never negative')
+ok2(remainingBalance(null, balEvent, 1) === 40, 'no booking (fresh) => balance is the full amount owed, no crash')
+ok2(remainingBalance({ amount_paid: 30 }, balEvent, 2) === 50, '2 seats: $30 paid of $80 owed => $50 balance')
+
+ok2(wholeDollar(10.4) === '$10', 'rounds down to whole dollars, no cents shown')
+ok2(wholeDollar(10.6) === '$11', 'rounds up to whole dollars')
+ok2(wholeDollar(undefined) === '$0', 'undefined => $0, no crash')
+ok2(wholeDollar('30') === '$30', 'accepts a numeric string (as sent from a form input)')
+
+ok2(balancePhrase({ amount_paid: 30 }, balEvent, 1) === '$10 of $40', 'balance phrase: $10 still owing of $40 total')
+ok2(balancePhrase({ amount_paid: 0 }, balEvent, 1) === '$40 of $40', 'nothing paid yet: balance equals the full amount owed')
 
 console.log(`lib/payments.js (partial payments + refund ledger): ${pass2} passed, ${fail2} failed`)
 
