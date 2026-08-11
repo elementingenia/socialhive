@@ -1323,6 +1323,15 @@ function BookingSection({ event, onRefresh, onClose }) {
   const [seats, setSeats] = useState(1)
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // Self-report amount/comment (2026-08-11 follow-up) -- a resident needs a
+  // way to say HOW MUCH they've paid, not just tap a blind "I've Paid"
+  // button, especially once they're already Partial and are now reporting
+  // the remaining balance. Pre-fills with the full amount owed (the common
+  // case: "I've now paid it all off"), editable down if they've only added
+  // a further partial amount.
+  const [showSelfReport, setShowSelfReport] = useState(false)
+  const [selfAmount, setSelfAmount] = useState("")
+  const [selfNote, setSelfNote] = useState("")
   const [toast, setToast] = useState(null)
   const [confirm, setConfirm] = useState(false)
   const [splitOffer, setSplitOffer] = useState(null)
@@ -1570,17 +1579,22 @@ function BookingSection({ event, onRefresh, onClose }) {
   // Idea 2 of the EC payment model (2026-07-12): resident self-flags they've
   // paid. Badge stays "Booked" -- this only adds secondary text/notification,
   // the EC still does the final confirm via the Paid/Unpaid toggle.
-  async function handleMarkSubmitted() {
+  async function handleMarkSubmitted(amount, note) {
     setSubmitting(true)
     try {
       const res = await authedFetch("/api/bookings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event_id: event.id, action: "mark_payment_submitted" }),
+        body: JSON.stringify({
+          event_id: event.id, action: "mark_payment_submitted",
+          ...(amount !== undefined && amount !== "" ? { amount } : {}),
+          ...(note ? { note } : {}),
+        }),
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Failed to mark as submitted", "error"); return }
       showToast("Marked as submitted — your Event Coordinator will confirm")
+      setShowSelfReport(false); setSelfAmount(""); setSelfNote("")
       onRefresh()
     } finally { setSubmitting(false) }
   }
@@ -1713,10 +1727,37 @@ function BookingSection({ event, onRefresh, onClose }) {
               <div style={{ fontSize: 12, color: "var(--teal)", lineHeight: 1.4 }}>
                 🧾 Payment submitted — your Event Coordinator will confirm it shortly.
               </div>
+            ) : showSelfReport ? (
+              // Amount/comment form (2026-08-11 follow-up) -- a resident
+              // reporting "I've paid" needs to say how much, same as an EC
+              // recording a payment on the other side. Pre-filled with the
+              // full amount owed (the common case), editable down if
+              // they've only added a further partial amount toward an
+              // existing "Partial" booking.
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, background: "var(--surface2)", borderRadius: 12 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 13, color: "var(--text-dim)" }}>Amount paid</span>
+                  <input type="number" min="0" step="0.01" value={selfAmount} onChange={e => setSelfAmount(e.target.value)}
+                    style={{ width: 100, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 14, boxSizing: "border-box", fontFamily: "inherit" }} />
+                  <span style={{ fontSize: 12, color: "var(--text-dim)" }}>of {seatsCost(event, myConfirmed.seats || 1)}</span>
+                </div>
+                <textarea placeholder="Comment (optional) — e.g. how or when you paid" value={selfNote} onChange={e => setSelfNote(e.target.value)} rows={2}
+                  style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 13, boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => { setShowSelfReport(false); setSelfAmount(""); setSelfNote("") }} disabled={submitting}
+                    style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}>Cancel</button>
+                  <button onClick={() => handleMarkSubmitted(selfAmount, selfNote)} disabled={submitting}
+                    style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid var(--teal)", background: "var(--teal)", color: "#fff", cursor: submitting ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 700, fontFamily: "inherit", opacity: submitting ? 0.7 : 1 }}>
+                    {submitting ? "Marking…" : "Submit"}
+                  </button>
+                </div>
+              </div>
             ) : (
-              <button onClick={handleMarkSubmitted} disabled={submitting}
+              <button
+                onClick={() => { setShowSelfReport(true); setSelfAmount(seatsCost(event, myConfirmed.seats || 1)?.replace("$", "") || "") }}
+                disabled={submitting}
                 style={{ width: "100%", padding: "12px 0", background: "transparent", border: "1px solid var(--teal)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", color: "var(--teal)", opacity: submitting ? 0.7 : 1 }}>
-                {submitting ? "Marking…" : "I've Paid — Mark as Submitted"}
+                {computeIsPartial(myConfirmed) ? "I've Paid the Rest — Mark as Submitted" : "I've Paid — Mark as Submitted"}
               </button>
             )
           )}

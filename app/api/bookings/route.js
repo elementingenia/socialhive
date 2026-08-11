@@ -209,7 +209,14 @@ export async function PATCH(req) {
       .maybeSingle()
 
     if (!booking) return NextResponse.json({ error: 'No confirmed booking found' }, { status: 404 })
-    if (booking.payment_status !== 'pending') {
+    // 'partial' is allowed here too (2026-08-11 follow-up) -- a resident who
+    // paid part of what's owed needs a way to tell their EC they've now
+    // paid the rest (or an additional amount). This was previously
+    // blocked outright: mark_payment_submitted only accepted 'pending',
+    // so a partial payer had NO self-service way to report the balance --
+    // found by Iain asking directly how Scampi would do this, not by a
+    // bug report.
+    if (!['pending', 'partial'].includes(booking.payment_status)) {
       return NextResponse.json({ error: 'Payment is not awaiting submission' }, { status: 400 })
     }
 
