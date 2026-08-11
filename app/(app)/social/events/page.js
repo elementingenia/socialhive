@@ -1704,7 +1704,7 @@ export default function SocialEvents() {
 
     const { data: myBookings } = await supabase
       .from("bookings")
-      .select("id, event_id, status, seats, payment_status")
+      .select("id, event_id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at")
       .eq("member_id", member.id).neq("status", "cancelled")
 
     const byEvent = {}

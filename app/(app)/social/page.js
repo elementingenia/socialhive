@@ -348,7 +348,7 @@ export default function SocialHome() {
     const [eventsRes, myBookingsRes, hubRes] = await Promise.all([
       supabase
         .from("events")
-        .select("id, title, event_date, event_time, description, max_seats, cost, payment_required, has_bus, location_type, location, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, booked_at)")
+        .select("id, title, event_date, event_time, description, max_seats, cost, payment_required, has_bus, location_type, location, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, booked_at)")
         .eq("hub_type", "social").eq("archived", false)
         .gte("event_date", todayStr)
         .order("event_date", { ascending: true })
@@ -356,7 +356,7 @@ export default function SocialHome() {
         .limit(5),
       supabase
         .from("bookings")
-        .select("id, event_id, status, seats, payment_status, events(id, title, event_date, event_time, hub_type, payment_required, location_type, location)")
+        .select("id, event_id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, events(id, title, event_date, event_time, hub_type, payment_required, location_type, location)")
         .eq("member_id", member.id)
         .neq("status", "cancelled"),
       supabase.from("hub_settings").select("welcome_text").eq("hub_type", "social").single(),
@@ -400,7 +400,7 @@ export default function SocialHome() {
   async function openEventSlideOut(event) {
     const { data } = await supabase
       .from("events")
-      .select("*, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, members(name, username))")
+      .select("*, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, members(name, username))")
       .eq("id", event.id).single()
     if (!data) return
     // Bug fixed 2026-07-08: this query never derived my_bookings, so
