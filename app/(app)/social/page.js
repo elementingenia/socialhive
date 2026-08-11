@@ -9,7 +9,7 @@ import { bbToHtml } from "@/components/RichEditor"
 import { BusIcon } from "@/components/NavIcons"
 import { ContactBar } from "@/components/OwnersManager"
 import { FormattedText } from "@/lib/textFormatter"
-import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted } from "@/lib/payments"
+import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted, balancePhrase } from "@/lib/payments"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 
 const COLOUR = "var(--terracotta)"
@@ -191,12 +191,18 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
             const total = seatsCost(event, seats)
             const badge = bookingStatusBadge(myBooking, event)
             const statusWord = badge.label.toLowerCase() // "booked" or "confirmed" — never re-worded per screen
-            const submitted = badge.label !== "Confirmed" && computeIsSubmitted(myBooking)
+            // Partial (2026-08-11 follow-up) -- same balance-based fix as
+            // the Scheduled tab's card strip, see social/events/page.js.
+            const isPartialBooking = badge.label === "Partial"
+            const balance = isPartialBooking ? balancePhrase(myBooking, event, seats) : null
+            const submitted = badge.label !== "Confirmed" && !isPartialBooking && computeIsSubmitted(myBooking)
             const label = badge.label === "Confirmed"
               ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Paid " + total : ""}`
-              : submitted
-                ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${total ? " " + total : ""}`
-                : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Unpaid " + total : ""}`
+              : isPartialBooking
+                ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid ${balance}`
+                : submitted
+                  ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${total ? " " + total : ""}`
+                  : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Unpaid " + total : ""}`
             const pillBg = submitted ? "#f0fdfa" : badge.bg
             const pillColor = submitted ? "#0f766e" : badge.color
             return (
@@ -260,10 +266,13 @@ function MyBookingsCard({ bookings, onViewAll }) {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column" }}>
-          {sorted.slice(0, 3).map(({ events: ev, status, seats, payment_status }, i) => {
+          {sorted.slice(0, 3).map(({ events: ev, status, seats, payment_status, amount_paid }, i) => {
             const isWait = status === "waitlist"
             const n      = seats || 1
-            const badge  = bookingStatusBadge({ status, payment_status }, ev)
+            // amount_paid passed through (2026-08-12) so a partial booking with an
+            // unconfirmed claim on top still badges "Partial" here too, not just on
+            // the full Scheduled card -- see lib/payments.js's isPartial() comment.
+            const badge  = bookingStatusBadge({ status, payment_status, seats, amount_paid }, ev)
             return (
               <div key={ev?.id} style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -342,7 +351,7 @@ export default function SocialHome() {
     const [eventsRes, myBookingsRes, hubRes] = await Promise.all([
       supabase
         .from("events")
-        .select("id, title, event_date, event_time, description, max_seats, cost, payment_required, has_bus, location_type, location, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, booked_at)")
+        .select("id, title, event_date, event_time, description, max_seats, cost, payment_required, has_bus, location_type, location, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, booked_at)")
         .eq("hub_type", "social").eq("archived", false)
         .gte("event_date", todayStr)
         .order("event_date", { ascending: true })
@@ -350,7 +359,7 @@ export default function SocialHome() {
         .limit(5),
       supabase
         .from("bookings")
-        .select("id, event_id, status, seats, payment_status, events(id, title, event_date, event_time, hub_type, payment_required, location_type, location)")
+        .select("id, event_id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, events(id, title, event_date, event_time, hub_type, payment_required, location_type, location)")
         .eq("member_id", member.id)
         .neq("status", "cancelled"),
       supabase.from("hub_settings").select("welcome_text").eq("hub_type", "social").single(),
@@ -394,7 +403,7 @@ export default function SocialHome() {
   async function openEventSlideOut(event) {
     const { data } = await supabase
       .from("events")
-      .select("*, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, members(name, username))")
+      .select("*, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, members(name, username))")
       .eq("id", event.id).single()
     if (!data) return
     // Bug fixed 2026-07-08: this query never derived my_bookings, so

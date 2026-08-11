@@ -8,7 +8,7 @@ import { authedFetch } from "@/lib/getAuthToken"
 import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
-import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, sumUnpaidSeats, seatsCost, bookingStatusBadge } from "@/lib/payments"
+import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge, balancePhrase, remainingBalance, wholeDollar } from "@/lib/payments"
 import { byOwnThenName } from "@/lib/sortNames"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
 import { clubCaps, clubColour } from "@/lib/clubs"
@@ -440,33 +440,45 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event_id: event.id, ...body }),
     })
-    return res.ok
+    // Surface the server's real reason (e.g. the cancel-blocked-by-an-
+    // unresolved-payment-claim guard, 2026-08-12) instead of a generic
+    // failure -- same fix as PR #62's authedFetch migration for ClubHome,
+    // just not yet applied to this panel's own patchAction wrapper.
+    let error = null
+    if (!res.ok) {
+      try { error = (await res.json())?.error || null } catch { /* non-JSON error body */ }
+    }
+    return { ok: res.ok, error }
   }
 
   async function toggleRefund(booking) {
-    const isRefunded = booking.payment_status === "refunded"
-    const ok = await patchAction({ action: "set_refund", booking_id: booking.id, refunded: !isRefunded })
-    if (ok) { showToast(isRefunded ? "Refund mark removed" : "Refund marked"); load(); onRefresh() }
-    else showToast("Failed", "error")
+    // Renamed from "set_refund" 2026-08-11 -- see lib/payments.js's
+    // isRefundIssued/isRefundPending for the unified refund_due/
+    // refund_paid_at ledger this now writes to (covers overpayment refunds
+    // on active bookings too, not just a cancelled-and-was-paid booking).
+    const isIssued = !!booking.refund_paid_at || booking.payment_status === "refunded"
+    const { ok, error } = await patchAction({ action: "mark_refund_paid", booking_id: booking.id, refunded: !isIssued })
+    if (ok) { showToast(isIssued ? "Refund mark removed" : "Refund marked"); load(); onRefresh() }
+    else showToast(error || "Failed", "error")
   }
 
   async function toggleHasBook(booking) {
-    const ok = await patchAction({ action: "set_has_book", booking_id: booking.id, has_book: !booking.has_book })
+    const { ok, error } = await patchAction({ action: "set_has_book", booking_id: booking.id, has_book: !booking.has_book })
     if (ok) { showToast(booking.has_book ? "Marked as returned" : "Book marked as given out"); load(); onRefresh() }
-    else showToast("Failed to update", "error")
+    else showToast(error || "Failed to update", "error")
   }
 
   async function toggleNameHidden(booking) {
-    const ok = await patchAction({ action: "set_name_hidden", booking_id: booking.id, name_hidden: !booking.name_hidden })
+    const { ok, error } = await patchAction({ action: "set_name_hidden", booking_id: booking.id, name_hidden: !booking.name_hidden })
     if (ok) { showToast(booking.name_hidden ? "Name shown again" : "Name hidden"); load(); onRefresh() }
-    else showToast("Failed to update", "error")
+    else showToast(error || "Failed to update", "error")
   }
 
   async function cancelBooking(bookingId) {
     if (cancelling) return // ignore repeat taps while a request is already in flight
     setCancelling(true)
     try {
-      const ok = await patchAction({ action: "cancel_booking", booking_id: bookingId })
+      const { ok, error } = await patchAction({ action: "cancel_booking", booking_id: bookingId })
       if (ok) {
         // If member had a split booking, cancel remaining rows too. This used
         // to reference an undefined `token` here (patchAction() fetches its
@@ -481,7 +493,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         }
         showToast("Booking cancelled"); setCancelTarget(null); load(); onRefresh()
       }
-      else showToast("Failed to cancel", "error")
+      else showToast(error || "Failed to cancel", "error")
     } finally {
       setCancelling(false)
     }
@@ -589,7 +601,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
 
   async function saveField(field, value) {
     setSaving(true)
-    const ok = await patchAction({ action: "update_event", [field]: value })
+    const { ok } = await patchAction({ action: "update_event", [field]: value })
     setSaving(false)
     if (ok) {
       showToast("Saved")
@@ -921,6 +933,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
               // Payment info from first confirmed row (if any)
               const firstConf = confRows[0]
               const isPaid     = computeIsPaid(firstConf)
+              const isPartial  = computeIsPartial(firstConf, event)
               const isRefunded = computeIsRefunded(firstConf)
               // All booking IDs for this member (for bulk cancel)
               const allIds = [...confRows, ...waitRows].map(b => b.id)
@@ -962,15 +975,16 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                     </div>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                       {paymentRequired && confirmedSeats > 0 && firstConf && !isRefunded && (
-                        // Read-only now -- Paid/Unpaid is toggled from the Scheduled
-                        // tile's Attendees accordion (2026-07-12), not here, so there's
-                        // one editable control for this field, not two that can drift.
+                        // Read-only now -- Paid/Unpaid/Partial is recorded from the
+                        // Scheduled tile's Attendees accordion (2026-07-12), not here,
+                        // so there's one editable control for this field, not two
+                        // that can drift. "Partial" added 2026-08-11.
                         <span style={{
                           fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12,
-                          background: isPaid ? "#16a34a20" : "var(--surface)",
-                          color: isPaid ? "#16a34a" : "var(--text-dim)",
-                          border: `1px solid ${isPaid ? "#16a34a" : "var(--border)"}`,
-                        }}>{isPaid ? "Paid" : "Unpaid"}</span>
+                          background: isPaid ? "#16a34a20" : isPartial ? "#0369a120" : "var(--surface)",
+                          color: isPaid ? "#16a34a" : isPartial ? "#0369a1" : "var(--text-dim)",
+                          border: `1px solid ${isPaid ? "#16a34a" : isPartial ? "#0369a1" : "var(--border)"}`,
+                        }}>{isPaid ? "Paid" : isPartial ? `Partial · ${wholeDollar(firstConf?.amount_paid)}` : "Unpaid"}</span>
                       )}
                       {paymentRequired && confirmedSeats > 0 && firstConf && isRefunded && (
                         <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12,
@@ -1317,6 +1331,15 @@ function BookingSection({ event, onRefresh, onClose }) {
   const [seats, setSeats] = useState(1)
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  // Self-report amount/comment (2026-08-11 follow-up) -- a resident needs a
+  // way to say HOW MUCH they've paid, not just tap a blind "I've Paid"
+  // button, especially once they're already Partial and are now reporting
+  // the remaining balance. Pre-fills with the full amount owed (the common
+  // case: "I've now paid it all off"), editable down if they've only added
+  // a further partial amount.
+  const [showSelfReport, setShowSelfReport] = useState(false)
+  const [selfAmount, setSelfAmount] = useState("")
+  const [selfNote, setSelfNote] = useState("")
   const [toast, setToast] = useState(null)
   const [confirm, setConfirm] = useState(false)
   const [splitOffer, setSplitOffer] = useState(null)
@@ -1564,17 +1587,22 @@ function BookingSection({ event, onRefresh, onClose }) {
   // Idea 2 of the EC payment model (2026-07-12): resident self-flags they've
   // paid. Badge stays "Booked" -- this only adds secondary text/notification,
   // the EC still does the final confirm via the Paid/Unpaid toggle.
-  async function handleMarkSubmitted() {
+  async function handleMarkSubmitted(amount, note) {
     setSubmitting(true)
     try {
       const res = await authedFetch("/api/bookings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event_id: event.id, action: "mark_payment_submitted" }),
+        body: JSON.stringify({
+          event_id: event.id, action: "mark_payment_submitted",
+          ...(amount !== undefined && amount !== "" ? { amount } : {}),
+          ...(note ? { note } : {}),
+        }),
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Failed to mark as submitted", "error"); return }
       showToast("Marked as submitted — your Event Coordinator will confirm")
+      setShowSelfReport(false); setSelfAmount(""); setSelfNote("")
       onRefresh()
     } finally { setSubmitting(false) }
   }
@@ -1659,16 +1687,24 @@ function BookingSection({ event, onRefresh, onClose }) {
               const totalCost = seatsCost(event, seats)
               const badge = bookingStatusBadge(myConfirmed, event)
               const statusWord = badge.label.toLowerCase() // "booked" or "confirmed" — canonical, see lib/payments.js
-              const submitted = event.payment_required && badge.label !== "Confirmed" && computeIsSubmitted(myConfirmed)
+              // Partial (2026-08-11 follow-up, Iain -- Spring Ball): this is
+              // the detail-screen mirror of the Scheduled card's strip --
+              // same bug (re-showing the full amount as if nothing had been
+              // paid), same fix (show the actual remaining balance).
+              const isPartialBooking = event.payment_required && badge.label === "Partial"
+              const balance = isPartialBooking ? balancePhrase(myConfirmed, event, seats) : null
+              const submitted = event.payment_required && !isPartialBooking && badge.label !== "Confirmed" && computeIsSubmitted(myConfirmed)
               const label = event.payment_required
                 ? (badge.label === "Confirmed"
                     ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Paid${totalCost ? " " + totalCost : ""}`
-                    : submitted
-                      ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${totalCost ? " " + totalCost : ""}`
-                      : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid${totalCost ? " " + totalCost : ""}`)
+                    : isPartialBooking
+                      ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid ${balance}`
+                      : submitted
+                        ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${totalCost ? " " + totalCost : ""}`
+                        : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid${totalCost ? " " + totalCost : ""}`)
                 : `✓ ${seats} seat${seats !== 1 ? "s" : ""} confirmed`
               const colour = event.payment_required
-                ? (badge.label === "Confirmed" ? "var(--green)" : submitted ? "#0f766e" : "#d97706")
+                ? (badge.label === "Confirmed" ? "var(--green)" : isPartialBooking ? "#0369a1" : submitted ? "#0f766e" : "#d97706")
                 : "var(--green)"
               return <StatusPill label={label} colour={colour} />
             })()}
@@ -1707,11 +1743,54 @@ function BookingSection({ event, onRefresh, onClose }) {
               <div style={{ fontSize: 12, color: "var(--teal)", lineHeight: 1.4 }}>
                 🧾 Payment submitted — your Event Coordinator will confirm it shortly.
               </div>
-            ) : (
-              <button onClick={handleMarkSubmitted} disabled={submitting}
-                style={{ width: "100%", padding: "12px 0", background: "transparent", border: "1px solid var(--teal)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", color: "var(--teal)", opacity: submitting ? 0.7 : 1 }}>
-                {submitting ? "Marking…" : "I've Paid — Mark as Submitted"}
-              </button>
+            ) : showSelfReport ? (() => {
+              // Balance-based (2026-08-11 follow-up, Iain -- Spring Ball):
+              // pre-filled with the outstanding BALANCE, not the full
+              // amount owed -- on a fresh (nothing paid yet) booking the
+              // two are identical, but on a Partial booking the resident
+              // should see "$10" (what's left), not "$40" (the whole
+              // thing, as if their earlier $30 didn't happen).
+              const seats = myConfirmed.seats || 1
+              const balanceNum = remainingBalance(myConfirmed, event, seats)
+              const owedPhrase = seatsCost(event, seats)
+              const isPartialBooking = computeIsPartial(myConfirmed, event)
+              return (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, background: "var(--surface2)", borderRadius: 12 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 13, color: "var(--text-dim)" }}>Amount paid</span>
+                    <input type="number" min="0" step="1" value={selfAmount} onChange={e => setSelfAmount(e.target.value)}
+                      style={{ width: 100, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 14, boxSizing: "border-box", fontFamily: "inherit" }} />
+                    <span style={{ fontSize: 12, color: "var(--text-dim)" }}>of {wholeDollar(balanceNum)} balance</span>
+                  </div>
+                  {isPartialBooking && (
+                    <div style={{ fontSize: 12, color: "var(--text-dim)" }}>Completes {owedPhrase} total</div>
+                  )}
+                  <textarea placeholder="Comment (optional) — e.g. how or when you paid" value={selfNote} onChange={e => setSelfNote(e.target.value)} rows={2}
+                    style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 13, boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => { setShowSelfReport(false); setSelfAmount(""); setSelfNote("") }} disabled={submitting}
+                      style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", cursor: "pointer", fontSize: 13, fontWeight: 600, fontFamily: "inherit" }}>Cancel</button>
+                    <button onClick={() => handleMarkSubmitted(selfAmount, selfNote)} disabled={submitting}
+                      style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid var(--teal)", background: "var(--teal)", color: "#fff", cursor: submitting ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 700, fontFamily: "inherit", opacity: submitting ? 0.7 : 1 }}>
+                      {submitting ? "Marking…" : "Submit"}
+                    </button>
+                  </div>
+                </div>
+              )
+            })() : (
+              (() => {
+                const seats = myConfirmed.seats || 1
+                const isPartialBooking = computeIsPartial(myConfirmed, event)
+                const balanceNum = remainingBalance(myConfirmed, event, seats)
+                return (
+                  <button
+                    onClick={() => { setShowSelfReport(true); setSelfAmount(String(Math.round(balanceNum))) }}
+                    disabled={submitting}
+                    style={{ width: "100%", padding: "12px 0", background: "transparent", border: "1px solid var(--teal)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: submitting ? "not-allowed" : "pointer", color: "var(--teal)", opacity: submitting ? 0.7 : 1 }}>
+                    {isPartialBooking ? `I've Paid the ${wholeDollar(balanceNum)} Balance — Mark as Submitted` : "I've Paid — Mark as Submitted"}
+                  </button>
+                )
+              })()
             )
           )}
           {myConfirmed && !isBookclubEvent && !closed && (
