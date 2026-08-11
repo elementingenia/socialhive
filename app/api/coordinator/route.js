@@ -504,6 +504,19 @@ export async function PATCH(req) {
     // Fetch booking first so we know seats freed (for waitlist promotion) and who to notify
     const { data: bk } = await supa
       .from("bookings").select("status, seats, member_id, payment_status, amount_paid").eq("id", booking_id).maybeSingle()
+    // A 'submitted' claim is a resident's self-report, unconfirmed by design
+    // (2026-08-12, Iain -- found on Spring Ball 2: cancelling a booking never
+    // looks at payment_status = 'submitted' at all, only 'confirmed'/'partial',
+    // so an EC could cancel a booking sitting on a genuine but not-yet-reviewed
+    // payment claim and it would just vanish -- no refund_due, no trace,
+    // nothing left to reconcile against). Force the EC to confirm or knock the
+    // claim back to pending via the Paid toggle first, so the ledger never
+    // silently drops money that may actually have changed hands.
+    if (bk?.payment_status === "submitted") {
+      return NextResponse.json({
+        error: "This booking has a payment marked as submitted that hasn't been confirmed yet. Confirm or clear it via the Paid toggle before cancelling."
+      }, { status: 409 })
+    }
     const cancelPatch = { status: "cancelled", updated_at: new Date().toISOString() }
     // A booking that had money against it (fully paid OR partial) owes that
     // amount back the moment it's cancelled -- populate the refund ledger

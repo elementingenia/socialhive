@@ -440,7 +440,15 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event_id: event.id, ...body }),
     })
-    return res.ok
+    // Surface the server's real reason (e.g. the cancel-blocked-by-an-
+    // unresolved-payment-claim guard, 2026-08-12) instead of a generic
+    // failure -- same fix as PR #62's authedFetch migration for ClubHome,
+    // just not yet applied to this panel's own patchAction wrapper.
+    let error = null
+    if (!res.ok) {
+      try { error = (await res.json())?.error || null } catch { /* non-JSON error body */ }
+    }
+    return { ok: res.ok, error }
   }
 
   async function toggleRefund(booking) {
@@ -449,28 +457,28 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
     // refund_paid_at ledger this now writes to (covers overpayment refunds
     // on active bookings too, not just a cancelled-and-was-paid booking).
     const isIssued = !!booking.refund_paid_at || booking.payment_status === "refunded"
-    const ok = await patchAction({ action: "mark_refund_paid", booking_id: booking.id, refunded: !isIssued })
+    const { ok, error } = await patchAction({ action: "mark_refund_paid", booking_id: booking.id, refunded: !isIssued })
     if (ok) { showToast(isIssued ? "Refund mark removed" : "Refund marked"); load(); onRefresh() }
-    else showToast("Failed", "error")
+    else showToast(error || "Failed", "error")
   }
 
   async function toggleHasBook(booking) {
-    const ok = await patchAction({ action: "set_has_book", booking_id: booking.id, has_book: !booking.has_book })
+    const { ok, error } = await patchAction({ action: "set_has_book", booking_id: booking.id, has_book: !booking.has_book })
     if (ok) { showToast(booking.has_book ? "Marked as returned" : "Book marked as given out"); load(); onRefresh() }
-    else showToast("Failed to update", "error")
+    else showToast(error || "Failed to update", "error")
   }
 
   async function toggleNameHidden(booking) {
-    const ok = await patchAction({ action: "set_name_hidden", booking_id: booking.id, name_hidden: !booking.name_hidden })
+    const { ok, error } = await patchAction({ action: "set_name_hidden", booking_id: booking.id, name_hidden: !booking.name_hidden })
     if (ok) { showToast(booking.name_hidden ? "Name shown again" : "Name hidden"); load(); onRefresh() }
-    else showToast("Failed to update", "error")
+    else showToast(error || "Failed to update", "error")
   }
 
   async function cancelBooking(bookingId) {
     if (cancelling) return // ignore repeat taps while a request is already in flight
     setCancelling(true)
     try {
-      const ok = await patchAction({ action: "cancel_booking", booking_id: bookingId })
+      const { ok, error } = await patchAction({ action: "cancel_booking", booking_id: bookingId })
       if (ok) {
         // If member had a split booking, cancel remaining rows too. This used
         // to reference an undefined `token` here (patchAction() fetches its
@@ -485,7 +493,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         }
         showToast("Booking cancelled"); setCancelTarget(null); load(); onRefresh()
       }
-      else showToast("Failed to cancel", "error")
+      else showToast(error || "Failed to cancel", "error")
     } finally {
       setCancelling(false)
     }
@@ -593,7 +601,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
 
   async function saveField(field, value) {
     setSaving(true)
-    const ok = await patchAction({ action: "update_event", [field]: value })
+    const { ok } = await patchAction({ action: "update_event", [field]: value })
     setSaving(false)
     if (ok) {
       showToast("Saved")

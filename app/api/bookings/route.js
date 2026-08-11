@@ -400,6 +400,21 @@ export async function DELETE(req) {
     return NextResponse.json({ error: 'No active booking found' }, { status: 404 })
   }
 
+  // A 'submitted' claim is unresolved by definition -- the EC hasn't confirmed
+  // or rejected it yet (2026-08-12, Iain -- closing the gap found on Spring
+  // Ball 2: a cancel wiped an outstanding payment claim with no trace, because
+  // amount_paid only reflects EC-confirmed money and cancelling doesn't look
+  // at payment_notes/payment_submitted_at at all). Block self-cancel here too,
+  // not just the EC path -- the same silent-loss risk exists either side:
+  // cancelling before the claim is resolved means if the money genuinely
+  // changed hands, there is nothing left in the system to prove it or refund
+  // it. Ask the resident to wait for their EC to review it first.
+  if (myBookings.some(b => b.payment_status === 'submitted')) {
+    return NextResponse.json({
+      error: "You've reported a payment for this booking that your Event Coordinator hasn't confirmed yet. Please wait for them to review it before cancelling."
+    }, { status: 409 })
+  }
+
   // Same refund-ledger population as the EC-cancel path (app/api/coordinator
   // /route.js's cancel_booking, 2026-08-11) -- a self-cancel on a paid or
   // partially-paid booking owes that money back just as much as an
