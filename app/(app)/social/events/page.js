@@ -1362,7 +1362,6 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                     // on a Partial booking would double-count the $30
                     // already in) or the amount already paid (which would
                     // record it a second time).
-                    const owedNum = amountOwing(event, b.seats || 1)
                     const balanceNum = remainingBalance(b, event, b.seats || 1)
                     const isRecording = recordingId === b.id
                     return (
@@ -1376,14 +1375,17 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                           {canManagePayments && submitted && (
                             <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#0f766e", background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 8, padding: "0.05rem 0.35rem" }}>🧾 Submitted</span>
                           )}
-                          {/* "Partial" pill (2026-08-11) -- shows the actual amount
-                              recorded so far, not just a word, since that's the whole
-                              point of tracking an amount instead of a binary flag. */}
-                          {canManagePayments && partial && (
-                            <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#075985", background: "#e0f2fe", border: "1px solid #7dd3fc", borderRadius: 8, padding: "0.05rem 0.35rem" }}>
-                              {wholeDollar(b.amount_paid)} of {wholeDollar(owedNum)} paid
-                            </span>
-                          )}
+                          {/* "Partial" $-amount pill removed (2026-08-12, Iain --
+                              Spring Ball 2 live review): on a row that's ALSO showing
+                              the "Submitted" pill, the two together pushed the
+                              attendee's name off to the side / wrapped awkwardly --
+                              one pill too many for this row's width. The blue toggle
+                              track colour + "$X of $Y paid" in the amount-entry form
+                              (below, once opened) and the event-level Collected/
+                              Outstanding summary above already carry this
+                              information -- this pill was the only place showing it
+                              unconditionally in the collapsed row, so removing it is
+                              a pure declutter, not a loss of information. */}
                           <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
                           {canManagePayments && isPaidEvent && !paid && (() => {
                             const reminding = remindingId === b.id
