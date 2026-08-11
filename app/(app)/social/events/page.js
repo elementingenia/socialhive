@@ -1080,6 +1080,9 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
   const [recordingId, setRecordingId] = useState(null)
   const [recordAmount, setRecordAmount] = useState("")
   const [recordNote, setRecordNote] = useState("")
+  // Confirm-before-wipe for "Reset to unpaid" (2026-08-11 hotfix) -- see the
+  // bug this replaces, below.
+  const [resetConfirmId, setResetConfirmId] = useState(null)
   const today     = new Date(); today.setHours(0, 0, 0, 0)
   const evDate    = localDate(event.event_date)
   const isPast    = evDate < today
@@ -1370,26 +1373,31 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                           })()}
                           {canManagePayments && isPaidEvent && (() => {
                             const pending = togglingId === b.id
-                            // Reworked 2026-08-11: marking paid now opens the inline
-                            // amount/comment form below instead of firing the API
-                            // straight away -- the EC's real input is an amount, not
-                            // a flag (see the payments scope doc). Reverting an
-                            // already-paid/partial booking stays a one-tap correction,
-                            // no form -- nothing to explain when undoing a mistake.
                             const isSettled = paid || partial
+                            // Hotfix 2026-08-11 (real bug, live-caught: Iain marked
+                            // Scampi paid at $25/$40 with a comment, then a second tap
+                            // on this same switch -- previously an unconfirmed, instant
+                            // "revert to unpaid" -- silently wiped amount_paid back to 0
+                            // and dropped the booking back to Submitted, with no warning
+                            // and no way to get back to editing the $25. The switch now
+                            // ALWAYS opens the record-payment form, pre-filled with the
+                            // CURRENT amount_paid when there is one (so correcting a
+                            // partial payment starts from what's actually on file, not
+                            // the full amount owed) -- "reset to unpaid" is now a
+                            // separate, explicitly-confirmed action inside the form
+                            // (below), matching how every other destructive action in
+                            // this app requires a confirm step, not a bare toggle.
                             return (
                               <button
                                 disabled={pending}
                                 onClick={e => {
                                   e.stopPropagation(); e.preventDefault()
-                                  if (isSettled) { onTogglePayment(event.id, b) }
-                                  else {
-                                    setRecordingId(b.id)
-                                    setRecordAmount(owed ? owed.replace("$", "") : "")
-                                    setRecordNote("")
-                                  }
+                                  setRecordingId(b.id)
+                                  setRecordAmount(isSettled ? String(parseFloat(b.amount_paid) || 0) : (owed ? owed.replace("$", "") : ""))
+                                  setRecordNote("")
+                                  setResetConfirmId(null)
                                 }}
-                                role="switch" aria-checked={paid} aria-label={isSettled ? "Mark as unpaid" : "Record a payment"}
+                                role="switch" aria-checked={paid} aria-label={isSettled ? "Adjust recorded payment" : "Record a payment"}
                                 style={{
                                   display: "flex", alignItems: "center", gap: 5,
                                   border: "none", background: "none", padding: "0.15rem 0.1rem",
@@ -1434,12 +1442,37 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                               value={recordNote} onChange={e => setRecordNote(e.target.value)} rows={2}
                               style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: "0.78rem", boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
                             <div style={{ display: "flex", gap: "0.4rem" }}>
-                              <button onClick={() => { setRecordingId(null) }} style={{ flex: 1, padding: "0.35rem", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600, fontFamily: "inherit" }}>Cancel</button>
+                              <button onClick={() => { setRecordingId(null); setResetConfirmId(null) }} style={{ flex: 1, padding: "0.35rem", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600, fontFamily: "inherit" }}>Cancel</button>
                               <button
                                 disabled={togglingId === b.id || (recordAmount !== "" && parseFloat(recordAmount) !== parseFloat((owed || "$0").replace("$", "")) && !recordNote.trim())}
                                 onClick={() => { onTogglePayment(event.id, b, recordAmount, recordNote); setRecordingId(null) }}
                                 style={{ flex: 1, padding: "0.35rem", borderRadius: 8, border: "none", background: "var(--terracotta)", color: "#fff", cursor: "pointer", fontSize: "0.75rem", fontWeight: 700, fontFamily: "inherit" }}>Save</button>
                             </div>
+                            {/* Reset to unpaid -- explicit, confirmed, separate from Save
+                                (2026-08-11 hotfix). This is the only path that wipes
+                                amount_paid back to 0; it never happens as a side effect
+                                of tapping the switch anymore. */}
+                            {(paid || partial) && (
+                              resetConfirmId === b.id ? (
+                                <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.1rem" }}>
+                                  <span style={{ fontSize: "0.68rem", color: "var(--amber-dark)", flex: 1 }}>
+                                    Clear the ${(parseFloat(b.amount_paid) || 0).toFixed(2)} on file and mark unpaid?
+                                  </span>
+                                  <button onClick={() => setResetConfirmId(null)}
+                                    style={{ fontSize: "0.68rem", background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>No</button>
+                                  <button
+                                    onClick={() => { onTogglePayment(event.id, b); setResetConfirmId(null); setRecordingId(null) }}
+                                    style={{ fontSize: "0.68rem", fontWeight: 700, background: "none", border: "none", color: "var(--amber-dark)", cursor: "pointer", fontFamily: "inherit", padding: 0, textDecoration: "underline" }}>
+                                    Yes, reset
+                                  </button>
+                                </div>
+                              ) : (
+                                <button onClick={() => setResetConfirmId(b.id)}
+                                  style={{ fontSize: "0.68rem", color: "var(--text-dim)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0, textAlign: "left", textDecoration: "underline" }}>
+                                  Reset to unpaid
+                                </button>
+                              )
+                            )}
                           </div>
                         )}
                         {(() => {
