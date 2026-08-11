@@ -64,6 +64,18 @@ ok2(isPartial({ payment_status: 'partial' }) === true, 'partial status detected'
 ok2(isPartial({ payment_status: 'confirmed' }) === false, 'confirmed is not partial')
 ok2(isPaid({ payment_status: 'partial' }) === false, 'partial never counts as paid -- isPaid stays strict')
 
+// ── isPartial(booking, event): survives a 'submitted' claim on top of an
+// already-partial booking (2026-08-12, Spring Ball 1) ────────────────────────
+const partialEventFor30 = { payment_required: true, cost: 40 }
+ok2(isPartial({ payment_status: 'submitted', amount_paid: 25, seats: 1 }, partialEventFor30) === true,
+  'submitted claim on top of a $25/$40 partial booking still reads as partial when event is supplied')
+ok2(isPartial({ payment_status: 'submitted', amount_paid: 0, seats: 1 }, partialEventFor30) === false,
+  'a fresh submitted claim with $0 on file (no prior partial payment) is NOT partial')
+ok2(isPartial({ payment_status: 'submitted', amount_paid: 40, seats: 1 }, partialEventFor30) === false,
+  'submitted claim that already fully covers the amount owed is not partial (would be Confirmed once an EC accepts it)')
+ok2(isPartial({ payment_status: 'submitted', amount_paid: 25, seats: 1 }) === false,
+  'without an event argument, falls back to the old literal-status-only check (backward compatible)')
+
 // ── bookingStatusBadge: "Partial" is the one addition to the closed set ─────
 const paidEventBadge = { payment_required: true, cost: 25 }
 ok2(bookingStatusBadge({ status: 'confirmed', payment_status: 'partial' }, paidEventBadge).label === 'Partial', 'partial booking => "Partial" badge')

@@ -1338,8 +1338,21 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                       : (isPrivate && !isAdmin) ? "Resident"
                       : (b.member?.name || b.member?.username || b.contact?.name || "Member")
                     const paid = computeIsPaid(b)
-                    const partial = computeIsPartial(b)
-                    const submitted = !paid && !partial && computeIsSubmitted(b)
+                    // Pass `event` through (2026-08-12, Iain -- Spring Ball 1):
+                    // a self-report on top of an already-partial booking flips
+                    // payment_status to 'submitted' for the new unconfirmed
+                    // claim, but the EC-confirmed amount_paid underneath is
+                    // still partial money -- see lib/payments.js's isPartial()
+                    // comment. Without this the toggle/pill fell back to plain
+                    // amber "Unpaid" the instant a resident submitted a
+                    // balance, hiding the fact there was already money in.
+                    const partial = computeIsPartial(b, event)
+                    // No longer gated on !partial (2026-08-12) -- the two can
+                    // now genuinely coexist (confirmed partial amount + a new
+                    // unconfirmed claim sitting on top of it), and an EC should
+                    // see both: the amount already on file AND that there's a
+                    // fresh submission waiting on their review.
+                    const submitted = !paid && computeIsSubmitted(b)
                     const owed = seatsCost(event, b.seats || 1)
                     // Balance-based (2026-08-11 follow-up, Iain -- Spring
                     // Ball) -- the record form's amount input is what the

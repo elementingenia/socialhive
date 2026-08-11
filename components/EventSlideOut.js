@@ -933,7 +933,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
               // Payment info from first confirmed row (if any)
               const firstConf = confRows[0]
               const isPaid     = computeIsPaid(firstConf)
-              const isPartial  = computeIsPartial(firstConf)
+              const isPartial  = computeIsPartial(firstConf, event)
               const isRefunded = computeIsRefunded(firstConf)
               // All booking IDs for this member (for bulk cancel)
               const allIds = [...confRows, ...waitRows].map(b => b.id)
@@ -1753,7 +1753,7 @@ function BookingSection({ event, onRefresh, onClose }) {
               const seats = myConfirmed.seats || 1
               const balanceNum = remainingBalance(myConfirmed, event, seats)
               const owedPhrase = seatsCost(event, seats)
-              const isPartialBooking = computeIsPartial(myConfirmed)
+              const isPartialBooking = computeIsPartial(myConfirmed, event)
               return (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, background: "var(--surface2)", borderRadius: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -1780,7 +1780,7 @@ function BookingSection({ event, onRefresh, onClose }) {
             })() : (
               (() => {
                 const seats = myConfirmed.seats || 1
-                const isPartialBooking = computeIsPartial(myConfirmed)
+                const isPartialBooking = computeIsPartial(myConfirmed, event)
                 const balanceNum = remainingBalance(myConfirmed, event, seats)
                 return (
                   <button

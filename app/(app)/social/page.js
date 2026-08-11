@@ -266,10 +266,13 @@ function MyBookingsCard({ bookings, onViewAll }) {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column" }}>
-          {sorted.slice(0, 3).map(({ events: ev, status, seats, payment_status }, i) => {
+          {sorted.slice(0, 3).map(({ events: ev, status, seats, payment_status, amount_paid }, i) => {
             const isWait = status === "waitlist"
             const n      = seats || 1
-            const badge  = bookingStatusBadge({ status, payment_status }, ev)
+            // amount_paid passed through (2026-08-12) so a partial booking with an
+            // unconfirmed claim on top still badges "Partial" here too, not just on
+            // the full Scheduled card -- see lib/payments.js's isPartial() comment.
+            const badge  = bookingStatusBadge({ status, payment_status, seats, amount_paid }, ev)
             return (
               <div key={ev?.id} style={{
                 display: "flex", alignItems: "center", justifyContent: "space-between",
