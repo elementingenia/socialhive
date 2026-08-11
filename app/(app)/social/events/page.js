@@ -9,7 +9,7 @@ import { BusIcon } from "@/components/NavIcons"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import EventImagePicker from "@/components/EventImagePicker"
 import ExpandableText from "@/components/ExpandableText"
-import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, paymentSummary, reconciliationIsStale } from "@/lib/payments"
+import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, isRefundPending, isRefundIssued, paymentSummary, reconciliationIsStale } from "@/lib/payments"
 import { cutoffToInputValue, cutoffFromInputValue } from "@/lib/booking"
 import { useLocations } from "@/lib/useLocations"
 import TimeField from "@/components/TimeField"
@@ -1069,6 +1069,17 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, onTogglePayment, togglingId, onCloseOutPayments, closingOut, onRemindPayment, remindingId, onToggleRefund, togglingRefundId }) {
   const { member } = useUser()
   const [showAttendees, setShowAttendees] = useState(false)
+  // Inline "record a payment" mini-form (2026-08-11) -- replaces the old
+  // blind Paid/Unpaid toggle. Marking someone paid now asks for the amount
+  // actually received (pre-filled with what's owed) and an optional
+  // comment, rather than firing the API the instant the switch is tapped --
+  // that's the whole point of this scope (see the payments scope doc):
+  // the EC's real input is an amount, not a binary flag. Reverting an
+  // already-paid/partial booking back to unpaid is still a one-tap
+  // correction with no form -- nothing to explain when undoing a mistake.
+  const [recordingId, setRecordingId] = useState(null)
+  const [recordAmount, setRecordAmount] = useState("")
+  const [recordNote, setRecordNote] = useState("")
   const today     = new Date(); today.setHours(0, 0, 0, 0)
   const evDate    = localDate(event.event_date)
   const isPast    = evDate < today
@@ -1093,8 +1104,14 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
   // panel, which had this and Social never did. event.bookings already
   // includes cancelled rows (the nested select has no status filter);
   // confirmedBookings/waitlistBookings above just never looked at them.
-  const refundPendingBookings = (event.bookings?.filter(b => b.status === "cancelled" && b.payment_status === "confirmed") || []).sort(bySelfFirst)
-  const refundIssuedBookings  = (event.bookings?.filter(b => b.status === "cancelled" && b.payment_status === "refunded") || []).sort(bySelfFirst)
+  // Unified refund ledger (2026-08-11) -- covers a cancelled-and-was-paid
+  // booking AND an overpayment refund still sitting on an ACTIVE booking
+  // (that booking was never cancelled, the excess payment is what's owed
+  // back). isRefundPending/isRefundIssued in lib/payments.js also
+  // recognise the old payment_status='refunded' marker for backward
+  // compatibility with rows written before this ledger existed.
+  const refundPendingBookings = (event.bookings?.filter(isRefundPending) || []).sort(bySelfFirst)
+  const refundIssuedBookings  = (event.bookings?.filter(b => b.status === "cancelled" && isRefundIssued(b)) || []).sort(bySelfFirst)
   const booked  = confirmedBookings.reduce((s, b) => s + (b.seats || 1), 0)
   const waiting = waitlistBookings.length
   const showNames = event.show_attendee_names !== false
@@ -1272,6 +1289,11 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                       🧾 {summary.submittedCount} of these marked payment submitted — check and confirm below
                     </div>
                   )}
+                  {summary.partialCount > 0 && (
+                    <div style={{ fontSize: "0.68rem", color: "#075985", marginBottom: "0.5rem" }}>
+                      {summary.partialCount} partial payment{summary.partialCount !== 1 ? "s" : ""} (${summary.partialTotal.toFixed(2)} received so far) — still short of the full amount
+                    </div>
+                  )}
                   {summary.unpaidCount > 0 && (
                     <button
                       disabled={closingOut}
@@ -1304,7 +1326,10 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                       : (isPrivate && !isAdmin) ? "Resident"
                       : (b.member?.name || b.member?.username || b.contact?.name || "Member")
                     const paid = computeIsPaid(b)
-                    const submitted = !paid && computeIsSubmitted(b)
+                    const partial = computeIsPartial(b)
+                    const submitted = !paid && !partial && computeIsSubmitted(b)
+                    const owed = seatsCost(event, b.seats || 1)
+                    const isRecording = recordingId === b.id
                     return (
                       <div key={i} style={{ padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", gap: "0.5rem" }}>
@@ -1315,6 +1340,14 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                         <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
                           {canManagePayments && submitted && (
                             <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#0f766e", background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 8, padding: "0.05rem 0.35rem" }}>🧾 Submitted</span>
+                          )}
+                          {/* "Partial" pill (2026-08-11) -- shows the actual amount
+                              recorded so far, not just a word, since that's the whole
+                              point of tracking an amount instead of a binary flag. */}
+                          {canManagePayments && partial && (
+                            <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#075985", background: "#e0f2fe", border: "1px solid #7dd3fc", borderRadius: 8, padding: "0.05rem 0.35rem" }}>
+                              ${(parseFloat(b.amount_paid) || 0).toFixed(2)} of {owed}
+                            </span>
                           )}
                           <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
                           {canManagePayments && isPaidEvent && !paid && (() => {
@@ -1337,11 +1370,26 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                           })()}
                           {canManagePayments && isPaidEvent && (() => {
                             const pending = togglingId === b.id
+                            // Reworked 2026-08-11: marking paid now opens the inline
+                            // amount/comment form below instead of firing the API
+                            // straight away -- the EC's real input is an amount, not
+                            // a flag (see the payments scope doc). Reverting an
+                            // already-paid/partial booking stays a one-tap correction,
+                            // no form -- nothing to explain when undoing a mistake.
+                            const isSettled = paid || partial
                             return (
                               <button
                                 disabled={pending}
-                                onClick={e => { e.stopPropagation(); e.preventDefault(); onTogglePayment(event.id, b) }}
-                                role="switch" aria-checked={paid} aria-label={paid ? "Mark as unpaid" : "Mark as paid"}
+                                onClick={e => {
+                                  e.stopPropagation(); e.preventDefault()
+                                  if (isSettled) { onTogglePayment(event.id, b) }
+                                  else {
+                                    setRecordingId(b.id)
+                                    setRecordAmount(owed ? owed.replace("$", "") : "")
+                                    setRecordNote("")
+                                  }
+                                }}
+                                role="switch" aria-checked={paid} aria-label={isSettled ? "Mark as unpaid" : "Record a payment"}
                                 style={{
                                   display: "flex", alignItems: "center", gap: 5,
                                   border: "none", background: "none", padding: "0.15rem 0.1rem",
@@ -1352,23 +1400,48 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                                     reads as an actionable switch rather than a status badge
                                     (Iain, 2026-07-12 -- the plain colour pill wasn't clearly
                                     tappable). */}
-                                <span style={{ fontSize: "0.62rem", fontWeight: 700, color: !paid ? "var(--amber-dark)" : "var(--text-dim)" }}>Unpaid</span>
+                                <span style={{ fontSize: "0.62rem", fontWeight: 700, color: !isSettled ? "var(--amber-dark)" : "var(--text-dim)" }}>Unpaid</span>
                                 <span style={{
                                   width: 32, height: 18, borderRadius: 9, position: "relative", flexShrink: 0,
-                                  background: paid ? "var(--green)" : "var(--amber)", transition: "background 0.15s",
+                                  background: paid ? "var(--green)" : partial ? "#0369a1" : "var(--amber)", transition: "background 0.15s",
                                 }}>
                                   <span style={{
-                                    position: "absolute", top: 2, left: paid ? 16 : 2,
+                                    position: "absolute", top: 2, left: isSettled ? 16 : 2,
                                     width: 14, height: 14, borderRadius: "50%", background: "#fff",
                                     transition: "left 0.15s", boxShadow: "0 1px 2px rgba(0,0,0,.25)",
                                   }} />
                                 </span>
-                                <span style={{ fontSize: "0.62rem", fontWeight: 700, color: paid ? "var(--green)" : "var(--text-dim)" }}>Paid</span>
+                                <span style={{ fontSize: "0.62rem", fontWeight: 700, color: isSettled ? (paid ? "var(--green)" : "#0369a1") : "var(--text-dim)" }}>Paid</span>
                               </button>
                             )
                           })()}
                         </span>
                         </div>
+                        {/* Inline record-payment form (2026-08-11) -- amount
+                            pre-filled with the full amount owed (editable down for
+                            a short payment or up for an overpayment), comment
+                            optional. The server derives Partial/Confirmed from the
+                            amount -- this never sends a status directly. */}
+                        {canManagePayments && isRecording && (
+                          <div onClick={e => e.stopPropagation()} style={{ marginTop: "0.4rem", padding: "0.5rem", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                              <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Amount received</span>
+                              <input type="number" min="0" step="0.01" value={recordAmount} onChange={e => setRecordAmount(e.target.value)}
+                                style={{ width: 90, padding: "0.3rem 0.5rem", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: "0.8rem", boxSizing: "border-box", fontFamily: "inherit" }} />
+                              <span style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>of {owed}</span>
+                            </div>
+                            <textarea placeholder={parseFloat(recordAmount) !== parseFloat((owed || "$0").replace("$", "")) ? "Comment (required — amount doesn't match what's owed)" : "Comment (optional)"}
+                              value={recordNote} onChange={e => setRecordNote(e.target.value)} rows={2}
+                              style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: "0.78rem", boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
+                            <div style={{ display: "flex", gap: "0.4rem" }}>
+                              <button onClick={() => { setRecordingId(null) }} style={{ flex: 1, padding: "0.35rem", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600, fontFamily: "inherit" }}>Cancel</button>
+                              <button
+                                disabled={togglingId === b.id || (recordAmount !== "" && parseFloat(recordAmount) !== parseFloat((owed || "$0").replace("$", "")) && !recordNote.trim())}
+                                onClick={() => { onTogglePayment(event.id, b, recordAmount, recordNote); setRecordingId(null) }}
+                                style={{ flex: 1, padding: "0.35rem", borderRadius: 8, border: "none", background: "var(--terracotta)", color: "#fff", cursor: "pointer", fontSize: "0.75rem", fontWeight: 700, fontFamily: "inherit" }}>Save</button>
+                            </div>
+                          </div>
+                        )}
                         {(() => {
                           const ownerKey = b.member_id ? `m:${b.member_id}` : b.contact_id ? `c:${b.contact_id}` : null
                           const party = ownerKey ? (partyByOwner[ownerKey] || []) : []
@@ -1532,7 +1605,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, member_id, contact_id, booked_at, updated_at, member:members!member_id(id, name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, member:members!member_id(name, hide_name), contact:contacts!contact_id(name))")
+      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, contact_id, booked_at, updated_at, member:members!member_id(id, name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, member:members!member_id(name, hide_name), contact:contacts!contact_id(name))")
       .eq("hub_type", "social")
       .eq("archived", false)
       .order("event_date", { ascending: true })
@@ -1572,19 +1645,31 @@ export default function SocialEvents() {
   // Iain) -- moved here from EventSlideOut's Coordinator View so an EC can
   // mark payment without opening the full modal, which is now read-only
   // status there. Same /api/coordinator set_payment action underneath.
-  async function handleTogglePayment(eventId, booking) {
+  // Reworked 2026-08-11 -- amount/note are optional, only sent when the EC
+  // used the inline record-payment form (a plain revert-to-unpaid still
+  // calls this with neither). "confirmed" is always what's SENT; the
+  // server derives the real resulting status (partial/confirmed) from the
+  // amount -- this function never has to know that logic itself.
+  async function handleTogglePayment(eventId, booking, amount, note) {
     if (togglingId) return // ignore taps while one is already in flight
     if (!session) { showToast("Session expired -- please refresh the page", "error"); return }
-    const next = booking.payment_status === "confirmed" ? "pending" : "confirmed"
+    const isSettled = booking.payment_status === "confirmed" || booking.payment_status === "partial"
+    const next = isSettled ? "pending" : "confirmed"
     setTogglingId(booking.id)
     try {
       const res = await fetch("/api/coordinator", {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await getAuthToken()) },
-        body: JSON.stringify({ event_id: eventId, action: "set_payment", booking_id: booking.id, payment_status: next }),
+        body: JSON.stringify({
+          event_id: eventId, action: "set_payment", booking_id: booking.id, payment_status: next,
+          ...(next === "confirmed" ? { amount: amount === "" ? undefined : amount, note: note || undefined } : {}),
+        }),
       })
       if (res.ok) {
-        showToast(next === "confirmed" ? "Marked as paid" : "Marked as unpaid")
+        const data = await res.json().catch(() => ({}))
+        const resultLabel = data.payment_status === "partial" ? "Partial payment recorded"
+          : data.payment_status === "confirmed" ? "Marked as paid" : "Marked as unpaid"
+        showToast(resultLabel)
         await load()
       } else {
         let msg = "Update failed"
@@ -1666,7 +1751,7 @@ export default function SocialEvents() {
       const res = await fetch("/api/coordinator", {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await getAuthToken()) },
-        body: JSON.stringify({ event_id: eventId, action: "set_refund", booking_id: booking.id, refunded: !currentlyRefunded }),
+        body: JSON.stringify({ event_id: eventId, action: "mark_refund_paid", booking_id: booking.id, refunded: !currentlyRefunded }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok) {

@@ -7,6 +7,7 @@ import { validateParty, validateBring, resolveBringCategoryIds } from '@/lib/att
 import { fetchTakenResidentIds } from '@/lib/takenResidents'
 import { syncAttendees } from '@/lib/syncAttendees'
 import { maxSeatsPerBooking, planSeatModification } from '@/lib/modifyBooking'
+import { amountOwing } from '@/lib/payments'
 
 
 async function getMember(token) {
@@ -195,8 +196,15 @@ export async function PATCH(req) {
   // confirmation (idea 2 of the EC payment model, 2026-07-12). Does not
   // touch seats -- separate branch, returns early.
   if (action === 'mark_payment_submitted') {
+    // amount/note (2026-08-11): a resident can say how much they actually
+    // paid and add a note ("paid $40, will bring the rest Saturday") when
+    // self-reporting -- same shape as the EC's own record-a-payment flow
+    // (app/api/coordinator/route.js's set_payment), just on the other side
+    // of the transaction. Both optional -- blank amount defaults to the
+    // full amount owed, same as before this field existed.
+    const { amount: rawAmount, note } = body
     const { data: booking } = await supabaseAdmin
-      .from('bookings').select('id, payment_status, seats')
+      .from('bookings').select('id, payment_status, seats, payment_notes')
       .eq('event_id', event_id).eq('member_id', member.id).eq('status', 'confirmed')
       .maybeSingle()
 
@@ -205,20 +213,27 @@ export async function PATCH(req) {
       return NextResponse.json({ error: 'Payment is not awaiting submission' }, { status: 400 })
     }
 
-    const { error: markErr } = await supabaseAdmin
-      .from('bookings').update({
-        payment_status: 'submitted', updated_at: new Date().toISOString(),
-        // Independent of payment_status (migration 076) -- lets an EC's
-        // later Paid -> Unpaid toggle restore 'submitted' instead of
-        // blindly wiping to 'pending', which would silently discard the
-        // resident's own self-report (Iain, 2026-08-04).
-        payment_submitted_at: new Date().toISOString(),
-      }).eq('id', booking.id)
-    if (markErr) return NextResponse.json({ error: markErr.message }, { status: 500 })
-
     const { data: event } = await supabaseAdmin
       .from('events').select('title, cost').eq('id', event_id).single()
-    const owed = event?.cost ? (parseFloat(event.cost) * (booking.seats || 1)).toFixed(2) : null
+    const owed = amountOwing(event, booking.seats)
+    const amountPaid = (rawAmount !== undefined && rawAmount !== null && rawAmount !== '')
+      ? Math.max(0, parseFloat(rawAmount) || 0) : owed
+
+    const patch = {
+      payment_status: 'submitted', updated_at: new Date().toISOString(),
+      // Independent of payment_status (migration 076) -- lets an EC's
+      // later Paid -> Unpaid toggle restore 'submitted' instead of
+      // blindly wiping to 'pending', which would silently discard the
+      // resident's own self-report (Iain, 2026-08-04).
+      payment_submitted_at: new Date().toISOString(),
+      amount_paid: amountPaid,
+    }
+    if (note) {
+      patch.payment_notes = [...(booking.payment_notes || []),
+        { amount: amountPaid, note, recorded_by: member.id, recorded_at: new Date().toISOString() }]
+    }
+    const { error: markErr } = await supabaseAdmin.from('bookings').update(patch).eq('id', booking.id)
+    if (markErr) return NextResponse.json({ error: markErr.message }, { status: 500 })
 
     // Notify this event's active coordinators + all admins so someone
     // knows to check and confirm -- mirrors resolveEC's authority set in
@@ -228,7 +243,11 @@ export async function PATCH(req) {
     const { data: admins } = await supabaseAdmin.from('members').select('id').eq('is_admin', true)
     const notifyIds = new Set([...(ecRows || []).map(r => r.member_id), ...(admins || []).map(a => a.id)])
 
-    const msg = `${member.name || 'A resident'} marked payment${owed ? ` ($${owed})` : ''} as submitted for ${event?.title || 'this event'} — please confirm.`
+    const owedStr = `$${owed.toFixed(2)}`
+    const paidStr = `$${amountPaid.toFixed(2)}`
+    const amountPhrase = amountPaid < owed ? `${paidStr} of ${owedStr}` : paidStr
+    let msg = `${member.name || 'A resident'} marked payment (${amountPhrase}) as submitted for ${event?.title || 'this event'} — please confirm.`
+    if (note) msg += ` Note: ${note}`
     for (const id of notifyIds) {
       // actorId guard (Iain, 2026-07-24): if the resident marking their own
       // payment as submitted is also an admin or this event's coordinator --
@@ -350,14 +369,28 @@ export async function DELETE(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: myBookings } = await supabaseAdmin
-    .from('bookings').select('id, status, seats')
+    .from('bookings').select('id, status, seats, payment_status, amount_paid')
     .eq('event_id', event_id).eq('member_id', member.id).neq('status', 'cancelled')
 
   if (!myBookings?.length) {
     return NextResponse.json({ error: 'No active booking found' }, { status: 404 })
   }
 
-  await supabaseAdmin.from('bookings').update({ status: 'cancelled', updated_at: new Date().toISOString() }).in('id', myBookings.map(b => b.id))
+  // Same refund-ledger population as the EC-cancel path (app/api/coordinator
+  // /route.js's cancel_booking, 2026-08-11) -- a self-cancel on a paid or
+  // partially-paid booking owes that money back just as much as an
+  // EC-initiated one does. Applied per-row since a split confirmed+waitlist
+  // booking can have payment on the confirmed row only.
+  const now = new Date().toISOString()
+  for (const b of myBookings) {
+    const alreadyPaid = parseFloat(b.amount_paid) || 0
+    const patch = { status: 'cancelled', updated_at: now }
+    if ((b.payment_status === 'confirmed' || b.payment_status === 'partial') && alreadyPaid > 0) {
+      patch.refund_due = alreadyPaid
+      patch.refund_paid_at = null
+    }
+    await supabaseAdmin.from('bookings').update(patch).eq('id', b.id)
+  }
 
   await supabaseAdmin.from('booking_attendees').delete().eq('event_id', event_id).eq('owner_id', member.id)
 

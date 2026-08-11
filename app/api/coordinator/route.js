@@ -8,6 +8,7 @@ import { fetchTakenResidentIds } from "@/lib/takenResidents"
 import { syncAttendees } from "@/lib/syncAttendees"
 import { maxSeatsPerBooking, planSeatModification } from "@/lib/modifyBooking"
 import { requireEventManage } from "@/lib/areaAuth"
+import { amountOwing, derivePaymentStatus } from "@/lib/payments"
 
 // force-dynamic + the shared no-store supabaseAdmin (lib/supabaseAdmin.js) keep
 // this GET route reading LIVE data. Without it, Next's fetch cache once dropped a
@@ -34,7 +35,7 @@ export async function GET(req) {
   // Fetch active bookings for the event
   const { data: activeBookings, error: be } = await supa
     .from("bookings")
-    .select("id, seats, status, payment_status, has_book, book_given_at, name_hidden, booked_at, bring_note, member_id, contact_id, members(id, name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
+    .select("id, seats, status, payment_status, amount_paid, refund_due, refund_paid_at, has_book, book_given_at, name_hidden, booked_at, bring_note, member_id, contact_id, members(id, name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
     .eq("event_id", eventId)
     .neq("status", "cancelled")
     .order("booked_at")
@@ -44,7 +45,7 @@ export async function GET(req) {
   // Also fetch cancelled bookings that have payment info (refund pending or issued)
   const { data: cancelledPayments } = await supa
     .from("bookings")
-    .select("id, seats, status, payment_status, has_book, book_given_at, name_hidden, booked_at, bring_note, member_id, contact_id, members(id, name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
+    .select("id, seats, status, payment_status, amount_paid, refund_due, refund_paid_at, has_book, book_given_at, name_hidden, booked_at, bring_note, member_id, contact_id, members(id, name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
     .eq("event_id", eventId)
     .eq("status", "cancelled")
     .in("payment_status", ["confirmed", "refunded"])
@@ -62,8 +63,18 @@ export async function GET(req) {
     .order("book_given_at")
 
   const bookings = activeBookings || []
-  const refundPending  = (cancelledPayments || []).filter(b => b.payment_status === "confirmed")
-  const refundIssued   = (cancelledPayments || []).filter(b => b.payment_status === "refunded")
+  // Unified refund ledger (2026-08-11) -- refund_due/refund_paid_at covers
+  // BOTH sources: a cancelled booking that had been paid (still selected
+  // above via the old payment_status IN ('confirmed','refunded') filter,
+  // which also catches every pre-migration row the backfill populated),
+  // and an overpayment on a still-ACTIVE confirmed booking (bookings, not
+  // cancelledPayments -- the booking itself never got cancelled). See
+  // lib/payments.js's isRefundPending/isRefundIssued for the shared
+  // backward-compat-aware check.
+  const activeOverpaid = bookings.filter(b => (parseFloat(b.refund_due) || 0) > 0)
+  const refundPending  = [...activeOverpaid, ...(cancelledPayments || [])]
+    .filter(b => (parseFloat(b.refund_due) || 0) > 0 && !b.refund_paid_at && b.payment_status !== "refunded")
+  const refundIssued   = (cancelledPayments || []).filter(b => b.refund_paid_at || b.payment_status === "refunded")
   const cancelledBookOut = cancelledWithBook || []
 
   // Fetch EC notes for the event
@@ -117,32 +128,81 @@ export async function PATCH(req) {
   const { error, status, member } = await resolveEC(req, event_id)
   if (error) return NextResponse.json({ error }, { status })
 
-  // ── Toggle payment status on a booking ──────────────────────────────────────
+  // ── Record a payment on a booking ─────────────────────────────────────────
+  // Reworked 2026-08-11 (see Partial_Payment_Scope_Document_v2) -- the EC's
+  // real input is now an AMOUNT, not a status. "Mark Paid" from the UI
+  // sends payment_status: "confirmed" with the amount actually received
+  // (defaults to the full amount owed if omitted, so the old "just flip it
+  // to confirmed" call sites -- e.g. any cached client -- still work); the
+  // status is DERIVED from that amount (lib/payments.js's
+  // derivePaymentStatus), never trusted as-is, so a short amount lands on
+  // 'partial' and an amount over what's owed still lands on 'confirmed'
+  // with the excess pushed into the refund ledger (refund_due), never a
+  // distinct "overpaid" status (Iain's explicit call -- "Partial" only
+  // ever means short). "Mark Unpaid" (payment_status: "pending") stays a
+  // plain correction with no amount, exactly as before.
   if (action === "set_payment" && booking_id) {
     if (!["not_required", "pending", "submitted", "confirmed", "refunded"].includes(payment_status)) {
       return NextResponse.json({ error: "Invalid payment_status" }, { status: 400 })
     }
-    // Fetch previous state first so we only notify on an actual Pending -> Confirmed
-    // transition, not every toggle (e.g. Confirmed -> Pending if corrected by mistake)
+    const { amount: rawAmount, note } = body
+    // Fetch previous state first so we only notify on an actual transition,
+    // not every toggle (e.g. Confirmed -> Pending if corrected by mistake).
     const { data: prevBk } = await supa
-      .from("bookings").select("payment_status, member_id, payment_submitted_at").eq("id", booking_id).maybeSingle()
-    // An EC un-confirming payment (-> "pending") must not silently discard a
-    // resident's own "I've Paid" self-report -- restore 'submitted' instead
-    // when one is on record (migration 076). Only applies to the "pending"
-    // direction; an explicit refund/not_required/etc is left as sent (Iain,
-    // 2026-08-04: "the setting back on my booking reverts to unpaid as well,
-    // but SHOULD remain as I set it, which was I've Paid").
-    const effectiveStatus = (payment_status === "pending" && prevBk?.payment_submitted_at)
-      ? "submitted" : payment_status
+      .from("bookings").select("payment_status, member_id, seats, payment_submitted_at, payment_notes")
+      .eq("id", booking_id).maybeSingle()
+    if (!prevBk) return NextResponse.json({ error: "Booking not found" }, { status: 404 })
+
+    let patch, effectiveStatus, refundDelta = 0, owed = 0
+    if (payment_status === "confirmed") {
+      const { data: ev } = await supa.from("events").select("cost").eq("id", event_id).single()
+      owed = amountOwing(ev, prevBk.seats)
+      const amountPaid = (rawAmount !== undefined && rawAmount !== null && rawAmount !== "")
+        ? Math.max(0, parseFloat(rawAmount) || 0) : owed
+      effectiveStatus = derivePaymentStatus(amountPaid, owed)
+      patch = { payment_status: effectiveStatus, amount_paid: amountPaid, updated_at: new Date().toISOString() }
+      if (amountPaid > owed) refundDelta = amountPaid - owed
+      if (note) {
+        patch.payment_notes = [...(prevBk.payment_notes || []),
+          { amount: amountPaid, note, recorded_by: member.id, recorded_at: new Date().toISOString() }]
+      }
+    } else {
+      // An EC un-confirming payment (-> "pending") must not silently discard a
+      // resident's own "I've Paid" self-report -- restore 'submitted' instead
+      // when one is on record (migration 076). Only applies to the "pending"
+      // direction; an explicit refund/not_required/etc is left as sent (Iain,
+      // 2026-08-04: "the setting back on my booking reverts to unpaid as well,
+      // but SHOULD remain as I set it, which was I've Paid").
+      effectiveStatus = (payment_status === "pending" && prevBk?.payment_submitted_at)
+        ? "submitted" : payment_status
+      patch = { payment_status: effectiveStatus, amount_paid: 0, updated_at: new Date().toISOString() }
+    }
+    if (refundDelta > 0) { patch.refund_due = refundDelta; patch.refund_paid_at = null }
+
     const { error: pe } = await supa
       .from("bookings")
-      .update({ payment_status: effectiveStatus, updated_at: new Date().toISOString() })
+      .update(patch)
       .eq("id", booking_id)
       .eq("event_id", event_id)
     if (pe) return NextResponse.json({ error: pe.message }, { status: 500 })
-    if (payment_status === "confirmed" && prevBk?.payment_status !== "confirmed" && prevBk?.member_id) {
-      const { data: ev } = await supa.from("events").select("title").eq("id", event_id).single()
-      await notify(prevBk.member_id, event_id, "payment_confirmed", `Your payment for ${ev?.title || "this event"} has been confirmed.`)
+
+    if (effectiveStatus !== prevBk?.payment_status && prevBk?.member_id) {
+      const { data: ev } = await supa.from("events").select("title, cost").eq("id", event_id).single()
+      const title = ev?.title || "this event"
+      const owedNow = owed || amountOwing(ev, prevBk.seats)
+      let msg, type = "payment_confirmed"
+      if (effectiveStatus === "partial") {
+        type = "payment_partial"
+        msg = `$${(patch.amount_paid || 0).toFixed(2)} of $${owedNow.toFixed(2)} received for ${title} — $${(owedNow - (patch.amount_paid || 0)).toFixed(2)} still owing.`
+      } else if (effectiveStatus === "confirmed") {
+        msg = refundDelta > 0
+          ? `Your payment for ${title} has been confirmed — $${refundDelta.toFixed(2)} overpaid, a refund is due back to you.`
+          : `Your payment for ${title} has been confirmed.`
+      } else {
+        msg = null // reverting to pending/submitted/not_required is a correction, not notification-worthy
+      }
+      if (note) msg = msg ? `${msg} EC note: ${note}` : null
+      if (msg) await notify(prevBk.member_id, event_id, type, msg)
     }
     return NextResponse.json({ ok: true, payment_status: effectiveStatus })
   }
@@ -242,23 +302,31 @@ export async function PATCH(req) {
     return NextResponse.json({ ok: true })
   }
 
-  // ── Mark refund given on a cancelled booking ─────────────────────────────────
-  if (action === "set_refund" && booking_id) {
+  // ── Acknowledge a refund was paid out ─────────────────────────────────────
+  // Renamed from "set_refund" and reworked 2026-08-11 -- ONE ledger for
+  // refund_due now covers both a cancelled-and-was-paid booking AND an
+  // overpayment on a still-active one (see lib/payments.js and the
+  // migration comment), so this action just stamps/clears refund_paid_at
+  // rather than flipping payment_status between 'refunded' and 'pending'
+  // -- that flip used to be the only refund record at all: no amount, no
+  // date. `refunded: false` (the "Unmark" control) clears the stamp.
+  if (action === "mark_refund_paid" && booking_id) {
     const { data: bk } = await supa
-      .from("bookings").select("member_id, seats").eq("id", booking_id).eq("event_id", event_id).maybeSingle()
+      .from("bookings").select("member_id, refund_due").eq("id", booking_id).eq("event_id", event_id).maybeSingle()
+    if (!bk) return NextResponse.json({ error: "Booking not found" }, { status: 404 })
+    const markPaid = refunded !== false
     const { error: re } = await supa
       .from("bookings")
-      .update({ payment_status: refunded ? "refunded" : "pending", updated_at: new Date().toISOString() })
+      .update({ refund_paid_at: markPaid ? new Date().toISOString() : null, updated_at: new Date().toISOString() })
       .eq("id", booking_id)
       .eq("event_id", event_id)
     if (re) return NextResponse.json({ error: re.message }, { status: 500 })
     // Tell the member their refund has been processed (only when marking one,
     // not when un-marking). A booking change they didn't initiate.
-    if (refunded && bk?.member_id) {
-      const { data: ev } = await supa.from("events").select("title, cost").eq("id", event_id).single()
-      const owed = ev?.cost ? (parseFloat(ev.cost) * (bk.seats || 1)).toFixed(2) : null
+    if (markPaid && bk?.member_id && (parseFloat(bk.refund_due) || 0) > 0) {
+      const { data: ev } = await supa.from("events").select("title").eq("id", event_id).single()
       await notify(bk.member_id, event_id, "payment_refunded",
-        `Your${owed ? ` $${owed}` : ""} refund for ${ev?.title || "this event"} has been processed.`)
+        `Your $${parseFloat(bk.refund_due).toFixed(2)} refund for ${ev?.title || "this event"} has been processed.`)
     }
     return NextResponse.json({ ok: true })
   }
@@ -419,10 +487,20 @@ export async function PATCH(req) {
   if (action === "cancel_booking" && booking_id) {
     // Fetch booking first so we know seats freed (for waitlist promotion) and who to notify
     const { data: bk } = await supa
-      .from("bookings").select("status, seats, member_id").eq("id", booking_id).maybeSingle()
+      .from("bookings").select("status, seats, member_id, payment_status, amount_paid").eq("id", booking_id).maybeSingle()
+    const cancelPatch = { status: "cancelled", updated_at: new Date().toISOString() }
+    // A booking that had money against it (fully paid OR partial) owes that
+    // amount back the moment it's cancelled -- populate the refund ledger
+    // here rather than waiting for an EC to notice and flag it manually
+    // (2026-08-11, unifying with the overpayment refund path above).
+    const amountAlreadyPaid = parseFloat(bk?.amount_paid) || 0
+    if ((bk?.payment_status === "confirmed" || bk?.payment_status === "partial") && amountAlreadyPaid > 0) {
+      cancelPatch.refund_due = amountAlreadyPaid
+      cancelPatch.refund_paid_at = null
+    }
     const { error: ce } = await supa
       .from("bookings")
-      .update({ status: "cancelled", updated_at: new Date().toISOString() })
+      .update(cancelPatch)
       .eq("id", booking_id)
       .eq("event_id", event_id)
     if (ce) return NextResponse.json({ error: ce.message }, { status: 500 })

@@ -811,6 +811,37 @@ export default function HelpGuidePage() {
                 view on every social event — not just the ones they're personally listed as
                 coordinator for.
               </InfoBox>
+              <Step>
+                On a paid event, tap the <strong>Unpaid / Paid</strong> switch next to a resident's
+                name to record their payment. Rather than just flipping a flag, this opens a small
+                form asking for the <strong>amount received</strong> (pre-filled with the full amount
+                owed, but editable) and an optional <strong>comment</strong>. If the amount doesn't
+                match what's owed, a comment is required — e.g. "paid $30 cash, owes $20 by Friday",
+                or "overpaid, rounding, no refund needed".
+              </Step>
+              <Step>
+                If the amount recorded is less than what's owed, the booking shows as{" "}
+                <strong style={{ color: "#075985" }}>Partial</strong> — the resident still owes the
+                difference, and the seat is treated the same as fully unpaid (it isn't protected from
+                the waitlist, and payment reminders still apply). If the amount is more than what's
+                owed, the booking is marked <strong style={{ color: "#166534" }}>Confirmed</strong> and
+                the extra automatically becomes a refund owed back to the resident — it never shows as
+                its own "overpaid" state.
+              </Step>
+              <Step>
+                Tap the <strong>Unpaid / Paid</strong> switch again on an already-paid or partially-paid
+                booking to correct it back to unpaid — this is a plain one-tap undo with no form, for
+                fixing a mistake.
+              </Step>
+              <Step>
+                A cancelled booking that had already been paid (in full or partially) automatically
+                appears under <strong>⚠️ Refunds Due</strong> for the amount that was actually
+                received. Once the money has genuinely been handed back to the resident, tap{" "}
+                <strong>Mark Refunded</strong> to acknowledge it — this moves it to{" "}
+                <strong>✓ Refunds Issued</strong> below. An overpayment refund (from the amount
+                recorded above) appears in the same Refunds Due list, whether or not the booking was
+                ever cancelled.
+              </Step>
             </Subsection>
           </Section>
 
@@ -1025,8 +1056,16 @@ export default function HelpGuidePage() {
                 but payment has not yet been recorded by the coordinator.
               </Step>
               <Step>
+                <strong style={{ color: "#075985" }}>Partial</strong> — the coordinator has recorded
+                some payment against your booking, but not the full amount yet. You'll get a
+                notification saying how much is still owing. Your seat isn't any more secure than
+                Booked until the balance is paid in full.
+              </Step>
+              <Step>
                 <strong style={{ color: "#166534" }}>Confirmed</strong> — your seat is secured and
-                paid. No further action needed unless you want to modify or cancel.
+                paid. No further action needed unless you want to modify or cancel. If you happened to
+                pay more than was owed, the extra shows up as a refund due back to you rather than
+                changing this status.
               </Step>
               <Step>
                 <strong style={{ color: "#64748b" }}>Waitlisted</strong> — the event was full when

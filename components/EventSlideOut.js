@@ -8,7 +8,7 @@ import { authedFetch } from "@/lib/getAuthToken"
 import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
-import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, sumUnpaidSeats, seatsCost, bookingStatusBadge } from "@/lib/payments"
+import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge } from "@/lib/payments"
 import { byOwnThenName } from "@/lib/sortNames"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
 import { clubCaps, clubColour } from "@/lib/clubs"
@@ -444,9 +444,13 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   }
 
   async function toggleRefund(booking) {
-    const isRefunded = booking.payment_status === "refunded"
-    const ok = await patchAction({ action: "set_refund", booking_id: booking.id, refunded: !isRefunded })
-    if (ok) { showToast(isRefunded ? "Refund mark removed" : "Refund marked"); load(); onRefresh() }
+    // Renamed from "set_refund" 2026-08-11 -- see lib/payments.js's
+    // isRefundIssued/isRefundPending for the unified refund_due/
+    // refund_paid_at ledger this now writes to (covers overpayment refunds
+    // on active bookings too, not just a cancelled-and-was-paid booking).
+    const isIssued = !!booking.refund_paid_at || booking.payment_status === "refunded"
+    const ok = await patchAction({ action: "mark_refund_paid", booking_id: booking.id, refunded: !isIssued })
+    if (ok) { showToast(isIssued ? "Refund mark removed" : "Refund marked"); load(); onRefresh() }
     else showToast("Failed", "error")
   }
 
@@ -921,6 +925,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
               // Payment info from first confirmed row (if any)
               const firstConf = confRows[0]
               const isPaid     = computeIsPaid(firstConf)
+              const isPartial  = computeIsPartial(firstConf)
               const isRefunded = computeIsRefunded(firstConf)
               // All booking IDs for this member (for bulk cancel)
               const allIds = [...confRows, ...waitRows].map(b => b.id)
@@ -962,15 +967,16 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                     </div>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                       {paymentRequired && confirmedSeats > 0 && firstConf && !isRefunded && (
-                        // Read-only now -- Paid/Unpaid is toggled from the Scheduled
-                        // tile's Attendees accordion (2026-07-12), not here, so there's
-                        // one editable control for this field, not two that can drift.
+                        // Read-only now -- Paid/Unpaid/Partial is recorded from the
+                        // Scheduled tile's Attendees accordion (2026-07-12), not here,
+                        // so there's one editable control for this field, not two
+                        // that can drift. "Partial" added 2026-08-11.
                         <span style={{
                           fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12,
-                          background: isPaid ? "#16a34a20" : "var(--surface)",
-                          color: isPaid ? "#16a34a" : "var(--text-dim)",
-                          border: `1px solid ${isPaid ? "#16a34a" : "var(--border)"}`,
-                        }}>{isPaid ? "Paid" : "Unpaid"}</span>
+                          background: isPaid ? "#16a34a20" : isPartial ? "#0369a120" : "var(--surface)",
+                          color: isPaid ? "#16a34a" : isPartial ? "#0369a1" : "var(--text-dim)",
+                          border: `1px solid ${isPaid ? "#16a34a" : isPartial ? "#0369a1" : "var(--border)"}`,
+                        }}>{isPaid ? "Paid" : isPartial ? `Partial · $${(parseFloat(firstConf?.amount_paid) || 0).toFixed(2)}` : "Unpaid"}</span>
                       )}
                       {paymentRequired && confirmedSeats > 0 && firstConf && isRefunded && (
                         <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12,
