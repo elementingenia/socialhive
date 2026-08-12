@@ -8,6 +8,8 @@ import EventSlideOut from "@/components/EventSlideOut"
 import { bbToHtml } from "@/components/RichEditor"
 import { BusIcon } from "@/components/NavIcons"
 import { ContactBar } from "@/components/OwnersManager"
+import ManageLink from "@/components/ManageLink"
+import { useOwners } from "@/lib/useOwners"
 import { FormattedText } from "@/lib/textFormatter"
 import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted, balancePhrase } from "@/lib/payments"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
@@ -324,8 +326,12 @@ function MyBookingsCard({ bookings, onViewAll }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function SocialHome() {
-  const { member }          = useUser()
+  const { member, isAdmin } = useUser()
   const router              = useRouter()
+  // Owner self-service (Owner_SelfService_and_Library_Hub_Scope_v1, Part A.3):
+  // an admin or this hub's Owner gets a link through to "Manage Social".
+  const { owners: hubOwners } = useOwners("hub", "social")
+  const canManage = isAdmin || (!!member?.id && hubOwners.some(o => o.id === member.id))
   const [nextEvent,         setNextEvent]         = useState(undefined) // undefined = loading, null = none
   const [nextCoordinators,  setNextCoordinators]  = useState([])
   const [myBooking,         setMyBooking]         = useState(null)
@@ -432,6 +438,8 @@ export default function SocialHome() {
       <WelcomeBanner text={welcomeText} />
 
       <ContactBar contextType="hub" contextKey="social" contextLabel="Social" colour="var(--terracotta)" style={{ margin: "-2px 0 12px" }} />
+
+      {canManage && <ManageLink href="/social/manage" label="Manage Social" colour="var(--terracotta)" />}
 
       <NextEventTile
         event={nextEvent}

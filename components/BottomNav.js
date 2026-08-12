@@ -44,6 +44,13 @@ const HUB_CONFIG = {
       { path: "/info/documents", label: "Documents", Icon: DocumentsIcon },
     ],
   },
+  library: {
+    colour: "var(--purple)",
+    items: [
+      { path: "/booklibrary",       label: "Library Home", Icon: BookClubIcon },
+      { path: "/booklibrary/books", label: "Library",      Icon: BookClubIcon },
+    ],
+  },
 }
 
 export default function BottomNav() {

@@ -6,12 +6,13 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MoviesIcon, SocialIcon, ShedIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon } from '@/components/NavIcons'
-import RichEditor, { bbToHtml } from '@/components/RichEditor'
+import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon } from '@/components/NavIcons'
 import OwnersManager from '@/components/OwnersManager'
 import ResidentEditForm, { Sheet, labelStyle } from '@/components/ResidentEditPanel'
 import { CLUB_COLOURS, nextClubColour } from '@/lib/clubColours'
-import ClubWatermarkPicker from '@/components/ClubWatermarkPicker'
+import ClubForm from '@/components/ClubForm'
+import HubTextSection from '@/components/HubTextSection'
+import { HUB_SECTIONS } from '@/lib/hubSections'
 import { BAR_ENABLED } from '@/lib/features'
 import { validateClosure, reasonRemaining, REASON_MAX } from '@/lib/spaces'
 import { useLocations } from '@/lib/useLocations'
@@ -1433,214 +1434,15 @@ function MoviesTab() {
 
 
 // ── PAGE TEXTS TAB ────────────────────────────────────────────────────────────
-// ── Sub notice editor row ────────────────────────────────────────────────────
-function SubRow({ item, hubColour, onChange, onDelete }) {
-  return (
-    <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'flex-start' }}>
-      <div style={{ flex: 1 }}>
-        <RichEditor
-          key={item.id}
-          initialValue={item.text}
-          hubColour={hubColour}
-          subOnly
-          bg="tile"
-          onChange={html => onChange(item.id, html)}
-        />
-      </div>
-      <button onClick={() => onDelete(item.id)}
-        style={{ marginTop: 4, background: 'none', border: '1px solid var(--border)',
-          borderRadius: 8, padding: '6px 10px', cursor: 'pointer',
-          color: 'var(--danger)', fontWeight: 700, fontSize: '0.8rem', flexShrink: 0 }}>
-        ×
-      </button>
-    </div>
-  )
-}
-
+// Each section is now a self-contained HubTextSection (components/HubTextSection.js,
+// config in lib/hubSections.js) — extracted 2026-08-12 so the same editor can be
+// reused on an Owner's "Manage this area" screen for just their one section.
 function PageTextsTab() {
-  const { member } = useUser()
-  const [data,    setData]    = useState({})
-  const [draft,   setDraft]   = useState({})
-  const [saving,  setSaving]  = useState(null)
-  const [saved,   setSaved]   = useState(null)
-  const [loading, setLoading] = useState(true)
-  // Sub-message id counter for stable keys
-  const subCounter = useRef(0)
-  function newSubId() { subCounter.current += 1; return 'sub_' + subCounter.current }
-
-  const HUB_SECTIONS = [
-    {
-      key: 'home', label: 'Hive Home', colour: 'var(--amber)', hex: '#f59e0b',
-      hasSubs: true, subsLabel: 'Sub Notices',
-      hint: 'Main announcement and sub-notices shown on the home screen.',
-    },
-    {
-      key: 'movies', label: 'Show Time Home', colour: 'var(--teal)', hex: '#0d9488',
-      hasSubs: false, hint: 'Welcome message on the Show Time landing page.',
-    },
-    {
-      key: 'movies_suggestions', label: 'Show Time — Suggestions', colour: 'var(--teal)', hex: '#0d9488',
-      hasSubs: false, hint: 'Text shown at the top of the Suggestions page.',
-    },
-    {
-      key: 'movies_dvd', label: 'Show Time — DVD Library', colour: 'var(--teal)', hex: '#0d9488',
-      hasSubs: false, hint: 'Text shown at the top of the DVD Library.',
-    },
-    {
-      key: 'social', label: 'Social Events', colour: 'var(--terracotta)', hex: '#c2410c',
-      hasSubs: false, hint: 'Welcome message on the Social Events page.',
-    },
-  ]
-
-  useEffect(() => {
-    fetch('/api/hub-settings')
-      .then(r => r.json())
-      .then(d => {
-        setData(d)
-        const init = {}
-        for (const s of HUB_SECTIONS) {
-          init[s.key + '__text'] = d[s.key]?.text || ''
-          // Subs stored as {id, text} for stable React keys
-          init[s.key + '__subs'] = (d[s.key]?.subs || []).map(text => ({ id: newSubId(), text }))
-        }
-        setDraft(init)
-        setLoading(false)
-      })
-  }, [])
-
-  function setDraftField(key, val) { setDraft(d => ({ ...d, [key]: val })) }
-
-  async function save(hubKey) {
-    setSaving(hubKey)
-    const body = {
-      hub_type: hubKey,
-      welcome_text: draft[hubKey + '__text'] || '',
-      user_id: member?.id,
-    }
-    const sec = HUB_SECTIONS.find(s => s.key === hubKey)
-    if (sec?.hasSubs) {
-      body.sub_messages = (draft[hubKey + '__subs'] || []).map(s => s.text).filter(t => t && t !== '<br>' && t !== '<div><br></div>')
-    }
-
-    await fetch('/api/hub-settings', {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + (await getAuthToken()),
-      },
-      body: JSON.stringify(body),
-    })
-    setData(d => ({
-      ...d,
-      [hubKey]: {
-        text: body.welcome_text,
-        subs: body.sub_messages || d[hubKey]?.subs || [],
-      },
-    }))
-    setSaved(hubKey); setSaving(null)
-    setTimeout(() => setSaved(null), 2500)
-  }
-
-  function isDirty(hubKey) {
-    const sec = HUB_SECTIONS.find(s => s.key === hubKey)
-    const textChanged = (draft[hubKey + '__text'] || '') !== (data[hubKey]?.text || '')
-    if (!sec?.hasSubs) return textChanged
-    const origSubs = JSON.stringify(data[hubKey]?.subs || [])
-    const newSubs  = JSON.stringify((draft[hubKey + '__subs'] || []).map(s => s.text).filter(Boolean))
-    return textChanged || origSubs !== newSubs
-  }
-
-  if (loading) return <div style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '2rem' }}>Loading…</div>
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      {HUB_SECTIONS.map(sec => {
-        const dirty = isDirty(sec.key)
-        const subs  = draft[sec.key + '__subs'] || []
-        return (
-          <div key={sec.key} style={{ background: 'var(--surface)', borderRadius: 14,
-            border: '1px solid var(--border)', overflow: 'hidden' }}>
-            {/* Section header */}
-            <div style={{ background: sec.colour + '18', borderBottom: '1px solid var(--border)',
-              padding: '0.65rem 1rem', fontWeight: 700, fontSize: '0.85rem', color: sec.colour }}>
-              {sec.label}
-            </div>
-            <div style={{ padding: '0.9rem 1rem' }}>
-              {sec.hint && (
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: 8, lineHeight: 1.4 }}>
-                  {sec.hint}
-                </div>
-              )}
-
-              {/* Main message */}
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)',
-                textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
-                {sec.hasSubs ? 'Main Message' : 'Message'}
-              </div>
-              <div style={{ marginBottom: sec.hasSubs ? 16 : 0 }}>
-                <RichEditor
-                  key={sec.key}
-                  initialValue={draft[sec.key + '__text'] || ''}
-                  hubColour={sec.hex}
-                  subOnly={false}
-                  bg="tile"
-                  onChange={html => setDraftField(sec.key + '__text', html)}
-                />
-              </div>
-
-              {/* Sub messages (Hive Home only) */}
-              {sec.hasSubs && (
-                <>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)',
-                    textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
-                    Sub Notices
-                  </div>
-                  {subs.map(item => (
-                    <SubRow
-                      key={item.id}
-                      item={item}
-                      hubColour={sec.hex}
-                      onChange={(id, html) => {
-                        const next = subs.map(s => s.id === id ? { ...s, text: html } : s)
-                        setDraftField(sec.key + '__subs', next)
-                      }}
-                      onDelete={id => {
-                        const next = subs.filter(s => s.id !== id)
-                        setDraftField(sec.key + '__subs', next)
-                      }}
-                    />
-                  ))}
-                  <button
-                    onClick={() => setDraftField(sec.key + '__subs', [...subs, { id: newSubId(), text: '' }])}
-                    style={{ background: 'none', border: '1.5px dashed var(--border)',
-                      borderRadius: 10, padding: '0.5rem', width: '100%', cursor: 'pointer',
-                      color: 'var(--text-dim)', fontSize: '0.82rem', fontWeight: 600,
-                      fontFamily: 'inherit', marginBottom: 8 }}>
-                    + Add Sub Notice
-                  </button>
-                </>
-              )}
-
-              {/* Save */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
-                gap: 10, marginTop: sec.hasSubs ? 0 : 8 }}>
-                {saved === sec.key && (
-                  <span style={{ color: 'var(--green)', fontSize: '0.82rem', fontWeight: 700 }}>✓ Saved</span>
-                )}
-                <button
-                  onClick={() => save(sec.key)}
-                  disabled={saving === sec.key}
-                  style={{ background: sec.colour, color: '#fff', border: 'none', borderRadius: 10,
-                    padding: '0.55rem 1.25rem', fontWeight: 700, fontSize: '0.85rem',
-                    cursor: saving === sec.key ? 'not-allowed' : 'pointer',
-                    opacity: saving === sec.key ? 0.5 : 1 }}>
-                  {saving === sec.key ? 'Saving…' : 'Save'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      })}
+      {HUB_SECTIONS.map(sec => (
+        <HubTextSection key={sec.key} sectionKey={sec.key} />
+      ))}
     </div>
   )
 }
@@ -1714,219 +1516,6 @@ export default function AdminPage() {
 // Create/configure clubs that render in the data-driven /clubs hub. Writes go
 // straight through the supabase client (clubs RLS allows admin write), same as
 // Book Club edits its events client-side.
-const CLUB_FLAGS = [
-  { key: 'has_book_return', label: 'Book return dates' },
-  { key: 'has_kit_return',  label: 'Kit return dates' },
-  { key: 'has_theme',       label: 'Theme name on events' },
-  { key: 'has_cost',        label: 'Paid events (cost)' },
-  { key: 'bring_enabled',   label: 'Attendees bring something' },
-  { key: 'single_signup',   label: 'Sign-up only (one seat per person)' },
-  { key: 'one_event_at_a_time', label: 'One event at a time (block scheduling ahead)' },
-]
-function slugify(s) {
-  return (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
-}
-
-function FlagToggle({ on, label, onClick }) {
-  return (
-    <button type="button" onClick={onClick} style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%',
-      padding: '0.6rem 0.8rem', borderRadius: 10, border: '1px solid var(--border)',
-      background: 'var(--surface)', cursor: 'pointer', fontFamily: 'inherit', marginBottom: '0.4rem',
-    }}>
-      <span style={{ fontSize: '0.9rem', color: 'var(--text)' }}>{label}</span>
-      <span style={{ width: 34, height: 20, borderRadius: 10, background: on ? 'var(--green)' : 'var(--border)', position: 'relative', flexShrink: 0 }}>
-        <span style={{ position: 'absolute', top: 2, left: on ? 16 : 2, width: 16, height: 16, borderRadius: '50%', background: '#fff', transition: 'left 0.15s' }} />
-      </span>
-    </button>
-  )
-}
-
-function ClubForm({ club, existingColours = [], onSaved, onCancel }) {
-  const isEdit = !!club
-  const [form, setForm] = useState({
-    name: club?.name || '', slug: club?.slug || '', description: club?.description || '',
-    welcome_text: club?.welcome_text || '',
-    image_url: club?.image_url || null, image_pos_x: club?.image_pos_x ?? 50, image_pos_y: club?.image_pos_y ?? 50, image_zoom: club?.image_zoom ?? 1,
-    colour: club?.colour || nextClubColour(existingColours), catalogue_module: club?.catalogue_module || 'none',
-    has_book_return: club?.has_book_return || false, has_kit_return: club?.has_kit_return || false,
-    has_theme: club?.has_theme || false, has_cost: club?.has_cost || false, bring_enabled: club?.bring_enabled || false,
-    single_signup: club?.single_signup || false,
-    one_event_at_a_time: club?.one_event_at_a_time || false,
-  })
-  const [slugTouched, setSlugTouched] = useState(isEdit)
-  const [bringCats, setBringCats] = useState([])
-  const [newCat, setNewCat] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
-
-  useEffect(() => {
-    if (!isEdit) return
-    supabase.from('club_bring_categories').select('id, label, sort').eq('club_id', club.id).order('sort')
-      .then(({ data }) => setBringCats((data || []).map(c => ({ id: c.id, label: c.label }))))
-  }, [isEdit, club?.id])
-
-  const effectiveSlug = slugTouched ? form.slug : slugify(form.name)
-
-  async function save() {
-    setError('')
-    if (!form.name.trim()) { setError('Name is required'); return }
-    const slug = slugify(effectiveSlug)
-    if (!slug) { setError('Slug is required'); return }
-    setSaving(true)
-    const payload = {
-      name: form.name.trim(), slug, description: form.description.trim() || null, colour: form.colour,
-      welcome_text: form.welcome_text || null,
-      catalogue_module: form.catalogue_module,
-      has_book_return: form.has_book_return, has_kit_return: form.has_kit_return,
-      has_theme: form.has_theme, has_cost: form.has_cost, bring_enabled: form.bring_enabled,
-      single_signup: form.single_signup,
-      one_event_at_a_time: form.one_event_at_a_time,
-    }
-    let clubId = club?.id
-    if (isEdit) {
-      const { error: e } = await supabase.from('clubs').update(payload).eq('id', club.id)
-      if (e) { setError(e.message.includes('duplicate') ? 'That slug is already taken' : e.message); setSaving(false); return }
-    } else {
-      const { data, error: e } = await supabase.from('clubs').insert(payload).select('id').single()
-      if (e) { setError(e.message.includes('duplicate') ? 'That slug is already taken' : e.message); setSaving(false); return }
-      clubId = data.id
-    }
-    // Sync bring categories, preserving each row's existing id where the
-    // category itself is unchanged. A blind delete-all/insert-all here used
-    // to hand out a fresh UUID to every category on every single club save
-    // (even ones unrelated to bring-a-dish) -- any event that had narrowed
-    // itself to specific categories via events.bring_category_ids silently
-    // lost that narrowing the next time anyone saved the club, because none
-    // of its stored ids matched anymore. Found live 2026-07-24 after Iain
-    // reported a Dinner Club event's "Book Now" was permanently disabled
-    // for every resident with no way to fix it from their side.
-    if (form.bring_enabled) {
-      const { data: existingCats } = await supabase.from('club_bring_categories').select('id').eq('club_id', clubId)
-      const keepIds = new Set(bringCats.filter(c => c.id).map(c => c.id))
-      const staleIds = (existingCats || []).filter(c => !keepIds.has(c.id)).map(c => c.id)
-      if (staleIds.length) await supabase.from('club_bring_categories').delete().in('id', staleIds)
-      for (let i = 0; i < bringCats.length; i++) {
-        const c = bringCats[i]
-        if (c.id) await supabase.from('club_bring_categories').update({ label: c.label, sort: i }).eq('id', c.id)
-      }
-      const newRows = bringCats.map((c, i) => ({ c, i })).filter(({ c }) => !c.id).map(({ c, i }) => ({ club_id: clubId, label: c.label, sort: i }))
-      if (newRows.length) await supabase.from('club_bring_categories').insert(newRows)
-    } else {
-      await supabase.from('club_bring_categories').delete().eq('club_id', clubId)
-    }
-    setSaving(false)
-    onSaved()
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-      <Field label="Group/Club name"><input style={inputStyle} value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Dinner Club" /></Field>
-      <Field label="Link (slug)">
-        <input style={inputStyle} value={effectiveSlug} onChange={e => { setSlugTouched(true); set('slug', e.target.value) }} placeholder="dinner-club" />
-      </Field>
-      <Field label="Description"><input style={inputStyle} value={form.description} onChange={e => set('description', e.target.value)} placeholder="One-line description shown in the Groups & Clubs list" /></Field>
-      <Field label="Landing page text">
-        <RichEditor
-          key={club?.id || 'new'}
-          initialValue={form.welcome_text}
-          hubColour={CLUB_COLOURS.find(c => c.value === form.colour)?.hex || (form.colour?.startsWith('#') ? form.colour : '#7c3aed')}
-          bg="tile"
-          onChange={html => set('welcome_text', html)}
-          placeholder="Shown in the coloured banner at the top of this group/club's page…"
-        />
-        <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.35rem' }}>
-          Appears on the club&apos;s page in the club colour with white text. (Replaces the old Admin &rsaquo; Page Texts entry.)
-        </div>
-      </Field>
-      <Field label="Colour">
-        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-          {CLUB_COLOURS.map(c => (
-            <button key={c.label} type="button" onClick={() => set('colour', c.value)} title={c.label} style={{
-              width: 30, height: 30, borderRadius: '50%', background: c.hex, cursor: 'pointer',
-              border: form.colour === c.value ? '3px solid var(--text)' : '2px solid var(--border)',
-            }} />
-          ))}
-        </div>
-      </Field>
-
-      {isEdit ? (
-        <Field label="Watermark image (optional)">
-          <ClubWatermarkPicker
-            clubId={club.id}
-            imageUrl={form.image_url}
-            posX={form.image_pos_x}
-            posY={form.image_pos_y}
-            zoom={form.image_zoom}
-            colour={CLUB_COLOURS.find(c => c.value === form.colour)?.hex || (form.colour?.startsWith('#') ? form.colour : '#7c3aed')}
-            onUpdated={patch => setForm(f => ({ ...f, ...patch }))}
-          />
-          <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.35rem' }}>
-            Shows as a faint background across the whole club page, behind everything from the welcome banner down to the last event card. Works with portrait or landscape photos; drag and zoom to fit.
-          </div>
-        </Field>
-      ) : (
-        <Field label="Watermark image (optional)">
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Save the group/club first, then you can add its watermark image here.</div>
-        </Field>
-      )}
-
-      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0.75rem 0 0.5rem' }}>Event options</div>
-      {CLUB_FLAGS.map(fl => (
-        <FlagToggle key={fl.key} on={form[fl.key]} label={fl.label} onClick={() => set(fl.key, !form[fl.key])} />
-      ))}
-
-      {form.bring_enabled && (
-        <Field label="Bring categories (e.g. Entrée, Main, Dessert, Drink)">
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.5rem' }}>
-            {bringCats.map((c, i) => (
-              <span key={c.id || `new-${i}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'var(--surface2)', borderRadius: 16, padding: '0.2rem 0.6rem', fontSize: '0.82rem', color: 'var(--text)' }}>
-                {c.label}
-                <button type="button" onClick={() => setBringCats(bringCats.filter((_, j) => j !== i))} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-dim)', fontSize: '0.9rem', lineHeight: 1 }}>×</button>
-              </span>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: '0.4rem' }}>
-            <input style={inputStyle} value={newCat} onChange={e => setNewCat(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && newCat.trim()) { setBringCats([...bringCats, { id: null, label: newCat.trim() }]); setNewCat('') } }}
-              placeholder="Add a category…" />
-            <button type="button" onClick={() => { if (newCat.trim()) { setBringCats([...bringCats, { id: null, label: newCat.trim() }]); setNewCat('') } }}
-              style={{ padding: '0 1rem', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface2)', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}>Add</button>
-          </div>
-        </Field>
-      )}
-
-      <Field label="Catalogue / Suggestions">
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {[{ v: 'none', t: 'None' }, { v: 'books', t: 'Books' }].map(o => (
-            <button key={o.v} type="button" onClick={() => set('catalogue_module', o.v)} style={{
-              flex: 1, padding: '0.6rem', borderRadius: 10, fontFamily: 'inherit', cursor: 'pointer', fontWeight: form.catalogue_module === o.v ? 700 : 500,
-              border: `1.5px solid ${form.catalogue_module === o.v ? 'var(--purple)' : 'var(--border)'}`,
-              background: form.catalogue_module === o.v ? 'var(--purple)' : 'var(--surface)', color: form.catalogue_module === o.v ? '#fff' : 'var(--text)',
-            }}>{o.t}</button>
-          ))}
-        </div>
-        <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.35rem' }}>Only Book Club uses a catalogue (Books) today. Others: None.</div>
-      </Field>
-
-      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '0.75rem 0 0.5rem' }}>Owners</div>
-      {isEdit ? (
-        <OwnersManager contextType="club" contextKey={club.id}
-          hint="Owners answer questions asked on this group/club's page and appear as its contact. Seeded with the group/club's first event coordinator — edit freely." />
-      ) : (
-        <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>Save the group/club first, then you can add its owners here.</div>
-      )}
-
-      {error && <div style={{ color: '#b91c1c', fontSize: '0.85rem', margin: '0.5rem 0' }}>{error}</div>}
-      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-        <button onClick={onCancel} style={{ flex: 1, padding: '0.75rem', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
-        <button onClick={save} disabled={saving} style={{ flex: 2, padding: '0.75rem', borderRadius: 10, border: 'none', background: 'var(--purple)', color: '#fff', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, fontFamily: 'inherit' }}>{saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Create Group/Club')}</button>
-      </div>
-    </div>
-  )
-}
-
 function HubOwnersTab() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -1945,22 +1534,14 @@ function HubOwnersTab() {
         </div>
         <OwnersManager contextType="hub" contextKey="social" />
       </div>
-      {/* Shed placeholder (Iain, 2026-07-27): the Work Shed hub itself is
-          Phase 3 / not built yet (see the "coming soon" tile on Home) -- this
-          section exists only so the option is visibly present in Admin
-          ahead of launch, not because it does anything. Deliberately NOT a
-          working OwnersManager: there's no real /shed page yet for an owner
-          to be a contact on, and no context_key="shed" is read anywhere else
-          in the app, so wiring it live would let an admin "add" an owner
-          that silently goes nowhere. Swap this for a real OwnersManager
-          contextType="hub" contextKey="shed" once the Shed hub ships. */}
+      {/* Shed placeholder removed 2026-08-12 -- Shed was never built and is
+          out of scope (Owner_SelfService_and_Library_Hub_Scope_v1), dropped
+          from Home the same session. Library takes its place here. */}
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: 'var(--text-dim)', marginBottom: '0.5rem' }}>
-          <ShedIcon size={18} /> Shed
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: 'var(--purple)', marginBottom: '0.5rem' }}>
+          <BookClubIcon size={18} /> Library
         </div>
-        <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontStyle: 'italic' }}>
-          Coming soon — the Work Shed hub hasn't launched yet, so owners can't be added here until it has.
-        </div>
+        <OwnersManager contextType="hub" contextKey="library" />
       </div>
     </div>
   )

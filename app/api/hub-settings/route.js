@@ -1,11 +1,29 @@
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
+import { requireAdminOrAreaOwner } from "@/lib/areaAuth"
 export const dynamic = "force-dynamic"
+
+// Which hub_settings rows an Owner (not just admin) may write, and which
+// hub-Owner context_key (space_owners.context_key under context_type='hub')
+// governs each. Added 2026-08-12, Part A of the Owner self-service scope —
+// 'home' and 'bookclub' (and anything else unmapped) stay admin-only: home
+// text isn't scoped to any one area's Owner, and Book Club is deliberately
+// unchanged by this work (it's a Groups & Clubs club, not a hub — its own
+// notices/settings already go through club-scoped routes).
+const HUB_TYPE_TO_OWNER_KEY = {
+  movies: "movie",
+  movies_suggestions: "movie",
+  movies_dvd: "movie",
+  social: "social",
+  library: "library",
+  library_books: "library",
+}
+
 export async function GET() {
   // Try with sub_messages (migration 016). Fall back to welcome_text only (015).
   // Return empty object if table doesn't exist yet.
   const { data, error } = await supa
     .from("hub_settings")
-    .select("hub_type, welcome_text, sub_messages")
+    .select("hub_type, welcome_text, sub_messages, loan_cap")
 
   if (error) {
     // Column or table missing — try without sub_messages
@@ -26,26 +44,38 @@ export async function GET() {
     out[row.hub_type] = {
       text: row.welcome_text || "",
       subs: Array.isArray(row.sub_messages) ? row.sub_messages : [],
+      loanCap: typeof row.loan_cap === "number" ? row.loan_cap : 3,
     }
   }
   return Response.json(out)
 }
 
 export async function PATCH(req) {
-  const { hub_type, welcome_text, sub_messages, location_id } = await req.json()
+  const { hub_type, welcome_text, sub_messages, location_id, loan_cap } = await req.json()
   if (!hub_type) return Response.json({ error: "hub_type required" }, { status: 400 })
 
-  // AUTH FROM THE TOKEN, not from the request body. This previously read a
-  // `user_id` out of the JSON and looked up that member's is_admin — so any
-  // caller could pass a known admin's id and edit every hub's text. The bearer
-  // token is the only thing the client cannot forge.
-  const token = req.headers.get("Authorization")?.replace("Bearer ", "")
-  if (!token) return Response.json({ error: "Unauthorised" }, { status: 401 })
-  const { data: { user } } = await supa.auth.getUser(token)
-  if (!user) return Response.json({ error: "Unauthorised" }, { status: 401 })
-  const { data: member } = await supa
-    .from("members").select("id, is_admin").eq("auth_id", user.id).maybeSingle()
-  if (!member?.is_admin) return Response.json({ error: "Forbidden" }, { status: 403 })
+  // AUTH FROM THE TOKEN, not from the request body — the bearer token is the
+  // only thing the client cannot forge. Widened 2026-08-12: an Owner of the
+  // hub this hub_type belongs to may also write it, not just an admin,
+  // matching the Owner self-service model already applied to events/EC view
+  // (lib/areaAuth.js) and club notices/settings. hub_types with no Owner
+  // mapping (home, bookclub) stay admin-only.
+  const ownerKey = HUB_TYPE_TO_OWNER_KEY[hub_type]
+  let member
+  if (ownerKey) {
+    const { error, status, member: m } = await requireAdminOrAreaOwner(req, "hub", ownerKey)
+    if (error) return Response.json({ error }, { status })
+    member = m
+  } else {
+    const token = req.headers.get("Authorization")?.replace("Bearer ", "")
+    if (!token) return Response.json({ error: "Unauthorised" }, { status: 401 })
+    const { data: { user } } = await supa.auth.getUser(token)
+    if (!user) return Response.json({ error: "Unauthorised" }, { status: 401 })
+    const { data: m } = await supa
+      .from("members").select("id, is_admin").eq("auth_id", user.id).maybeSingle()
+    if (!m?.is_admin) return Response.json({ error: "Forbidden" }, { status: 403 })
+    member = m
+  }
 
   // This route exists BECAUSE hub_settings cannot be written from the client.
   // Migration 015's policy is
@@ -59,6 +89,9 @@ export async function PATCH(req) {
   if (sub_messages !== undefined) update.sub_messages = sub_messages
   // null is meaningful here — it clears the hub's nominated venue.
   if (location_id !== undefined) update.location_id = location_id
+  // Owner/admin-configurable loan cap (Iain, 2026-08-12: don't hardcode the
+  // borrow limit for DVD or the Library — both read this per hub_type).
+  if (loan_cap !== undefined) update.loan_cap = loan_cap
 
   const { error } = await supa
     .from("hub_settings")
