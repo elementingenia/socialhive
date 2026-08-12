@@ -5,7 +5,7 @@ export async function GET() {
   // Return empty object if table doesn't exist yet.
   const { data, error } = await supa
     .from("hub_settings")
-    .select("hub_type, welcome_text, sub_messages")
+    .select("hub_type, welcome_text, sub_messages, loan_cap")
 
   if (error) {
     // Column or table missing — try without sub_messages
@@ -26,13 +26,14 @@ export async function GET() {
     out[row.hub_type] = {
       text: row.welcome_text || "",
       subs: Array.isArray(row.sub_messages) ? row.sub_messages : [],
+      loanCap: typeof row.loan_cap === "number" ? row.loan_cap : 3,
     }
   }
   return Response.json(out)
 }
 
 export async function PATCH(req) {
-  const { hub_type, welcome_text, sub_messages, location_id } = await req.json()
+  const { hub_type, welcome_text, sub_messages, location_id, loan_cap } = await req.json()
   if (!hub_type) return Response.json({ error: "hub_type required" }, { status: 400 })
 
   // AUTH FROM THE TOKEN, not from the request body. This previously read a
@@ -59,6 +60,9 @@ export async function PATCH(req) {
   if (sub_messages !== undefined) update.sub_messages = sub_messages
   // null is meaningful here — it clears the hub's nominated venue.
   if (location_id !== undefined) update.location_id = location_id
+  // Owner/admin-configurable loan cap (Iain, 2026-08-12: don't hardcode the
+  // borrow limit for DVD or the Library — both read this per hub_type).
+  if (loan_cap !== undefined) update.loan_cap = loan_cap
 
   const { error } = await supa
     .from("hub_settings")

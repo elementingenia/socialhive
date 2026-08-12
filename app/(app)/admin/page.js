@@ -6,7 +6,7 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MoviesIcon, SocialIcon, ShedIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon } from '@/components/NavIcons'
 import RichEditor, { bbToHtml } from '@/components/RichEditor'
 import OwnersManager from '@/components/OwnersManager'
 import ResidentEditForm, { Sheet, labelStyle } from '@/components/ResidentEditPanel'
@@ -1484,11 +1484,15 @@ function PageTextsTab() {
     },
     {
       key: 'movies_dvd', label: 'Show Time — DVD Library', colour: 'var(--teal)', hex: '#0d9488',
-      hasSubs: false, hint: 'Text shown at the top of the DVD Library.',
+      hasSubs: false, hasLoanCap: true, hint: 'Text shown at the top of the DVD Library. Loan cap sets how many DVDs a resident can have out at once.',
     },
     {
       key: 'social', label: 'Social Events', colour: 'var(--terracotta)', hex: '#c2410c',
       hasSubs: false, hint: 'Welcome message on the Social Events page.',
+    },
+    {
+      key: 'library', label: 'Library Home', colour: 'var(--purple)', hex: '#7c3aed',
+      hasSubs: false, hasLoanCap: true, hint: 'Welcome message on the Library landing page. Loan cap sets how many books a resident can have out at once.',
     },
   ]
 
@@ -1502,6 +1506,7 @@ function PageTextsTab() {
           init[s.key + '__text'] = d[s.key]?.text || ''
           // Subs stored as {id, text} for stable React keys
           init[s.key + '__subs'] = (d[s.key]?.subs || []).map(text => ({ id: newSubId(), text }))
+          if (s.hasLoanCap) init[s.key + '__loanCap'] = d[s.key]?.loanCap ?? 3
         }
         setDraft(init)
         setLoading(false)
@@ -1521,6 +1526,9 @@ function PageTextsTab() {
     if (sec?.hasSubs) {
       body.sub_messages = (draft[hubKey + '__subs'] || []).map(s => s.text).filter(t => t && t !== '<br>' && t !== '<div><br></div>')
     }
+    if (sec?.hasLoanCap) {
+      body.loan_cap = Number(draft[hubKey + '__loanCap']) || 3
+    }
 
     await fetch('/api/hub-settings', {
       method: 'PATCH',
@@ -1535,6 +1543,7 @@ function PageTextsTab() {
       [hubKey]: {
         text: body.welcome_text,
         subs: body.sub_messages || d[hubKey]?.subs || [],
+        loanCap: body.loan_cap !== undefined ? body.loan_cap : d[hubKey]?.loanCap,
       },
     }))
     setSaved(hubKey); setSaving(null)
@@ -1544,10 +1553,11 @@ function PageTextsTab() {
   function isDirty(hubKey) {
     const sec = HUB_SECTIONS.find(s => s.key === hubKey)
     const textChanged = (draft[hubKey + '__text'] || '') !== (data[hubKey]?.text || '')
-    if (!sec?.hasSubs) return textChanged
+    const capChanged = sec?.hasLoanCap && Number(draft[hubKey + '__loanCap']) !== (data[hubKey]?.loanCap ?? 3)
+    if (!sec?.hasSubs) return textChanged || capChanged
     const origSubs = JSON.stringify(data[hubKey]?.subs || [])
     const newSubs  = JSON.stringify((draft[hubKey + '__subs'] || []).map(s => s.text).filter(Boolean))
-    return textChanged || origSubs !== newSubs
+    return textChanged || origSubs !== newSubs || capChanged
   }
 
   if (loading) return <div style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '2rem' }}>Loading…</div>
@@ -1619,6 +1629,20 @@ function PageTextsTab() {
                     + Add Sub Notice
                   </button>
                 </>
+              )}
+
+              {/* Loan cap (DVD Library / Library Home only) */}
+              {sec.hasLoanCap && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, marginBottom: 4 }}>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)',
+                    textTransform: 'uppercase', letterSpacing: '0.05em' }}>Loan cap</label>
+                  <input type="number" min={1} max={20}
+                    value={draft[sec.key + '__loanCap'] ?? 3}
+                    onChange={e => setDraftField(sec.key + '__loanCap', e.target.value)}
+                    style={{ width: 64, padding: '0.4rem 0.5rem', borderRadius: 8, border: '1px solid var(--border)',
+                      background: 'var(--surface)', color: 'var(--text)', fontSize: '0.85rem', fontFamily: 'inherit' }} />
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>items per resident at once</span>
+                </div>
               )}
 
               {/* Save */}
@@ -1945,22 +1969,14 @@ function HubOwnersTab() {
         </div>
         <OwnersManager contextType="hub" contextKey="social" />
       </div>
-      {/* Shed placeholder (Iain, 2026-07-27): the Work Shed hub itself is
-          Phase 3 / not built yet (see the "coming soon" tile on Home) -- this
-          section exists only so the option is visibly present in Admin
-          ahead of launch, not because it does anything. Deliberately NOT a
-          working OwnersManager: there's no real /shed page yet for an owner
-          to be a contact on, and no context_key="shed" is read anywhere else
-          in the app, so wiring it live would let an admin "add" an owner
-          that silently goes nowhere. Swap this for a real OwnersManager
-          contextType="hub" contextKey="shed" once the Shed hub ships. */}
+      {/* Shed placeholder removed 2026-08-12 -- Shed was never built and is
+          out of scope (Owner_SelfService_and_Library_Hub_Scope_v1), dropped
+          from Home the same session. Library takes its place here. */}
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: 'var(--text-dim)', marginBottom: '0.5rem' }}>
-          <ShedIcon size={18} /> Shed
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: 'var(--purple)', marginBottom: '0.5rem' }}>
+          <BookClubIcon size={18} /> Library
         </div>
-        <div style={{ fontSize: '0.8rem', color: 'var(--text-dim)', fontStyle: 'italic' }}>
-          Coming soon — the Work Shed hub hasn't launched yet, so owners can't be added here until it has.
-        </div>
+        <OwnersManager contextType="hub" contextKey="library" />
       </div>
     </div>
   )
