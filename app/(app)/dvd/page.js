@@ -513,7 +513,7 @@ export default function DvdPage() {
     })
     loadData()
     loadLoans()
-    fetch('/api/hub-settings').then(r => r.json()).then(d => setLoanCap(d?.movies?.loanCap ?? 3)).catch(() => {})
+    fetch('/api/hub-settings').then(r => r.json()).then(d => setLoanCap(d?.movies_dvd?.loanCap ?? 3)).catch(() => {})
   }, [loadData, loadLoans])
 
   const loansMap    = Object.fromEntries(loans.map(l => [l.movie_id, l]))

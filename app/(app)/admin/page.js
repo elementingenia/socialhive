@@ -1492,7 +1492,11 @@ function PageTextsTab() {
     },
     {
       key: 'library', label: 'Library Home', colour: 'var(--purple)', hex: '#7c3aed',
-      hasSubs: false, hasLoanCap: true, hint: 'Welcome message on the Library landing page. Loan cap sets how many books a resident can have out at once.',
+      hasSubs: false, hint: 'Welcome message on the Library landing page.',
+    },
+    {
+      key: 'library_books', label: 'Library — Books', colour: 'var(--purple)', hex: '#7c3aed',
+      hasSubs: false, hasLoanCap: true, hint: 'Text shown at the top of the book grid. Loan cap sets how many books a resident can have out at once.',
     },
   ]
 
