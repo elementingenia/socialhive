@@ -22,10 +22,9 @@ export async function PATCH(req) {
   if (error) return NextResponse.json({ error }, { status })
 
   const allowed = [
-    'name', 'slug', 'description', 'welcome_text', 'image_url', 'image_pos_x',
-    'image_pos_y', 'image_zoom', 'colour', 'catalogue_module', 'has_book_return',
-    'has_kit_return', 'has_theme', 'has_cost', 'bring_enabled', 'single_signup',
-    'one_event_at_a_time',
+    'name', 'slug', 'description', 'welcome_text', 'colour', 'catalogue_module',
+    'has_book_return', 'has_kit_return', 'has_theme', 'has_cost', 'bring_enabled',
+    'single_signup', 'one_event_at_a_time',
   ]
   const payload = {}
   for (const k of allowed) if (fields[k] !== undefined) payload[k] = fields[k]
