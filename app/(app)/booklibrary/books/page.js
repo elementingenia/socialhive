@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useOwners } from '@/lib/useOwners'
 
 function parseGenres(g) {
   if (!g) return []
@@ -404,6 +405,7 @@ export default function BookLibraryPage() {
   const [showMyLoans,   setShowMyLoans]   = useState(false)
   const [showAddBook,   setShowAddBook]   = useState(false)
   const [toasts,        setToasts]        = useState([])
+  const { owners: libraryOwners } = useOwners('hub', 'library')
 
   function addToast(message, type='success') {
     const id = Date.now()
@@ -463,10 +465,11 @@ export default function BookLibraryPage() {
 
   const selectedBook = selected ? books.find(b => b.id === selected) : null
 
-  // Owner self-service model isn't built yet (separate scope item) — Add/
-  // Delete are admin-only in the UI for now even though the API routes are
-  // already Owner-scoped (requireAdminOrAreaOwner) ready for it.
-  const canManage = !!member?.is_admin
+  // Owner self-service model shipped 2026-08-12 (Owner_SelfService_and_
+  // Library_Hub_Scope_v1, Part A.3) — an admin or this hub's Owner can
+  // Add/Delete here, matching the API routes' existing Owner scoping
+  // (requireAdminOrAreaOwner('hub', 'library')).
+  const canManage = !!member?.is_admin || (!!member?.id && libraryOwners.some(o => o.id === member.id))
 
   return (
     <div style={{ background:'var(--bg)', minHeight:'100vh' }}>

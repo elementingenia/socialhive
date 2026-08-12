@@ -2,6 +2,9 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ContactBar } from '@/components/OwnersManager'
+import ManageLink from '@/components/ManageLink'
+import { useUser } from '@/lib/UserContext'
+import { useOwners } from '@/lib/useOwners'
 
 // ── Welcome banner — same dismiss/expand pattern as Show Time/Social Home ──
 function WelcomeBanner({ text, colour = 'var(--purple)' }) {
@@ -36,6 +39,11 @@ function WelcomeBanner({ text, colour = 'var(--purple)' }) {
 export default function BookLibraryHomePage() {
   const router = useRouter()
   const [welcomeText, setWelcomeText] = useState('')
+  // Owner self-service (Owner_SelfService_and_Library_Hub_Scope_v1, Part A.3):
+  // an admin or this hub's Owner gets a link through to "Manage Library".
+  const { member, isAdmin } = useUser()
+  const { owners: hubOwners } = useOwners('hub', 'library')
+  const canManage = isAdmin || (!!member?.id && hubOwners.some(o => o.id === member.id))
 
   useEffect(() => {
     fetch('/api/hub-settings').then(r => r.json()).then(d => setWelcomeText(d.library?.text || '')).catch(() => {})
@@ -47,6 +55,8 @@ export default function BookLibraryHomePage() {
 
       <ContactBar contextType="hub" contextKey="library" contextLabel="Library" colour="var(--purple)"
         style={{ margin: '-2px 0 12px' }} />
+
+      {canManage && <ManageLink href="/booklibrary/manage" label="Manage Library" colour="var(--purple)" />}
 
       <button onClick={() => router.push('/booklibrary/books')}
         style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',

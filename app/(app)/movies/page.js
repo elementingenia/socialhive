@@ -10,6 +10,9 @@ import EventCoordinators from '@/components/EventCoordinators'
 import FollowHubButton from '@/components/FollowHubButton'
 import { ContactBar } from '@/components/OwnersManager'
 import VoteScoreGrid from '@/components/VoteScoreGrid'
+import ManageLink from '@/components/ManageLink'
+import { useUser } from '@/lib/UserContext'
+import { useOwners } from '@/lib/useOwners'
 
 function parseGenres(g) {
   if (!g) return []
@@ -365,6 +368,12 @@ function WelcomeBanner({ text, colour = "var(--teal)" }) {
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function MoviesHomePage() {
   const router = useRouter()
+  // Owner self-service (Owner_SelfService_and_Library_Hub_Scope_v1, Part A.3):
+  // an admin or this hub's Owner gets a link through to the standalone
+  // "Manage Show Time" screen.
+  const { member, isAdmin } = useUser()
+  const { owners: hubOwners } = useOwners('hub', 'movie')
+  const canManage = isAdmin || (!!member?.id && hubOwners.some(o => o.id === member.id))
   const [loading, setLoading]     = useState(true)
   const [welcomeText, setWelcomeText] = useState('')
   const [nextEvent, setNextEvent] = useState(null)
@@ -528,6 +537,8 @@ export default function MoviesHomePage() {
 
       <ContactBar contextType="hub" contextKey="movie" contextLabel="Show Time" colour="var(--teal)"
         right={<FollowHubButton hubType="movie" colour="var(--teal)" />} style={{ margin: '-2px 0 12px' }} />
+
+      {canManage && <ManageLink href="/movies/manage" label="Manage Show Time" colour="var(--teal)" />}
 
       {nextEvent ? (
         <NextScreeningCard event={nextEvent} myBooking={nextBookingSummary} coordinator={nextEventCoordinator} seatsLeft={nextEventSeatsLeft} onOpen={() => openSlideOutForEvent(nextEvent.id, nextEvent)} />

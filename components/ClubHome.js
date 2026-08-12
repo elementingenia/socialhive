@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useState, useRef } from "react"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
@@ -1614,7 +1615,7 @@ function ClubSocial({ club, colour, isAdmin, onAppearanceUpdated }) {
             {joined ? "✓ Joined" : "Join"}
           </button>
         )}
-        {isAdmin && !composing && (
+        {(isAdmin || isOwner) && !composing && (
           <button onClick={() => setComposing(true)}
             style={{ padding: "0.4rem 0.9rem", borderRadius: 20, border: `1px dashed ${colour}`,
               background: "transparent", color: clubInk(colour), fontWeight: 700, fontFamily: "inherit",
@@ -1641,8 +1642,8 @@ function ClubSocial({ club, colour, isAdmin, onAppearanceUpdated }) {
         />
       )}
 
-      {/* Admin composer */}
-      {isAdmin && composing && (
+      {/* Admin/Owner composer */}
+      {(isAdmin || isOwner) && composing && (
         (() => (
           <div style={{ marginBottom: 12, border: `1px solid ${colour}`, borderRadius: 12, padding: "0.75rem" }}>
             <RichEditor key="club-notice" initialValue="" hubColour={colour.startsWith("var(") ? undefined : colour}
@@ -1669,7 +1670,7 @@ function ClubSocial({ club, colour, isAdmin, onAppearanceUpdated }) {
                   ? <span dangerouslySetInnerHTML={{ __html: n.content }} />
                   : n.content}
               </div>
-              {isAdmin && (
+              {(isAdmin || isOwner) && (
                 <button onClick={() => removeNotice(n.id)} style={{ marginTop: 6, background: "none", border: "none", color: "var(--danger)", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Remove</button>
               )}
             </div>
@@ -2049,6 +2050,19 @@ export default function ClubHome({ club }) {
       )}
 
       <ContactBar contextType="club" contextKey={club?.id} contextLabel={club?.name} colour={colour} style={{ marginTop: -4, marginBottom: 16 }} />
+
+      {/* Owner self-service (Owner_SelfService_and_Library_Hub_Scope_v1, Part A.3):
+          an admin or this club's Owner can reach the standalone "Manage this club"
+          screen from here — not via Admin, which has no per-area scoping. */}
+      {canManage && (
+        <Link href={`/clubs/${club?.slug}/manage`}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.4rem 0.9rem",
+            borderRadius: 20, border: `1px dashed ${colour}`, background: "transparent",
+            color: clubInk(colour), fontWeight: 700, fontFamily: "inherit", fontSize: "0.82rem",
+            textDecoration: "none", marginBottom: 16 }}>
+          ⚙ Manage {club?.name || "Club"}
+        </Link>
+      )}
 
       {/* Admin/Owner: add a new activity (single event or recurring series) */}
       {canManage && !showForm && canAdd && (
