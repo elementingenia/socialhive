@@ -25,16 +25,26 @@ export async function POST(req) {
 
   // Re-fetch from Google Books server-side rather than trusting client-
   // supplied fields (same discipline as dvd-add re-fetching from TMDB/OMDb).
+  // Bug fixed 2026-08-12: this fetch was missing the API key that
+  // /api/books/search and /api/books/details both already send — the
+  // by-ID endpoint enforces a much stricter anonymous quota than search,
+  // so every add attempt was failing with "Could not fetch book details"
+  // even though GOOGLE_BOOKS_API_KEY was set in Vercel the whole time.
+  const apiKey = process.env.GOOGLE_BOOKS_API_KEY
+  const keyParam = apiKey ? `?key=${apiKey}` : ''
   let item
   try {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 8000)
     const res = await fetch(
-      `https://www.googleapis.com/books/v1/volumes/${encodeURIComponent(google_books_id)}`,
+      `https://www.googleapis.com/books/v1/volumes/${encodeURIComponent(google_books_id)}${keyParam}`,
       { signal: controller.signal, cache: 'no-store' }
     )
     clearTimeout(timeout)
-    if (!res.ok) return NextResponse.json({ error: 'Could not fetch book details' }, { status: 502 })
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}))
+      return NextResponse.json({ error: errBody?.error?.message || 'Could not fetch book details' }, { status: 502 })
+    }
     item = await res.json()
   } catch (err) {
     return NextResponse.json({ error: 'Google Books lookup failed: ' + err.message }, { status: 502 })

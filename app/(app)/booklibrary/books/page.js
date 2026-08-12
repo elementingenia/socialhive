@@ -330,7 +330,7 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
 
   return (
     <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', zIndex:200, display:'flex', alignItems:'flex-end', justifyContent:'center', paddingBottom:'60px' }}>
-      <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, background:'var(--surface)', borderRadius:'20px 20px 0 0', maxHeight:'80vh', display:'flex', flexDirection:'column' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, background:'var(--surface)', borderRadius:'20px 20px 0 0', maxHeight:'calc(92vh - 60px)', display:'flex', flexDirection:'column' }}>
         <div style={{ padding:'0.6rem 1.25rem 0', display:'flex', justifyContent:'center' }}>
           <div style={{ width:40, height:4, background:'var(--border)', borderRadius:2 }} />
         </div>
