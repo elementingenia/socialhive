@@ -40,36 +40,6 @@ function fmtDate(str) {
   return new Date(str).toLocaleDateString('en-AU', { day:'numeric', month:'short', year:'numeric' })
 }
 
-// ── Welcome banner — admin/owner-editable text from Page Texts > Library
-// — Books, same dismiss/expand pattern as Show Time/Social/Library Home ──
-function WelcomeBanner({ text, colour = 'var(--purple)' }) {
-  const STORAGE_KEY = 'library_books_welcome_dismissed'
-  const [dismissed, setDismissed] = useState(() => {
-    try { return localStorage.getItem(STORAGE_KEY) === '1' } catch { return false }
-  })
-
-  if (!text) return null
-  if (dismissed) {
-    return (
-      <button onClick={() => setDismissed(false)}
-        style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none',
-          color: colour, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
-          padding: '0 0 0.75rem', fontFamily: 'inherit' }}>
-        <span style={{ fontSize: '1rem' }}>ℹ</span> Show welcome message
-      </button>
-    )
-  }
-  return (
-    <div style={{ background: colour, borderRadius: 14, padding: '0.9rem 1rem', marginBottom: '1rem', color: '#fff' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem' }}>
-        <div style={{ fontSize: '0.9rem', lineHeight: 1.55 }} dangerouslySetInnerHTML={{ __html: text }} />
-        <button onClick={() => { setDismissed(true); try { localStorage.setItem(STORAGE_KEY, '1') } catch {} }}
-          style={{ flexShrink: 0, background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%',
-            width: 24, height: 24, color: '#fff', fontSize: '0.85rem', cursor: 'pointer', lineHeight: 1 }}>✕</button>
-      </div>
-    </div>
-  )
-}
 
 // ── My Loans slide-out ────────────────────────────────────────────────────────
 function MyLoansSheet({ myLoans, books, onReturn, onClose, addToast }) {
@@ -424,7 +394,7 @@ export default function BookLibraryPage() {
   const [member,        setMember]        = useState(null)
   const [session,       setSession]       = useState(null)
   const [loanCap,       setLoanCap]       = useState(3)
-  const [welcomeText,   setWelcomeText]   = useState('')
+  const [infoText,      setInfoText]      = useState('Books available for residents to borrow. Tap a title to borrow or return.')
   const [loading,       setLoading]       = useState(true)
   const [search,        setSearch]        = useState('')
   const [sortBy,        setSortBy]        = useState('az')
@@ -460,7 +430,7 @@ export default function BookLibraryPage() {
       const res = await fetch('/api/hub-settings')
       const data = await res.json()
       setLoanCap(data?.library_books?.loanCap ?? 3)
-      setWelcomeText(data?.library_books?.text || '')
+      if (data?.library_books?.text) setInfoText(data.library_books.text)
     } catch { /* keep defaults */ }
   }, [])
 
@@ -503,8 +473,6 @@ export default function BookLibraryPage() {
       <Toast toasts={toasts} />
       <div style={{ padding:'1rem 1rem 6rem' }}>
 
-        <WelcomeBanner text={welcomeText} colour="var(--purple)" />
-
         {myLoanCount > 0 && (
           <button onClick={() => setShowMyLoans(true)}
             style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', background:'var(--purple)', color:'#fff', border:'none', borderRadius:'14px', padding:'0.85rem 1.1rem', marginBottom:'1rem', cursor:'pointer', boxShadow:'0 2px 8px rgba(124,58,237,0.25)' }}>
@@ -524,7 +492,7 @@ export default function BookLibraryPage() {
             <span style={{ fontSize:'1.4rem', flexShrink:0 }}>📚</span>
             <div>
               <div style={{ fontWeight:700, color:'var(--purple)', fontSize:'0.8rem', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'0.2rem' }}>Book Library</div>
-              Books available for residents to borrow. Tap a title to borrow or return.
+              <span dangerouslySetInnerHTML={{ __html: infoText }} />
             </div>
           </div>
         </div>

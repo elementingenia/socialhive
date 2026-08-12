@@ -485,6 +485,7 @@ export default function DvdPage() {
   const [showAddDvd,    setShowAddDvd]    = useState(false)
   const [toasts,        setToasts]        = useState([])
   const [loanCap,       setLoanCap]       = useState(3)
+  const [infoText,      setInfoText]      = useState('DVDs available in the cinema for residents to borrow. Tap a title to borrow or return.')
 
   function addToast(message, type='success') {
     const id = Date.now()
@@ -513,7 +514,10 @@ export default function DvdPage() {
     })
     loadData()
     loadLoans()
-    fetch('/api/hub-settings').then(r => r.json()).then(d => setLoanCap(d?.movies_dvd?.loanCap ?? 3)).catch(() => {})
+    fetch('/api/hub-settings').then(r => r.json()).then(d => {
+      setLoanCap(d?.movies_dvd?.loanCap ?? 3)
+      if (d?.movies_dvd?.text) setInfoText(d.movies_dvd.text)
+    }).catch(() => {})
   }, [loadData, loadLoans])
 
   const loansMap    = Object.fromEntries(loans.map(l => [l.movie_id, l]))
@@ -561,7 +565,7 @@ export default function DvdPage() {
             <span style={{ fontSize:'1.4rem', flexShrink:0 }}>💿</span>
             <div>
               <div style={{ fontWeight:700, color:'var(--teal)', fontSize:'0.8rem', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'0.2rem' }}>DVD Library</div>
-              DVDs available in the cinema for residents to borrow. Tap a title to borrow or return.
+              <span dangerouslySetInnerHTML={{ __html: infoText }} />
             </div>
           </div>
         </div>
