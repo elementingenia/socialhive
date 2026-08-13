@@ -49,7 +49,41 @@ export async function GET(req) {
     return true
   })
 
-  const results = deduped.slice(0, 8).map(item => {
+  // Google's Volumes API (q=intitle:) is a plain relevance search, not the
+  // curated ranking google.com/search?tbm=bks shows -- Iain flagged this
+  // 2026-08-13: it was putting a mangled-encoding edition first and a
+  // "(Book Analysis)" study-aid ahead of the actual novel, matching a
+  // gap we already fixed the same way on the Movies side (TMDB's own
+  // /search/movie ranks well on its own, so no scoring was needed there --
+  // Books needs its own since Google Books' plain relevance order doesn't).
+  // Cheap heuristic re-rank rather than trying to replicate Google's real
+  // search ranking signals we don't have access to: prefer editions with a
+  // real cover image and published rating data (the two things that make
+  // an edition look "real" and clickable in the Add Book picker), and push
+  // down study guides/companions/summaries and anything with visibly
+  // corrupted text (a literal U+FFFD replacement character in the
+  // author/title -- bad source data on Google's end, not ours, but no
+  // reason to show it above a clean edition of the same book).
+  const STUDY_AID_RE = /\b(book analysis|study guide|summary|summaries|sparknotes|cliffs?notes|companion|workbook|study notes)\b/i
+  function scoreItem(info) {
+    let score = 0
+    if (info.imageLinks?.thumbnail) score += 3
+    if (typeof info.averageRating === "number") score += 2
+    if ((info.ratingsCount || 0) > 0) score += 1
+    if ((info.pageCount || 0) > 80) score += 1
+    const text = `${info.title || ""} ${info.subtitle || ""}`
+    if (STUDY_AID_RE.test(text)) score -= 5
+    const authorText = (info.authors || []).join(" ")
+    if (/\uFFFD/.test(authorText) || /\uFFFD/.test(info.title || "")) score -= 5
+    return score
+  }
+
+  const ranked = deduped
+    .map((item, i) => ({ item, score: scoreItem(item.volumeInfo), i }))
+    .sort((a, b) => (b.score - a.score) || (a.i - b.i))
+    .map(x => x.item)
+
+  const results = ranked.slice(0, 8).map(item => {
     const info = item.volumeInfo
     const cover = info.imageLinks?.thumbnail?.replace("http://", "https://") || null
     const publishedYear = info.publishedDate
