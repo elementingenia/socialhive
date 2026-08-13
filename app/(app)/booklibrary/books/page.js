@@ -227,9 +227,11 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
                 </div>
               )}
 
-              {(book.isbn || book.notes) && (
-                <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginTop:'-0.4rem' }}>
+              {(book.isbn || book.publisher || book.notes) && (
+                <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginTop:'-0.4rem', flexWrap:'wrap' }}>
                   {book.isbn && <span title="ISBN" style={{ fontSize:'0.72rem', color:'var(--text-dim)', opacity:0.75, fontFamily:'monospace' }}>{book.isbn}</span>}
+                  {book.isbn && book.publisher && <span style={{ fontSize:'0.72rem', color:'var(--text-dim)', opacity:0.5 }}>·</span>}
+                  {book.publisher && <span style={{ fontSize:'0.72rem', color:'var(--text-dim)', opacity:0.75 }}>{book.publisher}</span>}
                   {book.notes && (
                     <button onClick={() => setShowNotes(true)}
                       style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'20px', padding:'0.1rem 0.55rem', fontSize:'0.68rem', fontWeight:600, color:'var(--purple)', cursor:'pointer' }}>
