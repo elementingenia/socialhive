@@ -369,7 +369,7 @@ function BookCard({ book, activeLoan, myLoan, onClick }) {
 
 // ── Add Book Sheet (admin/owner only) ──────────────────────────────────────────
 function AddBookSheet({ session, onAdded, onClose, addToast }) {
-  const [mode,        setMode]        = useState('title') // 'title' | 'barcode' — Iain, 2026-08-13: barcode is manual entry, no camera scan for now
+  const [mode,        setMode]        = useState('barcode') // 'title' | 'barcode' — Iain, 2026-08-13: barcode is manual entry, no camera scan for now. Default + left-most (2026-08-13): barcode is the fast path for adding a physical copy in hand; title search is the deliberate opt-in.
   const [search,      setSearch]      = useState('')
   const [barcode,     setBarcode]     = useState('')
   const [results,     setResults]     = useState([])
@@ -445,13 +445,13 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
         </div>
         <div style={{ padding:'1rem 1.25rem 2rem', overflowY:'auto', flex:1, display:'flex', flexDirection:'column', gap:'0.75rem' }}>
           <div style={{ display:'flex', gap:'0.4rem', background:'var(--surface2)', borderRadius:'10px', padding:'0.25rem' }}>
-            <button onClick={() => switchMode('title')}
-              style={{ flex:1, padding:'0.5rem', borderRadius:'8px', border:'none', fontSize:'0.85rem', fontWeight:700, cursor:'pointer', background:mode==='title'?'var(--surface)':'transparent', color:mode==='title'?'var(--purple)':'var(--text-dim)', boxShadow:mode==='title'?'0 1px 3px rgba(0,0,0,0.1)':'none' }}>
-              Search by Title
-            </button>
             <button onClick={() => switchMode('barcode')}
               style={{ flex:1, padding:'0.5rem', borderRadius:'8px', border:'none', fontSize:'0.85rem', fontWeight:700, cursor:'pointer', background:mode==='barcode'?'var(--surface)':'transparent', color:mode==='barcode'?'var(--purple)':'var(--text-dim)', boxShadow:mode==='barcode'?'0 1px 3px rgba(0,0,0,0.1)':'none' }}>
               Barcode / ISBN
+            </button>
+            <button onClick={() => switchMode('title')}
+              style={{ flex:1, padding:'0.5rem', borderRadius:'8px', border:'none', fontSize:'0.85rem', fontWeight:700, cursor:'pointer', background:mode==='title'?'var(--surface)':'transparent', color:mode==='title'?'var(--purple)':'var(--text-dim)', boxShadow:mode==='title'?'0 1px 3px rgba(0,0,0,0.1)':'none' }}>
+              Search by Title
             </button>
           </div>
 
