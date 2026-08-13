@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
+import ExpandableText from '@/components/ExpandableText'
 
 function parseGenres(g) {
   if (!g) return []
@@ -196,25 +197,21 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
             )}
 
             <div style={{ position:'relative', padding:movie.poster_url?'3rem 1.25rem 2.5rem':'1.25rem 1.25rem 2.5rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
-              {/* Top-right column — ON LOAN pill + admin delete */}
-              {(activeLoan || isAdmin) && (
-                <div style={{ position:'absolute', top:'0.75rem', right:'1.25rem', display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'0.4rem' }}>
-                  {activeLoan && (
-                    <div style={{ background:iMineToReturn?'var(--teal)':'var(--surface2)', border:'1px solid ' + (iMineToReturn?'var(--teal)':'var(--border)'), borderRadius:'10px', padding:'0.4rem 0.65rem', textAlign:'center' }}>
-                      <div style={{ fontSize:'0.65rem', fontWeight:800, color:iMineToReturn?'#fff':'var(--text)', textTransform:'uppercase', letterSpacing:'0.05em', lineHeight:1.2 }}>
-                        📀 On Loan
-                      </div>
-                      <div style={{ fontSize:'0.6rem', color:iMineToReturn?'rgba(255,255,255,0.85)':'var(--text-dim)', marginTop:'0.2rem', lineHeight:1.3, whiteSpace:'nowrap' }}>
-                        {iMineToReturn ? `You · ${fmtDate(activeLoan.borrowed_at)}` : `${activeLoan.members?.name || 'Resident'} · ${fmtDate(activeLoan.borrowed_at)}`}
-                      </div>
+              {/* Top-right — ON LOAN pill only. Admin Remove moved down onto
+                  the year/runtime row (2026-08-13) -- stacking it here with
+                  the loan pill cost a full extra line of vertical space in
+                  the modal, same fix applied to the Book Library detail
+                  sheet for consistency across hubs. */}
+              {activeLoan && (
+                <div style={{ position:'absolute', top:'0.75rem', right:'1.25rem' }}>
+                  <div style={{ background:iMineToReturn?'var(--teal)':'var(--surface2)', border:'1px solid ' + (iMineToReturn?'var(--teal)':'var(--border)'), borderRadius:'10px', padding:'0.4rem 0.65rem', textAlign:'center' }}>
+                    <div style={{ fontSize:'0.65rem', fontWeight:800, color:iMineToReturn?'#fff':'var(--text)', textTransform:'uppercase', letterSpacing:'0.05em', lineHeight:1.2 }}>
+                      📀 On Loan
                     </div>
-                  )}
-                  {isAdmin && (
-                    <button onClick={() => setConfirmDelete(true)} disabled={deleting}
-                      style={{ display:'flex', alignItems:'center', gap:'0.3rem', background:'none', border:'1px solid var(--danger)', borderRadius:'8px', padding:'0.3rem 0.6rem', fontSize:'0.68rem', fontWeight:700, color:'var(--danger)', cursor:deleting?'not-allowed':'pointer', opacity:deleting?0.5:1, whiteSpace:'nowrap' }}>
-                      🗑 {deleting ? 'Removing…' : 'Remove'}
-                    </button>
-                  )}
+                    <div style={{ fontSize:'0.6rem', color:iMineToReturn?'rgba(255,255,255,0.85)':'var(--text-dim)', marginTop:'0.2rem', lineHeight:1.3, whiteSpace:'nowrap' }}>
+                      {iMineToReturn ? `You · ${fmtDate(activeLoan.borrowed_at)}` : `${activeLoan.members?.name || 'Resident'} · ${fmtDate(activeLoan.borrowed_at)}`}
+                    </div>
+                  </div>
                 </div>
               )}
               {/* No-poster loan tile */}
@@ -230,7 +227,19 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
                 </div>
               )}
 
-              {movie.year && <div style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>{movie.year}{movie.runtime ? ' · ' + movie.runtime : ''}</div>}
+              {(movie.year || isAdmin) && (
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'0.75rem' }}>
+                  <div style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>
+                    {movie.year}{movie.year && movie.runtime ? ' · ' : ''}{movie.runtime}
+                  </div>
+                  {isAdmin && (
+                    <button onClick={() => setConfirmDelete(true)} disabled={deleting}
+                      style={{ flexShrink:0, display:'flex', alignItems:'center', gap:'0.3rem', background:'none', border:'1px solid var(--danger)', borderRadius:'8px', padding:'0.3rem 0.6rem', fontSize:'0.68rem', fontWeight:700, color:'var(--danger)', cursor:deleting?'not-allowed':'pointer', opacity:deleting?0.5:1, whiteSpace:'nowrap' }}>
+                      🗑 {deleting ? 'Removing…' : 'Remove'}
+                    </button>
+                  )}
+                </div>
+              )}
 
               {genres.length > 0 && <GenreChips genres={genres} />}
 
@@ -250,7 +259,12 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
 
               {movie.director && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Director:</strong> {movie.director}</div>}
               {movie.actors   && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Cast:</strong> {movie.actors}</div>}
-              {movie.plot     && <div style={{ fontSize:'0.88rem', lineHeight:1.6, color:'var(--text)' }}>{movie.plot}</div>}
+              {/* Clamped to 2 lines so Borrow this DVD below is always
+                  visible without scrolling when the sheet first opens —
+                  same fix and rationale as the Book Library summary. */}
+              {movie.plot && (
+                <ExpandableText text={movie.plot} fontSize={13} lineHeight={1.6} maxLines={2} colour="var(--teal)" />
+              )}
 
               {/* Borrow / Return actions — no info boxes, just buttons */}
               {iMineToReturn ? (

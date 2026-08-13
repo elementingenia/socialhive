@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useOwners } from '@/lib/useOwners'
+import ExpandableText from '@/components/ExpandableText'
 
 function parseGenres(g) {
   if (!g) return []
@@ -104,6 +105,7 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [borrowing,     setBorrowing]     = useState(false)
   const [returning,     setReturning]     = useState(false)
+  const [showNotes,     setShowNotes]     = useState(false)
   const genres = parseGenres(book.genre)
 
   const iMineToReturn = activeLoan && activeLoan.member_id === memberId
@@ -160,24 +162,16 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
             )}
 
             <div style={{ position:'relative', padding:book.cover_url?'3rem 1.25rem 2.5rem':'1.25rem 1.25rem 2.5rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
-              {(activeLoan || canManage) && (
-                <div style={{ position:'absolute', top:'0.75rem', right:'1.25rem', display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'0.4rem' }}>
-                  {activeLoan && (
-                    <div style={{ background:iMineToReturn?'var(--purple)':'var(--surface2)', border:'1px solid ' + (iMineToReturn?'var(--purple)':'var(--border)'), borderRadius:'10px', padding:'0.4rem 0.65rem', textAlign:'center' }}>
-                      <div style={{ fontSize:'0.65rem', fontWeight:800, color:iMineToReturn?'#fff':'var(--text)', textTransform:'uppercase', letterSpacing:'0.05em', lineHeight:1.2 }}>
-                        📚 On Loan
-                      </div>
-                      <div style={{ fontSize:'0.6rem', color:iMineToReturn?'rgba(255,255,255,0.85)':'var(--text-dim)', marginTop:'0.2rem', lineHeight:1.3, whiteSpace:'nowrap' }}>
-                        {iMineToReturn ? `You · ${fmtDate(activeLoan.borrowed_at)}` : `${activeLoan.members?.name || 'Resident'} · ${fmtDate(activeLoan.borrowed_at)}`}
-                      </div>
+              {activeLoan && (
+                <div style={{ position:'absolute', top:'0.75rem', right:'1.25rem' }}>
+                  <div style={{ background:iMineToReturn?'var(--purple)':'var(--surface2)', border:'1px solid ' + (iMineToReturn?'var(--purple)':'var(--border)'), borderRadius:'10px', padding:'0.4rem 0.65rem', textAlign:'center' }}>
+                    <div style={{ fontSize:'0.65rem', fontWeight:800, color:iMineToReturn?'#fff':'var(--text)', textTransform:'uppercase', letterSpacing:'0.05em', lineHeight:1.2 }}>
+                      📚 On Loan
                     </div>
-                  )}
-                  {canManage && (
-                    <button onClick={() => setConfirmDelete(true)} disabled={deleting}
-                      style={{ display:'flex', alignItems:'center', gap:'0.3rem', background:'none', border:'1px solid var(--danger)', borderRadius:'8px', padding:'0.3rem 0.6rem', fontSize:'0.68rem', fontWeight:700, color:'var(--danger)', cursor:deleting?'not-allowed':'pointer', opacity:deleting?0.5:1, whiteSpace:'nowrap' }}>
-                      🗑 {deleting ? 'Removing…' : 'Remove'}
-                    </button>
-                  )}
+                    <div style={{ fontSize:'0.6rem', color:iMineToReturn?'rgba(255,255,255,0.85)':'var(--text-dim)', marginTop:'0.2rem', lineHeight:1.3, whiteSpace:'nowrap' }}>
+                      {iMineToReturn ? `You · ${fmtDate(activeLoan.borrowed_at)}` : `${activeLoan.members?.name || 'Resident'} · ${fmtDate(activeLoan.borrowed_at)}`}
+                    </div>
+                  </div>
                 </div>
               )}
               {!book.cover_url && activeLoan && (
@@ -192,7 +186,31 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
                 </div>
               )}
 
-              {book.author && <div style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>{book.author}{book.published_year ? ' · ' + book.published_year : ''}</div>}
+              {(book.author || book.published_year || canManage) && (
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'0.75rem' }}>
+                  <div style={{ color:'var(--text-dim)', fontSize:'0.85rem', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                    {book.author}{book.author && book.published_year ? ' · ' : ''}{book.published_year}
+                  </div>
+                  {canManage && (
+                    <button onClick={() => setConfirmDelete(true)} disabled={deleting}
+                      style={{ flexShrink:0, display:'flex', alignItems:'center', gap:'0.3rem', background:'none', border:'1px solid var(--danger)', borderRadius:'8px', padding:'0.3rem 0.6rem', fontSize:'0.68rem', fontWeight:700, color:'var(--danger)', cursor:deleting?'not-allowed':'pointer', opacity:deleting?0.5:1, whiteSpace:'nowrap' }}>
+                      🗑 {deleting ? 'Removing…' : 'Remove'}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {(book.isbn || book.notes) && (
+                <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginTop:'-0.4rem' }}>
+                  {book.isbn && <span title="ISBN" style={{ fontSize:'0.72rem', color:'var(--text-dim)', opacity:0.75, fontFamily:'monospace' }}>{book.isbn}</span>}
+                  {book.notes && (
+                    <button onClick={() => setShowNotes(true)}
+                      style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'20px', padding:'0.1rem 0.55rem', fontSize:'0.68rem', fontWeight:600, color:'var(--purple)', cursor:'pointer' }}>
+                      Notes
+                    </button>
+                  )}
+                </div>
+              )}
 
               {genres.length > 0 && <GenreChips genres={genres} />}
 
@@ -205,12 +223,17 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
               )}
 
               {/* Google Books descriptions come with real HTML markup
-                  (<p>, <b>, <i>) baked in -- rendering as plain text showed
-                  the tags literally instead of formatting the text. Same
-                  dangerouslySetInnerHTML trust model already used for Page
-                  Texts/notices elsewhere in this app -- Google's catalogue
-                  copy, not user input. */}
-              {book.summary && <div style={{ fontSize:'0.88rem', lineHeight:1.6, color:'var(--text)' }} dangerouslySetInnerHTML={{ __html: book.summary }} />}
+                  (<p>, <b>, <i>) baked in -- same dangerouslySetInnerHTML
+                  trust model already used for Page Texts/notices elsewhere
+                  in this app -- Google's catalogue copy, not user input.
+                  Clamped to 2 lines (same convention as event/club
+                  descriptions) so the Borrow button below is always visible
+                  without scrolling when the sheet first opens -- expanding
+                  the summary is an explicit user action, so it's fine if
+                  that pushes the button down after the tap. */}
+              {book.summary && (
+                <ExpandableText text={book.summary} html fontSize={13} lineHeight={1.6} maxLines={2} colour="var(--purple)" />
+              )}
 
               {iMineToReturn ? (
                 <button onClick={handleReturn} disabled={returning}
@@ -241,6 +264,16 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
               <button onClick={() => setConfirmDelete(false)} style={{ flex:1, padding:'0.75rem', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'10px', fontSize:'0.9rem', fontWeight:600, cursor:'pointer', color:'var(--text)' }}>Cancel</button>
               <button onClick={handleDelete} style={{ flex:1, padding:'0.75rem', background:'var(--danger)', border:'none', borderRadius:'10px', fontSize:'0.9rem', fontWeight:600, cursor:'pointer', color:'#fff' }}>Remove</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showNotes && (
+        <div onClick={() => setShowNotes(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.6)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:'1.5rem' }}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:'var(--surface)', borderRadius:'16px', padding:'1.5rem', width:'100%', maxWidth:360 }}>
+            <div style={{ fontWeight:700, marginBottom:'0.75rem' }}>Notes</div>
+            <div style={{ fontSize:'0.88rem', color:'var(--text)', marginBottom:'1.25rem', lineHeight:1.6, whiteSpace:'pre-wrap' }}>{book.notes}</div>
+            <button onClick={() => setShowNotes(false)} style={{ width:'100%', padding:'0.75rem', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'10px', fontSize:'0.9rem', fontWeight:600, cursor:'pointer', color:'var(--text)' }}>Close</button>
           </div>
         </div>
       )}
