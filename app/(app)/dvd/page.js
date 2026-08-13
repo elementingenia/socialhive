@@ -259,29 +259,14 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
 
               {movie.director && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Director:</strong> {movie.director}</div>}
               {movie.actors   && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Cast:</strong> {movie.actors}</div>}
-              {/* Clamped to 2 lines so Borrow this DVD below is always
-                  visible without scrolling when the sheet first opens —
-                  same fix and rationale as the Book Library summary. */}
+              {/* Clamped for readability, not for Borrow-visibility -- that
+                  job now belongs to the sticky footer below (2026-08-13):
+                  the sheet grows to fit its content up to the sheet's own
+                  maxHeight and only scrolls internally past that point, same
+                  fix and rationale as the Book Library summary. */}
               {movie.plot && (
-                <ExpandableText text={movie.plot} fontSize={13} lineHeight={1.6} maxLines={2} colour="var(--teal)" />
+                <ExpandableText text={movie.plot} fontSize={13} lineHeight={1.6} maxLines={4} colour="var(--teal)" />
               )}
-
-              {/* Borrow / Return actions — no info boxes, just buttons */}
-              {iMineToReturn ? (
-                <button onClick={handleReturn} disabled={returning}
-                  style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:returning?'not-allowed':'pointer', opacity:returning?0.6:1, width:'100%' }}>
-                  {returning ? 'Returning…' : '↩ Return this DVD'}
-                </button>
-              ) : canBorrow ? (
-                <button onClick={handleBorrow} disabled={borrowing || !memberId}
-                  style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:(borrowing||!memberId)?'not-allowed':'pointer', opacity:(borrowing||!memberId)?0.6:1, width:'100%' }}>
-                  {borrowing ? 'Borrowing…' : '📀 Borrow this DVD'}
-                </button>
-              ) : !activeLoan && myLoanCount >= loanCap ? (
-                <div style={{ background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.3)', borderRadius:'10px', padding:'0.75rem 1rem', fontSize:'0.85rem', color:'var(--text)', textAlign:'center' }}>
-                  ⚠️ You have {loanCap} DVD{loanCap!==1?'s':''} on loan — return one first.
-                </div>
-              ) : null}
 
               {/* Suggest for Screening — visible to all signed-in members */}
               {memberId && (
@@ -309,6 +294,33 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
 
             </div>
           </div>
+
+          {/* Sticky action footer -- outside the scrollable body, so Borrow/
+              Return/loan-cap-warning stays reachable regardless of how far
+              the description or cast list scrolls. Mirrors the Sheet
+              component's sticky footer pattern used elsewhere in the app
+              (ResidentEditPanel) for the same "never hunt for the button"
+              reason, and matches the identical fix applied to the Book
+              Library detail sheet. */}
+          {(iMineToReturn || canBorrow || (!activeLoan && myLoanCount >= loanCap)) && (
+            <div style={{ flexShrink:0, padding:'0.85rem 1.25rem', borderTop:'1px solid var(--border)', background:'var(--surface)' }}>
+              {iMineToReturn ? (
+                <button onClick={handleReturn} disabled={returning}
+                  style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:returning?'not-allowed':'pointer', opacity:returning?0.6:1, width:'100%' }}>
+                  {returning ? 'Returning…' : '↩ Return this DVD'}
+                </button>
+              ) : canBorrow ? (
+                <button onClick={handleBorrow} disabled={borrowing || !memberId}
+                  style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:(borrowing||!memberId)?'not-allowed':'pointer', opacity:(borrowing||!memberId)?0.6:1, width:'100%' }}>
+                  {borrowing ? 'Borrowing…' : '📀 Borrow this DVD'}
+                </button>
+              ) : !activeLoan && myLoanCount >= loanCap ? (
+                <div style={{ background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.3)', borderRadius:'10px', padding:'0.75rem 1rem', fontSize:'0.85rem', color:'var(--text)', textAlign:'center' }}>
+                  ⚠️ You have {loanCap} DVD{loanCap!==1?'s':''} on loan — return one first.
+                </div>
+              ) : null}
+            </div>
+          )}
         </div>
       </div>
 

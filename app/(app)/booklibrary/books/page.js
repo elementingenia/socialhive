@@ -226,15 +226,26 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
                   (<p>, <b>, <i>) baked in -- same dangerouslySetInnerHTML
                   trust model already used for Page Texts/notices elsewhere
                   in this app -- Google's catalogue copy, not user input.
-                  Clamped to 2 lines (same convention as event/club
-                  descriptions) so the Borrow button below is always visible
-                  without scrolling when the sheet first opens -- expanding
-                  the summary is an explicit user action, so it's fine if
-                  that pushes the button down after the tap. */}
+                  Clamped for readability, not for Borrow-visibility -- that
+                  job now belongs to the sticky footer below (2026-08-13):
+                  the sheet grows to fit its content up to the sheet's own
+                  maxHeight and only scrolls internally past that point, so
+                  a short summary no longer forces the sheet shorter than it
+                  needs to be the way a fixed 2-line clamp did. */}
               {book.summary && (
-                <ExpandableText text={book.summary} html fontSize={13} lineHeight={1.6} maxLines={2} colour="var(--purple)" />
+                <ExpandableText text={book.summary} html fontSize={13} lineHeight={1.6} maxLines={4} colour="var(--purple)" />
               )}
+            </div>
+          </div>
 
+          {/* Sticky action footer -- outside the scrollable body, so Borrow/
+              Return/loan-cap-warning stays reachable regardless of how far
+              the description or genre list scrolls. Mirrors the Sheet
+              component's sticky footer pattern used elsewhere in the app
+              (ResidentEditPanel) for the same "never hunt for the button"
+              reason. */}
+          {(iMineToReturn || canBorrow || (!activeLoan && myLoanCount >= loanCap)) && (
+            <div style={{ flexShrink:0, padding:'0.85rem 1.25rem', borderTop:'1px solid var(--border)', background:'var(--surface)' }}>
               {iMineToReturn ? (
                 <button onClick={handleReturn} disabled={returning}
                   style={{ background:'var(--purple)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:returning?'not-allowed':'pointer', opacity:returning?0.6:1, width:'100%' }}>
@@ -251,7 +262,7 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
                 </div>
               ) : null}
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -328,12 +339,19 @@ function BookCard({ book, activeLoan, myLoan, onClick }) {
 
 // ── Add Book Sheet (admin/owner only) ──────────────────────────────────────────
 function AddBookSheet({ session, onAdded, onClose, addToast }) {
+  const [mode,        setMode]        = useState('title') // 'title' | 'barcode' — Iain, 2026-08-13: barcode is manual entry, no camera scan for now
   const [search,      setSearch]      = useState('')
+  const [barcode,     setBarcode]     = useState('')
   const [results,     setResults]     = useState([])
   const [searching,   setSearching]   = useState(false)
+  const [barcodeError,setBarcodeError]= useState('')
   const [selected,    setSelected]    = useState(null)
   const [adding,      setAdding]      = useState(false)
   const [isDuplicate, setIsDuplicate] = useState(false)
+
+  function switchMode(next) {
+    setMode(next); setSearch(''); setBarcode(''); setResults([]); setSelected(null); setIsDuplicate(false); setBarcodeError('')
+  }
 
   async function doSearch(q) {
     setSearch(q); setSelected(null); setIsDuplicate(false)
@@ -345,9 +363,25 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
     setSearching(false)
   }
 
+  // Barcode mode: NOT live search-as-you-type — the number must be entered
+  // in full and this only fires on an explicit button click (Iain,
+  // 2026-08-13: "must be entered in its entirety with a specific search
+  // button being clicked... Simple enough for now").
+  async function doBarcodeSearch() {
+    setSelected(null); setIsDuplicate(false); setBarcodeError('')
+    if (!barcode.trim()) return
+    setSearching(true)
+    const res = await fetch('/api/books/search?isbn=' + encodeURIComponent(barcode.trim()))
+    const data = await res.json()
+    setSearching(false)
+    if (data.error === 'invalid_isbn') { setBarcodeError('Enter a full 10 or 13-digit ISBN'); setResults([]); return }
+    if (!data.results?.length) { setBarcodeError('No book found for that barcode'); setResults([]); return }
+    setResults(data.results)
+  }
+
   async function handleSelect(r) {
     setSelected(r)
-    setSearch(r.title)
+    if (mode === 'title') setSearch(r.title)
     setResults([])
     setIsDuplicate(false)
     const { data } = await supabase.from('books').select('id').eq('we_own', true).eq('google_books_id', r.google_books_id).maybeSingle()
@@ -380,27 +414,69 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
           <button onClick={onClose} style={{ width:32, height:32, borderRadius:'50%', background:'var(--surface2)', border:'none', fontSize:'1.1rem', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-dim)' }}>✕</button>
         </div>
         <div style={{ padding:'1rem 1.25rem 2rem', overflowY:'auto', flex:1, display:'flex', flexDirection:'column', gap:'0.75rem' }}>
-          <div style={{ position:'relative' }}>
-            <input value={search} onChange={e => doSearch(e.target.value)}
-              placeholder="Search book title…"
-              style={{ width:'100%', padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
-            {searching && <div style={{ position:'absolute', right:'0.75rem', top:'50%', transform:'translateY(-50%)', fontSize:'0.75rem', color:'var(--text-dim)' }}>…</div>}
-            {results.length > 0 && !selected && (
-              <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', zIndex:50, overflow:'hidden', boxShadow:'0 4px 16px rgba(0,0,0,0.2)', marginTop:'0.25rem' }}>
-                {results.map(r => (
-                  <div key={r.google_books_id} onClick={() => handleSelect(r)}
-                    style={{ display:'flex', alignItems:'center', gap:'0.65rem', padding:'0.65rem 0.85rem', cursor:'pointer', borderBottom:'1px solid var(--border)' }}>
-                    {r.cover_url ? <img src={r.cover_url} alt={r.title} style={{ width:32, height:46, objectFit:'cover', borderRadius:4 }} /> : <div style={{ width:32, height:46, background:'var(--surface2)', borderRadius:4 }} />}
-                    <div>
-                      <div style={{ fontWeight:700, fontSize:'0.9rem' }}>{r.title}</div>
-                      {r.author && <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{r.author}</div>}
-                      {r.rating && <div style={{ fontSize:'0.75rem', color:'var(--amber-dark)', fontWeight:600 }}>⭐ {r.rating}</div>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+          <div style={{ display:'flex', gap:'0.4rem', background:'var(--surface2)', borderRadius:'10px', padding:'0.25rem' }}>
+            <button onClick={() => switchMode('title')}
+              style={{ flex:1, padding:'0.5rem', borderRadius:'8px', border:'none', fontSize:'0.85rem', fontWeight:700, cursor:'pointer', background:mode==='title'?'var(--surface)':'transparent', color:mode==='title'?'var(--purple)':'var(--text-dim)', boxShadow:mode==='title'?'0 1px 3px rgba(0,0,0,0.1)':'none' }}>
+              Search by Title
+            </button>
+            <button onClick={() => switchMode('barcode')}
+              style={{ flex:1, padding:'0.5rem', borderRadius:'8px', border:'none', fontSize:'0.85rem', fontWeight:700, cursor:'pointer', background:mode==='barcode'?'var(--surface)':'transparent', color:mode==='barcode'?'var(--purple)':'var(--text-dim)', boxShadow:mode==='barcode'?'0 1px 3px rgba(0,0,0,0.1)':'none' }}>
+              Barcode / ISBN
+            </button>
           </div>
+
+          {mode === 'title' ? (
+            <div style={{ position:'relative' }}>
+              <input value={search} onChange={e => doSearch(e.target.value)}
+                placeholder="Search book title…"
+                style={{ width:'100%', padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
+              {searching && <div style={{ position:'absolute', right:'0.75rem', top:'50%', transform:'translateY(-50%)', fontSize:'0.75rem', color:'var(--text-dim)' }}>…</div>}
+              {results.length > 0 && !selected && (
+                <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', zIndex:50, overflow:'hidden', boxShadow:'0 4px 16px rgba(0,0,0,0.2)', marginTop:'0.25rem' }}>
+                  {results.map(r => (
+                    <div key={r.google_books_id} onClick={() => handleSelect(r)}
+                      style={{ display:'flex', alignItems:'center', gap:'0.65rem', padding:'0.65rem 0.85rem', cursor:'pointer', borderBottom:'1px solid var(--border)' }}>
+                      {r.cover_url ? <img src={r.cover_url} alt={r.title} style={{ width:32, height:46, objectFit:'cover', borderRadius:4 }} /> : <div style={{ width:32, height:46, background:'var(--surface2)', borderRadius:4 }} />}
+                      <div>
+                        <div style={{ fontWeight:700, fontSize:'0.9rem' }}>{r.title}</div>
+                        {r.author && <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{r.author}</div>}
+                        {r.rating && <div style={{ fontSize:'0.75rem', color:'var(--amber-dark)', fontWeight:600 }}>⭐ {r.rating}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+              <div style={{ display:'flex', gap:'0.5rem' }}>
+                <input value={barcode} onChange={e => { setBarcode(e.target.value); setBarcodeError('') }}
+                  onKeyDown={e => { if (e.key === 'Enter') doBarcodeSearch() }}
+                  inputMode="numeric" placeholder="Enter full ISBN / barcode number…"
+                  style={{ flex:1, padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
+                <button onClick={doBarcodeSearch} disabled={searching || !barcode.trim()}
+                  style={{ flexShrink:0, padding:'0 1.1rem', background:'var(--purple)', color:'#fff', border:'none', borderRadius:'12px', fontSize:'0.9rem', fontWeight:700, cursor:(searching||!barcode.trim())?'not-allowed':'pointer', opacity:(searching||!barcode.trim())?0.5:1 }}>
+                  {searching ? '…' : 'Search'}
+                </button>
+              </div>
+              {barcodeError && <div style={{ fontSize:'0.8rem', color:'var(--danger)' }}>{barcodeError}</div>}
+              {results.length > 0 && !selected && (
+                <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', overflow:'hidden' }}>
+                  {results.map(r => (
+                    <div key={r.google_books_id} onClick={() => handleSelect(r)}
+                      style={{ display:'flex', alignItems:'center', gap:'0.65rem', padding:'0.65rem 0.85rem', cursor:'pointer', borderBottom:'1px solid var(--border)' }}>
+                      {r.cover_url ? <img src={r.cover_url} alt={r.title} style={{ width:32, height:46, objectFit:'cover', borderRadius:4 }} /> : <div style={{ width:32, height:46, background:'var(--surface2)', borderRadius:4 }} />}
+                      <div>
+                        <div style={{ fontWeight:700, fontSize:'0.9rem' }}>{r.title}</div>
+                        {r.author && <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{r.author}</div>}
+                        {r.rating && <div style={{ fontSize:'0.75rem', color:'var(--amber-dark)', fontWeight:600 }}>⭐ {r.rating}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {selected && (
             <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
               <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'var(--surface2)', borderRadius:'12px', padding:'0.75rem', border:`1px solid ${isDuplicate ? 'var(--danger)' : 'var(--purple)'}` }}>

@@ -1,13 +1,43 @@
 import { NextResponse } from "next/server"
 
+// Strips anything but digits/X so "978-0-14-118535-4" and "978 0 14 118535 4"
+// both match cleanly -- Iain, 2026-08-13: manual barcode entry, the user
+// types whatever's printed under the barcode (hyphens and all).
+function normaliseIsbn(raw) {
+  return (raw || "").toUpperCase().replace(/[^0-9X]/g, "")
+}
+
+function extractIsbn(info) {
+  const ids = info.industryIdentifiers || []
+  const isbn13 = ids.find(x => x.type === "ISBN_13")
+  const isbn10 = ids.find(x => x.type === "ISBN_10")
+  return (isbn13 || isbn10)?.identifier || null
+}
+
 export async function GET(req) {
   const { searchParams } = new URL(req.url)
-  const q = searchParams.get("q")?.trim()
-  if (!q || q.length < 2) return NextResponse.json({ results: [] })
+  const q    = searchParams.get("q")?.trim()
+  const isbn = normaliseIsbn(searchParams.get("isbn"))
 
+  // Barcode/ISBN mode -- Iain, 2026-08-13: manual entry only for now (no
+  // camera scanning), triggered by an explicit "Search" button rather than
+  // live search-as-you-type, and the number must be entered in full: a
+  // bare 10 or 13 digit ISBN (10-digit may end in an X check digit).
+  if (isbn) {
+    if (!/^(\d{9}[\dX]|\d{13})$/.test(isbn)) {
+      return NextResponse.json({ results: [], error: "invalid_isbn" }, { status: 400 })
+    }
+    return searchGoogleBooks(`isbn:${isbn}`, { rerank: false })
+  }
+
+  if (!q || q.length < 2) return NextResponse.json({ results: [] })
+  return searchGoogleBooks(`intitle:${encodeURIComponent(q)}`, { rerank: true, qNorm: q.toLowerCase().trim() })
+}
+
+async function searchGoogleBooks(queryFragment, { rerank, qNorm }) {
   const apiKey = process.env.GOOGLE_BOOKS_API_KEY
   const keyParam = apiKey ? `&key=${apiKey}` : ""
-  const url = `https://www.googleapis.com/books/v1/volumes?q=intitle:${encodeURIComponent(q)}&maxResults=20&printType=books&langRestrict=en${keyParam}`
+  const url = `https://www.googleapis.com/books/v1/volumes?q=${queryFragment}&maxResults=20&printType=books&langRestrict=en${keyParam}`
 
   let res
   try {
@@ -31,12 +61,12 @@ export async function GET(req) {
   }
 
   const data = await res.json()
-  const qNorm = q.toLowerCase().trim()
-  const seen  = new Set()
+  const seen = new Set()
 
   const items = (data.items || []).filter(item => {
     const info = item.volumeInfo
     if (!info?.title || !info?.authors?.length) return false
+    if (!rerank) return true // ISBN search -- Google already matched the exact edition, no title-substring gate needed
     const mainTitle = info.title.toLowerCase().split(/[:\-–]/)[0].trim()
     return mainTitle.includes(qNorm)
   })
@@ -64,6 +94,8 @@ export async function GET(req) {
   // corrupted text (a literal U+FFFD replacement character in the
   // author/title -- bad source data on Google's end, not ours, but no
   // reason to show it above a clean edition of the same book).
+  // Not applied to ISBN search: a barcode identifies one specific printed
+  // edition, so there's nothing to rank -- Google's own match is the answer.
   const STUDY_AID_RE = /\b(book analysis|study guide|summary|summaries|sparknotes|cliffs?notes|companion|workbook|study notes)\b/i
   function scoreItem(info) {
     let score = 0
@@ -86,16 +118,18 @@ export async function GET(req) {
     const text = `${info.title || ""} ${info.subtitle || ""}`
     if (STUDY_AID_RE.test(text)) score -= 5
     const authorText = (info.authors || []).join(" ")
-    if (/\uFFFD/.test(authorText) || /\uFFFD/.test(info.title || "")) score -= 5
+    if (/�/.test(authorText) || /�/.test(info.title || "")) score -= 5
     return score
   }
 
-  const ranked = deduped
-    .map((item, i) => ({ item, score: scoreItem(item.volumeInfo), i }))
-    .sort((a, b) => (b.score - a.score) || (a.i - b.i))
-    .map(x => x.item)
+  const ordered = rerank
+    ? deduped
+        .map((item, i) => ({ item, score: scoreItem(item.volumeInfo), i }))
+        .sort((a, b) => (b.score - a.score) || (a.i - b.i))
+        .map(x => x.item)
+    : deduped
 
-  const results = ranked.slice(0, 8).map(item => {
+  const results = ordered.slice(0, 8).map(item => {
     const info = item.volumeInfo
     const cover = info.imageLinks?.thumbnail?.replace("http://", "https://") || null
     const publishedYear = info.publishedDate
@@ -111,6 +145,7 @@ export async function GET(req) {
       rating_link:    info.infoLink || `https://books.google.com/books?id=${item.id}`,
       genres:         (info.categories || []).slice(0, 4).join(", ") || null,
       published_year: publishedYear,
+      isbn:           extractIsbn(info),
     }
   })
 
