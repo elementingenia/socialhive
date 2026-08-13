@@ -204,7 +204,13 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
                 </div>
               )}
 
-              {book.summary && <div style={{ fontSize:'0.88rem', lineHeight:1.6, color:'var(--text)' }}>{book.summary}</div>}
+              {/* Google Books descriptions come with real HTML markup
+                  (<p>, <b>, <i>) baked in -- rendering as plain text showed
+                  the tags literally instead of formatting the text. Same
+                  dangerouslySetInnerHTML trust model already used for Page
+                  Texts/notices elsewhere in this app -- Google's catalogue
+                  copy, not user input. */}
+              {book.summary && <div style={{ fontSize:'0.88rem', lineHeight:1.6, color:'var(--text)' }} dangerouslySetInnerHTML={{ __html: book.summary }} />}
 
               {iMineToReturn ? (
                 <button onClick={handleReturn} disabled={returning}
