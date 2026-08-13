@@ -1,8 +1,9 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useOwners } from '@/lib/useOwners'
 import ExpandableText from '@/components/ExpandableText'
+import { useAdaptiveClamp } from '@/lib/useAdaptiveClamp'
 
 function parseGenres(g) {
   if (!g) return []
@@ -111,6 +112,15 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
   const iMineToReturn = activeLoan && activeLoan.member_id === memberId
   const canBorrow      = !activeLoan && myLoanCount < loanCap
 
+  // Clamp the summary only as far as the sheet's own maxHeight forces --
+  // a short blurb that fits in full shows in full, no Read more; a long
+  // one clamps to whatever's left after everything else in the sheet.
+  // See lib/useAdaptiveClamp.js for the measurement approach.
+  const sheetRef = useRef(null)
+  const bodyRef = useRef(null)
+  const summaryWrapRef = useRef(null)
+  const summaryMaxLines = useAdaptiveClamp(sheetRef, bodyRef, summaryWrapRef, { fontSize: 13, lineHeight: 1.6 }, [book.id, book.summary])
+
   async function handleBorrow() {
     if (!memberId) { addToast('Sign in to borrow books', 'error'); return }
     setBorrowing(true)
@@ -141,7 +151,7 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
   return (
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center', paddingBottom:'60px' }}>
-        <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, background:'var(--surface)', borderRadius:'20px 20px 0 0', maxHeight:'calc(92vh - 60px)', display:'flex', flexDirection:'column' }}>
+        <div ref={sheetRef} onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, background:'var(--surface)', borderRadius:'20px 20px 0 0', maxHeight:'calc(92vh - 60px)', display:'flex', flexDirection:'column' }}>
 
           <div style={{ flexShrink:0 }}>
             <div style={{ padding:'0.6rem 1.25rem 0', display:'flex', justifyContent:'center' }}>
@@ -153,7 +163,7 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
             </div>
           </div>
 
-          <div style={{ overflowY:'auto', flex:1 }}>
+          <div ref={bodyRef} style={{ overflowY:'auto', flex:1 }}>
             {book.cover_url && (
               <div style={{ position:'relative', height:180, overflow:'hidden' }}>
                 <img src={book.cover_url} alt={book.title} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', filter:'blur(2px) brightness(0.6)', transform:'scale(1.05)' }} />
@@ -233,14 +243,15 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
                   (<p>, <b>, <i>) baked in -- same dangerouslySetInnerHTML
                   trust model already used for Page Texts/notices elsewhere
                   in this app -- Google's catalogue copy, not user input.
-                  Clamped for readability, not for Borrow-visibility -- that
-                  job now belongs to the sticky footer below (2026-08-13):
-                  the sheet grows to fit its content up to the sheet's own
-                  maxHeight and only scrolls internally past that point, so
-                  a short summary no longer forces the sheet shorter than it
-                  needs to be the way a fixed 2-line clamp did. */}
+                  Clamp is computed dynamically (2026-08-13, useAdaptiveClamp)
+                  against the sheet's own maxHeight, not a fixed line count:
+                  a summary that fits in full shows in full with no Read
+                  more; only once the sheet would exceed its max height does
+                  it clamp, and only by as much as it needs to. */}
               {book.summary && (
-                <ExpandableText text={book.summary} html fontSize={13} lineHeight={1.6} maxLines={4} colour="var(--purple)" />
+                <div ref={summaryWrapRef}>
+                  <ExpandableText text={book.summary} html fontSize={13} lineHeight={1.6} maxLines={summaryMaxLines} colour="var(--purple)" />
+                </div>
               )}
             </div>
           </div>

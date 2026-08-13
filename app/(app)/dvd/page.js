@@ -1,7 +1,8 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import ExpandableText from '@/components/ExpandableText'
+import { useAdaptiveClamp } from '@/lib/useAdaptiveClamp'
 
 function parseGenres(g) {
   if (!g) return []
@@ -114,6 +115,12 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
   const onLoanByOther = activeLoan && activeLoan.member_id !== memberId
   const canBorrow     = !activeLoan && myLoanCount < loanCap
 
+  // Same dynamic clamp as the Book Library sheet -- see lib/useAdaptiveClamp.js.
+  const sheetRef = useRef(null)
+  const bodyRef = useRef(null)
+  const plotWrapRef = useRef(null)
+  const plotMaxLines = useAdaptiveClamp(sheetRef, bodyRef, plotWrapRef, { fontSize: 13, lineHeight: 1.6 }, [movie.id, movie.plot])
+
   async function handleBorrow() {
     if (!memberId) { addToast('Sign in to borrow DVDs', 'error'); return }
     setBorrowing(true)
@@ -171,7 +178,7 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
   return (
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center', paddingBottom:'60px' }}>
-        <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, background:'var(--surface)', borderRadius:'20px 20px 0 0', maxHeight:'calc(92vh - 60px)', display:'flex', flexDirection:'column' }}>
+        <div ref={sheetRef} onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, background:'var(--surface)', borderRadius:'20px 20px 0 0', maxHeight:'calc(92vh - 60px)', display:'flex', flexDirection:'column' }}>
 
           {/* ── Sticky header — always visible ── */}
           <div style={{ flexShrink:0 }}>
@@ -187,7 +194,7 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
           </div>
 
           {/* ── Scrollable body ── */}
-          <div style={{ overflowY:'auto', flex:1 }}>
+          <div ref={bodyRef} style={{ overflowY:'auto', flex:1 }}>
             {movie.poster_url && (
               <div style={{ position:'relative', height:180, overflow:'hidden' }}>
                 <img src={movie.poster_url} alt={movie.title} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', filter:'blur(2px) brightness(0.6)', transform:'scale(1.05)' }} />
@@ -264,13 +271,13 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
 
               {movie.director && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Director:</strong> {movie.director}</div>}
               {movie.actors   && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Cast:</strong> {movie.actors}</div>}
-              {/* Clamped for readability, not for Borrow-visibility -- that
-                  job now belongs to the sticky footer below (2026-08-13):
-                  the sheet grows to fit its content up to the sheet's own
-                  maxHeight and only scrolls internally past that point, same
-                  fix and rationale as the Book Library summary. */}
+              {/* Clamp is computed dynamically against the sheet's own
+                  maxHeight (2026-08-13, useAdaptiveClamp) -- same fix and
+                  rationale as the Book Library summary. */}
               {movie.plot && (
-                <ExpandableText text={movie.plot} fontSize={13} lineHeight={1.6} maxLines={4} colour="var(--teal)" />
+                <div ref={plotWrapRef}>
+                  <ExpandableText text={movie.plot} fontSize={13} lineHeight={1.6} maxLines={plotMaxLines} colour="var(--teal)" />
+                </div>
               )}
 
               {/* Suggest for Screening — visible to all signed-in members */}
