@@ -165,8 +165,18 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
 
           <div ref={bodyRef} style={{ overflowY:'auto', flex:1 }}>
             {book.cover_url && (
-              <div style={{ position:'relative', height:180, overflow:'hidden' }}>
-                <img src={book.cover_url} alt={book.title} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', filter:'blur(2px) brightness(0.6)', transform:'scale(1.05)' }} />
+              // overflow:hidden moved onto an inner wrapper around just the
+              // blurred banner image (2026-08-13) -- it was on this outer
+              // relative box, which clipped the thumbnail's intended -40px
+              // overlap into the info section below along with it. Verified
+              // live: the thumbnail's own box extended 40px past the banner
+              // as coded, but was invisible because the shared ancestor cut
+              // it off, leaving a dead white gap above the author line
+              // instead of the thumbnail visibly hanging over the boundary.
+              <div style={{ position:'relative', height:180 }}>
+                <div style={{ position:'absolute', inset:0, overflow:'hidden' }}>
+                  <img src={book.cover_url} alt={book.title} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', filter:'blur(2px) brightness(0.6)', transform:'scale(1.05)' }} />
+                </div>
                 <img src={book.cover_url} alt={book.title} style={{ position:'absolute', left:'1.25rem', bottom:'-40px', width:80, height:120, objectFit:'cover', borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,0.4)' }} />
               </div>
             )}

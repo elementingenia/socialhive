@@ -196,10 +196,14 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
           {/* ── Scrollable body ── */}
           <div ref={bodyRef} style={{ overflowY:'auto', flex:1 }}>
             {movie.poster_url && (
-              <div style={{ position:'relative', height:180, overflow:'hidden' }}>
-                <img src={movie.poster_url} alt={movie.title} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', filter:'blur(2px) brightness(0.6)', transform:'scale(1.05)' }} />
+              // Same fix as the Book Library sheet, 2026-08-13: overflow:hidden
+              // moved onto an inner wrapper around just the blurred banner so
+              // it no longer clips the thumbnail's intended -40px overlap.
+              <div style={{ position:'relative', height:180 }}>
+                <div style={{ position:'absolute', inset:0, overflow:'hidden' }}>
+                  <img src={movie.poster_url} alt={movie.title} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', filter:'blur(2px) brightness(0.6)', transform:'scale(1.05)' }} />
+                </div>
                 <img src={movie.poster_url} alt={movie.title} style={{ position:'absolute', left:'1.25rem', bottom:'-40px', width:80, height:120, objectFit:'cover', borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,0.4)' }} />
-
               </div>
             )}
 
