@@ -68,8 +68,20 @@ export async function GET(req) {
   function scoreItem(info) {
     let score = 0
     if (info.imageLinks?.thumbnail) score += 3
-    if (typeof info.averageRating === "number") score += 2
-    if ((info.ratingsCount || 0) > 0) score += 1
+    // Weighted by the actual rating value, not just whether one exists --
+    // Iain, 2026-08-13: a 5.0 edition should clearly outrank a 1.0 edition
+    // of the same book, not just tie with it for both having "a" rating.
+    // *1.5 puts the full 0-5 scale at 0-7.5, comfortably wider than the
+    // structural signals below so rating quality is the dominant factor
+    // among same-title results, matching what actually flipped the order
+    // wrong in the Harry Potter screenshot (25th Anniversary Edition, 1.0,
+    // was outranking the Slytherin Edition, 5.0).
+    if (typeof info.averageRating === "number") score += info.averageRating * 1.5
+    // Small additional nudge for having a real sample size behind that
+    // rating -- log-scaled and capped so one lone 5-star vote doesn't beat
+    // a 4.5 backed by hundreds of ratings, but a completely unrated edition
+    // still ranks below both.
+    if ((info.ratingsCount || 0) > 0) score += Math.min(Math.log10(info.ratingsCount + 1), 1.5)
     if ((info.pageCount || 0) > 80) score += 1
     const text = `${info.title || ""} ${info.subtitle || ""}`
     if (STUDY_AID_RE.test(text)) score -= 5
