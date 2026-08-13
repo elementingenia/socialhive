@@ -361,6 +361,7 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
                     <div>
                       <div style={{ fontWeight:700, fontSize:'0.9rem' }}>{r.title}</div>
                       {r.author && <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{r.author}</div>}
+                      {r.rating && <div style={{ fontSize:'0.75rem', color:'var(--amber-dark)', fontWeight:600 }}>⭐ {r.rating}</div>}
                     </div>
                   </div>
                 ))}
@@ -374,6 +375,7 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
                 <div style={{ flex:1 }}>
                   <div style={{ fontWeight:700, fontSize:'0.95rem' }}>{selected.title}</div>
                   {selected.author && <div style={{ fontSize:'0.8rem', color:'var(--text-dim)' }}>{selected.author}</div>}
+                  {selected.rating && <div style={{ fontSize:'0.8rem', color:'var(--amber-dark)', fontWeight:600 }}>⭐ {selected.rating}</div>}
                 </div>
                 {isDuplicate && <span style={{ fontSize:'1.25rem' }}>⚠️</span>}
               </div>
