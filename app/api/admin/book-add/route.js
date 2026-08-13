@@ -70,6 +70,11 @@ export async function POST(req) {
     genre:          (info.categories || []).slice(0, 4).join(', ') || null,
     published_year: info.publishedDate ? (parseInt(info.publishedDate.substring(0, 4), 10) || null) : null,
     isbn,
+    // publisher (2026-08-13, migration 082): whatever edition Google
+    // resolved this google_books_id to -- for a physical-copy import where
+    // the exact printing matters, the caller should overwrite this after
+    // insert with the copy's actual publisher rather than trust Google's.
+    publisher:      info.publisher || null,
     we_own:         true,
   }
 
