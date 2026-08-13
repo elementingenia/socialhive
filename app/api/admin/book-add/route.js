@@ -53,6 +53,12 @@ export async function POST(req) {
   const info = item.volumeInfo || {}
   if (!info.title) return NextResponse.json({ error: 'Book not found' }, { status: 404 })
 
+  // ISBN_13 preferred over ISBN_10 when both are present (matches
+  // /api/books/search's extractIsbn) -- stored for both title-based and
+  // barcode-based adds, since Google returns industryIdentifiers either way.
+  const ids = info.industryIdentifiers || []
+  const isbn = (ids.find(x => x.type === 'ISBN_13') || ids.find(x => x.type === 'ISBN_10'))?.identifier || null
+
   const row = {
     google_books_id,
     title:          info.title,
@@ -63,6 +69,7 @@ export async function POST(req) {
     rating_link:    info.infoLink || `https://books.google.com/books?id=${google_books_id}`,
     genre:          (info.categories || []).slice(0, 4).join(', ') || null,
     published_year: info.publishedDate ? (parseInt(info.publishedDate.substring(0, 4), 10) || null) : null,
+    isbn,
     we_own:         true,
   }
 

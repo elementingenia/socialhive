@@ -1,6 +1,8 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import ExpandableText from '@/components/ExpandableText'
+import { useAdaptiveClamp } from '@/lib/useAdaptiveClamp'
 
 function parseGenres(g) {
   if (!g) return []
@@ -113,6 +115,12 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
   const onLoanByOther = activeLoan && activeLoan.member_id !== memberId
   const canBorrow     = !activeLoan && myLoanCount < loanCap
 
+  // Same dynamic clamp as the Book Library sheet -- see lib/useAdaptiveClamp.js.
+  const sheetRef = useRef(null)
+  const bodyRef = useRef(null)
+  const plotWrapRef = useRef(null)
+  const plotMaxLines = useAdaptiveClamp(sheetRef, bodyRef, plotWrapRef, { fontSize: 13, lineHeight: 1.6 }, [movie.id, movie.plot])
+
   async function handleBorrow() {
     if (!memberId) { addToast('Sign in to borrow DVDs', 'error'); return }
     setBorrowing(true)
@@ -170,7 +178,7 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
   return (
     <>
       <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:100, display:'flex', alignItems:'flex-end', justifyContent:'center', paddingBottom:'60px' }}>
-        <div onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, background:'var(--surface)', borderRadius:'20px 20px 0 0', maxHeight:'calc(92vh - 60px)', display:'flex', flexDirection:'column' }}>
+        <div ref={sheetRef} onClick={e=>e.stopPropagation()} style={{ width:'100%', maxWidth:640, background:'var(--surface)', borderRadius:'20px 20px 0 0', maxHeight:'calc(92vh - 60px)', display:'flex', flexDirection:'column' }}>
 
           {/* ── Sticky header — always visible ── */}
           <div style={{ flexShrink:0 }}>
@@ -186,35 +194,40 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
           </div>
 
           {/* ── Scrollable body ── */}
-          <div style={{ overflowY:'auto', flex:1 }}>
+          <div ref={bodyRef} style={{ overflowY:'auto', flex:1 }}>
             {movie.poster_url && (
-              <div style={{ position:'relative', height:180, overflow:'hidden' }}>
-                <img src={movie.poster_url} alt={movie.title} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', filter:'blur(2px) brightness(0.6)', transform:'scale(1.05)' }} />
+              // Same fix as the Book Library sheet, 2026-08-13: overflow:hidden
+              // moved onto an inner wrapper around just the blurred banner so
+              // it no longer clips the thumbnail's intended -40px overlap.
+              <div style={{ position:'relative', height:180 }}>
+                <div style={{ position:'absolute', inset:0, overflow:'hidden' }}>
+                  <img src={movie.poster_url} alt={movie.title} style={{ width:'100%', height:'100%', objectFit:'cover', objectPosition:'top', filter:'blur(2px) brightness(0.6)', transform:'scale(1.05)' }} />
+                </div>
                 <img src={movie.poster_url} alt={movie.title} style={{ position:'absolute', left:'1.25rem', bottom:'-40px', width:80, height:120, objectFit:'cover', borderRadius:8, boxShadow:'0 4px 16px rgba(0,0,0,0.4)' }} />
-
               </div>
             )}
 
-            <div style={{ position:'relative', padding:movie.poster_url?'3rem 1.25rem 2.5rem':'1.25rem 1.25rem 2.5rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
-              {/* Top-right column — ON LOAN pill + admin delete */}
-              {(activeLoan || isAdmin) && (
-                <div style={{ position:'absolute', top:'0.75rem', right:'1.25rem', display:'flex', flexDirection:'column', alignItems:'flex-end', gap:'0.4rem' }}>
-                  {activeLoan && (
-                    <div style={{ background:iMineToReturn?'var(--teal)':'var(--surface2)', border:'1px solid ' + (iMineToReturn?'var(--teal)':'var(--border)'), borderRadius:'10px', padding:'0.4rem 0.65rem', textAlign:'center' }}>
-                      <div style={{ fontSize:'0.65rem', fontWeight:800, color:iMineToReturn?'#fff':'var(--text)', textTransform:'uppercase', letterSpacing:'0.05em', lineHeight:1.2 }}>
-                        📀 On Loan
-                      </div>
-                      <div style={{ fontSize:'0.6rem', color:iMineToReturn?'rgba(255,255,255,0.85)':'var(--text-dim)', marginTop:'0.2rem', lineHeight:1.3, whiteSpace:'nowrap' }}>
-                        {iMineToReturn ? `You · ${fmtDate(activeLoan.borrowed_at)}` : `${activeLoan.members?.name || 'Resident'} · ${fmtDate(activeLoan.borrowed_at)}`}
-                      </div>
+            {/* Bottom padding trimmed to 1rem (was 2.5rem) — same fix and
+                rationale as the Book Library sheet: that space was sized for
+                Borrow/Suggest when they lived in this scrollable area; now
+                Borrow is in its own sticky footer below, the old padding
+                was just dead space. */}
+            <div style={{ position:'relative', padding:movie.poster_url?'3rem 1.25rem 1rem':'1.25rem 1.25rem 1rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
+              {/* Top-right — ON LOAN pill only. Admin Remove moved down onto
+                  the year/runtime row (2026-08-13) -- stacking it here with
+                  the loan pill cost a full extra line of vertical space in
+                  the modal, same fix applied to the Book Library detail
+                  sheet for consistency across hubs. */}
+              {activeLoan && (
+                <div style={{ position:'absolute', top:'0.75rem', right:'1.25rem' }}>
+                  <div style={{ background:iMineToReturn?'var(--teal)':'var(--surface2)', border:'1px solid ' + (iMineToReturn?'var(--teal)':'var(--border)'), borderRadius:'10px', padding:'0.4rem 0.65rem', textAlign:'center' }}>
+                    <div style={{ fontSize:'0.65rem', fontWeight:800, color:iMineToReturn?'#fff':'var(--text)', textTransform:'uppercase', letterSpacing:'0.05em', lineHeight:1.2 }}>
+                      📀 On Loan
                     </div>
-                  )}
-                  {isAdmin && (
-                    <button onClick={() => setConfirmDelete(true)} disabled={deleting}
-                      style={{ display:'flex', alignItems:'center', gap:'0.3rem', background:'none', border:'1px solid var(--danger)', borderRadius:'8px', padding:'0.3rem 0.6rem', fontSize:'0.68rem', fontWeight:700, color:'var(--danger)', cursor:deleting?'not-allowed':'pointer', opacity:deleting?0.5:1, whiteSpace:'nowrap' }}>
-                      🗑 {deleting ? 'Removing…' : 'Remove'}
-                    </button>
-                  )}
+                    <div style={{ fontSize:'0.6rem', color:iMineToReturn?'rgba(255,255,255,0.85)':'var(--text-dim)', marginTop:'0.2rem', lineHeight:1.3, whiteSpace:'nowrap' }}>
+                      {iMineToReturn ? `You · ${fmtDate(activeLoan.borrowed_at)}` : `${activeLoan.members?.name || 'Resident'} · ${fmtDate(activeLoan.borrowed_at)}`}
+                    </div>
+                  </div>
                 </div>
               )}
               {/* No-poster loan tile */}
@@ -230,7 +243,19 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
                 </div>
               )}
 
-              {movie.year && <div style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>{movie.year}{movie.runtime ? ' · ' + movie.runtime : ''}</div>}
+              {(movie.year || isAdmin) && (
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'0.75rem' }}>
+                  <div style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>
+                    {movie.year}{movie.year && movie.runtime ? ' · ' : ''}{movie.runtime}
+                  </div>
+                  {isAdmin && (
+                    <button onClick={() => setConfirmDelete(true)} disabled={deleting}
+                      style={{ flexShrink:0, display:'flex', alignItems:'center', gap:'0.3rem', background:'none', border:'1px solid var(--danger)', borderRadius:'8px', padding:'0.3rem 0.6rem', fontSize:'0.68rem', fontWeight:700, color:'var(--danger)', cursor:deleting?'not-allowed':'pointer', opacity:deleting?0.5:1, whiteSpace:'nowrap' }}>
+                      🗑 {deleting ? 'Removing…' : 'Remove'}
+                    </button>
+                  )}
+                </div>
+              )}
 
               {genres.length > 0 && <GenreChips genres={genres} />}
 
@@ -250,24 +275,14 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
 
               {movie.director && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Director:</strong> {movie.director}</div>}
               {movie.actors   && <div style={{ fontSize:'0.85rem', color:'var(--text-dim)' }}><strong>Cast:</strong> {movie.actors}</div>}
-              {movie.plot     && <div style={{ fontSize:'0.88rem', lineHeight:1.6, color:'var(--text)' }}>{movie.plot}</div>}
-
-              {/* Borrow / Return actions — no info boxes, just buttons */}
-              {iMineToReturn ? (
-                <button onClick={handleReturn} disabled={returning}
-                  style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:returning?'not-allowed':'pointer', opacity:returning?0.6:1, width:'100%' }}>
-                  {returning ? 'Returning…' : '↩ Return this DVD'}
-                </button>
-              ) : canBorrow ? (
-                <button onClick={handleBorrow} disabled={borrowing || !memberId}
-                  style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:(borrowing||!memberId)?'not-allowed':'pointer', opacity:(borrowing||!memberId)?0.6:1, width:'100%' }}>
-                  {borrowing ? 'Borrowing…' : '📀 Borrow this DVD'}
-                </button>
-              ) : !activeLoan && myLoanCount >= loanCap ? (
-                <div style={{ background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.3)', borderRadius:'10px', padding:'0.75rem 1rem', fontSize:'0.85rem', color:'var(--text)', textAlign:'center' }}>
-                  ⚠️ You have {loanCap} DVD{loanCap!==1?'s':''} on loan — return one first.
+              {/* Clamp is computed dynamically against the sheet's own
+                  maxHeight (2026-08-13, useAdaptiveClamp) -- same fix and
+                  rationale as the Book Library summary. */}
+              {movie.plot && (
+                <div ref={plotWrapRef}>
+                  <ExpandableText text={movie.plot} fontSize={13} lineHeight={1.6} maxLines={plotMaxLines} colour="var(--teal)" />
                 </div>
-              ) : null}
+              )}
 
               {/* Suggest for Screening — visible to all signed-in members */}
               {memberId && (
@@ -295,6 +310,33 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
 
             </div>
           </div>
+
+          {/* Sticky action footer -- outside the scrollable body, so Borrow/
+              Return/loan-cap-warning stays reachable regardless of how far
+              the description or cast list scrolls. Mirrors the Sheet
+              component's sticky footer pattern used elsewhere in the app
+              (ResidentEditPanel) for the same "never hunt for the button"
+              reason, and matches the identical fix applied to the Book
+              Library detail sheet. */}
+          {(iMineToReturn || canBorrow || (!activeLoan && myLoanCount >= loanCap)) && (
+            <div style={{ flexShrink:0, padding:'0.85rem 1.25rem', borderTop:'1px solid var(--border)', background:'var(--surface)' }}>
+              {iMineToReturn ? (
+                <button onClick={handleReturn} disabled={returning}
+                  style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:returning?'not-allowed':'pointer', opacity:returning?0.6:1, width:'100%' }}>
+                  {returning ? 'Returning…' : '↩ Return this DVD'}
+                </button>
+              ) : canBorrow ? (
+                <button onClick={handleBorrow} disabled={borrowing || !memberId}
+                  style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:(borrowing||!memberId)?'not-allowed':'pointer', opacity:(borrowing||!memberId)?0.6:1, width:'100%' }}>
+                  {borrowing ? 'Borrowing…' : '📀 Borrow this DVD'}
+                </button>
+              ) : !activeLoan && myLoanCount >= loanCap ? (
+                <div style={{ background:'rgba(245,158,11,0.08)', border:'1px solid rgba(245,158,11,0.3)', borderRadius:'10px', padding:'0.75rem 1rem', fontSize:'0.85rem', color:'var(--text)', textAlign:'center' }}>
+                  ⚠️ You have {loanCap} DVD{loanCap!==1?'s':''} on loan — return one first.
+                </div>
+              ) : null}
+            </div>
+          )}
         </div>
       </div>
 
