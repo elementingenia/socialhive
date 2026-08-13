@@ -196,7 +196,12 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
               </div>
             )}
 
-            <div style={{ position:'relative', padding:movie.poster_url?'3rem 1.25rem 2.5rem':'1.25rem 1.25rem 2.5rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
+            {/* Bottom padding trimmed to 1rem (was 2.5rem) — same fix and
+                rationale as the Book Library sheet: that space was sized for
+                Borrow/Suggest when they lived in this scrollable area; now
+                Borrow is in its own sticky footer below, the old padding
+                was just dead space. */}
+            <div style={{ position:'relative', padding:movie.poster_url?'3rem 1.25rem 1rem':'1.25rem 1.25rem 1rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
               {/* Top-right — ON LOAN pill only. Admin Remove moved down onto
                   the year/runtime row (2026-08-13) -- stacking it here with
                   the loan pill cost a full extra line of vertical space in

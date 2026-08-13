@@ -161,7 +161,14 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
               </div>
             )}
 
-            <div style={{ position:'relative', padding:book.cover_url?'3rem 1.25rem 2.5rem':'1.25rem 1.25rem 2.5rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
+            {/* Bottom padding trimmed to 1rem (was 2.5rem) — that space was
+                sized for the Borrow button when it lived in this scrollable
+                area; now that it's in its own sticky footer below, the old
+                padding was just dead space between the description and the
+                footer's border (measured live on the deployed preview,
+                2026-08-13: 48px top + 40px bottom padding against ~144px of
+                actual content). */}
+            <div style={{ position:'relative', padding:book.cover_url?'3rem 1.25rem 1rem':'1.25rem 1.25rem 1rem', display:'flex', flexDirection:'column', gap:'0.75rem' }}>
               {activeLoan && (
                 <div style={{ position:'absolute', top:'0.75rem', right:'1.25rem' }}>
                   <div style={{ background:iMineToReturn?'var(--purple)':'var(--surface2)', border:'1px solid ' + (iMineToReturn?'var(--purple)':'var(--border)'), borderRadius:'10px', padding:'0.4rem 0.65rem', textAlign:'center' }}>
