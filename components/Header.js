@@ -124,14 +124,26 @@ export default function Header() {
     </button>
   )
 
-  const bellBtn = notifCount > 0 ? (
-    <button onClick={openNotif} aria-label="Notifications" style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", border: "1.5px solid #e53e3e", display: "flex", alignItems: "center", justifyContent: "center", color: "#e53e3e", background: "none", cursor: "pointer", flexShrink: 0 }}>
+  // Bell is ALWAYS rendered (fixed 2026-08-14, Iain live-feedback) -- it used
+  // to be `notifCount > 0 ? <button> : null`, which unmounted the bell itself
+  // the moment the count hit zero. Combined with NotificationsDrawer's old
+  // auto-mark-all-read-on-open behaviour, that meant: open the drawer once,
+  // every notification silently becomes read, count drops to 0, bell
+  // vanishes from the header -- with no other entry point to the drawer
+  // anywhere in the app, the panel became permanently unreachable and
+  // whatever alerts had been in it were gone for good. Only the red badge
+  // is now conditional; the bell button itself is permanent chrome, same as
+  // the Questions button beside it.
+  const bellBtn = (
+    <button onClick={openNotif} aria-label="Notifications" style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", border: `1.5px solid ${notifCount > 0 ? "#e53e3e" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", color: notifCount > 0 ? "#e53e3e" : "var(--text-dim)", background: "none", cursor: "pointer", flexShrink: 0 }}>
       <BellIcon size={16} />
-      <span style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: "50%", background: "#e53e3e", color: "#fff", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
-        {notifCount > 9 ? "9+" : notifCount}
-      </span>
+      {notifCount > 0 && (
+        <span style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: "50%", background: "#e53e3e", color: "#fff", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
+          {notifCount > 9 ? "9+" : notifCount}
+        </span>
+      )}
     </button>
-  ) : null
+  )
 
   // ── HOME — larger branded header ──
   if (isHome) {
