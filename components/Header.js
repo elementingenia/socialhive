@@ -1,178 +1,225 @@
-"use client"
-import { useEffect, useRef, useState } from "react"
-import { usePathname, useRouter } from "next/navigation"
-import { useUser } from "@/lib/UserContext"
-import { useUI }   from "@/lib/UIContext"
-import { getModuleColour, getPageTitle } from "@/lib/navUtils"
-import { useActiveClub } from "@/lib/useActiveClub"
-
-function BellIcon({ size = 22 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-      <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-    </svg>
-  )
-}
-
-function QuestionIcon({ size = 22 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
-      <path d="M9.6 9a2.4 2.4 0 0 1 4.7.6c0 1.6-2.4 2.4-2.4 2.4"/>
-      <line x1="12" y1="16" x2="12" y2="16"/>
-    </svg>
-  )
-}
-
-function getInitials(name) {
-  if (!name) return "?"
-  const parts = name.trim().split(/\s+/)
-  return parts.length >= 2
-    ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
-    : name.slice(0, 2).toUpperCase()
-}
-
-export default function Header() {
-  const { memberName, member } = useUser()
-  const { openProfile, openPinModal, openNotif, notifCount, refreshNotifCount, questionCount, refreshQuestionCount } = useUI()
-  const pathname     = usePathname()
-  const router       = useRouter()
-  // Inside a club, the chrome takes that club's own colour/name so Clubs match
-  // the other hubs' behaviour (Iain 2026-07-18 — colour standards).
-  const activeClub   = useActiveClub()
-  const moduleColour = activeClub?.colour || getModuleColour(pathname)
-  const pageTitle    = getPageTitle(pathname) || activeClub?.name || ""
-  const isHome       = pathname === "/home"
-
-  const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef(null)
-
-  useEffect(() => {
-    if (!menuOpen) return
-    function handler(e) {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false)
-    }
-    document.addEventListener("mousedown", handler)
-    return () => document.removeEventListener("mousedown", handler)
-  }, [menuOpen])
-
-  useEffect(() => { refreshNotifCount() }, [refreshNotifCount])
-  useEffect(() => { refreshQuestionCount() }, [refreshQuestionCount])
-
-  async function signOut() {
-    setMenuOpen(false)
-    const { supabase } = await import("@/lib/supabase")
-    await supabase.auth.signOut()
-    router.replace("/login")
-  }
-
-  const avatarEl = member?.avatar_url ? (
-    <img src={member.avatar_url} alt="" style={{ width: 30, height: 30, borderRadius: "50%", border: "1.5px solid var(--border)", flexShrink: 0, objectFit: "cover" }} />
-  ) : (
-    <div style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0, background: moduleColour, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.68rem", fontWeight: 700 }}>
-      {getInitials(memberName)}
-    </div>
-  )
-
-  const avatarPill = (
-    <div ref={menuRef} style={{ position: "relative" }}>
-      <button
-        onClick={() => setMenuOpen(v => !v)}
-        style={{ display: "flex", alignItems: "center", gap: "0.4rem", background: "none", border: "1px solid var(--border)", borderRadius: "20px", padding: "3px 10px 3px 4px", cursor: "pointer", fontFamily: "inherit" }}
-        aria-label="Account menu" aria-expanded={menuOpen}
-      >
-        {avatarEl}
-        <span style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", maxWidth: 80, overflow: "hidden", textOverflow: "ellipsis" }}>
-          {memberName?.split(" ")[0] || "…"}
-        </span>
-        <span style={{ fontSize: "0.6rem", color: "var(--text-dim)", marginLeft: 1 }}>▾</span>
-      </button>
-
-      {menuOpen && (
-        <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "12px", minWidth: 170, zIndex: 300, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", overflow: "hidden" }}>
-          {[
-            { label: "Help & Guide",   href: "/help-guide" },
-            { label: "Update Profile", action: () => { setMenuOpen(false); openProfile() } },
-            { label: "Change PIN",     action: () => { setMenuOpen(false); openPinModal() } },
-            { label: "Sign Out",       action: signOut, danger: true },
-          ].map(item => {
-            const rowStyle = { display: "block", width: "100%", boxSizing: "border-box", textAlign: "left", padding: "0.75rem 1rem", background: "none", border: "none", cursor: "pointer", fontSize: "0.88rem", fontFamily: "inherit", textDecoration: "none", color: item.danger ? "#e53e3e" : "var(--text)", borderTop: item.danger ? "1px solid var(--border)" : "none" }
-            const hover = { onMouseEnter: e => e.currentTarget.style.background = "var(--bg)", onMouseLeave: e => e.currentTarget.style.background = "none" }
-            return item.href ? (
-              <a key={item.label} href={item.href} target="_blank" rel="noopener noreferrer" onClick={() => setMenuOpen(false)} style={rowStyle} {...hover}>
-                <span aria-hidden style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 18, height: 18, borderRadius: "50%", border: "1.5px solid var(--text-dim)", color: "var(--text-dim)", fontSize: "0.7rem", fontWeight: 800, marginRight: 8, verticalAlign: "middle", lineHeight: 1 }}>?</span>
-                {item.label}
-              </a>
-            ) : (
-              <button key={item.label} onClick={item.action} style={rowStyle} {...hover}>{item.label}</button>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-
-  const questionBtn = (
-    <button onClick={() => { router.push("/questions"); if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("questions-reset")) }} aria-label="Questions" style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", border: `1.5px solid ${questionCount > 0 ? "var(--amber-dark)" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", color: questionCount > 0 ? "var(--amber-dark)" : "var(--text-dim)", background: "none", cursor: "pointer", flexShrink: 0 }}>
-      <QuestionIcon size={16} />
-      {questionCount > 0 && (
-        <span style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: "50%", background: "var(--amber-dark)", color: "#fff", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
-          {questionCount > 9 ? "9+" : questionCount}
-        </span>
-      )}
-    </button>
-  )
-
-  const bellBtn = notifCount > 0 ? (
-    <button onClick={openNotif} aria-label="Notifications" style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", border: "1.5px solid #e53e3e", display: "flex", alignItems: "center", justifyContent: "center", color: "#e53e3e", background: "none", cursor: "pointer", flexShrink: 0 }}>
-      <BellIcon size={16} />
-      <span style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: "50%", background: "#e53e3e", color: "#fff", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
-        {notifCount > 9 ? "9+" : notifCount}
-      </span>
-    </button>
-  ) : null
-
-  // ── HOME — larger branded header ──
-  if (isHome) {
-    return (
-      <header style={{ position: "sticky", top: 0, zIndex: 50, background: "var(--surface)", borderBottom: "3px solid " + moduleColour, padding: "0.6rem 1rem", display: "flex", alignItems: "center", justifyContent: "space-between", boxShadow: "0 1px 8px rgba(0,0,0,0.07)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.35rem", minWidth: 0, overflow: "hidden" }}>
-          <img src="/logo_hex_bee.png" alt="Element Happenings" style={{ width: 46, height: 46, flexShrink: 0 }} />
-          <div style={{ lineHeight: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "0.36rem", fontWeight: 700, color: "#C08E43", whiteSpace: "nowrap", lineHeight: 1 }}>Element</div>
-            <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "0.88rem", fontWeight: 900, color: "#C08E43", textTransform: "uppercase", whiteSpace: "nowrap", lineHeight: 1 }}>Happenings</div>
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexShrink: 0 }}>
-          {questionBtn}
-          {bellBtn}
-          {avatarPill}
-        </div>
-      </header>
-    )
-  }
-
-  // ── Sub-pages — compact stacked wordmark, links back to Home; page title still gets the room ──
-  return (
-    <header style={{ position: "sticky", top: 0, zIndex: 50, background: "var(--surface)", borderBottom: "3px solid " + moduleColour, padding: "0.45rem 1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", boxShadow: "0 1px 8px rgba(0,0,0,0.07)" }}>
-      <a href="/home" style={{ display: "flex", alignItems: "center", gap: "0.2rem", textDecoration: "none", flexShrink: 0 }}>
-        <img src="/logo_hex_bee.png" alt="Element Happenings — back to Home" style={{ width: 30, height: 30, flexShrink: 0 }} />
-        <div style={{ lineHeight: 1 }}>
-          <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "0.24rem", fontWeight: 700, color: "#C08E43", whiteSpace: "nowrap", lineHeight: 1 }}>Element</div>
-          <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: "0.58rem", fontWeight: 900, color: "#C08E43", textTransform: "uppercase", whiteSpace: "nowrap", lineHeight: 1 }}>Happenings</div>
-        </div>
-      </a>
-
-      {pageTitle && (
-        <div style={{ fontSize: "0.95rem", fontWeight: 700, color: moduleColour, flex: 1, minWidth: 0, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "0 0.25rem" }}>{pageTitle}</div>
-      )}
-
-      <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", flexShrink: 0 }}>
-        {questionBtn}
-        {bellBtn}
-        {avatarPill}
-      </div>
-    </header>
-  )
-}
+diff --git a/components/Header.js b/components/Header.js
+index 0908bf7..79e067d 100644
+--- a/components/Header.js
++++ b/components/Header.js
+@@ -124,14 +124,26 @@ export default function Header() {
+     </button>
+   )
+ 
+-  const bellBtn = notifCount > 0 ? (
+-    <button onClick={openNotif} aria-label="Notifications" style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", border: "1.5px solid #e53e3e", display: "flex", alignItems: "center", justifyContent: "center", color: "#e53e3e", background: "none", cursor: "pointer", flexShrink: 0 }}>
++  // Bell is ALWAYS rendered (fixed 2026-08-14, Iain live-feedback) -- it used
++  // to be `notifCount > 0 ? <button> : null`, which unmounted the bell itself
++  // the moment the count hit zero. Combined with NotificationsDrawer's old
++  // auto-mark-all-read-on-open behaviour, that meant: open the drawer once,
++  // every notification silently becomes read, count drops to 0, bell
++  // vanishes from the header -- with no other entry point to the drawer
++  // anywhere in the app, the panel became permanently unreachable and
++  // whatever alerts had been in it were gone for good. Only the red badge
++  // is now conditional; the bell button itself is permanent chrome, same as
++  // the Questions button beside it.
++  const bellBtn = (
++    <button onClick={openNotif} aria-label="Notifications" style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", border: `1.5px solid ${notifCount > 0 ? "#e53e3e" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", color: notifCount > 0 ? "#e53e3e" : "var(--text-dim)", background: "none", cursor: "pointer", flexShrink: 0 }}>
+       <BellIcon size={16} />
+-      <span style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: "50%", background: "#e53e3e", color: "#fff", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
+-        {notifCount > 9 ? "9+" : notifCount}
+-      </span>
++      {notifCount > 0 && (
++        <span style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: "50%", background: "#e53e3e", color: "#fff", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
++          {notifCount > 9 ? "9+" : notifCount}
++        </span>
++      )}
+     </button>
+-  ) : null
++  )
+ 
+   // ── HOME — larger branded header ──
+   if (isHome) {
+diff --git a/components/NotificationsDrawer.js b/components/NotificationsDrawer.js
+index f0c75be..40ccc2c 100644
+--- a/components/NotificationsDrawer.js
++++ b/components/NotificationsDrawer.js
+@@ -1,5 +1,6 @@
+ "use client"
+ import { useState, useEffect, useCallback } from "react"
++import { useRouter } from "next/navigation"
+ import { supabase } from "@/lib/supabase"
+ import { useUI } from "@/lib/UIContext"
+ 
+@@ -68,8 +69,27 @@ function typeColour(type) {
+   }
+ }
+ 
++// Best-effort mapping from a notification's event to the hub page that
++// covers it. There is no per-event URL/page anywhere in this app (event
++// detail always renders in an in-page slide-out, never its own route), so
++// this is deliberately a landing-page approximation, not a deep link to the
++// exact booking/screening/club post -- flagged rather than pretended away.
++// Notification types with no event_id (club_notice_posted, bar_reconciled)
++// have no navigable target and stay tick-only.
++function targetForNotif(n) {
++  if (n.type?.startsWith("question_")) return "/questions"
++  switch (n.events?.hub_type) {
++    case "movie":    return "/screenings"
++    case "social":   return "/social"
++    case "bookclub": return "/bookclub"
++    case "club":     return "/clubs"
++    default:         return null
++  }
++}
++
+ export default function NotificationsDrawer() {
+   const { notifOpen, closeNotif, setNotifCount, refreshNotifCount } = useUI()
++  const router = useRouter()
+ 
+   const [mounted,  setMounted]  = useState(false)
+   const [animIn,   setAnimIn]   = useState(false)
+@@ -80,7 +100,7 @@ export default function NotificationsDrawer() {
+     if (notifOpen) {
+       setMounted(true)
+       requestAnimationFrame(() => requestAnimationFrame(() => setAnimIn(true)))
+-      loadAndMarkRead()
++      load()
+     } else {
+       setAnimIn(false)
+       const t = setTimeout(() => setMounted(false), 280)
+@@ -88,7 +108,12 @@ export default function NotificationsDrawer() {
+     }
+   }, [notifOpen])
+ 
+-  const loadAndMarkRead = useCallback(async () => {
++  // Fetches the list only -- no longer marks anything read just for having
++  // been opened (fixed 2026-08-14, see the bellBtn comment in Header.js for
++  // why that was a real bug, not a style choice). An alert now only leaves
++  // the unread count when the resident explicitly acknowledges it: the ✓
++  // tick, or clicking through to its matter via openMatter() below.
++  const load = useCallback(async () => {
+     setLoading(true)
+     const { data: { session } } = await supabase.auth.getSession()
+     if (!session) { setLoading(false); return }
+@@ -99,25 +124,42 @@ export default function NotificationsDrawer() {
+     if (res.ok) {
+       const items = await res.json()
+       setNotifs(items || [])
+-
+-      // Mark all unread as read
+-      const unreadIds = (items || []).filter(n => !n.read_at).map(n => n.id)
+-      if (unreadIds.length > 0) {
+-        await fetch('/api/notifications', {
+-          method: 'PATCH',
+-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+-          body: JSON.stringify({ all: true }),
+-        })
+-        setNotifCount(0)
+-      }
+     }
+     setLoading(false)
+-  }, [setNotifCount])
++  }, [])
++
++  // Marks a single notification read -- optimistic locally (both the row's
++  // own state and the header badge count) so the tick feels instant, then
++  // persists via the existing PATCH {ids:[...]} endpoint (already supported
++  // server-side, no API change needed for this fix).
++  const markOne = useCallback(async (id) => {
++    setNotifs(prev => prev.map(n => (n.id === id && !n.read_at) ? { ...n, read_at: new Date().toISOString() } : n))
++    setNotifCount(c => Math.max(0, c - 1))
++    const { data: { session } } = await supabase.auth.getSession()
++    if (!session) return
++    await fetch('/api/notifications', {
++      method: 'PATCH',
++      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
++      body: JSON.stringify({ ids: [id] }),
++    }).catch(() => {})
++    refreshNotifCount()
++  }, [setNotifCount, refreshNotifCount])
++
++  // Clicking the body of a notification (not the tick) acknowledges it AND
++  // navigates to the relevant hub, satisfying Iain's "if they click through
++  // to the matter, that counts as done too" -- so a resident who taps
++  // straight into the event never has to also come back and tick it off.
++  const openMatter = useCallback((n) => {
++    const target = targetForNotif(n)
++    if (!target) return
++    if (!n.read_at) markOne(n.id)
++    closeNotif()
++    router.push(target)
++  }, [markOne, closeNotif, router])
+ 
+   if (!mounted) return null
+ 
+   const unread = notifs.filter(n => !n.read_at)
+-  const read   = notifs.filter(n => n.read_at)
+ 
+   return (
+     <>
+@@ -157,18 +199,24 @@ export default function NotificationsDrawer() {
+             </div>
+           ) : (
+             <div style={{ display: "flex", flexDirection: "column" }}>
+-              {/* Unread first (will already be marked read server-side but shown distinctly until next open) */}
++              {/* Unread stays visible (with a tick to dismiss) until acknowledged -- no longer auto-cleared just by opening the drawer */}
+               {unread.length > 0 && (
+                 <div style={{ padding: "0.5rem 1rem 0.25rem", fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.08em" }}>New</div>
+               )}
+-              {notifs.map((n, i) => {
++              {notifs.map((n) => {
+                 const isNew = !n.read_at
++                const target = targetForNotif(n)
+                 return (
+-                  <div key={n.id} style={{
+-                    display: "flex", gap: "0.75rem", padding: "0.85rem 1rem",
+-                    borderBottom: "1px solid var(--border)",
+-                    background: isNew ? "rgba(0,128,128,0.04)" : "transparent",
+-                  }}>
++                  <div
++                    key={n.id}
++                    onClick={target ? () => openMatter(n) : undefined}
++                    style={{
++                      display: "flex", gap: "0.75rem", padding: "0.85rem 1rem",
++                      borderBottom: "1px solid var(--border)",
++                      background: isNew ? "rgba(0,128,128,0.04)" : "transparent",
++                      cursor: target ? "pointer" : "default",
++                    }}
++                  >
+                     <div style={{ fontSize: "1.4rem", flexShrink: 0, lineHeight: 1.2 }}>{typeIcon(n.type)}</div>
+                     <div style={{ flex: 1, minWidth: 0 }}>
+                       {n.events?.title && (
+@@ -179,8 +227,23 @@ export default function NotificationsDrawer() {
+                       <div style={{ fontSize: "0.88rem", color: "var(--text)", lineHeight: 1.45 }}>{n.message}</div>
+                       <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>{timeAgo(n.created_at)}</div>
+                     </div>
+-                    {isNew && (
+-                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--teal)", flexShrink: 0, marginTop: 6 }} />
++                    {isNew ? (
++                      <button
++                        onClick={(e) => { e.stopPropagation(); markOne(n.id) }}
++                        aria-label="Mark as done"
++                        title="Mark as done"
++                        style={{
++                          flexShrink: 0, alignSelf: "flex-start", marginTop: 2,
++                          width: 26, height: 26, borderRadius: "50%",
++                          border: "1.5px solid var(--teal)", background: "none", color: "var(--teal)",
++                          display: "flex", alignItems: "center", justifyContent: "center",
++                          fontSize: "0.85rem", fontWeight: 800, cursor: "pointer", padding: 0,
++                        }}
++                      >
++                        ✓
++                      </button>
++                    ) : (
++                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--border)", flexShrink: 0, marginTop: 6 }} />
+                     )}
+                   </div>
+                 )
+diff --git a/lib/useAdaptiveClamp.js b/lib/useAdaptiveClamp.js
+index cb49357..e5f93fa 100644
+--- a/lib/useAdaptiveClamp.js
++++ b/lib/useAdaptiveClamp.js
+@@ -44,7 +44,6 @@ export function useAdaptiveClamp(sheetRef, bodyRef, textWrapRef, { fontSize, lin
+   const [maxLines, setMaxLines] = useState(null)
+   const [pass, setPass] = useState("measure") // 'measure' (unclamped, mid-measurement) | 'done'
+ 
+-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   useLayoutEffect(() => {
+     setPass("measure")
+     setMaxLines(null)
