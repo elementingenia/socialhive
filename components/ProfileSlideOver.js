@@ -5,6 +5,7 @@ import { useUser } from "@/lib/UserContext"
 import { BAR_ENABLED } from "@/lib/features"
 import { isPushSupported, isIOS, isStandalone, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from "@/lib/pushClient"
 import { formatPhoneInput } from "@/lib/phone"
+import { isValidDisplayName } from "@/lib/memberName"
 
 // Clearance below the sticky header so the avatar pill stays visible
 const TOP_OFFSET = 72 // px — covers both home (~68px) and sub-page (~43px) headers
@@ -141,7 +142,8 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
     }
   }, [open])
 
-  const [name,     setName]     = useState("")
+  const [name,        setName]        = useState("")
+  const [displayName, setDisplayName] = useState("")
   const [email,    setEmail]    = useState("")
   const [house,    setHouse]    = useState("")
   const [phone,    setPhone]    = useState("")
@@ -156,12 +158,16 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
   useEffect(() => {
     if (member) {
       setName(member.name || "")
+      // display_name defaults to Real Name until the resident types
+      // something different (Iain, 2026-08-14) -- also covers any
+      // legacy row from before migration 083's backfill ran.
+      setDisplayName(member.display_name || member.name || "")
       setBarOptIn(!!member.bar_opt_in)
       setAvatar(member.avatar_url || null)
     }
   }, [member])
 
-  // Full fetch when panel opens (email, house_number, hide_name)
+  // Full fetch when panel opens (email, house_number, hide_name, display_name)
   useEffect(() => {
     if (!open) return
     setLoading(true)
@@ -171,6 +177,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
       if (res.ok) {
         const d = await res.json()
         setName(d.name || "")
+        setDisplayName(d.display_name || d.name || "")
         setEmail(d.email || "")
         setHouse(d.house_number || "")
         setPhone(d.phone || "")
@@ -188,13 +195,14 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
   }, [])
 
   const handleSave = async () => {
-    if (!name.trim()) { showToast("Display name is required", false); return }
+    if (!name.trim()) { showToast("Your name is required", false); return }
+    if (!isValidDisplayName(displayName)) { showToast("Display name needs at least 3 letters", false); return }
     setSaving(true)
     const { data: { session } } = await supabase.auth.getSession()
     const res = await fetch("/api/profile", {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ name: name.trim(), email: email.trim(), house_number: house.trim(), phone: phone.trim(), hide_name: hideName, bar_opt_in: barOptIn, avatar_url: avatar }),
+      body: JSON.stringify({ name: name.trim(), display_name: displayName.trim(), email: email.trim(), house_number: house.trim(), phone: phone.trim(), hide_name: hideName, bar_opt_in: barOptIn, avatar_url: avatar }),
     })
     setSaving(false)
     if (res.ok) {
@@ -265,8 +273,14 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
               {/* Fields */}
               <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.9rem", display: "flex", flexDirection: "column", gap: "0.65rem" }}>
                 <div>
-                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.3rem" }}>Display name *</label>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.3rem" }}>Your name *</label>
                   <input value={name} onChange={e => setName(e.target.value)} style={inputStyle} placeholder="Your name" />
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.25rem" }}>Your real name -- always required, used for admin/EC lookups and anywhere someone's acting as a responsible party.</div>
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.3rem" }}>Display name *</label>
+                  <input value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} placeholder="e.g. what your neighbours call you" />
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.25rem" }}>Shown in Attendees and other social lists. Starts the same as your name above -- change it if you'd rather go by something else. At least 3 letters, can't be blank.</div>
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.3rem" }}>Email <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>(optional)</span></label>
@@ -285,7 +299,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
               {/* Toggles */}
               <div style={{ borderTop: "1px solid var(--border)", marginTop: "0.75rem" }}>
                 <NotificationsToggle />
-                <Toggle value={hideName} onChange={setHideName} label="Hide my name" description="Show me as 'Resident' in event attendee lists" />
+                <Toggle value={hideName} onChange={setHideName} label="Hide my name" description="Show me as 'Resident' everywhere -- including your Display Name above -- except to admins/EC" />
                 {/* Bar access toggle parked (feature not in scope) — see lib/features.js */}
                 {BAR_ENABLED && (
                   <>
