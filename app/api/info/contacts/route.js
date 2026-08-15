@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
+import { isValidDisplayName } from "@/lib/memberName"
 async function getAdminMember(token) {
   if (!token) return null
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
@@ -88,7 +89,22 @@ export async function PATCH(req) {
   // when they typed it. With ~100 accounts being created FOR residents by an
   // admin, the admin is the one who entered the name, and was left unable to
   // correct their own typo. Same last-write-wins, no locking.
-  const MEMBER_OWNED = ['email', 'house_number', 'phone', 'name']
+  // display_name joins the dual-edit set (Iain, 2026-08-15): admins need to
+  // both find someone by whichever name they go by AND correct that name
+  // when it's unhelpful (fire-warden/register accuracy) -- same rationale as
+  // `name` above, and the resident keeps editing it from their own Profile
+  // exactly as before. Validated with the same rule as Profile
+  // (isValidDisplayName -- at least 3 letters) so an admin can't save a
+  // value the DB's NOT NULL/backfill contract wouldn't have allowed at
+  // signup either.
+  const MEMBER_OWNED = ['email', 'house_number', 'phone', 'name', 'display_name']
+
+  if (member_id && updates.display_name !== undefined) {
+    const trimmed = typeof updates.display_name === 'string' ? updates.display_name.trim() : ''
+    if (!isValidDisplayName(trimmed))
+      return NextResponse.json({ error: 'Display name must be at least 3 letters.' }, { status: 400 })
+    updates.display_name = trimmed
+  }
 
   // Standalone contact: every field, including name, lives on the contacts row.
   if (!member_id && name !== undefined) updates.name = name
