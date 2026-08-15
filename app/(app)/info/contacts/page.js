@@ -6,6 +6,7 @@ import ResidentEditForm, { Sheet, CategoryPicker, COLOUR, inputStyle, labelStyle
 import { isBuiltInCategory } from "@/lib/contactCategories"
 import { formatPhoneInput } from "@/lib/phone"
 import { isExternalContact, displayRecipientName } from "@/lib/categoryQuestions"
+import { resolveMemberName } from "@/lib/memberName"
 import AskQuestion from "@/components/AskQuestion"
 
 const secondaryButtonStyle = {
@@ -455,7 +456,7 @@ export default function ContactsPage() {
   const load = useCallback(async () => {
     const [catRes, memberRes, contactRes, inviteRes] = await Promise.all([
       supabase.from("contact_categories").select("id, name, display_order, askable").eq("active", true).order("display_order"),
-      supabase.from("members").select("id, name, username, email, house_number, phone, hide_name, is_admin").eq("status", "active"),
+      supabase.from("members").select("id, name, display_name, username, email, house_number, phone, hide_name, is_admin").eq("status", "active"),
       supabase.from("contacts")
         .select("id, name, title, phone, email, house_number, member_id, active, contact_category_members(category_id)")
         .order("display_order"),
@@ -512,9 +513,16 @@ export default function ContactsPage() {
       const linked = contactByMemberId[m.id]
       const isSelf = m.id === me?.id
       const maskedForViewer = m.hide_name && !isAdmin && !isSelf
+      // display_name (2026-08-14): preferred fallback ahead of the real name
+      // once unmasked -- masking itself (maskedForViewer) is unchanged.
+      // searchName carries BOTH raw name and display_name, unmasked, so a
+      // viewer who only knows one of the two names can still find the card
+      // -- but only when this entry isn't masked for them (never leak the
+      // real name of a Private resident into search for a non-admin).
       return {
         key: `m-${m.id}`,
-        name: maskedForViewer ? "Resident" : m.name,
+        name: maskedForViewer ? "Resident" : resolveMemberName(m, { viewerId: me?.id, canManage: isAdmin }),
+        searchName: maskedForViewer ? null : [m.name, m.display_name].filter(Boolean).join(" "),
         email: maskedForViewer ? null : m.email,
         house_number: maskedForViewer ? null : m.house_number,
         phone: maskedForViewer ? null : (m.phone || null),
@@ -580,7 +588,7 @@ export default function ContactsPage() {
     if (!q) return categoryFiltered
     const digits = q.replace(/\D/g, "")
     return categoryFiltered.filter(e => {
-      const haystack = [e.name, e.title, e.email, e.isResident ? e.house_number : null]
+      const haystack = [e.name, e.searchName, e.title, e.email, e.isResident ? e.house_number : null]
         .filter(Boolean).join(" ").toLowerCase()
       if (haystack.includes(q)) return true
       if (digits && e.phone && e.phone.replace(/\D/g, "").includes(digits)) return true
