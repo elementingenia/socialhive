@@ -132,6 +132,20 @@ const TRADES = '8cace631-cc1c-46ab-a6a2-f11b595daf44'
      'privacy: a non-Private resident is shown normally')
   eq(displayRecipientName(null, { id: 'm-other' }), null,
      'privacy: an unresolved member yields null (filtered out upstream)')
+
+  // display_name (2026-08-14): preferred fallback ahead of the real name,
+  // but never overrides masking -- Hide My Name still wins outright.
+  const openWithDisplay = { id: 'm-open2', name: 'John Smith', display_name: 'Johnny', hide_name: false }
+  const privWithDisplay = { id: 'm-priv2', name: 'Jane Doe', display_name: 'Coastal Jane', hide_name: true }
+
+  eq(displayRecipientName(openWithDisplay, { id: 'm-other', is_admin: false }), 'Johnny',
+     'display_name: shown ahead of the real name when not masked')
+  eq(displayRecipientName(privWithDisplay, { id: 'm-other', is_admin: false }), 'Resident',
+     'display_name: Hide My Name still wins outright, display_name is irrelevant here')
+  eq(displayRecipientName(privWithDisplay, { id: 'm-other', is_admin: true }), 'Coastal Jane',
+     'display_name: an admin (unmasked) sees the display name ahead of the real name')
+  eq(displayRecipientName(privWithDisplay, { id: 'm-priv2', is_admin: false }), 'Coastal Jane',
+     'display_name: you always see your own display name, even with Private set')
 }
 
 console.log(`categoryQuestions: ${pass} passed, ${fail} failed`)
