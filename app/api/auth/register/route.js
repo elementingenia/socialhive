@@ -97,6 +97,12 @@ export async function POST(request) {
     // Insert member record
     const { error: insertError } = await supabaseAdmin.from('members').insert({
       name: username.trim(),
+      // display_name (2026-08-14): defaults to Real Name at creation --
+      // Iain's explicit call -- so every render site can just show
+      // display_name directly, no IF-display_name-else-name fallback
+      // logic anywhere. Only diverges once the resident edits it in
+      // Profile (validated there -- see lib/memberName.js).
+      display_name: username.trim(),
       username: username.trim(),
       pin: password,
       auth_id: authUserId,
