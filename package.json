@@ -1,5 +1,33 @@
 {
-  "name": "socialhive",
+{
+    "name": "socialhive",
+    "version": "0.1.1",
+    "private": true,
+    "scripts": {
+          "dev": "next dev",
+          "build": "next build",
+          "start": "next start",
+          "test": "playwright test",
+          "test:ui": "playwright test --ui",
+          "test:headed": "playwright test --headed",
+          "check:invariants": "node scripts/check-invariants.js",
+          "test:unit": "node tests/unit/date.test.mjs && node tests/unit/booking.test.mjs && node tests/unit/payments.test.mjs && node tests/unit/attendees.test.mjs && node tests/unit/accounts.test.mjs && node tests/unit/clubs.test.mjs && node tests/unit/recurrence.test.mjs && node tests/unit/categoryQuestions.test.mjs && node tests/unit/usernames.test.mjs && node tests/unit/spaces.test.mjs && node tests/unit/eventClash.test.mjs && node tests/unit/showing.test.mjs && node tests/unit/spaceBookings.test.mjs && node tests/unit/modifyBooking.test.mjs && node tests/unit/memberName.test.mjs",
+          "lint": "eslint --ext .js,.jsx app components lib"
+    },
+    "dependencies": {
+          "@supabase/supabase-js": "^2",
+          "next": "14.2.35",
+          "react": "^18",
+          "react-dom": "^18",
+          "web-push": "^3.6.7"
+    },
+    "devDependencies": {
+          "@playwright/test": "^1.61.0",
+          "eslint": "^8.57.1",
+          "eslint-plugin-react": "^7.37.5"
+    }
+}
+"name": "socialhive",
   "version": "0.1.1",
   "private": true,
   "scripts": {
