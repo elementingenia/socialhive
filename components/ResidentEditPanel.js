@@ -3,6 +3,7 @@ import { useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { getAuthToken } from "@/lib/getAuthToken"
 import { formatPhoneInput } from "@/lib/phone"
+import { isValidDisplayName } from "@/lib/memberName"
 
 export const COLOUR = "#4e7aab"
 
@@ -335,8 +336,13 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
   // editing them in their own Profile, and an admin can now fill them in from
   // here. Practical driver -- plenty of residents will never set a phone or
   // house number themselves, and an admin had no way to complete the record.
-  // Identity (name, username) stays self-service only.
+  // Real name joined dual-edit 2026-07-29, and display_name joins it here
+  // (2026-08-15) for the same reason: fire-warden/register accuracy needs an
+  // admin able to correct a resident's own typo or an unhelpful Display
+  // Name, not just view it. Username stays the one truly self-service-only
+  // identity field (renaming it here would orphan the Auth user).
   const [name, setName]       = useState(member.name || "")
+  const [displayName, setDisplayName] = useState(member.display_name || member.name || "")
   const [email, setEmail]     = useState(member.email || "")
   const [house, setHouse]     = useState(member.house_number || "")
   const [phone, setPhone]     = useState(member.phone || "")
@@ -390,6 +396,13 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
   }
 
   async function save() {
+    // Same rule as Profile's own save (isValidDisplayName -- at least 3
+    // letters): the server enforces this too, but failing fast here avoids
+    // a round trip for the common typo/blank case.
+    if (!isValidDisplayName(displayName.trim())) {
+      setError("Display name must be at least 3 letters.")
+      return
+    }
     setSaving(true); setError("")
     const token = await getToken()
     const res = await fetch("/api/info/contacts", {
@@ -398,6 +411,7 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
       body: JSON.stringify({
         member_id: member.id,
         name: name.trim() || member.name,
+        display_name: displayName.trim(),
         title: title.trim() || null,
         email: email.trim() || null,
         house_number: house.trim() || null,
@@ -420,6 +434,14 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
         <label style={labelStyle}>Full name</label>
         <input value={name} onChange={e => setName(e.target.value)} style={inputStyle} />
         <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>
+          The resident can also change this in their own profile — whichever was saved last wins.
+        </div>
+      </div>
+      <div>
+        <label style={labelStyle}>Display name</label>
+        <input value={displayName} onChange={e => setDisplayName(e.target.value)} style={inputStyle} />
+        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>
+          Shown around the app instead of the full name (Attendees, recipient lists, Contacts).
           The resident can also change this in their own profile — whichever was saved last wins.
         </div>
       </div>
