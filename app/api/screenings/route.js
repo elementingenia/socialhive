@@ -9,6 +9,7 @@ import { titleFor } from '@/lib/showing'
 import { checkCancelPaymentGuard } from '@/lib/eventCancelGuard'
 import { sydneyTodayStr } from '@/lib/date'
 import { requireAdminOrAreaOwner, requireEventManage } from '@/lib/areaAuth'
+import { resolveMemberName } from '@/lib/memberName'
 
 // Movie screenings always run in the one dedicated common space -- there's no
 // location picker in the screening form, so every screening is auto-bound to
@@ -73,7 +74,7 @@ export async function GET(req) {
 
   const { data: bookings } = await supabaseAdmin
     .from('bookings')
-    .select('id, event_id, member_id, contact_id, status, seats, booked_at, members(name, hide_name), contacts(name)')
+    .select('id, event_id, member_id, contact_id, status, seats, booked_at, members(name, display_name, hide_name), contacts(name)')
     .in('event_id', eventIds)
     .neq('status', 'cancelled')
 
@@ -84,7 +85,7 @@ export async function GET(req) {
   // seat"). Composite key covers both without the two id spaces colliding.
   const { data: partyRows } = await supabaseAdmin
     .from('booking_attendees')
-    .select('event_id, owner_id, owner_contact_id, member_id, contact_id, guest_name, member:members!member_id(name, hide_name), contact:contacts!contact_id(name)')
+    .select('event_id, owner_id, owner_contact_id, member_id, contact_id, guest_name, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name)')
     .in('event_id', eventIds)
   const partyMap = {}
   for (const p of partyRows || []) {
@@ -156,7 +157,11 @@ export async function GET(req) {
     const attendeeOf = b => {
       const isOwn     = b.member_id === member.id
       const isPrivate = !!b.members?.hide_name
-      const name = isOwn ? 'You' : (isPrivate && !canManageBooks) ? 'Resident' : (b.members?.name || b.contacts?.name || 'Resident')
+      // display_name (2026-08-14): preferred fallback ahead of the real name
+      // when not masked -- masking itself is unchanged, see lib/memberName.js.
+      const name = b.members
+        ? resolveMemberName(b.members, { viewerId: member.id, canManage: canManageBooks, selfLabel: 'You' })
+        : (isOwn ? 'You' : (b.contacts?.name || 'Resident'))
       // Named party for this booker, same privacy masking as the booker's
       // row -- except the booking owner always sees their own party's names.
       const ownerKey = b.member_id ? `m:${b.member_id}` : b.contact_id ? `c:${b.contact_id}` : null
@@ -164,7 +169,8 @@ export async function GET(req) {
         if (p.member_id) {
           const own  = p.member_id === member.id
           const priv = !!p.member?.hide_name
-          return { name: own ? 'You' : (priv && !canManageBooks && !isOwn) ? 'Resident' : (p.member?.name || 'Resident'), isPrivate: priv, guest: false }
+          const pName = resolveMemberName(p.member, { viewerId: member.id, canManage: canManageBooks || isOwn, selfLabel: 'You' })
+          return { name: pName, isPrivate: priv, guest: false }
         }
         if (p.contact_id) {
           return { name: p.contact?.name || 'Resident', isPrivate: false, guest: false }
