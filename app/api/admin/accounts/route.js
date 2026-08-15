@@ -117,7 +117,9 @@ export async function POST(req) {
     }
 
     const { data: member, error: insertErr } = await supabaseAdmin.from("members").insert({
-      name, username, pin, auth_id: authUserId, auth_email: fakeEmail,
+      // display_name (2026-08-14) defaults to Real Name at creation here too --
+      // see the identical note in app/api/auth/register/route.js.
+      name, display_name: name, username, pin, auth_id: authUserId, auth_email: fakeEmail,
       // Admin-created: the PIN is handed over, so force a change on first
       // login (migration 067). Self-registration leaves this false.
       must_change_pin: true,
