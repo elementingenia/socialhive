@@ -96,7 +96,7 @@ function ContactCard({ contact, badge, external = false, isResident = true, onEd
       </div>
       {contact.realName && (
         <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.15rem" }}>
-          Real name: {contact.realName}
+          {contact.realName}
         </div>
       )}
       {expanded && (
