@@ -94,6 +94,11 @@ function ContactCard({ contact, badge, external = false, isResident = true, onEd
           )}
         </div>
       </div>
+      {contact.realName && (
+        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.15rem" }}>
+          Real name: {contact.realName}
+        </div>
+      )}
       {expanded && (
         <div style={{ marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
           {contact.title && (
@@ -519,9 +524,19 @@ export default function ContactsPage() {
       // viewer who only knows one of the two names can still find the card
       // -- but only when this entry isn't masked for them (never leak the
       // real name of a Private resident into search for a non-admin).
+      //
+      // realName (2026-08-15, Iain): Display Name is front-and-centre for
+      // everyone, but an admin specifically needs the Real Name reachable
+      // without a click -- fire-warden/register accuracy means an admin
+      // scanning this list has to be able to tell "Coastal Jane" is really
+      // "Jane Doe" at a glance, not just search for either. Admin-only
+      // (canManage), and only shown when it actually differs from what's
+      // already on the card -- Private residents already collapse to
+      // "Resident" for non-admins with nothing further revealed, unchanged.
       return {
         key: `m-${m.id}`,
         name: maskedForViewer ? "Resident" : resolveMemberName(m, { viewerId: me?.id, canManage: isAdmin }),
+        realName: (!maskedForViewer && isAdmin && m.display_name && m.display_name !== m.name) ? m.name : null,
         searchName: maskedForViewer ? null : [m.name, m.display_name].filter(Boolean).join(" "),
         email: maskedForViewer ? null : m.email,
         house_number: maskedForViewer ? null : m.house_number,
