@@ -648,8 +648,13 @@ function CoordPicker({ members, value, onChange, valid = false, colour = "var(--
   const [open,   setOpen]   = useState(false)
   const containerRef        = useRef(null)
 
+  // display_name (2026-08-14): this picker is an admin/Owner responsible-party
+  // action (assigning a club coordinator), so search matches EITHER name --
+  // whoever's picking may only know one of the two -- while the option list
+  // still shows the real name first (below), matching the confirmed rule
+  // that responsible-party screens keep Real Name primary.
   const filtered = members.filter(m =>
-    !query || (m.name || m.username || "").toLowerCase().includes(query.toLowerCase())
+    !query || [m.name, m.display_name, m.username].filter(Boolean).join(" ").toLowerCase().includes(query.toLowerCase())
   )
 
   useEffect(() => {
@@ -1850,7 +1855,7 @@ export default function ClubHome({ club }) {
 
     // Members for EC picker (admin or this club's Owner)
     if (canManage) {
-      const { data: mems } = await supabase.from("members").select("id, name, username").order("name")
+      const { data: mems } = await supabase.from("members").select("id, name, display_name, username").order("name")
       setMembers(mems || [])
     }
 
