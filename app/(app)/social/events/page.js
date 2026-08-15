@@ -20,6 +20,7 @@ import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName } from "@/lib/sortNames"
 import { useOwners } from "@/lib/useOwners"
+import { resolveMemberName } from "@/lib/memberName"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -1333,10 +1334,12 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                   {confirmedBookings.map((b, i) => {
                     const isOwn     = b.member_id === member?.id
                     const isPrivate = !!b.member?.hide_name
+                    // display_name (2026-08-14) rides ahead of the real name once
+                    // unmasked -- masking itself (isPrivate && !isAdmin) is unchanged.
                     const label = isOwn ? "You"
                       : !showNames ? "Guest"
-                      : (isPrivate && !isAdmin) ? "Resident"
-                      : (b.member?.name || b.member?.username || b.contact?.name || "Member")
+                      : b.member ? resolveMemberName(b.member, { canManage: isAdmin })
+                      : (b.contact?.name || "Member")
                     const paid = computeIsPaid(b)
                     // Pass `event` through (2026-08-12, Iain -- Spring Ball 1):
                     // a self-report on top of an already-partial booking flips
@@ -1542,9 +1545,11 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                               // Contacts (no app login) have no privacy toggle. The
                               // booking owner (isOwn, this row) always sees their own
                               // party's real names, privacy flag or not (Iain, 2026-07-23).
+                              // display_name (2026-08-14) rides ahead of the real name once
+                              // unmasked -- masking itself (gPriv && !isAdmin && !isOwn) is unchanged.
                               const gName = gOwn ? "You" : p.guest_name ? p.guest_name
                                 : p.contact_id ? (p.contact?.name || "Resident")
-                                : (gPriv && !isAdmin && !isOwn) ? "Resident" : (p.member?.name || "Resident")
+                                : resolveMemberName(p.member, { canManage: isAdmin || isOwn })
                               return <span key={j} style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>+ {gName}{p.guest_name ? " (guest)" : ""}{gPriv && isAdmin && !gOwn && p.member?.name ? " (P)" : ""}</span>
                             })}
                           </div>
@@ -1694,7 +1699,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, contact_id, booked_at, updated_at, member:members!member_id(id, name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, member:members!member_id(name, hide_name), contact:contacts!contact_id(name))")
+      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, contact_id, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
       .eq("hub_type", "social")
       .eq("archived", false)
       .order("event_date", { ascending: true })
