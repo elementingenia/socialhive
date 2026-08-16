@@ -26,6 +26,7 @@ import { useRequestOnlyAcknowledge } from "@/components/RequestOnlyAcknowledge"
 import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName } from "@/lib/sortNames"
+import { resolveMemberName } from "@/lib/memberName"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -109,13 +110,13 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
   async function loadAttendees() {
     const { data } = await supabase
       .from("bookings")
-      .select("id, seats, has_book, book_given_at, name_hidden, bring_note, members(id, name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
+      .select("id, seats, has_book, book_given_at, name_hidden, bring_note, members(id, name, display_name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
       .eq("event_id", event.id)
       .eq("status", "confirmed")
     // Named additional attendees (the party), grouped by the booker.
     const { data: partyRows } = await supabase
       .from("booking_attendees")
-      .select("owner_id, owner_contact_id, member_id, contact_id, guest_name, bring_note, member:members!member_id(name, hide_name), contact:contacts!contact_id(name), bring:club_bring_categories!bring_category_id(label)")
+      .select("owner_id, owner_contact_id, member_id, contact_id, guest_name, bring_note, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name), bring:club_bring_categories!bring_category_id(label)")
       .eq("event_id", event.id)
     const partyByOwner = {}
     for (const p of partyRows || []) {
@@ -131,12 +132,26 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
     // always sees their own party's real names regardless of privacy —
     // that's the `!isOwn` bypass added below, matching the same fix in
     // Social and Movies.
+    //
+    // display_name (2026-08-15): this list was missed in the original
+    // rollout -- it was still showing b.members?.name (Real Name) to every
+    // viewer, including non-admins, who should only ever see Display Name.
+    // Routed through the same resolveMemberName() every other attendee list
+    // uses. name_hidden is a per-booking privacy override on TOP of the
+    // member's own hide_name -- folded into a synthetic hide_name so
+    // resolveMemberName's masking still covers both.
     setAttendees((data || []).map(b => {
       const isOwn     = b.members?.id === member?.id
       const isPrivate = !!(b.members?.hide_name || b.name_hidden)
+      const memberForName = b.members ? { ...b.members, hide_name: isPrivate } : null
       return {
         id: b.id,
-        name: isOwn ? "You" : (isPrivate && !canManageBooks) ? "Resident" : (b.members?.name || b.members?.username || b.contacts?.name || "Member"),
+        name: memberForName
+          ? resolveMemberName(memberForName, {
+              viewerId: member?.id, canManage: canManageBooks, selfLabel: "You",
+              fallback: b.members?.username || b.contacts?.name || "Member",
+            })
+          : (b.contacts?.name || "Member"),
         isOwn,
         isPrivate,
         seats: b.seats || 1,
@@ -148,10 +163,14 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
           const ownerKey = b.members?.id ? `m:${b.members.id}` : b.contacts?.id ? `c:${b.contacts.id}` : null
           return ownerKey ? (partyByOwner[ownerKey] || []) : []
         })().map(p => {
-          const gPriv = !!p.member?.hide_name
           const gOwn  = p.member_id && p.member_id === member?.id
           return {
-            name: gOwn ? "You" : p.guest_name ? p.guest_name : p.contact_id ? (p.contact?.name || "Resident") : (gPriv && !canManageBooks && !isOwn) ? "Resident" : (p.member?.name || "Resident"),
+            name: gOwn ? "You"
+              : p.guest_name ? p.guest_name
+              : p.contact_id ? (p.contact?.name || "Resident")
+              : p.member
+                ? resolveMemberName(p.member, { viewerId: member?.id, canManage: canManageBooks || isOwn, selfLabel: "You", fallback: "Resident" })
+                : "Resident",
             guest: !!p.guest_name,
             bring: p.bring?.label || null,
             bringNote: p.bring_note || null,
