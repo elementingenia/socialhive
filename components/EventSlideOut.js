@@ -10,6 +10,7 @@ import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
 import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge, balancePhrase, remainingBalance, wholeDollar } from "@/lib/payments"
 import { byOwnThenName } from "@/lib/sortNames"
+import { resolveMemberName } from "@/lib/memberName"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
 import { clubCaps, clubColour } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
@@ -365,11 +366,12 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
 
   // Named additional attendees (workstream A) for every booking on this event,
   // grouped by the owner who booked them. RLS allows any authenticated member
-  // to read these; this EC/admin panel shows real names (with a guest tag),
-  // same as it shows real member names rather than masking.
+  // to read these; this EC/admin panel bypasses masking same as the main
+  // attendee tiles, via resolveMemberName's canManage (2026-08-15 -- this
+  // used to show member.name directly, missing display_name entirely).
   useEffect(() => {
     supabase.from("booking_attendees")
-      .select("owner_id, owner_contact_id, member_id, contact_id, guest_name, member:members!member_id(name, username), contact:contacts!contact_id(name)")
+      .select("owner_id, owner_contact_id, member_id, contact_id, guest_name, member:members!member_id(name, display_name, hide_name, username), contact:contacts!contact_id(name)")
       .eq("event_id", event.id)
       .then(({ data: rows }) => {
         const map = {}
@@ -380,7 +382,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           // 061, 2026-07-23.
           const key = r.owner_id ? `m:${r.owner_id}` : `c:${r.owner_contact_id}`
           ;(map[key] = map[key] || []).push(
-            r.member_id ? { label: r.member?.name || r.member?.username || "Resident", guest: false }
+            r.member_id ? { label: resolveMemberName(r.member, { canManage: true, fallback: r.member?.username || "Resident" }), guest: false }
               : r.contact_id ? { label: r.contact?.name || "Resident", guest: false }
               : { label: r.guest_name, guest: true }
           )
@@ -907,24 +909,31 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         }
         // Own row always pinned to the top — consistent with every other attendee
         // list (Movies/Social inline lists, Book Club's own attendees list) —
-        // then A-Z by name (Iain, 2026-08-04). This is the admin/EC-only
-        // panel, always real names (never masked), so sorting on the
-        // displayed name is exact here.
+        // then A-Z by name (Iain, 2026-08-04).
         const attendeeGroups = Object.values(grouped)
           .sort((a, b) => byOwnThenName(
             a.member?.id === currentMember?.id, b.member?.id === currentMember?.id,
-            a.member?.name || a.contact?.name, b.member?.name || b.contact?.name,
+            a.member?.display_name || a.member?.name || a.contact?.name,
+            b.member?.display_name || b.member?.name || b.contact?.name,
           ))
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
             {attendeeGroups.map(({ member, contact, confirmed: confRows, waitlist: waitRows }) => {
               const isOwnBooking   = member?.id === currentMember?.id
-              // This whole panel is already admin/EC-only (showCoordinatorPanel) - show the
-              // real name rather than masking to "Resident", but flag Private members with
-              // a (P) marker so admins/ECs still know at a glance. Own row always reads "You".
-              // Contacts have no login and therefore no privacy toggle — always shown.
+              // This whole panel is already admin/EC-only (showCoordinatorPanel), so
+              // masking is bypassed here same as Contacts -- but which name is PRIMARY
+              // was never revisited after Display Name shipped (this block predates it,
+              // 2026-08-04). Iain's rule (2026-08-15, same as the Contacts list): admins
+              // see Display Name front-and-centre, with Real Name revealed underneath in
+              // smaller text -- not Real Name as the primary label. Flag Private members
+              // with a (P) marker so admins/ECs still know at a glance. Own row always
+              // reads "You". Contacts have no login/display_name concept -- always their
+              // one real name.
               const isPrivate = !!member?.hide_name
-              const name = isOwnBooking ? "You" : (member?.name || member?.username || contact?.name || "—")
+              const name = isOwnBooking ? "You"
+                : member ? resolveMemberName(member, { canManage: true, fallback: member?.username || contact?.name || "—" })
+                : (contact?.name || "—")
+              const realName = (!isOwnBooking && member?.display_name && member.display_name !== member.name) ? member.name : null
               const confirmedSeats = confRows.reduce((s, b) => s + (b.seats || 1), 0)
               const waitlistSeats  = waitRows.reduce((s, b) => s + (b.seats || 1), 0)
               const hasSplit       = confirmedSeats > 0 && waitlistSeats > 0
@@ -951,6 +960,9 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                         {name}
                         {isPrivate && !isOwnBooking && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", marginLeft: 5 }}>(P)</span>}
                       </div>
+                      {realName && (
+                        <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{realName}</div>
+                      )}
                       <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 2, display: "flex", gap: 6, flexWrap: "wrap" }}>
                         {confirmedSeats > 0 && (
                           <span>{confirmedSeats} seat{confirmedSeats !== 1 ? "s" : ""}</span>
