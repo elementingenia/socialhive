@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import ExpandableText from '@/components/ExpandableText'
 import { useAdaptiveClamp } from '@/lib/useAdaptiveClamp'
+import { resolveMemberName } from '@/lib/memberName'
 
 function parseGenres(g) {
   if (!g) return []
@@ -113,6 +114,12 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
 
   const iMineToReturn = activeLoan && activeLoan.member_id === memberId
   const onLoanByOther = activeLoan && activeLoan.member_id !== memberId
+  // display_name (2026-08-15): same fix as booklibrary/books/page.js -- this
+  // badge is shown to every resident and was never wired into Display Name
+  // OR hide_name masking (the query didn't even select hide_name).
+  const activeLoanName = activeLoan
+    ? (iMineToReturn ? 'You' : resolveMemberName(activeLoan.members, { canManage: isAdmin, fallback: 'Resident' }))
+    : null
   const canBorrow     = !activeLoan && myLoanCount < loanCap
 
   // Same dynamic clamp as the Book Library sheet -- see lib/useAdaptiveClamp.js.
@@ -225,7 +232,7 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
                       📀 On Loan
                     </div>
                     <div style={{ fontSize:'0.6rem', color:iMineToReturn?'rgba(255,255,255,0.85)':'var(--text-dim)', marginTop:'0.2rem', lineHeight:1.3, whiteSpace:'nowrap' }}>
-                      {iMineToReturn ? `You · ${fmtDate(activeLoan.borrowed_at)}` : `${activeLoan.members?.name || 'Resident'} · ${fmtDate(activeLoan.borrowed_at)}`}
+                      {activeLoanName} · {fmtDate(activeLoan.borrowed_at)}
                     </div>
                   </div>
                 </div>
@@ -237,7 +244,7 @@ function DvdDetailSheet({ movie, isAdmin, session, memberId, myLoanCount, loanCa
                   <div>
                     <div style={{ fontSize:'0.72rem', fontWeight:800, color:iMineToReturn?'#fff':'var(--text)', textTransform:'uppercase', letterSpacing:'0.04em' }}>On Loan</div>
                     <div style={{ fontSize:'0.68rem', color:iMineToReturn?'rgba(255,255,255,0.85)':'var(--text-dim)' }}>
-                      {iMineToReturn ? 'You · ' + fmtDate(activeLoan.borrowed_at) : (activeLoan.members?.name || 'Resident') + ' · ' + fmtDate(activeLoan.borrowed_at)}
+                      {activeLoanName} · {fmtDate(activeLoan.borrowed_at)}
                     </div>
                   </div>
                 </div>
@@ -538,7 +545,7 @@ export default function DvdPage() {
   const loadLoans = useCallback(async () => {
     const { data } = await supabase
       .from('dvd_loans')
-      .select('id, movie_id, member_id, borrowed_at, members(name)')
+      .select('id, movie_id, member_id, borrowed_at, members(name, display_name, hide_name)')
       .is('returned_at', null)
     setLoans(data || [])
   }, [])
@@ -722,4 +729,3 @@ export default function DvdPage() {
     </div>
   )
 }
-
