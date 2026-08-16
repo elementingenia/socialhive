@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useOwners } from '@/lib/useOwners'
 import ExpandableText from '@/components/ExpandableText'
 import { useAdaptiveClamp } from '@/lib/useAdaptiveClamp'
+import { resolveMemberName } from '@/lib/memberName'
 
 function parseGenres(g) {
   if (!g) return []
@@ -110,6 +111,15 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
   const genres = parseGenres(book.genre)
 
   const iMineToReturn = activeLoan && activeLoan.member_id === memberId
+  // display_name (2026-08-15): this borrower badge is shown to EVERY
+  // resident browsing the library, not just admins -- and it was never
+  // wired into either Display Name OR the existing hide_name ("Private")
+  // masking at all (the query didn't even select hide_name). Routed through
+  // resolveMemberName now so a Private resident's real name doesn't leak
+  // here, and everyone else sees Display Name, same as Contacts/Attendees.
+  const activeLoanName = activeLoan
+    ? (iMineToReturn ? 'You' : resolveMemberName(activeLoan.members, { canManage: isAdmin, fallback: 'Resident' }))
+    : null
   const canBorrow      = !activeLoan && myLoanCount < loanCap
 
   // Clamp the summary only as far as the sheet's own maxHeight forces --
@@ -196,7 +206,7 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
                       📚 On Loan
                     </div>
                     <div style={{ fontSize:'0.6rem', color:iMineToReturn?'rgba(255,255,255,0.85)':'var(--text-dim)', marginTop:'0.2rem', lineHeight:1.3, whiteSpace:'nowrap' }}>
-                      {iMineToReturn ? `You · ${fmtDate(activeLoan.borrowed_at)}` : `${activeLoan.members?.name || 'Resident'} · ${fmtDate(activeLoan.borrowed_at)}`}
+                      {activeLoanName} · {fmtDate(activeLoan.borrowed_at)}
                     </div>
                   </div>
                 </div>
@@ -207,7 +217,7 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
                   <div>
                     <div style={{ fontSize:'0.72rem', fontWeight:800, color:iMineToReturn?'#fff':'var(--text)', textTransform:'uppercase', letterSpacing:'0.04em' }}>On Loan</div>
                     <div style={{ fontSize:'0.68rem', color:iMineToReturn?'rgba(255,255,255,0.85)':'var(--text-dim)' }}>
-                      {iMineToReturn ? 'You · ' + fmtDate(activeLoan.borrowed_at) : (activeLoan.members?.name || 'Resident') + ' · ' + fmtDate(activeLoan.borrowed_at)}
+                      {activeLoanName} · {fmtDate(activeLoan.borrowed_at)}
                     </div>
                   </div>
                 </div>
@@ -563,7 +573,7 @@ export default function BookLibraryPage() {
   const loadLoans = useCallback(async () => {
     const { data } = await supabase
       .from('book_loans')
-      .select('id, book_id, member_id, borrowed_at, members(name)')
+      .select('id, book_id, member_id, borrowed_at, members(name, display_name, hide_name)')
       .is('returned_at', null)
     setLoans(data || [])
   }, [])
