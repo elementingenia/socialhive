@@ -35,7 +35,7 @@ export async function GET(req) {
   // Fetch active bookings for the event
   const { data: activeBookings, error: be } = await supa
     .from("bookings")
-    .select("id, seats, status, payment_status, amount_paid, refund_due, refund_paid_at, has_book, book_given_at, name_hidden, booked_at, bring_note, member_id, contact_id, members(id, name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
+    .select("id, seats, status, payment_status, amount_paid, refund_due, refund_paid_at, has_book, book_given_at, name_hidden, booked_at, bring_note, member_id, contact_id, members(id, name, display_name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
     .eq("event_id", eventId)
     .neq("status", "cancelled")
     .order("booked_at")
@@ -45,7 +45,7 @@ export async function GET(req) {
   // Also fetch cancelled bookings that have payment info (refund pending or issued)
   const { data: cancelledPayments } = await supa
     .from("bookings")
-    .select("id, seats, status, payment_status, amount_paid, refund_due, refund_paid_at, has_book, book_given_at, name_hidden, booked_at, bring_note, member_id, contact_id, members(id, name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
+    .select("id, seats, status, payment_status, amount_paid, refund_due, refund_paid_at, has_book, book_given_at, name_hidden, booked_at, bring_note, member_id, contact_id, members(id, name, display_name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
     .eq("event_id", eventId)
     .eq("status", "cancelled")
     .in("payment_status", ["confirmed", "refunded"])
@@ -56,7 +56,7 @@ export async function GET(req) {
   // the EC/admin attendee list rather than silently disappearing.
   const { data: cancelledWithBook } = await supa
     .from("bookings")
-    .select("id, seats, status, payment_status, has_book, book_given_at, name_hidden, booked_at, bring_note, member_id, contact_id, members(id, name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
+    .select("id, seats, status, payment_status, has_book, book_given_at, name_hidden, booked_at, bring_note, member_id, contact_id, members(id, name, display_name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
     .eq("event_id", eventId)
     .eq("status", "cancelled")
     .eq("has_book", true)
