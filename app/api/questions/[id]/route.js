@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { notify } from "@/lib/notify"
 import { canAnswer, primaryAnswererIds, contextLabel } from "@/lib/questionRouting"
+import { resolveMemberName } from "@/lib/memberName"
 
 export const dynamic = "force-dynamic"
 
@@ -14,21 +15,28 @@ async function getMember(req) {
   return m || null
 }
 
-async function loadThread(id) {
+// viewer is the requesting member (id, is_admin) — needed here because
+// asker_name/author are resolved to Display Name (or, for an admin/EC
+// viewer, Real Name too) same two-tier rule as everywhere else (Iain,
+// 2026-08-15): non-admins see Display Name only (or the masked fallback if
+// the member is Private); admins additionally get the Real Name.
+async function loadThread(id, viewer) {
   const { data: q } = await supabaseAdmin.from("questions").select("*").eq("id", id).single()
   if (!q) return null
   const { data: replies } = await supabaseAdmin.from("question_replies")
-    .select("id, member_id, body, is_answer, created_at, members(name)").eq("question_id", id)
+    .select("id, member_id, body, is_answer, created_at, members(name, display_name, hide_name)").eq("question_id", id)
     .order("created_at", { ascending: true })
-  const { data: asker } = await supabaseAdmin.from("members").select("name").eq("id", q.asker_member_id).single()
+  const { data: asker } = await supabaseAdmin.from("members")
+    .select("name, display_name, hide_name").eq("id", q.asker_member_id).single()
   const label = await contextLabel(q.context_type, q.context_key)
-  return { q, replies: replies || [], askerName: asker?.name || "Resident", label }
+  const askerName = resolveMemberName(asker, { viewerId: viewer?.id, canManage: !!viewer?.is_admin })
+  return { q, replies: replies || [], askerName, label }
 }
 
 export async function GET(req, { params }) {
   const member = await getMember(req)
   if (!member) return NextResponse.json({ error: "Unauthorised" }, { status: 401 })
-  const t = await loadThread(params.id)
+  const t = await loadThread(params.id, member)
   if (!t) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
   const isAsker = t.q.asker_member_id === member.id
@@ -50,7 +58,10 @@ export async function GET(req, { params }) {
     },
     replies: t.replies.map(r => ({
       id: r.id, body: r.body, is_answer: r.is_answer, created_at: r.created_at,
-      author: r.members?.name || (r.is_answer ? "Coordinator" : "Resident"),
+      author: resolveMemberName(r.members, {
+        viewerId: member.id, canManage: !!member.is_admin,
+        fallback: r.is_answer ? "Coordinator" : "Resident",
+      }),
     })),
     isAsker, canAnswer: mayAnswer,
     // Open-ended conversation (Iain, 2026-07-21): either party may keep replying
@@ -126,10 +137,18 @@ export async function POST(req, { params }) {
   }
   await supabaseAdmin.from("questions").update(patch).eq("id", q.id)
 
+  // Subject included in the reply notification (2026-08-15, Iain) -- the
+  // "New question" notification below always named the actual topic
+  // ("New question about Dinner Club: \"Booze\""), but the reply
+  // notification only ever carried the context label ("New reply on a
+  // question about Dinner Club"), with no way to tell which of possibly
+  // several open threads in that context it was. Matches the same
+  // subject.trim().slice(0, 80) truncation used at creation (POST /api/questions).
+  const subject = q.subject?.trim().slice(0, 80) || ""
   for (const id of notifyTargets) {
     const msg = notifyType === "question_answered"
-      ? `Your question about ${label} has a new reply.`
-      : `New reply on a question about ${label}.`
+      ? `Your question about ${label} has a new reply: "${subject}"`
+      : `New reply on a question about ${label}: "${subject}"`
     await notify(id, null, notifyType, msg, "/questions", member.id)
   }
 
