@@ -5,6 +5,7 @@ import {
   primaryAnswererIds, contextLabel, answeringBoxQuestions, HUB_LABELS,
   askableCategories,
 } from "@/lib/questionRouting"
+import { resolveMemberName } from "@/lib/memberName"
 
 export const dynamic = "force-dynamic"
 
@@ -18,7 +19,11 @@ async function getMember(req) {
 }
 
 // Attach asker name, a human context label, and reply summary to a list of rows.
-async function enrich(rows) {
+// `viewer` (the requesting member, id + is_admin) drives the same two-tier
+// name rule as loadThread() in app/api/questions/[id]/route.js: non-admins
+// get the Display Name (or the masked fallback for a Private asker);
+// admins additionally see the Real Name via resolveMemberName's canManage.
+async function enrich(rows, viewer) {
   if (!rows.length) return []
   const askerIds = [...new Set(rows.map(r => r.asker_member_id))]
   const clubIds  = [...new Set(rows.filter(r => r.context_type === "club").map(r => r.context_key))]
@@ -27,13 +32,15 @@ async function enrich(rows) {
   const qIds     = rows.map(r => r.id)
 
   const [{ data: askers }, { data: clubs }, { data: events }, { data: cats }, { data: replies }] = await Promise.all([
-    supabaseAdmin.from("members").select("id, name").in("id", askerIds),
+    supabaseAdmin.from("members").select("id, name, display_name, hide_name").in("id", askerIds),
     clubIds.length  ? supabaseAdmin.from("clubs").select("id, name").in("id", clubIds)       : Promise.resolve({ data: [] }),
     eventIds.length ? supabaseAdmin.from("events").select("id, title").in("id", eventIds)     : Promise.resolve({ data: [] }),
     catIds.length   ? supabaseAdmin.from("contact_categories").select("id, name").in("id", catIds) : Promise.resolve({ data: [] }),
     supabaseAdmin.from("question_replies").select("question_id, created_at").in("question_id", qIds),
   ])
-  const askerName = Object.fromEntries((askers || []).map(m => [m.id, m.name]))
+  const askerName = Object.fromEntries((askers || []).map(m => [
+    m.id, resolveMemberName(m, { viewerId: viewer?.id, canManage: !!viewer?.is_admin }),
+  ]))
   const clubName  = Object.fromEntries((clubs  || []).map(c => [c.id, c.name]))
   const eventName = Object.fromEntries((events || []).map(e => [e.id, e.title]))
   const catName   = Object.fromEntries((cats   || []).map(c => [String(c.id), c.name]))
@@ -82,12 +89,12 @@ export async function GET(req) {
   const box = searchParams.get("box") || "mine"
   if (box === "answering") {
     const rows = await answeringBoxQuestions(member)
-    return NextResponse.json(await enrich(rows))
+    return NextResponse.json(await enrich(rows, member))
   }
   // mine
   const { data: rows } = await supabaseAdmin.from("questions")
     .select("*").eq("asker_member_id", member.id).order("updated_at", { ascending: false })
-  return NextResponse.json(await enrich(rows || []))
+  return NextResponse.json(await enrich(rows || [], member))
 }
 
 export async function POST(req) {
