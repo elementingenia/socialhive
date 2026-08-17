@@ -16,7 +16,7 @@ import { useRequestOnlyAcknowledge } from '@/components/RequestOnlyAcknowledge'
 import { sydneyTodayStr } from '@/lib/date'
 import AttendeeNamingPicker from '@/components/AttendeeNamingPicker'
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from '@/lib/formValidation'
-import { byOwnThenName } from '@/lib/sortNames'
+import { byOwnThenName, ordinal } from '@/lib/sortNames'
 import { useOwners } from '@/lib/useOwners'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -699,7 +699,13 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit }) {
   // standing A-Z rule for anything a user reads down a list.
   const bySelfFirst = (a, b) => byOwnThenName(a.isOwn, b.isOwn, a.name, b.name)
   const confirmedAttendees = (ev.attendees || []).filter(a => a.status === 'confirmed').sort(bySelfFirst)
-  const waitlistAttendees  = (ev.attendees || []).filter(a => a.status === 'waitlist').sort(bySelfFirst)
+  // Waitlist sorts by QUEUE POSITION, not A-Z (Iain, 2026-08-17: "the
+  // waitlisted number for a booking needs to be visible to the Admin/Owner/
+  // EC view... put them in non A-Z sort order"). waitlist_position comes
+  // from the API (app/api/screenings/route.js, ranked by booked_at
+  // ascending -- the same FIFO rule a resident's own position already uses).
+  const waitlistAttendees  = (ev.attendees || []).filter(a => a.status === 'waitlist')
+    .sort((a, b) => (a.waitlist_position || Infinity) - (b.waitlist_position || Infinity))
 
   return (
     <div onClick={onOpen}
@@ -836,6 +842,7 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit }) {
                 {waitlistAttendees.map((a, i) => (
                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', padding: '0.2rem 0', borderBottom: '1px solid var(--border)' }}>
                     <span style={{ fontWeight: a.isOwn ? 700 : 400, color: a.isOwn ? 'var(--teal)' : 'var(--text)' }}>
+                      {a.waitlist_position && <span style={{ color: 'var(--amber-dark)', fontWeight: 700 }}>({ordinal(a.waitlist_position)}) </span>}
                       {a.name}
                       {a.isPrivate && !a.isOwn && a.name !== 'Resident' && <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-dim)', marginLeft: 4 }}>(P)</span>}
                     </span>
