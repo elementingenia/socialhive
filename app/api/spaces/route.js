@@ -121,12 +121,20 @@ export async function GET(req) {
   }
 
   // Mode 2: my bookings
+  //
+  // Iain, 2026-08-17 (live-fire find): this had no expiry filter at all --
+  // a booking from over a week ago was still showing in "My Space Bookings"
+  // with an active Cancel button. ends_at is always set for a personal
+  // booking (unlike events, which can lack an end time -- see eventClash.js),
+  // so filtering on it here is safe. A finished booking simply drops off the
+  // list once its window has passed, same as the app's other "past" cutoffs.
   if (searchParams.get('mine') === '1') {
     const { data, error } = await supabaseAdmin
       .from('space_bookings')
       .select('id, location_id, starts_at, ends_at, title, purpose, status, created_at, locations(name)')
       .eq('booked_by', member.id)
       .eq('purpose', 'private')
+      .gte('ends_at', new Date().toISOString())
       .order('starts_at', { ascending: true })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ bookings: data || [] })
