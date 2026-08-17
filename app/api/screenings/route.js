@@ -123,14 +123,15 @@ export async function GET(req) {
     const myConfirmed = myBookings.find(b => b.status === 'confirmed') || null
     const myWaitlist  = myBookings.find(b => b.status === 'waitlist')  || null
 
-    // Waitlist position — rank by booked_at ascending
-    let waitlist_position = null
-    if (myWaitlist) {
-      const sorted = [...waitlistBookings].sort(
-        (a, b) => new Date(a.booked_at) - new Date(b.booked_at)
-      )
-      waitlist_position = sorted.findIndex(b => b.member_id === member.id) + 1
-    }
+    // Waitlist position — rank by booked_at ascending. Computed once per
+    // event and reused below for every waitlist attendee row (Iain,
+    // 2026-08-17: "the waitlisted number for a booking needs to be visible
+    // to the Admin/Owner/EC view"), not just the viewer's own position.
+    const waitlistOrder = [...waitlistBookings].sort(
+      (a, b) => new Date(a.booked_at) - new Date(b.booked_at)
+    )
+    const waitlistPositionById = new Map(waitlistOrder.map((b, i) => [b.id, i + 1]))
+    const waitlist_position = myWaitlist ? waitlistPositionById.get(myWaitlist.id) || null : null
 
     const my_booking = (myConfirmed || myWaitlist) ? {
       confirmed_seats:   myConfirmed?.seats || 0,
@@ -182,7 +183,7 @@ export async function GET(req) {
     const attendees = member.is_admin
       ? [
           ...confirmedBookings.map(b => ({ ...attendeeOf(b), status: 'confirmed' })),
-          ...waitlistBookings.map(b => ({ ...attendeeOf(b), status: 'waitlist' })),
+          ...waitlistBookings.map(b => ({ ...attendeeOf(b), status: 'waitlist', waitlist_position: waitlistPositionById.get(b.id) || null })),
         ]
       : confirmedBookings.map(b => ({ ...attendeeOf(b), status: 'confirmed' }))
 
