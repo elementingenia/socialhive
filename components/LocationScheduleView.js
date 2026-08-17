@@ -101,20 +101,27 @@ export default function LocationScheduleView({ open, onClose, onPickSlot }) {
   // form and hitting a clash. starts_at/ends_at are UTC instants; event_time/
   // event_end_time are already Sydney-local "HH:MM" strings (unlike
   // space_bookings, events never needed the UTC round-trip).
+  //
+  // Some legacy club events predate the 2026-07-23 space-clash feature and
+  // were never given an end time (lib/eventClash.js locks this as "no
+  // retroactive backfill" -- they're simply not clash-checkable until next
+  // edited). fmtTime("") returns "", which used to leave a bare trailing
+  // dash ("5pm–"). Fall back to an open-ended "onwards" label instead.
   function itemsForDay(dateStr) {
     if (!schedule) return []
     const fromBookings = (schedule.bookings || [])
       .filter(b => sameSydneyDay(b.starts_at, dateStr))
       .map(b => {
         const startHHMM = isoToSydneyHHMM(b.starts_at)
-        const time = `${fmtTime(startHHMM)}–${fmtTime(isoToSydneyHHMM(b.ends_at))}`
+        const endHHMM = isoToSydneyHHMM(b.ends_at)
+        const time = endHHMM ? `${fmtTime(startHHMM)}–${fmtTime(endHHMM)}` : `${fmtTime(startHHMM)} onwards`
         const who = b.title ? `${b.booked_by_name} — ${b.title}` : b.booked_by_name
         return { key: `b:${b.id}`, kind: "booking", label: `${time} · ${who}`, sortKey: startHHMM }
       })
     const fromEvents = (schedule.events || [])
       .filter(e => e.event_date === dateStr)
       .map(e => {
-        const time = `${fmtTime(e.event_time)}–${fmtTime(e.event_end_time)}`
+        const time = e.event_end_time ? `${fmtTime(e.event_time)}–${fmtTime(e.event_end_time)}` : `${fmtTime(e.event_time)} onwards`
         return { key: `e:${e.id}`, kind: "event", label: `${time} · ${e.title || "An event"}`, sortKey: (e.event_time || "").slice(0, 5) }
       })
     return [...fromEvents, ...fromBookings].sort((a, b) => a.sortKey.localeCompare(b.sortKey))
