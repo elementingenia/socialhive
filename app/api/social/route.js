@@ -80,7 +80,7 @@ function buildEventPayload(body, isInsert = false) {
 // wrote location_id = NULL the first time an event was edited after its room was
 // renamed. Returns { location_id, location } to stamp onto the row, or
 // { error, status }. An empty object means "not applicable" (off-site).
-async function validateSpace(payload, excludeEventId) {
+async function validateSpace(payload, excludeEventId, viewerId, canManage) {
   if (payload.location_type !== 'onsite') return { location_id: null }
 
   const loc = await fetchLocation(supabaseAdmin, payload.location_id)
@@ -95,6 +95,7 @@ async function validateSpace(payload, excludeEventId) {
   const conflict = await findAnyRoomConflict(supabaseAdmin, {
     location_id: loc.id, event_date: payload.event_date, event_time: payload.event_time,
     event_end_time: payload.event_end_time, exclude_event_id: excludeEventId, locationName: loc.name,
+    viewerId, canManage,
   })
   if (conflict) return { error: conflict.message, status: 409 }
   return { location_id: loc.id, location: loc.name, request_only: !!loc.request_only }
@@ -112,7 +113,7 @@ export async function POST(req) {
     return NextResponse.json({ error: 'At least one Event Coordinator is required' }, { status: 400 })
 
   const payload = buildEventPayload(body, true)
-  const space = await validateSpace(payload)
+  const space = await validateSpace(payload, undefined, member.id, !!member.is_admin)
   if (space.error) return NextResponse.json({ error: space.error }, { status: space.status })
   payload.location_id = space.location_id || null
   if (space.location) payload.location = space.location
@@ -180,7 +181,7 @@ export async function PATCH(req) {
     return NextResponse.json({ error: 'At least one Event Coordinator is required' }, { status: 400 })
 
   const payload = buildEventPayload(body)
-  const space = await validateSpace(payload, body.id)
+  const space = await validateSpace(payload, body.id, member.id, !!member.is_admin)
   if (space.error) return NextResponse.json({ error: space.error }, { status: space.status })
   payload.location_id = space.location_id || null
   if (space.location) payload.location = space.location
