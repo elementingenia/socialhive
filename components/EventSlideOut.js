@@ -9,7 +9,7 @@ import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
 import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge, balancePhrase, remainingBalance, wholeDollar } from "@/lib/payments"
-import { byOwnThenName } from "@/lib/sortNames"
+import { byOwnThenName, ordinal } from "@/lib/sortNames"
 import { resolveMemberName } from "@/lib/memberName"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
 import { clubCaps, clubColour } from "@/lib/clubs"
@@ -907,18 +907,47 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           if (b.status === "waitlist") grouped[key].waitlist.push(b)
           else grouped[key].confirmed.push(b)
         }
+
+        // Waitlist queue position (Iain, 2026-08-17: "the waitlisted number
+        // for a booking needs to be visible to the Admin/Owner/EC view") --
+        // ranked by booked_at ascending across every waitlist row on this
+        // event, same FIFO convention /api/screenings already uses to tell a
+        // resident their own position. Computed explicitly here rather than
+        // relied on from `bookings`' existing order, so this stays correct
+        // even if that query's ordering ever changes.
+        const waitlistOrder = bookings.filter(b => b.status === "waitlist")
+          .slice().sort((a, b) => new Date(a.booked_at) - new Date(b.booked_at))
+        const waitlistPositionById = new Map(waitlistOrder.map((b, i) => [b.id, i + 1]))
+
         // Own row always pinned to the top — consistent with every other attendee
-        // list (Movies/Social inline lists, Book Club's own attendees list) —
-        // then A-Z by name (Iain, 2026-08-04).
+        // list (Movies/Social inline lists, Book Club's own attendees list).
+        // Then: confirmed (and split confirmed+waitlist) attendees A-Z as
+        // before, followed by waitlist-only attendees in QUEUE order rather
+        // than A-Z (Iain, 2026-08-17) -- someone 4th in line reading above
+        // someone 1st in line just because their name comes earlier
+        // alphabetically was confusing for admins deciding who to contact
+        // first as seats free up.
         const attendeeGroups = Object.values(grouped)
-          .sort((a, b) => byOwnThenName(
-            a.member?.id === currentMember?.id, b.member?.id === currentMember?.id,
-            a.member?.display_name || a.member?.name || a.contact?.name,
-            b.member?.display_name || b.member?.name || b.contact?.name,
-          ))
+          .map(g => {
+            const waitlistOnly = g.confirmed.length === 0 && g.waitlist.length > 0
+            const waitlistPosition = waitlistOnly
+              ? Math.min(...g.waitlist.map(b => waitlistPositionById.get(b.id) ?? Infinity))
+              : null
+            return { ...g, waitlistOnly, waitlistPosition }
+          })
+          .sort((a, b) => {
+            const isOwnA = a.member?.id === currentMember?.id, isOwnB = b.member?.id === currentMember?.id
+            if (isOwnA !== isOwnB) return isOwnA ? -1 : 1
+            if (a.waitlistOnly !== b.waitlistOnly) return a.waitlistOnly ? 1 : -1
+            if (a.waitlistOnly && b.waitlistOnly) return a.waitlistPosition - b.waitlistPosition
+            return byOwnThenName(false, false,
+              a.member?.display_name || a.member?.name || a.contact?.name,
+              b.member?.display_name || b.member?.name || b.contact?.name,
+            )
+          })
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
-            {attendeeGroups.map(({ member, contact, confirmed: confRows, waitlist: waitRows }) => {
+            {attendeeGroups.map(({ member, contact, confirmed: confRows, waitlist: waitRows, waitlistOnly: isWaitlistOnly, waitlistPosition }) => {
               const isOwnBooking   = member?.id === currentMember?.id
               // This whole panel is already admin/EC-only (showCoordinatorPanel), so
               // masking is bypassed here same as Contacts -- but which name is PRIMARY
@@ -957,6 +986,9 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 700, fontSize: 14, color: isOwnBooking ? colour : "var(--text)" }}>
+                        {isWaitlistOnly && waitlistPosition && (
+                          <span style={{ color: "var(--amber-dark)", marginRight: 5 }}>({ordinal(waitlistPosition)})</span>
+                        )}
                         {name}
                         {isPrivate && !isOwnBooking && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", marginLeft: 5 }}>(P)</span>}
                       </div>
