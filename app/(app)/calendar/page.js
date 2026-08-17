@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase"
 import CalendarView from "@/components/CalendarView"
 import EventSlideOut from "@/components/EventSlideOut"
 import SpaceBookingForm from "@/components/SpaceBookingForm"
+import LocationScheduleView from "@/components/LocationScheduleView"
 import { sydneyTodayStr, sydneyDateStrPlusDays } from "@/lib/date"
 
 export default function CalendarPage() {
@@ -11,6 +12,8 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
   const [bookingSpace, setBookingSpace] = useState(false)
+  const [browsingByLocation, setBrowsingByLocation] = useState(false)
+  const [spacePrefill, setSpacePrefill] = useState(null) // { locationId, date } handed off from LocationScheduleView, or null
   const loadRef = useRef(0)
 
   const loadEvents = useCallback(async () => {
@@ -66,18 +69,33 @@ export default function CalendarPage() {
       {/* Book a Space — independent of every hub/club (Iain, 2026-08-01).
           Calendar is the entry point: it's where a resident would already be
           checking what's on before deciding when to book their own use of a
-          room. */}
-      <div style={{ padding: "12px 16px 0" }}>
+          room. Two ways in (Social_Hive_Location_First_Booking_Scope_v2.md,
+          decision #1, Iain 2026-08-16/17): Book by Date -- the original
+          date/time-first flow -- or Book by Location -- pick the space first,
+          see its schedule, then hand off into the same form. One booking
+          engine underneath either way. */}
+      <div style={{ padding: "12px 16px 0", display: "flex", gap: "0.6rem" }}>
         <button
-          onClick={() => setBookingSpace(true)}
+          onClick={() => { setSpacePrefill(null); setBookingSpace(true) }}
           style={{
-            width: "100%", background: "var(--surface)", border: "1px dashed var(--border)",
+            flex: 1, background: "var(--surface)", border: "1px dashed var(--border)",
             borderRadius: 10, padding: "0.65rem 1rem", color: "var(--text)", fontWeight: 600,
             fontSize: "0.88rem", cursor: "pointer", display: "flex", alignItems: "center",
             justifyContent: "center", gap: "0.4rem",
           }}
         >
-          <span style={{ fontSize: "1.05rem", lineHeight: 1 }}>+</span> Book a Space
+          <span style={{ fontSize: "1.05rem", lineHeight: 1 }}>+</span> Book by Date
+        </button>
+        <button
+          onClick={() => setBrowsingByLocation(true)}
+          style={{
+            flex: 1, background: "var(--surface)", border: "1px dashed var(--border)",
+            borderRadius: 10, padding: "0.65rem 1rem", color: "var(--text)", fontWeight: 600,
+            fontSize: "0.88rem", cursor: "pointer", display: "flex", alignItems: "center",
+            justifyContent: "center", gap: "0.4rem",
+          }}
+        >
+          <span style={{ fontSize: "1.05rem", lineHeight: 1 }}>📍</span> Book by Location
         </button>
       </div>
 
@@ -113,6 +131,18 @@ export default function CalendarPage() {
         open={bookingSpace}
         onClose={() => setBookingSpace(false)}
         onBooked={() => {}}
+        initialLocationId={spacePrefill?.locationId || ""}
+        initialDate={spacePrefill?.date || ""}
+      />
+
+      <LocationScheduleView
+        open={browsingByLocation}
+        onClose={() => setBrowsingByLocation(false)}
+        onPickSlot={({ locationId, date }) => {
+          setSpacePrefill({ locationId, date })
+          setBrowsingByLocation(false)
+          setBookingSpace(true)
+        }}
       />
     </div>
   )
