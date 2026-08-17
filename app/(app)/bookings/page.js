@@ -181,45 +181,66 @@ function MySpaceBookings() {
 
   if (bookings === null || bookings.length === 0) return null
 
+  // Grouped by Location (heading), then chronological by date underneath,
+  // indented a fraction (Iain, 2026-08-17, Social_Hive_Location_First_
+  // Booking_Scope_v2.md item 7) -- was a flat chronological list. No query
+  // change needed: /api/spaces?mine=1 already returns locations(name)
+  // joined, this is a pure client-side re-group of data already present.
+  const byLocation = new Map()
+  for (const b of bookings) {
+    const name = b.locations?.name || "Space"
+    if (!byLocation.has(name)) byLocation.set(name, [])
+    byLocation.get(name).push(b)
+  }
+  const locationNames = [...byLocation.keys()].sort((a, b) => a.localeCompare(b))
+
   return (
     <div style={{ marginBottom: "1.5rem" }}>
       <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-dim)",
         textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.5rem" }}>
         My Space Bookings
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-        {bookings.map(b => (
-          <div key={b.id} style={{
-            background: "var(--surface)", border: "1px solid var(--border)",
-            borderLeft: "4px solid var(--amber)", borderRadius: "14px",
-            padding: "0.9rem 1.1rem", display: "flex", alignItems: "flex-start",
-            justifyContent: "space-between", gap: "0.75rem",
-          }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {/* No per-tile "Space Booking" label -- the section header above
-                  (Iain, 2026-08-04: "the entire section has that label")
-                  already says it; repeating it on every tile just cost
-                  vertical space for nothing. */}
-              <div style={{ fontSize: "0.98rem", fontWeight: 700, color: "var(--text)", marginBottom: "0.22rem" }}>
-                {b.locations?.name || "Space"}
-              </div>
-              <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", marginBottom: "0.3rem" }}>
-                {fmtSpaceDate(b.starts_at)} · {fmtSpaceTime(b.starts_at)}–{fmtSpaceTime(b.ends_at)}
-              </div>
-              {b.title && <div style={{ fontSize: "0.82rem", color: "var(--text)" }}>{b.title}</div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: "1.1rem" }}>
+        {locationNames.map(name => (
+          <div key={name}>
+            <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--text)", marginBottom: "0.5rem" }}>
+              {name}
             </div>
-            <button
-              onClick={() => cancel(b.id)}
-              disabled={cancellingId === b.id}
-              style={{
-                flexShrink: 0, background: "var(--surface2)", border: "1px solid var(--border)",
-                borderRadius: 8, padding: "0.4rem 0.75rem", fontSize: "0.78rem", fontWeight: 600,
-                color: "var(--danger)", cursor: cancellingId === b.id ? "default" : "pointer",
-                opacity: cancellingId === b.id ? 0.6 : 1,
-              }}
-            >
-              {cancellingId === b.id ? "Cancelling…" : "Cancel"}
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", paddingLeft: "0.6rem" }}>
+              {byLocation.get(name)
+                .slice()
+                .sort((a, c) => (a.starts_at || "").localeCompare(c.starts_at || ""))
+                .map(b => (
+                <div key={b.id} style={{
+                  background: "var(--surface)", border: "1px solid var(--border)",
+                  borderLeft: "4px solid var(--amber)", borderRadius: "14px",
+                  padding: "0.9rem 1.1rem", display: "flex", alignItems: "flex-start",
+                  justifyContent: "space-between", gap: "0.75rem",
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {/* No per-tile "Space Booking" or location label -- the
+                        section header (Iain, 2026-08-04) and the location
+                        heading above (Iain, 2026-08-17) already say it. */}
+                    <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginBottom: "0.3rem" }}>
+                      {fmtSpaceDate(b.starts_at)} · {fmtSpaceTime(b.starts_at)}–{fmtSpaceTime(b.ends_at)}
+                    </div>
+                    {b.title && <div style={{ fontSize: "0.82rem", color: "var(--text)" }}>{b.title}</div>}
+                  </div>
+                  <button
+                    onClick={() => cancel(b.id)}
+                    disabled={cancellingId === b.id}
+                    style={{
+                      flexShrink: 0, background: "var(--surface2)", border: "1px solid var(--border)",
+                      borderRadius: 8, padding: "0.4rem 0.75rem", fontSize: "0.78rem", fontWeight: 600,
+                      color: "var(--danger)", cursor: cancellingId === b.id ? "default" : "pointer",
+                      opacity: cancellingId === b.id ? 0.6 : 1,
+                    }}
+                  >
+                    {cancellingId === b.id ? "Cancelling…" : "Cancel"}
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
