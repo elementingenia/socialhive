@@ -6,6 +6,7 @@ import {
   listAvailableLocations, checkSpaceAvailability, validateSpaceBooking,
   toSpaceBookingWindow, BOOKING_REASON_MAX, validateIngeniaConfirmation,
 } from '@/lib/spaceBookings'
+import { resolveMemberName } from '@/lib/memberName'
 
 // Personal Space Booking. Scope: Social_Hive_Personal_Space_Booking_Scope.md
 // (decisions locked 2026-08-01). Any resident can book a common-area space
@@ -67,6 +68,7 @@ export async function GET(req) {
     try {
       const locations = await listAvailableLocations(supabaseAdmin, {
         event_date, event_time, event_end_time, starts_at: window.starts_at, ends_at: window.ends_at,
+        viewerId: member.id, canManage: !!member.is_admin,
       })
       return NextResponse.json({ locations })
     } catch (e) {
@@ -130,31 +132,66 @@ export async function GET(req) {
     return NextResponse.json({ bookings: data || [] })
   }
 
-  // Mode 3: calendar range
+  // Mode 3: calendar range -- also doubles as the Location-First Booking
+  // schedule read when ?location_id= is passed (Social_Hive_Location_First_
+  // Booking_Scope_v2.md, item 5/technical shape: reuse this mode rather than
+  // a new endpoint, since it already has the closest shape and had no
+  // existing frontend consumer to preserve compatibility with).
+  //
+  // Iain, 2026-08-17 (scope v2 item 5): personal bookings are NO LONGER
+  // anonymised here. Who booked it and why now follow the exact same
+  // Display Name / Real Name rule as every Attendees list (resolveMemberName,
+  // lib/memberName.js) -- this supersedes the 2026-08-01 "reason stripped
+  // unless own/admin" behaviour.
   const calendar_from = searchParams.get('calendar_from')
   const calendar_to = searchParams.get('calendar_to')
   if (calendar_from && calendar_to) {
-    const { data, error } = await supabaseAdmin
+    const locationFilter = searchParams.get('location_id')
+
+    let q = supabaseAdmin
       .from('space_bookings')
-      .select('id, location_id, starts_at, ends_at, title, purpose, booked_by, locations(name)')
+      .select('id, location_id, starts_at, ends_at, title, purpose, booked_by, locations(name), member:members!booked_by(id, name, display_name, hide_name)')
       .eq('status', 'confirmed')
       .is('event_id', null) // event-backed rows already appear on the Calendar as their event; don't double-list them
       .gte('starts_at', calendar_from)
       .lt('starts_at', calendar_to)
       .order('starts_at', { ascending: true })
+    if (locationFilter) q = q.eq('location_id', locationFilter)
+    const { data, error } = await q
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     const bookings = (data || []).map((b) => {
       const isOwn = b.booked_by === member.id
-      const canSeeReason = isOwn || member.is_admin
       return {
         id: b.id, location_id: b.location_id, location_name: b.locations?.name || null,
         starts_at: b.starts_at, ends_at: b.ends_at, purpose: b.purpose,
         isOwn,
-        title: canSeeReason ? b.title : null, // the private reason -- never shown to another resident
+        title: b.title || null,
+        booked_by_name: resolveMemberName(b.member, {
+          viewerId: member.id, canManage: !!member.is_admin, selfLabel: 'You', fallback: 'a resident',
+        }),
       }
     })
-    return NextResponse.json({ bookings })
+
+    // When scoped to one location, also fold in events already booked
+    // there (Show Time screenings etc, via events.location_id -- confirmed
+    // in scope v2 to already exist app-wide) so the location's schedule is
+    // complete, matching admin's SpaceBookingsTab shape but resident-facing.
+    let events = []
+    if (locationFilter) {
+      const { data: evData, error: evErr } = await supabaseAdmin
+        .from('events')
+        .select('id, title, hub_type, event_date, event_time, event_end_time, location_id')
+        .eq('location_id', locationFilter)
+        .eq('archived', false)
+        .gte('event_date', calendar_from.slice(0, 10))
+        .lte('event_date', calendar_to.slice(0, 10))
+        .order('event_date', { ascending: true })
+      if (evErr) return NextResponse.json({ error: evErr.message }, { status: 500 })
+      events = evData || []
+    }
+
+    return NextResponse.json({ bookings, events })
   }
 
   return NextResponse.json({ error: 'event_date/event_time/event_end_time, mine=1, calendar_from/calendar_to, or admin=1 required' }, { status: 400 })
@@ -198,6 +235,7 @@ export async function POST(req) {
 
   const check = await checkSpaceAvailability(supabaseAdmin, {
     location, event_date, event_time, event_end_time, starts_at: window.starts_at, ends_at: window.ends_at,
+    viewerId: member.id, canManage: !!member.is_admin,
   })
   if (!check.available) return NextResponse.json({ error: check.reason }, { status: 409 })
 
