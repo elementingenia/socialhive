@@ -59,15 +59,21 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url)
 
   // Mode 1: availability filter
+  //
+  // ?exclude_booking_id= (Iain, 2026-08-17, editing a booking): when the
+  // resident is re-checking availability for a booking they're editing, its
+  // own existing row must not show up as blocking itself.
   const event_date = searchParams.get('event_date')
   const event_time = searchParams.get('event_time')
   const event_end_time = searchParams.get('event_end_time')
+  const excludeBookingId = searchParams.get('exclude_booking_id')
   if (event_date && event_time && event_end_time) {
     const window = toSpaceBookingWindow(event_date, event_time, event_end_time)
     if (!window) return NextResponse.json({ error: 'Invalid date or time' }, { status: 400 })
     try {
       const locations = await listAvailableLocations(supabaseAdmin, {
         event_date, event_time, event_end_time, starts_at: window.starts_at, ends_at: window.ends_at,
+        exclude_booking_id: excludeBookingId || undefined,
         viewerId: member.id, canManage: !!member.is_admin,
       })
       return NextResponse.json({ locations })
@@ -131,7 +137,7 @@ export async function GET(req) {
   if (searchParams.get('mine') === '1') {
     const { data, error } = await supabaseAdmin
       .from('space_bookings')
-      .select('id, location_id, starts_at, ends_at, title, purpose, status, created_at, locations(name)')
+      .select('id, location_id, starts_at, ends_at, title, purpose, status, created_at, ingenia_confirmed, ingenia_confirmed_by, locations(name, request_only)')
       .eq('booked_by', member.id)
       .eq('purpose', 'private')
       .gte('ends_at', new Date().toISOString())
@@ -315,4 +321,83 @@ export async function DELETE(req) {
   }
 
   return NextResponse.json({ ok: true })
+}
+
+// ── PATCH ────────────────────────────────────────────────────────────────
+// Edit an existing personal space booking (Iain, 2026-08-17: "My Space
+// bookings need to be editable" -- previously Cancel was the only option,
+// so changing a date/time/location meant cancelling and re-booking from
+// scratch, losing the original if the new slot turned out unavailable).
+//
+// Owner only, same as the self-cancel path -- no admin-edits-anyone's-
+// booking case here (Admin's own overrule/cancel/challenge view already
+// covers admin intervention via DELETE's admin path). Re-validates and
+// re-checks availability from scratch exactly like POST, with the booking's
+// own row excluded from the conflict check via exclude_booking_id so it
+// doesn't block itself when the window doesn't change (or only partially
+// changes). A cancelled booking can't be edited back to life -- re-book
+// instead, same as the rest of the app treats a cancelled row as terminal.
+export async function PATCH(req) {
+  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+  if (!token) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  const member = await getMember(token)
+  if (!member) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+  const {
+    id, location_id, event_date, event_time, event_end_time, reason,
+    ingenia_confirmed, ingenia_confirmed_by,
+  } = await req.json()
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const { data: existing, error: fetchError } = await supabaseAdmin
+    .from('space_bookings').select('id, booked_by, status, purpose')
+    .eq('id', id).maybeSingle()
+  if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 })
+  if (!existing) return NextResponse.json({ error: 'Booking not found' }, { status: 404 })
+  if (existing.purpose !== 'private') return NextResponse.json({ error: 'Only personal space bookings can be edited here' }, { status: 400 })
+  if (existing.booked_by !== member.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (existing.status === 'cancelled') return NextResponse.json({ error: 'This booking has been cancelled -- make a new booking instead' }, { status: 409 })
+
+  const validationError = validateSpaceBooking({ location_id, event_date, event_time, event_end_time, reason })
+  if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
+
+  const { data: location, error: locError } = await supabaseAdmin
+    .from('locations').select('id, name, bookable, booking_status, closed_from, closed_to, closed_reason, archived, request_only')
+    .eq('id', location_id).maybeSingle()
+  if (locError) return NextResponse.json({ error: locError.message }, { status: 500 })
+  if (!location || location.archived) return NextResponse.json({ error: 'That space no longer exists' }, { status: 404 })
+
+  const ingeniaError = validateIngeniaConfirmation({
+    requestOnly: location.request_only,
+    ingeniaConfirmed: ingenia_confirmed, ingeniaConfirmedBy: ingenia_confirmed_by,
+  })
+  if (ingeniaError) return NextResponse.json({ error: ingeniaError }, { status: 400 })
+
+  const window = toSpaceBookingWindow(event_date, event_time, event_end_time)
+  if (!window) return NextResponse.json({ error: 'Invalid date or time' }, { status: 400 })
+
+  const check = await checkSpaceAvailability(supabaseAdmin, {
+    location, event_date, event_time, event_end_time, starts_at: window.starts_at, ends_at: window.ends_at,
+    exclude_booking_id: id, viewerId: member.id, canManage: !!member.is_admin,
+  })
+  if (!check.available) return NextResponse.json({ error: check.reason }, { status: 409 })
+
+  const { data: updated, error: updateError } = await supabaseAdmin
+    .from('space_bookings')
+    .update({
+      location_id, starts_at: window.starts_at, ends_at: window.ends_at, title: reason.trim(),
+      ingenia_confirmed: location.request_only ? !!ingenia_confirmed : false,
+      ingenia_confirmed_by: location.request_only && ingenia_confirmed ? (ingenia_confirmed_by || '').trim() : null,
+    })
+    .eq('id', id)
+    .select().single()
+
+  if (updateError) {
+    if (isOverlapError(updateError)) {
+      return NextResponse.json({ error: overlapMessage(location.name) }, { status: 409 })
+    }
+    return NextResponse.json({ error: updateError.message }, { status: 500 })
+  }
+
+  return NextResponse.json(updated)
 }
