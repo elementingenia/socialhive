@@ -3,8 +3,9 @@ import { useState, useEffect, useCallback } from "react"
 import { createPortal } from "react-dom"
 import { authedFetch } from "@/lib/getAuthToken"
 import { useLocations } from "@/lib/useLocations"
-import { sydneyTodayStr, sydneyDateStrPlusDays, localDateFromStr } from "@/lib/date"
+import { sydneyTodayStr, sydneyDateStrPlusDays, localDateFromStr, isoToSydneyHHMM } from "@/lib/date"
 import { toInstant, sydneyOffsetMinutes } from "@/lib/spaces"
+import { fmtTime } from "@/lib/eventClash"
 
 // Book by Location -- Social_Hive_Location_First_Booking_Scope_v2.md
 // (decisions locked 2026-08-16/17, Iain). Second entry point into the same
@@ -94,18 +95,29 @@ export default function LocationScheduleView({ open, onClose, onPickSlot }) {
   const selectedLocation = (allLocations || []).find(l => l.id === locationId) || null
   const closed = selectedLocation?.booking_status === "closed"
 
+  // Each day's list now names the TIME as well as who/what (Iain, 2026-08-17)
+  // -- was just "who — description", no time, so a resident couldn't tell
+  // which part of the day was actually taken without opening the booking
+  // form and hitting a clash. starts_at/ends_at are UTC instants; event_time/
+  // event_end_time are already Sydney-local "HH:MM" strings (unlike
+  // space_bookings, events never needed the UTC round-trip).
   function itemsForDay(dateStr) {
     if (!schedule) return []
     const fromBookings = (schedule.bookings || [])
-      .filter(b => (b.starts_at || "").slice(0, 10) === dateStr || sameSydneyDay(b.starts_at, dateStr))
-      .map(b => ({
-        key: `b:${b.id}`, kind: "booking",
-        label: b.title ? `${b.booked_by_name} — ${b.title}` : b.booked_by_name,
-      }))
+      .filter(b => sameSydneyDay(b.starts_at, dateStr))
+      .map(b => {
+        const startHHMM = isoToSydneyHHMM(b.starts_at)
+        const time = `${fmtTime(startHHMM)}–${fmtTime(isoToSydneyHHMM(b.ends_at))}`
+        const who = b.title ? `${b.booked_by_name} — ${b.title}` : b.booked_by_name
+        return { key: `b:${b.id}`, kind: "booking", label: `${time} · ${who}`, sortKey: startHHMM }
+      })
     const fromEvents = (schedule.events || [])
       .filter(e => e.event_date === dateStr)
-      .map(e => ({ key: `e:${e.id}`, kind: "event", label: e.title || "An event" }))
-    return [...fromEvents, ...fromBookings]
+      .map(e => {
+        const time = `${fmtTime(e.event_time)}–${fmtTime(e.event_end_time)}`
+        return { key: `e:${e.id}`, kind: "event", label: `${time} · ${e.title || "An event"}`, sortKey: (e.event_time || "").slice(0, 5) }
+      })
+    return [...fromEvents, ...fromBookings].sort((a, b) => a.sortKey.localeCompare(b.sortKey))
   }
 
   function sameSydneyDay(iso, dateStr) {
