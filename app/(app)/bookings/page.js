@@ -8,6 +8,7 @@ import { authedFetch } from "@/lib/getAuthToken"
 import { MoviesIcon, SocialIcon } from "@/components/NavIcons"
 import ClubScopeDropdown from "@/components/ClubScopeDropdown"
 import { useMyClubs } from "@/lib/useMyClubs"
+import SpaceBookingForm from "@/components/SpaceBookingForm"
 
 const HUB_COLOURS = {
   movie:    "var(--teal)",
@@ -157,6 +158,13 @@ function fmtSpaceTime(iso) {
 function MySpaceBookings() {
   const [bookings, setBookings] = useState(null) // null = loading
   const [cancellingId, setCancellingId] = useState(null)
+  // Iain, 2026-08-17: "My Space bookings need to be editable" -- previously
+  // Cancel was the only option, so changing a date/time/location meant
+  // cancelling and re-booking from scratch with no fallback if the new slot
+  // wasn't actually free. Reuses SpaceBookingForm itself (same fields,
+  // validation, clash-check, Ingenia confirmation) via its editBooking prop
+  // rather than building a second form.
+  const [editingBooking, setEditingBooking] = useState(null)
 
   const load = useCallback(async () => {
     const res = await authedFetch("/api/spaces?mine=1")
@@ -226,24 +234,45 @@ function MySpaceBookings() {
                     </div>
                     {b.title && <div style={{ fontSize: "0.82rem", color: "var(--text)" }}>{b.title}</div>}
                   </div>
-                  <button
-                    onClick={() => cancel(b.id)}
-                    disabled={cancellingId === b.id}
-                    style={{
-                      flexShrink: 0, background: "var(--surface2)", border: "1px solid var(--border)",
-                      borderRadius: 8, padding: "0.4rem 0.75rem", fontSize: "0.78rem", fontWeight: 600,
-                      color: "var(--danger)", cursor: cancellingId === b.id ? "default" : "pointer",
-                      opacity: cancellingId === b.id ? 0.6 : 1,
-                    }}
-                  >
-                    {cancellingId === b.id ? "Cancelling…" : "Cancel"}
-                  </button>
+                  <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0 }}>
+                    <button
+                      onClick={() => setEditingBooking(b)}
+                      disabled={cancellingId === b.id}
+                      style={{
+                        background: "var(--surface2)", border: "1px solid var(--border)",
+                        borderRadius: 8, padding: "0.4rem 0.75rem", fontSize: "0.78rem", fontWeight: 600,
+                        color: "var(--text)", cursor: cancellingId === b.id ? "default" : "pointer",
+                        opacity: cancellingId === b.id ? 0.6 : 1,
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => cancel(b.id)}
+                      disabled={cancellingId === b.id}
+                      style={{
+                        background: "var(--surface2)", border: "1px solid var(--border)",
+                        borderRadius: 8, padding: "0.4rem 0.75rem", fontSize: "0.78rem", fontWeight: 600,
+                        color: "var(--danger)", cursor: cancellingId === b.id ? "default" : "pointer",
+                        opacity: cancellingId === b.id ? 0.6 : 1,
+                      }}
+                    >
+                      {cancellingId === b.id ? "Cancelling…" : "Cancel"}
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         ))}
       </div>
+
+      <SpaceBookingForm
+        open={!!editingBooking}
+        editBooking={editingBooking}
+        onClose={() => setEditingBooking(null)}
+        onBooked={() => load()}
+      />
     </div>
   )
 }
