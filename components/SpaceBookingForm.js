@@ -4,7 +4,51 @@ import { createPortal } from "react-dom"
 import TimeField from "@/components/TimeField"
 import { authedFetch } from "@/lib/getAuthToken"
 import { BOOKING_REASON_MAX, INGENIA_CONFIRMED_BY_MAX } from "@/lib/spaceBookings"
-import { sydneyTodayStr } from "@/lib/date"
+import { sydneyTodayStr, isoToSydneyHHMM } from "@/lib/date"
+import { toInstant, sydneyOffsetMinutes } from "@/lib/spaces"
+
+// Venue hours (Iain, 2026-08-17): every space is only bookable 8am-10pm,
+// full stop -- applied here so it covers both entry points (Book by Date
+// and the Book by Location hand-off), rather than only the new flow, since
+// this reads as a venue-wide policy and the two flows share this one form.
+const SPACE_HOUR_FLOOR = 8
+const SPACE_HOUR_CEIL = 22
+
+// Half-hour-slot busy set for ONE location on ONE date, from the same
+// {bookings, events} shape /api/spaces?calendar_from=&calendar_to=&
+// location_id= already returns (used by LocationScheduleView). Greys out
+// already-booked start/end times in the TimeFields below -- a first-pass UX
+// aid; checkSpaceAvailability on submit is still the authoritative check.
+function toMinutes(hhmm) {
+  if (!hhmm) return null
+  const [h, m] = hhmm.slice(0, 5).split(":").map(Number)
+  return h * 60 + m
+}
+
+function computeBusySlots(bookings, events, dateStr) {
+  const intervals = []
+  for (const b of (bookings || [])) {
+    const s = toMinutes(isoToSydneyHHMM(b.starts_at))
+    const e = toMinutes(isoToSydneyHHMM(b.ends_at))
+    if (s != null && e != null) intervals.push([s, e])
+  }
+  for (const e of (events || [])) {
+    if (e.event_date !== dateStr) continue
+    const s = toMinutes(e.event_time)
+    const en = toMinutes(e.event_end_time)
+    if (s != null && en != null) intervals.push([s, en])
+  }
+  const slots = new Set()
+  for (let m = 0; m < 24 * 60; m += 30) {
+    const slotEnd = m + 30
+    if (intervals.some(([s, en]) => s < slotEnd && en > m)) {
+      const hh = String(Math.floor(m / 60)).padStart(2, "0")
+      const mm = m % 60 === 0 ? "00" : "30"
+      slots.add(`${hh}:${mm}`)
+    }
+  }
+  return slots
+}
 
 // Book a Space — Personal Space Booking. Scope:
 // Social_Hive_Personal_Space_Booking_Scope.md (decisions locked 2026-08-01).
@@ -162,11 +206,40 @@ export default function SpaceBookingForm({
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
   const [acknowledgedClash, setAcknowledgedClash] = useState(null) // clash items the resident proceeded past, or null
+  const [busySlots, setBusySlots] = useState(new Set())
   const fetchTag = useRef(0)
   const { ask: askSameDate, Modal: SameDateModal } = useSpaceClashWarning()
 
   const today = sydneyTodayStr()
   const windowValid = !!(date && startTime && endTime && endTime > startTime)
+
+  // Already-booked half-hour slots for the CURRENTLY selected location + date
+  // (Iain, 2026-08-17) -- only meaningful once a location is already known,
+  // which in practice is the Book-by-Location hand-off (locationId is set
+  // before a time is picked there). Book by Date never has this: its location
+  // list only appears AFTER a time window is chosen, so there's no location
+  // yet while these TimeFields are visible -- this effect simply never fires
+  // there, which is correct, not a gap.
+  useEffect(() => {
+    let cancelled = false
+    async function loadBusy() {
+      if (!open || !locationId || !date) { setBusySlots(new Set()); return }
+      try {
+        const offset = sydneyOffsetMinutes(date)
+        const from = toInstant(date, "00:00", offset).toISOString()
+        const to = toInstant(date, "23:59", offset).toISOString()
+        const res = await authedFetch(`/api/spaces?calendar_from=${encodeURIComponent(from)}&calendar_to=${encodeURIComponent(to)}&location_id=${locationId}`)
+        const data = await res.json()
+        if (cancelled) return
+        if (!res.ok) { setBusySlots(new Set()); return }
+        setBusySlots(computeBusySlots(data.bookings, data.events, date))
+      } catch {
+        if (!cancelled) setBusySlots(new Set())
+      }
+    }
+    loadBusy()
+    return () => { cancelled = true }
+  }, [open, locationId, date])
 
   // Reset everything when the sheet is closed and reopened, so a stale
   // half-filled booking from last time can't be accidentally submitted.
@@ -183,9 +256,16 @@ export default function SpaceBookingForm({
 
   // When start time changes, keep end time sensible (start + 1hr) rather
   // than leaving an invalid or empty end time silently blocking the form.
+  // Clamped to the venue-hours ceiling (Iain, 2026-08-17) -- a start of
+  // 21:30 auto-advancing to 22:30 would be past the 10pm cutoff and TimeField
+  // wouldn't even offer it as an End option.
   function handleStartChange(v) {
     setStartTime(v)
-    if (v && (!endTime || endTime <= v)) setEndTime(addHour(v))
+    if (v && (!endTime || endTime <= v)) {
+      const auto = addHour(v)
+      const ceilStr = `${String(SPACE_HOUR_CEIL).padStart(2, "0")}:00`
+      setEndTime(auto > ceilStr ? ceilStr : auto)
+    }
   }
 
   // The pre-filled location (from Book-by-Location's hand-off) survives the
@@ -362,12 +442,22 @@ export default function SpaceBookingForm({
           <div style={{ display: "flex", gap: "0.75rem" }}>
             <div style={{ ...FIELD, flex: 1 }}>
               <label style={LABEL}>Start</label>
-              <TimeField value={startTime} onChange={handleStartChange} colour={startTime ? "var(--green)" : "var(--border)"} />
+              <TimeField
+                value={startTime} onChange={handleStartChange} colour={startTime ? "var(--green)" : "var(--border)"}
+                hourFloor={SPACE_HOUR_FLOOR} hourCeil={SPACE_HOUR_CEIL} disabledSlots={busySlots}
+              />
             </div>
             <div style={{ ...FIELD, flex: 1 }}>
               <label style={LABEL}>End</label>
-              <TimeField value={endTime} onChange={setEndTime} colour={endTime && endTime > startTime ? "var(--green)" : "var(--danger)"} minHour={startTime ? Number(startTime.split(":")[0]) : null} />
+              <TimeField
+                value={endTime} onChange={setEndTime} colour={endTime && endTime > startTime ? "var(--green)" : "var(--danger)"}
+                minHour={startTime ? Number(startTime.split(":")[0]) : null}
+                hourFloor={SPACE_HOUR_FLOOR} hourCeil={SPACE_HOUR_CEIL} disabledSlots={busySlots}
+              />
             </div>
+          </div>
+          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "-0.9rem", marginBottom: "1rem" }}>
+            Spaces can be booked between 8am and 10pm. Times already booked are greyed out.
           </div>
           {startTime && endTime && endTime <= startTime && (
             <div style={{ fontSize: "0.78rem", color: "var(--danger)", marginTop: "-0.75rem", marginBottom: "1rem" }}>
