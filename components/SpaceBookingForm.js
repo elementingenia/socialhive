@@ -29,10 +29,13 @@ const HUB_LABEL = { movie: "Show Time", social: "Social", bookclub: "Book Club",
 // bookings) into one flat list of same-day clashes for display — each item
 // carries what the space-booking clash requirement (Iain, 2026-08-04) asks
 // for: the space booked, a description, and who's responsible. Events show
-// their real hub/club name (already public); personal bookings are
-// anonymised to "A resident" unless it's the requester's own (labelled
-// "You"), per the confirmed privacy answer — never revealing another
-// resident's identity or their private reason for booking.
+// their real hub/club name (already public).
+//
+// REVISED (Iain, 2026-08-17, Social_Hive_Location_First_Booking_Scope_v2.md
+// item 5): personal bookings used to be anonymised to "A resident" here.
+// That's superseded -- the API now returns booked_by_name already resolved
+// through the exact same Attendees-list rule (resolveMemberName), so this
+// just displays it, same as an event's hub name.
 function buildClashItems(sameDateEvents, sameDatePersonalBookings) {
   const fromEvents = (sameDateEvents || []).map(e => ({
     key: `event:${e.id}`,
@@ -44,7 +47,7 @@ function buildClashItems(sameDateEvents, sameDatePersonalBookings) {
     key: `personal:${i}`,
     space: b.location_name,
     description: b.title || "A personal booking",
-    responsible: b.is_own ? "You" : "A resident",
+    responsible: b.is_own ? "You" : (b.booked_by_name || "A resident"),
   }))
   return [...fromEvents, ...fromPersonal]
 }
@@ -135,7 +138,17 @@ function addHour(time) {
   return `${String(nh).padStart(2, "0")}:${String(m).padStart(2, "0")}`
 }
 
-export default function SpaceBookingForm({ open, onClose, onBooked }) {
+// initialDate/initialStartTime/initialEndTime/initialLocationId: optional
+// pre-fill for the hand-off from the Book-by-Location flow (Iain, 2026-08-17,
+// Social_Hive_Location_First_Booking_Scope_v2.md) -- a resident picks a free
+// slot on a location's schedule first, and this form still does the actual
+// booking/validation/Ingenia-confirmation/clash-check, just pre-populated
+// rather than starting blank. Location remains changeable after pre-fill --
+// this is a convenience default, not a lock.
+export default function SpaceBookingForm({
+  open, onClose, onBooked,
+  initialDate = "", initialStartTime = "", initialEndTime = "", initialLocationId = "",
+}) {
   const [date, setDate] = useState("")
   const [startTime, setStartTime] = useState("")
   const [endTime, setEndTime] = useState("")
@@ -159,8 +172,9 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
   // half-filled booking from last time can't be accidentally submitted.
   useEffect(() => {
     if (open) {
-      setDate(""); setStartTime(""); setEndTime("")
-      setLocations(null); setLocationId(""); setReason("")
+      pendingInitialLocationRef.current = initialLocationId || null
+      setDate(initialDate); setStartTime(initialStartTime); setEndTime(initialEndTime)
+      setLocations(null); setLocationId(initialLocationId); setReason("")
       setIngeniaConfirmed(false); setIngeniaConfirmedBy("")
       setError(""); setSuccess(false); setSubmitting(false)
       setAcknowledgedClash(null)
@@ -174,11 +188,19 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
     if (v && (!endTime || endTime <= v)) setEndTime(addHour(v))
   }
 
+  // The pre-filled location (from Book-by-Location's hand-off) survives the
+  // first availability load only -- if it's actually free for the window,
+  // pre-select it; otherwise leave the picker to the resident, same as a
+  // blank-start booking would.
+  const pendingInitialLocationRef = useRef(initialLocationId || null)
+
   const loadLocations = useCallback(async () => {
     if (!windowValid) { setLocations(null); return }
     const tag = ++fetchTag.current
     setLocationsLoading(true)
-    setLocationId("")
+    const pendingLocationId = pendingInitialLocationRef.current
+    pendingInitialLocationRef.current = null
+    if (!pendingLocationId) setLocationId("")
     setIngeniaConfirmed(false); setIngeniaConfirmedBy("")
     try {
       const res = await authedFetch(`/api/spaces?event_date=${date}&event_time=${startTime}&event_end_time=${endTime}`)
@@ -186,7 +208,12 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
       if (tag !== fetchTag.current) return
       if (!res.ok) { setError(data.error || "Could not check availability"); setLocations([]); return }
       setError("")
-      setLocations(data.locations || [])
+      const list = data.locations || []
+      setLocations(list)
+      if (pendingLocationId) {
+        const match = list.find(l => l.id === pendingLocationId)
+        setLocationId(match?.available ? pendingLocationId : "")
+      }
     } catch {
       if (tag === fetchTag.current) { setError("Could not check availability — check your connection"); setLocations([]) }
     } finally {
@@ -370,6 +397,9 @@ export default function SpaceBookingForm({ open, onClose, onBooked }) {
                       }}
                     >
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.4rem" }}>
+                        {loc.image_url && (
+                          <img src={loc.image_url} alt="" style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover", flexShrink: 0 }} />
+                        )}
                         <span style={{ fontWeight: 600, fontSize: "0.9rem", flex: 1 }}>{loc.name}</span>
                         {loc.request_only && (
                           <span style={{ fontSize: "0.66rem", fontWeight: 700, padding: "0.12rem 0.4rem", borderRadius: 6,
