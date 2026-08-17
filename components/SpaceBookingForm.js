@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { createPortal } from "react-dom"
 import TimeField from "@/components/TimeField"
 import { authedFetch } from "@/lib/getAuthToken"
@@ -13,31 +13,46 @@ import { toInstant, sydneyOffsetMinutes } from "@/lib/spaces"
 // this reads as a venue-wide policy and the two flows share this one form.
 const SPACE_HOUR_FLOOR = 8
 const SPACE_HOUR_CEIL = 22
+const DAY_CLOSE_MIN = SPACE_HOUR_CEIL * 60
 
-// Half-hour-slot busy set for ONE location on ONE date, from the same
-// {bookings, events} shape /api/spaces?calendar_from=&calendar_to=&
-// location_id= already returns (used by LocationScheduleView). Greys out
-// already-booked start/end times in the TimeFields below -- a first-pass UX
-// aid; checkSpaceAvailability on submit is still the authoritative check.
 function toMinutes(hhmm) {
   if (!hhmm) return null
   const [h, m] = hhmm.slice(0, 5).split(":").map(Number)
   return h * 60 + m
 }
 
-function computeBusySlots(bookings, events, dateStr) {
+// Busy [start,end) intervals (in minutes-since-midnight) for ONE location on
+// ONE date, from the same {bookings, events} shape /api/spaces?calendar_from=
+// &calendar_to=&location_id= already returns (used by LocationScheduleView).
+//
+// Iain, 2026-08-19 (live-fire find): a legacy club event with a location but
+// no event_end_time -- predates the space-clash feature (2026-07-23), which
+// by locked decision (lib/eventClash.js, "no retroactive backfill") leaves
+// these permanently unchecked by the real hard-block too, not just this UI --
+// was silently vanishing from the busy picture entirely (an interval needs
+// BOTH ends to compute) instead of showing as booked. Treated the same way
+// the real clash-check philosophy would want if it could see it: grey
+// conservatively from its start through the venue's closing hour, rather
+// than showing that time as free when it might not be.
+function computeBusyIntervals(bookings, events, dateStr) {
   const intervals = []
   for (const b of (bookings || [])) {
     const s = toMinutes(isoToSydneyHHMM(b.starts_at))
-    const e = toMinutes(isoToSydneyHHMM(b.ends_at))
-    if (s != null && e != null) intervals.push([s, e])
+    if (s == null) continue
+    const e = toMinutes(isoToSydneyHHMM(b.ends_at)) ?? DAY_CLOSE_MIN
+    if (e > s) intervals.push([s, e])
   }
   for (const e of (events || [])) {
     if (e.event_date !== dateStr) continue
     const s = toMinutes(e.event_time)
-    const en = toMinutes(e.event_end_time)
-    if (s != null && en != null) intervals.push([s, en])
+    if (s == null) continue
+    const en = toMinutes(e.event_end_time) ?? DAY_CLOSE_MIN
+    if (en > s) intervals.push([s, en])
   }
+  return intervals
+}
+
+function slotsFromIntervals(intervals) {
   const slots = new Set()
   for (let m = 0; m < 24 * 60; m += 30) {
     const slotEnd = m + 30
@@ -48,6 +63,30 @@ function computeBusySlots(bookings, events, dateStr) {
     }
   }
   return slots
+}
+
+// Once a Start is chosen, the booking window runs continuously from it to
+// whatever End is picked -- it can't "skip over" an occupied stretch. So the
+// End field's disabled set isn't just each busy slot's own half-hour match;
+// every slot from the first busy interval starting AT OR AFTER Start, through
+// the rest of the day, is unreachable too (Iain, 2026-08-19: "the end start
+// AND End hours should be unavailable for selection (Logically)" -- ending
+// inside, or having to run through, an occupied stretch is never valid).
+function endDisabledSlotsFor(startTime, busySlots, busyIntervals) {
+  if (!startTime) return busySlots
+  const startMin = toMinutes(startTime)
+  if (startMin == null) return busySlots
+  const boundary = busyIntervals
+    .filter(([s]) => s >= startMin)
+    .reduce((min, [s]) => (min == null || s < min ? s : min), null)
+  if (boundary == null) return busySlots
+  const extended = new Set(busySlots)
+  for (let m = boundary; m < 24 * 60; m += 30) {
+    const hh = String(Math.floor(m / 60)).padStart(2, "0")
+    const mm = m % 60 === 0 ? "00" : "30"
+    extended.add(`${hh}:${mm}`)
+  }
+  return extended
 }
 
 // Book a Space — Personal Space Booking. Scope:
@@ -207,6 +246,7 @@ export default function SpaceBookingForm({
   const [success, setSuccess] = useState(false)
   const [acknowledgedClash, setAcknowledgedClash] = useState(null) // clash items the resident proceeded past, or null
   const [busySlots, setBusySlots] = useState(new Set())
+  const [busyIntervals, setBusyIntervals] = useState([])
   const fetchTag = useRef(0)
   const { ask: askSameDate, Modal: SameDateModal } = useSpaceClashWarning()
 
@@ -223,7 +263,7 @@ export default function SpaceBookingForm({
   useEffect(() => {
     let cancelled = false
     async function loadBusy() {
-      if (!open || !locationId || !date) { setBusySlots(new Set()); return }
+      if (!open || !locationId || !date) { setBusySlots(new Set()); setBusyIntervals([]); return }
       try {
         const offset = sydneyOffsetMinutes(date)
         const from = toInstant(date, "00:00", offset).toISOString()
@@ -231,15 +271,26 @@ export default function SpaceBookingForm({
         const res = await authedFetch(`/api/spaces?calendar_from=${encodeURIComponent(from)}&calendar_to=${encodeURIComponent(to)}&location_id=${locationId}`)
         const data = await res.json()
         if (cancelled) return
-        if (!res.ok) { setBusySlots(new Set()); return }
-        setBusySlots(computeBusySlots(data.bookings, data.events, date))
+        if (!res.ok) { setBusySlots(new Set()); setBusyIntervals([]); return }
+        const intervals = computeBusyIntervals(data.bookings, data.events, date)
+        setBusyIntervals(intervals)
+        setBusySlots(slotsFromIntervals(intervals))
       } catch {
-        if (!cancelled) setBusySlots(new Set())
+        if (!cancelled) { setBusySlots(new Set()); setBusyIntervals([]) }
       }
     }
     loadBusy()
     return () => { cancelled = true }
   }, [open, locationId, date])
+
+  // End Time must additionally exclude every slot from the nearest busy
+  // interval that starts at-or-after the chosen Start time through the rest
+  // of the day (Iain, 2026-08-17) -- an end time can't be selected mid-way
+  // through, or past, an occupied stretch. Start keeps the plain busySlots.
+  const endDisabledSlots = useMemo(
+    () => endDisabledSlotsFor(startTime, busySlots, busyIntervals),
+    [startTime, busySlots, busyIntervals]
+  )
 
   // Reset everything when the sheet is closed and reopened, so a stale
   // half-filled booking from last time can't be accidentally submitted.
@@ -452,7 +503,7 @@ export default function SpaceBookingForm({
               <TimeField
                 value={endTime} onChange={setEndTime} colour={endTime && endTime > startTime ? "var(--green)" : "var(--danger)"}
                 minHour={startTime ? Number(startTime.split(":")[0]) : null}
-                hourFloor={SPACE_HOUR_FLOOR} hourCeil={SPACE_HOUR_CEIL} disabledSlots={busySlots}
+                hourFloor={SPACE_HOUR_FLOOR} hourCeil={SPACE_HOUR_CEIL} disabledSlots={endDisabledSlots}
               />
             </div>
           </div>
