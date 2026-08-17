@@ -21,6 +21,8 @@ export async function POST(req) {
   if (!token) return NextResponse.json({ error: "Unauthorised" }, { status: 401 })
   const { data: { user } } = await supabaseAdmin.auth.getUser(token)
   if (!user) return NextResponse.json({ error: "Unauthorised" }, { status: 401 })
+  const { data: member } = await supabaseAdmin
+    .from("members").select("id, is_admin").eq("auth_id", user.id).maybeSingle()
 
   const {
     event_date, event_time, event_end_time, location_type, location_id, exclude_event_id,
@@ -37,7 +39,10 @@ export async function POST(req) {
 
   let spaceConflict = null
   if (needsSpaceValidation({ location_type, bookable: loc?.bookable })) {
-    const conflict = await findAnyRoomConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time, exclude_event_id, locationName: loc?.name })
+    const conflict = await findAnyRoomConflict(supabaseAdmin, {
+      location_id, event_date, event_time, event_end_time, exclude_event_id, locationName: loc?.name,
+      viewerId: member?.id, canManage: !!member?.is_admin,
+    })
     if (conflict) spaceConflict = conflict
   }
 
@@ -45,10 +50,8 @@ export async function POST(req) {
 
   let sameDatePersonalBookings = []
   if (!spaceConflict && include_space_bookings) {
-    const { data: member } = await supabaseAdmin
-      .from("members").select("id").eq("auth_id", user.id).maybeSingle()
     sameDatePersonalBookings = await findSameDatePersonalBookings(supabaseAdmin, {
-      event_date, exclude_booking_id, requesting_member_id: member?.id,
+      event_date, exclude_booking_id, requesting_member_id: member?.id, canManage: !!member?.is_admin,
     })
   }
 
