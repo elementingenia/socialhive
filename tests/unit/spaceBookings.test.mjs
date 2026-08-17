@@ -12,15 +12,40 @@ let pass = 0, fail = 0
 const ok = (cond, msg) => { cond ? pass++ : (fail++, console.log('  ✗', msg)) }
 
 // ── another space_booking (no event_id) ─────────────────────────────────────
+//
+// REVISED (Iain, 2026-08-17, Social_Hive_Location_First_Booking_Scope_v2.md
+// item 5): personal bookings are no longer anonymised -- who booked it and
+// why now follow the exact same Attendees-list rule as everywhere else
+// (resolveMemberName), superseding the 2026-08-04 "another booking, no
+// name, no reason" behaviour these tests used to assert.
 const privateConflict = {
   starts_at: '2026-08-15T06:00:00+00:00', // 4pm AEST
   ends_at:   '2026-08-15T08:00:00+00:00', // 6pm AEST
   purpose: 'private', event_id: null, title: 'Family lunch',
+  member: { id: 'm1', name: 'Jane Smith', display_name: 'Jane S.', hide_name: false },
 }
 const msg1 = spaceBookingConflictMessage('Community Lounge', privateConflict)
 ok(msg1.includes('Community Lounge'), 'names the space')
-ok(msg1.includes('another booking'), 'a private booking reads as "another booking", never the reason text')
-ok(!msg1.includes('Family lunch'), 'NEVER reveals another resident\'s private reason')
+ok(msg1.includes('Jane S.'), 'names the booker by their Display Name, same rule as the Attendees list')
+ok(msg1.includes('Family lunch'), 'shows the booking reason too, no longer hidden')
+ok(!msg1.includes('another booking'), 'the old anonymised wording is gone')
+
+// Masked booker (hide_name set) -- still falls back to "a resident", same as
+// resolveMemberName's fallback everywhere else.
+const maskedConflict = { ...privateConflict, member: { id: 'm2', name: 'Bob Jones', display_name: 'Bob J.', hide_name: true } }
+const msgMasked = spaceBookingConflictMessage('Community Lounge', maskedConflict)
+ok(msgMasked.includes('a resident'), 'a booker with hide_name set is masked to "a resident" for an ordinary viewer')
+ok(!msgMasked.includes('Bob J.'), 'a masked booker\'s name is never shown to a non-privileged viewer')
+
+// An admin/EC/Owner viewer (canManage) sees the Real Name, same as every
+// other Attendees-list surface.
+const msgAdmin = spaceBookingConflictMessage('Community Lounge', privateConflict, { canManage: true })
+ok(msgAdmin.includes('Jane S.'), 'an admin viewer still sees the Display Name (no Real Name override unless it differs)')
+
+// No member row at all (defensive -- shouldn't happen in practice, but the
+// function must not throw) falls back to "a resident".
+const msgNoMember = spaceBookingConflictMessage('Community Lounge', { ...privateConflict, member: null })
+ok(msgNoMember.includes('a resident'), 'no member row falls back to "a resident" rather than throwing')
 
 // ── maintenance hold ─────────────────────────────────────────────────────────
 const maint = { starts_at: '2026-08-15T00:00:00+00:00', ends_at: '2026-08-15T02:00:00+00:00',
