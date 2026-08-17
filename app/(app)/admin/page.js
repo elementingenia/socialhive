@@ -17,6 +17,7 @@ import { BAR_ENABLED } from '@/lib/features'
 import { validateClosure, reasonRemaining, REASON_MAX } from '@/lib/spaces'
 import { useLocations } from '@/lib/useLocations'
 import { authedFetch } from '@/lib/getAuthToken'
+import LocationImagePicker from '@/components/LocationImagePicker'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const HUB_TYPES = [
@@ -2299,6 +2300,22 @@ function LocationRow({ loc, expanded, onToggle, onArchive, onSaved, deleteBlockR
           </div>
           <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '-0.4rem', marginBottom: '0.75rem' }}>
             Capacity sets the default number of seats for events here. It doesn&apos;t stop anyone setting more.
+          </div>
+
+          <label style={labelStyle}>Image</label>
+          <div style={{ marginBottom: '0.75rem' }}>
+            <LocationImagePicker
+              locationId={loc.id}
+              imageUrl={loc.image_url}
+              focalX={loc.image_focal_x}
+              focalY={loc.image_focal_y}
+              colour="var(--teal)"
+              getToken={getAuthToken}
+              onUpdated={onSaved}
+            />
+          </div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '-0.4rem', marginBottom: '0.75rem' }}>
+            Shown as a thumbnail wherever residents pick this space to book, both in Book a Space and Book by Location.
           </div>
 
           <label style={labelStyle}>Request Only</label>
