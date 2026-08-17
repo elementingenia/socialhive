@@ -49,7 +49,7 @@ async function resolve(req, clubId) {
 }
 
 // ID is the truth, name derived from it — see the note in app/api/social/route.js.
-async function validateSpace(payload, excludeEventId) {
+async function validateSpace(payload, excludeEventId, viewerId, canManage) {
   if (payload.location_type !== "onsite") return { location_id: null }
 
   const loc = await fetchLocation(supa, payload.location_id)
@@ -62,6 +62,7 @@ async function validateSpace(payload, excludeEventId) {
   const conflict = await findAnyRoomConflict(supa, {
     location_id: loc.id, event_date: payload.event_date, event_time: payload.event_time,
     event_end_time: payload.event_end_time, exclude_event_id: excludeEventId, locationName: loc.name,
+    viewerId, canManage,
   })
   if (conflict) return { error: conflict.message, status: 409 }
   return { location_id: loc.id, location: loc.name, request_only: !!loc.request_only }
@@ -88,7 +89,7 @@ export async function POST(req) {
   const payload = buildPayload(body, true)
   const bringCheck = validateBringRequirement(payload)
   if (!bringCheck.ok) return NextResponse.json({ error: bringCheck.error }, { status: 400 })
-  const space = await validateSpace(payload)
+  const space = await validateSpace(payload, undefined, member.id, !!member.is_admin)
   if (space.error) return NextResponse.json({ error: space.error }, { status: space.status })
   payload.location_id = space.location_id
   if (space.location) payload.location = space.location
@@ -135,7 +136,7 @@ export async function PATCH(req) {
     bring_category_ids: "bring_category_ids" in payload ? payload.bring_category_ids : existing.bring_category_ids,
   })
   if (!bringCheck.ok) return NextResponse.json({ error: bringCheck.error }, { status: 400 })
-  const space = await validateSpace({ ...existing, ...payload }, event_id)
+  const space = await validateSpace({ ...existing, ...payload }, event_id, member.id, !!member.is_admin)
   if (space.error) return NextResponse.json({ error: space.error }, { status: space.status })
   payload.location_id = space.location_id
   if (space.location) payload.location = space.location
