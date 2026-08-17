@@ -228,10 +228,23 @@ function addHour(time) {
 // booking/validation/Ingenia-confirmation/clash-check, just pre-populated
 // rather than starting blank. Location remains changeable after pre-fill --
 // this is a convenience default, not a lock.
+//
+// editBooking (Iain, 2026-08-17: "My Space bookings need to be editable" --
+// Cancel was previously the only option): pass the resident's own existing
+// booking row -- { id, location_id, starts_at, ends_at, title,
+// ingenia_confirmed, ingenia_confirmed_by } -- to reuse this exact same form
+// (fields, validation, clash-check, Ingenia confirmation -- request_only is
+// re-derived per selected location from the live availability list, same as
+// a fresh booking, not read off this object)
+// for editing instead of creating. When set, every availability/busy-slot
+// check excludes the booking's own id so it never blocks against itself,
+// and submit goes to PATCH instead of POST. Takes priority over the
+// initial* hand-off props (a resident is never doing both at once).
 export default function SpaceBookingForm({
-  open, onClose, onBooked,
+  open, onClose, onBooked, editBooking = null,
   initialDate = "", initialStartTime = "", initialEndTime = "", initialLocationId = "",
 }) {
+  const isEdit = !!editBooking
   const [date, setDate] = useState("")
   const [startTime, setStartTime] = useState("")
   const [endTime, setEndTime] = useState("")
@@ -272,7 +285,11 @@ export default function SpaceBookingForm({
         const data = await res.json()
         if (cancelled) return
         if (!res.ok) { setBusySlots(new Set()); setBusyIntervals([]); return }
-        const intervals = computeBusyIntervals(data.bookings, data.events, date)
+        // Editing (Iain, 2026-08-17): this window already includes the
+        // booking's own current row -- drop it before computing busy
+        // intervals so it doesn't greyed-out block its own existing slot.
+        const bookings = isEdit ? (data.bookings || []).filter(b => b.id !== editBooking.id) : data.bookings
+        const intervals = computeBusyIntervals(bookings, data.events, date)
         setBusyIntervals(intervals)
         setBusySlots(slotsFromIntervals(intervals))
       } catch {
@@ -281,7 +298,7 @@ export default function SpaceBookingForm({
     }
     loadBusy()
     return () => { cancelled = true }
-  }, [open, locationId, date])
+  }, [open, locationId, date, isEdit, editBooking?.id])
 
   // End Time must additionally exclude every slot from the nearest busy
   // interval that starts at-or-after the chosen Start time through the rest
@@ -294,16 +311,30 @@ export default function SpaceBookingForm({
 
   // Reset everything when the sheet is closed and reopened, so a stale
   // half-filled booking from last time can't be accidentally submitted.
+  // isEdit pre-fills from the existing booking instead of the initial*
+  // hand-off props -- starts_at/ends_at are UTC instants, converted back to
+  // the Sydney-local date/HH:MM strings this form works in (same conversion
+  // LocationScheduleView/MySpaceBookings already use elsewhere).
   useEffect(() => {
     if (open) {
-      pendingInitialLocationRef.current = initialLocationId || null
-      setDate(initialDate); setStartTime(initialStartTime); setEndTime(initialEndTime)
-      setLocations(null); setLocationId(initialLocationId); setReason("")
-      setIngeniaConfirmed(false); setIngeniaConfirmedBy("")
+      if (isEdit) {
+        pendingInitialLocationRef.current = editBooking.location_id || null
+        setDate(sydneyTodayStr(new Date(editBooking.starts_at)))
+        setStartTime(isoToSydneyHHMM(editBooking.starts_at))
+        setEndTime(isoToSydneyHHMM(editBooking.ends_at))
+        setLocations(null); setLocationId(editBooking.location_id); setReason(editBooking.title || "")
+        setIngeniaConfirmed(!!editBooking.ingenia_confirmed)
+        setIngeniaConfirmedBy(editBooking.ingenia_confirmed_by || "")
+      } else {
+        pendingInitialLocationRef.current = initialLocationId || null
+        setDate(initialDate); setStartTime(initialStartTime); setEndTime(initialEndTime)
+        setLocations(null); setLocationId(initialLocationId); setReason("")
+        setIngeniaConfirmed(false); setIngeniaConfirmedBy("")
+      }
       setError(""); setSuccess(false); setSubmitting(false)
       setAcknowledgedClash(null)
     }
-  }, [open])
+  }, [open, isEdit, editBooking, initialDate, initialStartTime, initialEndTime, initialLocationId])
 
   // When start time changes, keep end time sensible (start + 1hr) rather
   // than leaving an invalid or empty end time silently blocking the form.
@@ -332,9 +363,15 @@ export default function SpaceBookingForm({
     const pendingLocationId = pendingInitialLocationRef.current
     pendingInitialLocationRef.current = null
     if (!pendingLocationId) setLocationId("")
-    setIngeniaConfirmed(false); setIngeniaConfirmedBy("")
+    // Don't clear a pending hand-off's Ingenia state -- for editBooking this
+    // is the pre-filled confirmation from the original booking, which is
+    // still valid for its own unchanged window; a genuine date/time change
+    // afterwards clears pendingLocationId and this branch no longer applies,
+    // correctly voiding the old confirmation for the new window.
+    if (!pendingLocationId) { setIngeniaConfirmed(false); setIngeniaConfirmedBy("") }
     try {
-      const res = await authedFetch(`/api/spaces?event_date=${date}&event_time=${startTime}&event_end_time=${endTime}`)
+      const excludeParam = isEdit ? `&exclude_booking_id=${editBooking.id}` : ""
+      const res = await authedFetch(`/api/spaces?event_date=${date}&event_time=${startTime}&event_end_time=${endTime}${excludeParam}`)
       const data = await res.json()
       if (tag !== fetchTag.current) return
       if (!res.ok) { setError(data.error || "Could not check availability"); setLocations([]); return }
@@ -350,7 +387,7 @@ export default function SpaceBookingForm({
     } finally {
       if (tag === fetchTag.current) setLocationsLoading(false)
     }
-  }, [date, startTime, endTime, windowValid])
+  }, [date, startTime, endTime, windowValid, isEdit, editBooking?.id])
 
   useEffect(() => { loadLocations() }, [loadLocations])
 
@@ -386,6 +423,7 @@ export default function SpaceBookingForm({
           event_date: date, event_time: startTime, event_end_time: endTime,
           location_type: "onsite", location_id: locationId,
           include_space_bookings: true,
+          exclude_booking_id: isEdit ? editBooking.id : undefined,
         }),
       }).then(r => r.json()).catch(() => ({}))
       const items = buildClashItems(pre.sameDateEvents, pre.sameDatePersonalBookings)
@@ -401,16 +439,17 @@ export default function SpaceBookingForm({
 
     try {
       const res = await authedFetch("/api/spaces", {
-        method: "POST",
+        method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          ...(isEdit ? { id: editBooking.id } : {}),
           location_id: locationId, event_date: date, event_time: startTime, event_end_time: endTime, reason: reasonTrimmed,
           ingenia_confirmed: needsIngeniaConfirmation ? ingeniaConfirmed : undefined,
           ingenia_confirmed_by: needsIngeniaConfirmation ? ingeniaConfirmedByTrimmed : undefined,
         }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || "Could not book that space"); setSubmitting(false); return }
+      if (!res.ok) { setError(data.error || (isEdit ? "Could not update that booking" : "Could not book that space")); setSubmitting(false); return }
       setAcknowledgedClash(clashItems)
       setSuccess(true)
       // Bug fix (Iain, 2026-08-04 live-fire find): this used to never reset,
@@ -421,7 +460,7 @@ export default function SpaceBookingForm({
       setSubmitting(false)
       onBooked?.(data)
     } catch {
-      setError("Could not book that space — check your connection")
+      setError(isEdit ? "Could not update that booking — check your connection" : "Could not book that space — check your connection")
       setSubmitting(false)
     }
   }
@@ -446,7 +485,7 @@ export default function SpaceBookingForm({
         <div style={{ height: 6, background: "var(--amber)" }} />
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px",
           borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "var(--surface)", zIndex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 15 }}>Book a Space</div>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>{isEdit ? "Edit Space Booking" : "Book a Space"}</div>
           <button onClick={handleClose} style={{ background: "var(--surface2)", border: "none", borderRadius: "50%",
             width: 36, height: 36, fontSize: 20, cursor: "pointer", color: "var(--text)",
             display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
@@ -455,7 +494,7 @@ export default function SpaceBookingForm({
         {success ? (
           <div style={{ padding: "2rem 1.25rem", textAlign: "center" }}>
             <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>✅</div>
-            <div style={{ fontWeight: 700, fontSize: "1.05rem", marginBottom: "0.4rem" }}>Space booked</div>
+            <div style={{ fontWeight: 700, fontSize: "1.05rem", marginBottom: "0.4rem" }}>{isEdit ? "Booking updated" : "Space booked"}</div>
             {acknowledgedClash?.length ? (
               <>
                 <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginBottom: "0.85rem" }}>
@@ -481,8 +520,9 @@ export default function SpaceBookingForm({
         ) : (
         <div style={{ padding: "1.1rem 1.1rem 0" }}>
           <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: "1.25rem", lineHeight: 1.5 }}>
-            Book a common-area space for your own use — a family gathering, a hobby group, anything
-            that isn't already covered by Show Time, Social, or Groups &amp; Clubs.
+            {isEdit
+              ? "Change the date, time, or space for this booking. It's re-checked for clashes the same way as a new booking."
+              : "Book a common-area space for your own use — a family gathering, a hobby group, anything that isn't already covered by Show Time, Social, or Groups & Clubs."}
           </div>
 
           <div style={FIELD}>
@@ -625,7 +665,7 @@ export default function SpaceBookingForm({
               cursor: canSubmit ? "pointer" : "not-allowed", opacity: canSubmit ? 1 : 0.5, marginBottom: "1.5rem",
             }}
           >
-            {submitting ? "Booking…" : "Book this space"}
+            {submitting ? (isEdit ? "Saving…" : "Booking…") : (isEdit ? "Save changes" : "Book this space")}
           </button>
         </div>
         )}
