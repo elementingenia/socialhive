@@ -93,6 +93,8 @@ export default function Header() {
         <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "12px", minWidth: 170, zIndex: 300, boxShadow: "0 4px 20px rgba(0,0,0,0.15)", overflow: "hidden" }}>
           {[
             { label: "Help & Guide",   href: "/help-guide" },
+            // Admin-only — same gate as the Admin panel itself (member.is_admin).
+            ...(member?.is_admin ? [{ label: "Administration Manual", href: "/admin-guide" }] : []),
             { label: "Update Profile", action: () => { setMenuOpen(false); openProfile() } },
             { label: "Change PIN",     action: () => { setMenuOpen(false); openPinModal() } },
             { label: "Sign Out",       action: signOut, danger: true },
