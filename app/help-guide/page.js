@@ -130,6 +130,7 @@ const RAW_SECTIONS = [
     id: "bookings", num: 10, title: "My Bookings",
     subs: [
       { title: "Understanding booking status", id: "sub-bookings-status" },
+      { title: "My Space Bookings — editing and cancelling", id: "sub-bookings-space" },
     ],
   },
 ]
@@ -726,6 +727,17 @@ export default function HelpGuidePage() {
                 Each card shows the title, date and time, IMDb and Rotten Tomatoes scores, seats
                 available, and your booking status. Tap any card to open the booking panel.
               </Step>
+              <Step>
+                Tap <strong>Attendees</strong> on a card to expand a quick attendee list without
+                leaving the page — confirmed seats first, then (for ECs and Owners only) the
+                waitlist.
+              </Step>
+              <InfoBox>
+                💡 <strong>EC only:</strong> waitlist names in this quick list are shown in queue
+                order, not A-Z, with each resident's position — <strong>(1st)</strong>,{" "}
+                <strong>(2nd)</strong>, and so on — to the left of their name, so you can see at a
+                glance who's next in line for a seat.
+              </InfoBox>
             </Subsection>
 
             <Subsection id="sub-movies-library" title="Suggestions library">
@@ -752,6 +764,11 @@ export default function HelpGuidePage() {
                 booking panel — a full attendee list with names, seat counts, and unpaid tallies. ECs
                 can modify a resident's seat count, cancel individual bookings, and monitor waitlist
                 numbers in real time.
+              </Step>
+              <Step>
+                Waitlisted residents are listed in queue order (not A-Z), each with their position —{" "}
+                <strong>(1st)</strong>, <strong>(2nd)</strong>, and so on — shown to the left of their
+                name, so it's clear who's next in line for a seat.
               </Step>
               <InfoBox>
                 💡 If Show Time has an assigned <strong>Owner</strong>, they get this same Coordinator
@@ -805,6 +822,11 @@ export default function HelpGuidePage() {
                 ECs see the full attendee list inside the event detail panel, with each resident's
                 name, seat count, and payment status. ECs can modify a resident's seat count, cancel
                 individual bookings, or update event details directly from this view.
+              </Step>
+              <Step>
+                Where a booking is waitlist-only, it's listed in queue order with the resident's
+                position — <strong>(1st)</strong>, <strong>(2nd)</strong>, and so on — shown to the
+                left of their name.
               </Step>
               <InfoBox>
                 💡 If Social has an assigned <strong>Owner</strong>, they get this same Coordinator
@@ -912,6 +934,11 @@ export default function HelpGuidePage() {
                 bringing what. They can modify a resident's seat count, cancel bookings, and
                 create or edit the club's events and activities — the same options an admin has, just
                 restricted to their own club.
+              </Step>
+              <Step>
+                A waitlist-only attendee is listed in queue order with their position —{" "}
+                <strong>(1st)</strong>, <strong>(2nd)</strong>, and so on — shown to the left of
+                their name.
               </Step>
               <InfoBox>
                 💡 An Owner doesn't need to be individually added as coordinator on every event to get
@@ -1071,6 +1098,26 @@ export default function HelpGuidePage() {
                 <strong style={{ color: "#64748b" }}>Waitlisted</strong> — the event was full when
                 you registered. You will be notified automatically if a confirmed seat opens up.
               </Step>
+            </Subsection>
+
+            <Subsection id="sub-bookings-space" title="My Space Bookings — editing and cancelling">
+              <Step>
+                If you have booked a common space for your own personal use (see "Booking a common
+                space" above), it appears in its own <strong>My Space Bookings</strong> panel on this
+                page, grouped by location with the soonest booking at each location listed first.
+              </Step>
+              <Step>
+                Tap <strong>Edit</strong> on a space booking to change its date, time, or location.
+                This opens the same booking form used to make it in the first place, so the change
+                still goes through the same clash-check against other Hive bookings and events, and
+                still asks for Ingenia's sign-off if you switch to a Request Only space. Tap{" "}
+                <strong>Cancel</strong> to release the booking entirely.
+              </Step>
+              <InfoBox>
+                💡 Editing a space booking checks the new date/time/location for clashes before
+                saving — if it isn't free, you'll be asked to pick a different slot rather than
+                losing your existing booking.
+              </InfoBox>
             </Subsection>
           </Section>
 
