@@ -545,7 +545,11 @@ export default function HelpGuidePage() {
             <Subsection id="sub-header-account" title="Your account menu (avatar pill)">
               <Step>
                 Tap your name or profile photo on the right-hand side of the header to open the account
-                menu. This menu has three options:
+                menu. This menu has three options — four if your account has admin rights:
+              </Step>
+              <Step>
+                <strong>Administration Manual</strong> — admin accounts only. Opens a separate guide
+                covering the Admin panel and admin-only screens (Page Texts, Owners, Locations, and more).
               </Step>
               <Step>
                 <strong>Update Profile</strong> — change your display name, email address, and house
