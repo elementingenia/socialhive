@@ -772,6 +772,13 @@ export default function HelpGuidePage() {
                 numbers in real time.
               </Step>
               <Step>
+                If a screening has a cost attached, each attendee also gets an{" "}
+                <strong>Unpaid / Paid / Partial</strong> badge — tap it to record what's been received,
+                same as Groups & Clubs (see <strong>§5 Coordinator & Owner panel</strong>). A{" "}
+                <strong>🧾 Submitted</strong> tag shows if the resident has already flagged themselves
+                as paid.
+              </Step>
+              <Step>
                 Waitlisted residents are listed in queue order (not A-Z), each with their position —{" "}
                 <strong>(1st)</strong>, <strong>(2nd)</strong>, and so on — shown to the left of their
                 name, so it's clear who's next in line for a seat.
@@ -979,6 +986,14 @@ export default function HelpGuidePage() {
                 bringing what. They can modify a resident's seat count, cancel bookings, and
                 create or edit the club's events and activities — the same options an admin has, just
                 restricted to their own club.
+              </Step>
+              <Step>
+                On a paid event, each attendee has an <strong>Unpaid / Paid / Partial</strong> badge —
+                tap it to record what's been received. A <strong>🧾 Submitted</strong> tag appears
+                alongside it if the resident has flagged themselves as paid from their own booking, so
+                it's never invisible while you're still confirming it. Tap an already-recorded payment
+                to adjust it, or use <strong>Reset to unpaid</strong> (with a confirm step) if it was
+                entered in error.
               </Step>
               <Step>
                 A waitlist-only attendee is listed in queue order with their position —{" "}

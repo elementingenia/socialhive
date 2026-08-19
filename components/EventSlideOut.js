@@ -338,6 +338,18 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   const [cancelTarget,  setCancelTarget]  = useState(null)
   const [cancelling,    setCancelling]    = useState(false)
   const [closingOut,    setClosingOut]    = useState(false)
+  // Inline Paid/Unpaid/Partial recording (2026-08-20) -- this panel's
+  // payment badge was made read-only on 2026-07-12 on the assumption every
+  // paid event has Social's own inline "Scheduled tile" accordion as the
+  // one editable surface for it -- true for Social, but Clubs and Movies
+  // have NO other attendee view at all, so for those two hubs there was
+  // never actually any way to mark a booking paid. Restoring an editable
+  // control here specifically, since it's the only surface those hubs have.
+  const [payTogglingId, setPayTogglingId] = useState(null)
+  const [payRecordingId, setPayRecordingId] = useState(null)
+  const [payRecordAmount, setPayRecordAmount] = useState("")
+  const [payRecordNote, setPayRecordNote] = useState("")
+  const [payResetConfirmId, setPayResetConfirmId] = useState(null)
   // Modify an existing booking's seat count on the resident's behalf
   // (2026-08-08, Iain: "there needs to be a cancel AND modify option").
   // Same rule set as a resident modifying their own booking -- see
@@ -544,6 +556,25 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
     const { ok, error } = await patchAction({ action: "set_name_hidden", booking_id: booking.id, name_hidden: !booking.name_hidden })
     if (ok) { showToast(booking.name_hidden ? "Name shown again" : "Name hidden"); load(); onRefresh() }
     else showToast(error || "Failed to update", "error")
+  }
+
+  // Record/toggle a payment (2026-08-20) -- same /api/coordinator
+  // "set_payment" action Social's own inline toggle uses (see
+  // app/(app)/social/events/page.js's handleTogglePayment); the server
+  // derives partial/confirmed from the amount, this never sends a status
+  // directly. A plain "reset to unpaid" sends no amount at all.
+  async function handlePaymentToggle(booking, amount, note) {
+    if (payTogglingId) return
+    setPayTogglingId(booking.id)
+    const isSettled = booking.payment_status === "confirmed" || booking.payment_status === "partial"
+    const next = isSettled ? "pending" : "confirmed"
+    const { ok, error } = await patchAction({
+      action: "set_payment", booking_id: booking.id, payment_status: next,
+      ...(next === "confirmed" ? { amount: amount === "" || amount == null ? undefined : amount, note: note || undefined } : {}),
+    })
+    setPayTogglingId(null)
+    if (ok) { showToast(next === "confirmed" ? "Payment recorded" : "Marked as unpaid"); load(); onRefresh() }
+    else showToast(error || "Failed to update payment", "error")
   }
 
   async function cancelBooking(bookingId) {
@@ -1155,24 +1186,86 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                       })()}
                     </div>
                     <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
-                      {paymentRequired && confirmedSeats > 0 && firstConf && !isRefunded && (
-                        // Read-only now -- Paid/Unpaid/Partial is recorded from the
-                        // Scheduled tile's Attendees accordion (2026-07-12), not here,
-                        // so there's one editable control for this field, not two
-                        // that can drift. "Partial" added 2026-08-11.
-                        <span style={{
-                          fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12,
-                          background: isPaid ? "#16a34a20" : isPartial ? "#0369a120" : "var(--surface)",
-                          color: isPaid ? "#16a34a" : isPartial ? "#0369a1" : "var(--text-dim)",
-                          border: `1px solid ${isPaid ? "#16a34a" : isPartial ? "#0369a1" : "var(--border)"}`,
-                        }}>{isPaid ? "Paid" : isPartial ? `Partial · ${wholeDollar(firstConf?.amount_paid)}` : "Unpaid"}</span>
+                      {paymentRequired && confirmedSeats > 0 && firstConf && computeIsSubmitted(firstConf) && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 7px", borderRadius: 10,
+                          background: "#f0fdfa", color: "#0f766e", border: "1px solid #99f6e4" }}>🧾 Submitted</span>
                       )}
+                      {paymentRequired && confirmedSeats > 0 && firstConf && !isRefunded && (() => {
+                        // Editable again (2026-08-20) -- see the note above
+                        // handlePaymentToggle: this is the ONLY attendee view
+                        // Clubs/Movies have, so a read-only badge here left
+                        // those two hubs with no way to mark a booking paid
+                        // at all.
+                        const pending = payTogglingId === firstConf.id
+                        return (
+                          <button
+                            disabled={pending}
+                            onClick={() => {
+                              const owed = seatsCost(event, confirmedSeats)
+                              const bal = remainingBalance(firstConf, event, confirmedSeats)
+                              setPayRecordingId(firstConf.id)
+                              setPayRecordAmount(String(Math.round(bal != null ? bal : owed)))
+                              setPayRecordNote("")
+                              setPayResetConfirmId(null)
+                            }}
+                            role="switch" aria-checked={isPaid}
+                            aria-label={isPaid || isPartial ? "Adjust recorded payment" : "Record a payment"}
+                            style={{
+                              fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12,
+                              background: isPaid ? "#16a34a20" : isPartial ? "#0369a120" : "var(--surface)",
+                              color: isPaid ? "#16a34a" : isPartial ? "#0369a1" : "var(--text-dim)",
+                              border: `1px solid ${isPaid ? "#16a34a" : isPartial ? "#0369a1" : "var(--border)"}`,
+                              cursor: pending ? "default" : "pointer", opacity: pending ? 0.55 : 1, fontFamily: "inherit",
+                            }}>{isPaid ? "Paid" : isPartial ? `Partial · ${wholeDollar(firstConf?.amount_paid)}` : "Unpaid"}</button>
+                        )
+                      })()}
                       {paymentRequired && confirmedSeats > 0 && firstConf && isRefunded && (
                         <span style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12,
                           background: "#f3f4f6", color: "#9ca3af" }}>Refunded</span>
                       )}
                     </div>
                   </div>
+                  {paymentRequired && firstConf && payRecordingId === firstConf.id && (() => {
+                    const bal = remainingBalance(firstConf, event, confirmedSeats)
+                    const enteredAmt = payRecordAmount === "" ? null : (parseFloat(payRecordAmount) || 0)
+                    const willComplete = enteredAmt !== null && bal != null && Math.round(enteredAmt) === Math.round(bal)
+                    return (
+                      <div onClick={e => e.stopPropagation()} style={{ marginTop: 8, padding: 8, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 11, color: "var(--text-dim)" }}>Amount received</span>
+                          <input type="number" min="0" step="1" value={payRecordAmount} onChange={e => setPayRecordAmount(e.target.value)}
+                            style={{ width: 80, padding: "4px 8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 12, boxSizing: "border-box", fontFamily: "inherit" }} />
+                          {bal != null && <span style={{ fontSize: 11, color: "var(--text-dim)" }}>of {wholeDollar(bal)} balance</span>}
+                        </div>
+                        <textarea placeholder={willComplete ? "Comment (optional)" : "Comment (required if amount doesn't complete the balance)"}
+                          value={payRecordNote} onChange={e => setPayRecordNote(e.target.value)} rows={2}
+                          style={{ width: "100%", padding: "6px 8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 11, boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => { setPayRecordingId(null); setPayResetConfirmId(null) }}
+                            style={{ flex: 1, padding: 6, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "inherit" }}>Cancel</button>
+                          <button
+                            disabled={payTogglingId === firstConf.id || (!willComplete && !payRecordNote.trim())}
+                            onClick={() => { handlePaymentToggle(firstConf, payRecordAmount, payRecordNote); setPayRecordingId(null) }}
+                            style={{ flex: 1, padding: 6, borderRadius: 8, border: "none", background: colour, color: clubTextOn(colour), cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "inherit" }}>Save</button>
+                        </div>
+                        {(isPaid || isPartial) && (
+                          payResetConfirmId === firstConf.id ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span style={{ fontSize: 11, color: "var(--amber-dark)", flex: 1 }}>Clear the {wholeDollar(firstConf.amount_paid)} on file and mark unpaid?</span>
+                              <button onClick={() => setPayResetConfirmId(null)} style={{ fontSize: 11, background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>No</button>
+                              <button onClick={() => { handlePaymentToggle(firstConf); setPayResetConfirmId(null); setPayRecordingId(null) }}
+                                style={{ fontSize: 11, fontWeight: 700, background: "none", border: "none", color: "var(--amber-dark)", cursor: "pointer", fontFamily: "inherit", padding: 0, textDecoration: "underline" }}>Yes, reset</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setPayResetConfirmId(firstConf.id)}
+                              style={{ fontSize: 11, color: "var(--text-dim)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0, textAlign: "left", textDecoration: "underline" }}>
+                              Reset to unpaid
+                            </button>
+                          )
+                        )}
+                      </div>
+                    )
+                  })()}
                   {isBook && primaryRow && (
                     <div style={{ display: "flex", gap: 14, marginTop: 8, paddingTop: 8, borderTop: "1px solid var(--border)", flexWrap: "wrap" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

@@ -4,6 +4,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
+import { BusIcon } from "@/components/NavIcons"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import { ContactBar } from "@/components/OwnersManager"
 import ExpandableText from "@/components/ExpandableText"
@@ -110,13 +111,13 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
   async function loadAttendees() {
     const { data } = await supabase
       .from("bookings")
-      .select("id, seats, has_book, book_given_at, name_hidden, bring_note, members(id, name, display_name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
+      .select("id, seats, has_book, book_given_at, name_hidden, bring_note, bus_passenger, members(id, name, display_name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
       .eq("event_id", event.id)
       .eq("status", "confirmed")
     // Named additional attendees (the party), grouped by the booker.
     const { data: partyRows } = await supabase
       .from("booking_attendees")
-      .select("owner_id, owner_contact_id, member_id, contact_id, guest_name, bring_note, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name), bring:club_bring_categories!bring_category_id(label)")
+      .select("owner_id, owner_contact_id, member_id, contact_id, guest_name, bring_note, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name), bring:club_bring_categories!bring_category_id(label)")
       .eq("event_id", event.id)
     const partyByOwner = {}
     for (const p of partyRows || []) {
@@ -155,6 +156,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
         isOwn,
         isPrivate,
         seats: b.seats || 1,
+        busPassenger: !!b.bus_passenger,
         hasBook: !!b.has_book,
         bring: b.bring?.label || null,
         bringNote: b.bring_note || null,
@@ -172,6 +174,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
                 ? resolveMemberName(p.member, { viewerId: member?.id, canManage: canManageBooks || isOwn, selfLabel: "You", fallback: "Resident" })
                 : "Resident",
             guest: !!p.guest_name,
+            busPassenger: !!p.is_bus_passenger,
             bring: p.bring?.label || null,
             bringNote: p.bring_note || null,
           }
@@ -381,11 +384,13 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
                     <span style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: a.isOwn ? 700 : 400, color: a.isOwn ? colour : "var(--text)" }}>
                       {a.name}
                       {a.isPrivate && canManageBooks && !a.isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
+                      {a.busPassenger && <span title="Riding the bus" style={{ marginLeft: 4 }}><BusIcon style={{ width: 12, height: 12, verticalAlign: "-1px", opacity: 0.75 }} /></span>}
                       {a.bring && <span style={{ fontWeight: 600, color: clubInk(colour) }}> · {a.bring}{a.bringNote ? ` — ${a.bringNote}` : ""}</span>}
                     </span>
                     {(a.party || []).map((p, j) => (
                       <span key={j} style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: "0.75rem", color: "var(--text-dim)" }}>
                         {p.name}{p.guest ? " (guest)" : ""}
+                        {p.busPassenger && <span title="Riding the bus" style={{ marginLeft: 4 }}><BusIcon style={{ width: 11, height: 11, verticalAlign: "-1px", opacity: 0.75 }} /></span>}
                         {p.bring && <span style={{ color: clubInk(colour), fontWeight: 600 }}> · {p.bring}{p.bringNote ? ` — ${p.bringNote}` : ""}</span>}
                       </span>
                     ))}
