@@ -21,6 +21,7 @@ import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName } from "@/lib/sortNames"
 import { useOwners } from "@/lib/useOwners"
 import { resolveMemberName } from "@/lib/memberName"
+import { busSeatsUsed } from "@/lib/busSeats"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -520,6 +521,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     is_public:             event?.is_public           !== false,
     show_attendee_names:   event?.show_attendee_names !== false,
     has_bus:               event?.has_bus             || false,
+    bus_max_seats:         event?.bus_max_seats       ?? "",
     location_type:         event?.location_type       || "onsite",
     location:              event?.location            || "",
     location_id:           event?.location_id         || null,
@@ -645,6 +647,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
       max_seats_per_booking: Number(form.max_seats_per_booking),
       coordinator_ids:       coordinators.map(m => m.id),
       bus_driver_id:         form.has_bus ? busDriver?.id || null : null,
+      bus_max_seats:         form.has_bus && form.bus_max_seats !== "" ? Number(form.bus_max_seats) : null,
       has_dining:            form.has_dining,
       menu_type:             form.has_dining ? form.menu_type : null,
       menu_text:             form.has_dining && form.menu_type === "text" ? form.menu_text : null,
@@ -986,6 +989,13 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
                     excludeIds={coordinators.map(m => m.id)} />
                 </div>
               )}
+              {form.has_bus && (
+                <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
+                  <label style={LABEL}>Bus max seats <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", fontWeight: 400 }}>(optional — blank = uncapped)</span></label>
+                  <input type="number" min="0" value={form.bus_max_seats}
+                    onChange={e => set("bus_max_seats", e.target.value)} style={INPUT} placeholder="Uncapped" />
+                </div>
+              )}
             </>
           )}
 
@@ -1136,6 +1146,9 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
     const ownerKey = p.owner_id ? `m:${p.owner_id}` : `c:${p.owner_contact_id}`
     ;(partyByOwner[ownerKey] = partyByOwner[ownerKey] || []).push(p)
   }
+  const busSeats = event.has_bus
+    ? busSeatsUsed({ bookings: confirmedBookings, attendees: event.booking_attendees || [] })
+    : 0
   const unpaidSeats = sumUnpaidSeats(confirmedBookings, event)
   const ecNames = coordinators.map(c => c.members?.name || c.members?.username).filter(Boolean)
   // Matches the canManageBooks convention used everywhere else (Book Club,
@@ -1264,6 +1277,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
               <span style={{ marginLeft: "0.4rem" }}>of {event.max_seats}</span>
               {isAdmin && unpaidSeats > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.4rem" }}>({unpaidSeats} unpaid)</span>}
               {isAdmin && waiting > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.4rem" }}>· {waiting} waitlist</span>}
+              {event.has_bus && <span style={{ color: "var(--text-dim)", marginLeft: "0.4rem" }}>· 🚌 {busSeats}{event.bus_max_seats != null ? `/${event.bus_max_seats}` : ""}</span>}
             </span>
             <span style={{ fontSize: "0.65rem", color: "var(--teal)" }}>{showAttendees ? "▲ Hide" : "▼ Attendees"}</span>
           </button>
@@ -1373,6 +1387,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                         <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--terracotta)" : "var(--text)", minWidth: 0 }}>
                           {label}
                           {isPrivate && isAdmin && !isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
+                          {b.bus_passenger && <BusIcon style={{ width: 12, height: 12, marginLeft: 4, verticalAlign: "-1px", opacity: 0.75 }} />}
                         </span>
                         <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
                           {canManagePayments && submitted && (
@@ -1550,7 +1565,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                               const gName = gOwn ? "You" : p.guest_name ? p.guest_name
                                 : p.contact_id ? (p.contact?.name || "Resident")
                                 : resolveMemberName(p.member, { canManage: isAdmin || isOwn })
-                              return <span key={j} style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>+ {gName}{p.guest_name ? " (guest)" : ""}{gPriv && isAdmin && !gOwn && p.member?.name ? " (P)" : ""}</span>
+                              return <span key={j} style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>+ {gName}{p.guest_name ? " (guest)" : ""}{gPriv && isAdmin && !gOwn && p.member?.name ? " (P)" : ""}{p.is_bus_passenger ? " 🚌" : ""}</span>
                             })}
                           </div>
                           )
@@ -1699,7 +1714,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, contact_id, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
+      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, bus_max_seats, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, contact_id, bus_passenger, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
       .eq("hub_type", "social")
       .eq("archived", false)
       .order("event_date", { ascending: true })
@@ -1888,7 +1903,7 @@ export default function SocialEvents() {
   async function openEventSlideOut(event) {
     const { data } = await supabase
       .from("events")
-      .select("*, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, booked_at, members(name, username)), booking_attendees(owner_id, member_id, guest_name, member:members!member_id(name, hide_name))")
+      .select("*, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, bus_passenger, booked_at, members(name, username)), booking_attendees(owner_id, member_id, guest_name, is_bus_passenger, member:members!member_id(name, hide_name))")
       .eq("id", event.id).single()
     if (data) {
       const allBookings = (data.bookings || []).filter(b => b.status !== "cancelled")

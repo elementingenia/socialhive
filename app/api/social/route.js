@@ -31,7 +31,7 @@ function buildEventPayload(body, isInsert = false) {
   const {
     title, event_date, event_time, event_end_time, description, welcome_message,
     max_seats, max_seats_per_booking, cost, payment_required,
-    show_attendee_names, is_public, has_bus, bus_driver_id,
+    show_attendee_names, is_public, has_bus, bus_driver_id, bus_max_seats,
     location_type, location, location_id, has_dining, menu_type, menu_text, reservation_cutoff, payment_due_by, allow_nonresident_guests,
     require_attendee_names,
   } = body
@@ -59,6 +59,7 @@ function buildEventPayload(body, isInsert = false) {
     is_public:             is_public !== false,
     has_bus:               !!has_bus,
     bus_driver_id:         (has_bus && bus_driver_id) ? bus_driver_id : null,
+    bus_max_seats:         (has_bus && bus_max_seats != null && bus_max_seats !== '') ? Number(bus_max_seats) : null,
     location_type:         location_type || 'onsite',
     // For onsite events both of these are overwritten by validateSpace() from
     // the locations row — location_id is authoritative, location is its display

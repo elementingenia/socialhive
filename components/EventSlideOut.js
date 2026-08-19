@@ -15,6 +15,7 @@ import { bookingsClosed, cutoffLabel } from "@/lib/booking"
 import { clubCaps, clubColour } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
 import { maxSeatsPerBooking } from "@/lib/modifyBooking"
+import { busSeatsUsed } from "@/lib/busSeats"
 import { useOwners } from "@/lib/useOwners"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -371,7 +372,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   // used to show member.name directly, missing display_name entirely).
   useEffect(() => {
     supabase.from("booking_attendees")
-      .select("owner_id, owner_contact_id, member_id, contact_id, guest_name, member:members!member_id(name, display_name, hide_name, username), contact:contacts!contact_id(name)")
+      .select("owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name, username), contact:contacts!contact_id(name)")
       .eq("event_id", event.id)
       .then(({ data: rows }) => {
         const map = {}
@@ -382,9 +383,9 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           // 061, 2026-07-23.
           const key = r.owner_id ? `m:${r.owner_id}` : `c:${r.owner_contact_id}`
           ;(map[key] = map[key] || []).push(
-            r.member_id ? { label: resolveMemberName(r.member, { canManage: true, fallback: r.member?.username || "Resident" }), guest: false }
-              : r.contact_id ? { label: r.contact?.name || "Resident", guest: false }
-              : { label: r.guest_name, guest: true }
+            r.member_id ? { label: resolveMemberName(r.member, { canManage: true, fallback: r.member?.username || "Resident" }), guest: false, bus: !!r.is_bus_passenger }
+              : r.contact_id ? { label: r.contact?.name || "Resident", guest: false, bus: !!r.is_bus_passenger }
+              : { label: r.guest_name, guest: true, bus: !!r.is_bus_passenger }
           )
         }
         setPartyByOwner(map)
@@ -434,6 +435,16 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
     : (!addNameParty || (addParty.length === addPartyNeed && addParty.every(isAddRowFilled)))
   const addPartyToAttendees = (arr) => arr.map(p => ({
     ...(p.member_id ? { member_id: p.member_id } : p.contact_id ? { contact_id: p.contact_id } : { guest_name: (p.guest_name || "").trim() }),
+    // Community bus (2026-08-19): this EC panel doesn't expose a bus
+    // checkbox (self-service only, per Iain's ask) -- but syncAttendees does
+    // a full delete+insert of an owner's party on every write, so if a
+    // resident's own booking has bus-flagged attendees and an EC then uses
+    // Modify (submitModify, below, shares this same function) without this
+    // field, their bus reservation would silently vanish. openModify seeds
+    // is_bus_passenger from the real row so this just passes it through
+    // unchanged; a brand-new walk-up booking (add_booking) has nothing to
+    // preserve, so this is always false there.
+    is_bus_passenger: !!p.is_bus_passenger,
   }))
 
   async function patchAction(body) {
@@ -516,17 +527,21 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
     if (allResidents.length === 0) fetchResidentDirectory().then(setAllResidents)
     const [{ data: attendeeRows }, takenIds] = await Promise.all([
       supabase.from("booking_attendees")
-        .select("member_id, contact_id, guest_name, member:members!member_id(name), contact:contacts!contact_id(name)")
+        .select("member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name), contact:contacts!contact_id(name)")
         .eq("event_id", event.id)
         .eq(ownerId ? "owner_id" : "owner_contact_id", ownerId || ownerContactId),
       fetchTakenResidentIds(event.id, { excludeOwnerId: ownerId, excludeOwnerContactId: ownerContactId }),
     ])
     setModifyTaken(takenIds)
+    // is_bus_passenger carried through unset in the UI (this panel has no bus
+    // checkbox) purely so addPartyToAttendees round-trips it unchanged on
+    // Save -- see the comment there for why dropping it would be a silent
+    // data-loss bug, not just a missing feature.
     setModifyParty((attendeeRows || []).map(a => (a.member_id
-      ? { kind: "resident", member_id: a.member_id, contact_id: null, member_name: a.member?.name || "Resident", guest_name: "" }
+      ? { kind: "resident", member_id: a.member_id, contact_id: null, member_name: a.member?.name || "Resident", guest_name: "", is_bus_passenger: !!a.is_bus_passenger }
       : a.contact_id
-      ? { kind: "resident", member_id: null, contact_id: a.contact_id, member_name: a.contact?.name || "Resident", guest_name: "" }
-      : { kind: "guest", member_id: null, contact_id: null, member_name: "", guest_name: a.guest_name || "" })))
+      ? { kind: "resident", member_id: null, contact_id: a.contact_id, member_name: a.contact?.name || "Resident", guest_name: "", is_bus_passenger: !!a.is_bus_passenger }
+      : { kind: "guest", member_id: null, contact_id: null, member_name: "", guest_name: a.guest_name || "", is_bus_passenger: !!a.is_bus_passenger })))
     setModifyTarget({
       ownerId, ownerContactId, currentTotal,
       name: group.member?.name || group.member?.username || group.contact?.name || "Resident",
@@ -671,6 +686,19 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       <div style={{ fontSize: 12, fontWeight: 700, color: clubInk(colour), textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>
         Coordinator View
       </div>
+
+      {/* Community bus (2026-08-19): transparency for the driver -- a running
+          count here, the actual names live per-attendee below (🚌 markers). */}
+      {!!event.has_bus && (() => {
+        const busCount = confirmed.filter(b => b.bus_passenger).length
+          + Object.values(partyByOwner).flat().filter(p => p.bus).length
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--text-dim)", marginBottom: 14 }}>
+            <BusIcon size={13} />
+            <span>Bus: {busCount}{event.bus_max_seats != null ? ` / ${event.bus_max_seats}` : ""} seat{busCount !== 1 ? "s" : ""} taken</span>
+          </div>
+        )
+      })()}
 
       {/* EC Notes */}
       <div style={{ marginBottom: 14 }}>
@@ -991,6 +1019,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                         )}
                         {name}
                         {isPrivate && !isOwnBooking && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", marginLeft: 5 }}>(P)</span>}
+                        {!!firstConf?.bus_passenger && <span title="Riding the bus" style={{ marginLeft: 5 }}><BusIcon size={11} /></span>}
                       </div>
                       {realName && (
                         <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{realName}</div>
@@ -1011,7 +1040,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                         return party.length > 0 && (
                           <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3, lineHeight: 1.5 }}>
                             With: {party.map((p, i) => (
-                              <span key={i}>{i > 0 ? ", " : ""}{p.label}{p.guest ? " (guest)" : ""}</span>
+                              <span key={i}>{i > 0 ? ", " : ""}{p.label}{p.guest ? " (guest)" : ""}{p.bus ? " 🚌" : ""}</span>
                             ))}
                           </div>
                         )
@@ -1273,7 +1302,7 @@ function BringPicker({ cats, categoryId, note, onChange, colour, required, label
 // Collects the (seats - 1) additional attendees for a multi-seat booking. Each
 // is a resident (searchable, 2-char min per UI standards) or, only when the
 // event allows it, a named non-resident guest.
-function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, bringCats = [], taken }) {
+function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, bringCats = [], taken, bus }) {
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
   const kind = row.kind || "resident"
@@ -1345,11 +1374,30 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
             onChange={({ category_id, note }) => onChange({ ...row, bring_category_id: category_id, bring_note: note })} />
         </div>
       )}
+      {/* Community bus (2026-08-19): only shown for offsite events with a bus.
+          Riding the bus forces this row to be named regardless of whether the
+          event otherwise requires attendee names -- lib/attendees.js enforces
+          this server-side; the row is already a resident/guest name-or-nothing
+          picker above, so the requirement is just "pick someone" once ticked. */}
+      {bus?.enabled && (
+        <div style={{ marginTop: 8 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13,
+            color: (bus.full && !row.is_bus_passenger) ? "var(--text-dim)" : "var(--text)",
+            cursor: (bus.full && !row.is_bus_passenger) ? "not-allowed" : "pointer", opacity: (bus.full && !row.is_bus_passenger) ? 0.6 : 1 }}>
+            <input type="checkbox" checked={!!row.is_bus_passenger} disabled={bus.full && !row.is_bus_passenger}
+              onChange={e => onChange({ ...row, is_bus_passenger: e.target.checked })} />
+            🚌 Riding the bus
+          </label>
+          {bus.full && !row.is_bus_passenger && (
+            <div style={{ fontSize: 11.5, color: "var(--danger)", marginTop: 2 }}>Bus is full</div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
-function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange, bringCats = [], taken, required = true }) {
+function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange, bringCats = [], taken, required = true, bus }) {
   const rows = []
   for (let i = 0; i < count; i++) rows.push(value[i] || { kind: "resident", member_id: null, contact_id: null, member_name: "", guest_name: "" })
   const chosen = value.filter(v => v?.member_id || v?.contact_id).map(v => v.member_id || v.contact_id)
@@ -1362,7 +1410,7 @@ function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange,
       </div>
       {rows.map((row, i) => (
         <PartyRow key={i} index={i} row={row} allowGuests={allowGuests} members={members}
-          bringCats={bringCats} taken={taken}
+          bringCats={bringCats} taken={taken} bus={bus}
           excludeIds={[...excludeIds, ...chosen.filter(id => id !== (row.member_id || row.contact_id))]}
           onChange={next => { const copy = value.slice(); copy[i] = next; onChange(copy) }} />
       ))}
@@ -1396,6 +1444,14 @@ function BookingSection({ event, onRefresh, onClose }) {
   const [members, setMembers] = useState([])
   const [party, setParty] = useState([])
   const [myAttendees, setMyAttendees] = useState([])
+  // Community bus (2026-08-19): the booker's own seat lives on the booking
+  // row itself (bus_passenger), same reasoning as myBring below -- the
+  // booker isn't a booking_attendees row, so their own choice can't live
+  // there. Named party members' choices live on booking_attendees
+  // (is_bus_passenger), threaded through party/modParty rows below.
+  const [myWantsBus, setMyWantsBus] = useState(false)
+  const [modWantsBus, setModWantsBus] = useState(false)
+  const [myInitialBusUsage, setMyInitialBusUsage] = useState(0)
   // Bring-a-dish (reworked 2026-08-07, Iain): applicable to THIS event only
   // when it actually has bring categories chosen -- club.bring_enabled is
   // just the club-level capability switch, it no longer implies every event
@@ -1466,15 +1522,28 @@ function BookingSection({ event, onRefresh, onClose }) {
 
   useEffect(() => {
     if (!me?.id) return
-    supabase.from("booking_attendees")
-      .select("member_id, contact_id, guest_name, bring_category_id, bring_note, member:members!member_id(name), contact:contacts!contact_id(name)")
-      .eq("event_id", event.id).eq("owner_id", me.id)
-      .then(({ data }) => setMyAttendees(data || []))
-    // Prefill the booker's own dish so it shows in the manage view and isn't
-    // lost when they Modify (Iain 2026-07-18).
-    supabase.from("bookings").select("bring_category_id, bring_note")
-      .eq("event_id", event.id).eq("member_id", me.id).eq("status", "confirmed").maybeSingle()
-      .then(({ data }) => { if (data?.bring_category_id) setMyBring({ category_id: data.bring_category_id, note: data.bring_note || "" }) })
+    Promise.all([
+      supabase.from("booking_attendees")
+        .select("member_id, contact_id, guest_name, bring_category_id, bring_note, is_bus_passenger, member:members!member_id(name), contact:contacts!contact_id(name)")
+        .eq("event_id", event.id).eq("owner_id", me.id),
+      // Prefill the booker's own dish AND bus seat so both show in the manage
+      // view and aren't lost when they Modify (Iain 2026-07-18, extended for
+      // the bus 2026-08-19).
+      supabase.from("bookings").select("bring_category_id, bring_note, bus_passenger")
+        .eq("event_id", event.id).eq("member_id", me.id).eq("status", "confirmed").maybeSingle(),
+    ]).then(([{ data: attendeeData }, { data: bookingData }]) => {
+      const rows = attendeeData || []
+      setMyAttendees(rows)
+      if (bookingData?.bring_category_id) setMyBring({ category_id: bookingData.bring_category_id, note: bookingData.bring_note || "" })
+      setMyWantsBus(!!bookingData?.bus_passenger)
+      // Snapshot of what "me" was already contributing to the bus count at
+      // load time, for hubs that only give BookingSection a pre-aggregated
+      // total (event.bus_seats_used, see below) rather than the full
+      // bookings/booking_attendees arrays -- without this, a resident's own
+      // existing bus seat(s) would double-count against the shared total
+      // when computing how many are left for THEM to still request.
+      setMyInitialBusUsage((bookingData?.bus_passenger ? 1 : 0) + rows.filter(a => a.is_bus_passenger).length)
+    })
   }, [event.id, me?.id])
 
   // Naming extra seats used to be mandatory on every multi-seat booking.
@@ -1491,7 +1560,36 @@ function BookingSection({ event, onRefresh, onClose }) {
     ...(p.member_id ? { member_id: p.member_id } : p.contact_id ? { contact_id: p.contact_id } : { guest_name: (p.guest_name || "").trim() }),
     bring_category_id: p.bring_category_id || null,
     bring_note: p.bring_note || null,
+    is_bus_passenger: !!p.is_bus_passenger,
   }))
+
+  // Community bus (2026-08-19): capacity is independent of the event's own
+  // seats and has explicitly NO waitlist -- the control just disables once
+  // full. busUsedByOthers excludes this member's own current usage (same
+  // "othersConfirmed" pattern the seat cap already uses) so a resident
+  // re-submitting their own unchanged bus seat, or opening Modify, isn't
+  // blocked by themselves. Mirrors the server-side check in
+  // app/api/bookings/route.js exactly, so a resident should rarely actually
+  // hit the server's rejection -- this is what disables the checkbox first.
+  const busEnabled = !!event.has_bus
+  // Two shapes of input, depending on the hub page that built this `event`
+  // object: Social/Show Time/Book Club hydrate full `bookings` +
+  // `booking_attendees` arrays (so the exact "others" set can be computed
+  // directly); Clubs' list view only ever built a pre-aggregated
+  // `bookings_count` for ordinary seats (never the full arrays), so it
+  // supplies a matching pre-aggregated `event.bus_seats_used` instead --
+  // myInitialBusUsage (snapshotted above) is subtracted back out of that
+  // total to get "everyone but me", the same number the full-array path
+  // computes directly.
+  const busUsedByOthers = Array.isArray(event.bookings) || Array.isArray(event.booking_attendees)
+    ? busSeatsUsed({
+        bookings: (event.bookings || []).filter(b => b.member_id !== me?.id),
+        attendees: (event.booking_attendees || []).filter(a => a.owner_id !== me?.id),
+      })
+    : Math.max(0, (event.bus_seats_used || 0) - myInitialBusUsage)
+  const busRemainingBase = event.bus_max_seats != null ? Math.max(0, event.bus_max_seats - busUsedByOthers) : null
+  const busCheckedNow = (myWantsBus ? 1 : 0) + party.filter(p => p.is_bus_passenger).length
+  const busFull = busEnabled && busRemainingBase != null && busCheckedNow >= busRemainingBase
 
   const myConfirmed = event.my_bookings?.find(b => b.status === "confirmed")
   const myWaitlist  = event.my_bookings?.find(b => b.status === "waitlist")
@@ -1523,25 +1621,28 @@ function BookingSection({ event, onRefresh, onClose }) {
 
   const [modParty, setModParty] = useState([])
   const modSeeded = useRef(false)
-  const blankRow = () => ({ kind: "resident", member_id: null, contact_id: null, member_name: "", guest_name: "", bring_category_id: null, bring_note: null })
+  const blankRow = () => ({ kind: "resident", member_id: null, contact_id: null, member_name: "", guest_name: "", bring_category_id: null, bring_note: null, is_bus_passenger: false })
   useEffect(() => {
     if (!modifying) { modSeeded.current = false; return }
     const need = Math.max(0, modifySeats - 1)
     if (!modSeeded.current) {
-      // First open of this Modify session: seed the whole party — names AND
-      // dishes — from the existing booking, so Save re-sends them instead of
-      // blanks. Previously a race seeded from a not-yet-loaded myAttendees and
-      // then refused to re-seed, wiping the party/dishes (Iain 2026-07-18).
+      // First open of this Modify session: seed the whole party — names,
+      // dishes AND bus seats — from the existing booking, so Save re-sends
+      // them instead of blanks. Previously a race seeded from a
+      // not-yet-loaded myAttendees and then refused to re-seed, wiping the
+      // party/dishes (Iain 2026-07-18); the bus seat (2026-08-19) is the
+      // same shape of bug waiting to happen if it isn't seeded here too.
       modSeeded.current = true
       const seed = (myAttendees || []).map(a => (a.member_id
         ? { kind: "resident", member_id: a.member_id, contact_id: null, member_name: a.member?.name || "Resident", guest_name: "" }
         : a.contact_id
         ? { kind: "resident", member_id: null, contact_id: a.contact_id, member_name: a.contact?.name || "Resident", guest_name: "" }
         : { kind: "guest", member_id: null, contact_id: null, member_name: "", guest_name: a.guest_name || "" }))
-        .map((row, i) => ({ ...row, bring_category_id: myAttendees[i]?.bring_category_id || null, bring_note: myAttendees[i]?.bring_note || null }))
+        .map((row, i) => ({ ...row, bring_category_id: myAttendees[i]?.bring_category_id || null, bring_note: myAttendees[i]?.bring_note || null, is_bus_passenger: !!myAttendees[i]?.is_bus_passenger }))
       const copy = seed.slice(0, need)
       while (copy.length < need) copy.push(blankRow())
       setModParty(copy)
+      setModWantsBus(myWantsBus)
     } else {
       // Subsequent seat changes within the session: resize, keep what's there.
       setModParty(prev => {
@@ -1550,8 +1651,10 @@ function BookingSection({ event, onRefresh, onClose }) {
         return copy
       })
     }
-  }, [modifying, modifySeats, myAttendees])
+  }, [modifying, modifySeats, myAttendees, myWantsBus])
   const modNeed = Math.max(0, modifySeats - 1)
+  const modBusCheckedNow = (modWantsBus ? 1 : 0) + modParty.filter(p => p.is_bus_passenger).length
+  const modBusFull = busEnabled && busRemainingBase != null && modBusCheckedNow >= busRemainingBase
   // Also now covers contact_id, matching partyValid above -- modPartyValid
   // was missing it (a pre-existing gap: a contact picked as a party member
   // on Modify was silently never counted as "filled"), found while adding
@@ -1569,7 +1672,7 @@ function BookingSection({ event, onRefresh, onClose }) {
       const res = await authedFetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event_id: event.id, seats, accept_split: acceptSplit, attendees: partyToAttendees(party), bring_category_id: myBring.category_id, bring_note: myBring.note }),
+        body: JSON.stringify({ event_id: event.id, seats, accept_split: acceptSplit, attendees: partyToAttendees(party), bring_category_id: myBring.category_id, bring_note: myBring.note, bus_passenger: myWantsBus }),
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Booking failed", "error"); return }
@@ -1598,7 +1701,7 @@ function BookingSection({ event, onRefresh, onClose }) {
       const res = await authedFetch("/api/bookings", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ event_id: event.id, seats: modifySeats, attendees: partyToAttendees(modParty), bring_category_id: myBring.category_id, bring_note: myBring.note }),
+        body: JSON.stringify({ event_id: event.id, seats: modifySeats, attendees: partyToAttendees(modParty), bring_category_id: myBring.category_id, bring_note: myBring.note, bus_passenger: modWantsBus }),
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Update failed", "error"); return }
@@ -1702,10 +1805,25 @@ function BookingSection({ event, onRefresh, onClose }) {
                 <BringPicker cats={bringCats} categoryId={myBring.category_id} note={myBring.note}
                   onChange={setMyBring} colour="var(--amber)" required={bringRequired} label="What are you bringing?" />
               )}
+              {busEnabled && (
+                <div style={{ marginBottom: 10 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600,
+                    color: (busFull && !myWantsBus) ? "var(--text-dim)" : "var(--text)",
+                    cursor: (busFull && !myWantsBus) ? "not-allowed" : "pointer", opacity: (busFull && !myWantsBus) ? 0.6 : 1 }}>
+                    <input type="checkbox" checked={myWantsBus} disabled={busFull && !myWantsBus}
+                      onChange={e => setMyWantsBus(e.target.checked)} />
+                    🚌 I need a seat on the bus
+                  </label>
+                  {busFull && !myWantsBus && (
+                    <div style={{ fontSize: 11.5, color: "var(--danger)", marginTop: 2 }}>The bus is full.</div>
+                  )}
+                </div>
+              )}
               {!isBookclubEvent && seats > 1 && (
                 <PartyPicker count={seats - 1} allowGuests={allowGuests} members={members}
                   excludeIds={me?.id ? [me.id] : []} value={party} onChange={setParty}
-                  bringCats={bringApplicable ? bringCats : []} taken={taken} required={requireNaming} />
+                  bringCats={bringApplicable ? bringCats : []} taken={taken} required={requireNaming}
+                  bus={{ enabled: busEnabled, full: busFull }} />
               )}
               <button onClick={() => handleBook()} disabled={loading || (seats > 1 && !partyValid) || !bringValid}
                 style={{ width: "100%", padding: "14px 0", background: "var(--amber)", color: "#fff", border: "none",
@@ -1774,6 +1892,19 @@ function BookingSection({ event, onRefresh, onClose }) {
                     </>
                   )
                 })()}
+              </div>
+            )
+          })()}
+          {myConfirmed && busEnabled && (() => {
+            const riders = [
+              ...(myWantsBus ? ["You"] : []),
+              ...myAttendees.filter(a => a.is_bus_passenger).map(a =>
+                a.member_id ? (a.member?.name || "Resident") : a.contact_id ? (a.contact?.name || "Resident") : `${a.guest_name} (guest)`),
+            ]
+            if (!riders.length) return null
+            return (
+              <div style={{ fontSize: 12.5, lineHeight: 1.6, background: "var(--surface2)", borderRadius: 10, padding: "8px 10px" }}>
+                <BusIcon size={12} /> <strong>On the bus:</strong> {riders.join(", ")}
               </div>
             )
           })()}
@@ -1862,10 +1993,25 @@ function BookingSection({ event, onRefresh, onClose }) {
             <BringPicker cats={bringCats} categoryId={myBring.category_id} note={myBring.note}
               onChange={setMyBring} colour="var(--amber)" required={bringRequired} label="What are you bringing?" />
           )}
+          {busEnabled && (
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600,
+                color: (modBusFull && !modWantsBus) ? "var(--text-dim)" : "var(--text)",
+                cursor: (modBusFull && !modWantsBus) ? "not-allowed" : "pointer", opacity: (modBusFull && !modWantsBus) ? 0.6 : 1 }}>
+                <input type="checkbox" checked={modWantsBus} disabled={modBusFull && !modWantsBus}
+                  onChange={e => setModWantsBus(e.target.checked)} />
+                🚌 I need a seat on the bus
+              </label>
+              {modBusFull && !modWantsBus && (
+                <div style={{ fontSize: 11.5, color: "var(--danger)", marginTop: 2 }}>The bus is full.</div>
+              )}
+            </div>
+          )}
           {modifySeats > 1 && (
             <PartyPicker count={modifySeats - 1} allowGuests={allowGuests} members={members}
               excludeIds={me?.id ? [me.id] : []} value={modParty} onChange={setModParty}
-              bringCats={bringApplicable ? bringCats : []} taken={taken} required={requireNaming} />
+              bringCats={bringApplicable ? bringCats : []} taken={taken} required={requireNaming}
+              bus={{ enabled: busEnabled, full: modBusFull }} />
           )}
           <div style={{ display: "flex", gap: 10 }}>
             <button onClick={() => setModifying(false)}

@@ -8,6 +8,7 @@ import { fetchTakenResidentIds } from '@/lib/takenResidents'
 import { syncAttendees } from '@/lib/syncAttendees'
 import { maxSeatsPerBooking, planSeatModification } from '@/lib/modifyBooking'
 import { amountOwing } from '@/lib/payments'
+import { busSeatsUsed, validateBusRequest, requestedBusSeats } from '@/lib/busSeats'
 
 
 async function getMember(token) {
@@ -36,7 +37,7 @@ export async function POST(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('id, max_seats, max_seats_per_booking, hub_type, book_id, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('id, max_seats, max_seats_per_booking, hub_type, book_id, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
 
   // Cap reads the event's own max_seats_per_booking (falls back to 4) --
@@ -136,20 +137,54 @@ export async function POST(req) {
     return NextResponse.json({ error: 'Already booked for this event' }, { status: 409 })
   }
 
+  // Community bus (migration 085, Iain 2026-08-19): independent of the
+  // event's own seat cap, and explicitly NO waitlist -- a bus seat is only
+  // ever granted alongside a booking that's fully confirmable outright. A
+  // resident hitting a split (some/all seats to waitlist) can't meaningfully
+  // reserve a bus seat for a place they're not yet confirmed to have, and
+  // there's no per-attendee confirmed/waitlisted identity in this model to
+  // resolve that ambiguity -- so this is a hard "not right now" rather than
+  // silently dropping what they asked for. The client mirrors this (disables
+  // the bus control once the event itself would split) so a resident should
+  // rarely actually hit this message.
+  const ownerWantsBus = !!event.has_bus && !!body.bus_passenger
+  const busRequested = requestedBusSeats({ ownerWantsBus, attendees: party.attendees })
+  if (busRequested > 0) {
+    if (!event.has_bus) {
+      return NextResponse.json({ error: "This event doesn't have a bus." }, { status: 400 })
+    }
+    if (available < requestedSeats) {
+      return NextResponse.json({
+        error: 'This event is nearly full — bus seats can only be requested alongside a booking that confirms outright. Try again once seats free up, or book without the bus.',
+      }, { status: 409 })
+    }
+    const { data: busBookings } = await supabaseAdmin
+      .from('bookings').select('id, status, bus_passenger').eq('event_id', event_id).eq('status', 'confirmed')
+    const { data: busAttendees } = await supabaseAdmin
+      .from('booking_attendees').select('is_bus_passenger').eq('event_id', event_id)
+    const othersUsed = busSeatsUsed({ bookings: busBookings || [], attendees: busAttendees || [] })
+    const busCheck = validateBusRequest({ requested: busRequested, busMaxSeats: event.bus_max_seats, othersUsed })
+    if (!busCheck.ok) {
+      return NextResponse.json({ error: busCheck.error, bus_full: true }, { status: 409 })
+    }
+  }
+
   const bookedAt = new Date().toISOString()
 
   // All seats confirmed — no dialog needed
   if (available >= requestedSeats) {
     const { error } = await supabaseAdmin.from('bookings').insert({
       event_id, member_id: member.id, seats: requestedSeats, status: 'confirmed', booked_at: bookedAt,
-      payment_status: initialPaymentStatus, ...bringFields,
+      payment_status: initialPaymentStatus, bus_passenger: ownerWantsBus, ...bringFields,
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     await syncAttendees(event_id, { ownerId: member.id }, party.attendees)
     return NextResponse.json({ status: 'confirmed', seats: requestedSeats })
   }
 
-  // Some or all seats must go to waitlist — ask for confirmation first
+  // Some or all seats must go to waitlist — ask for confirmation first.
+  // busRequested is guaranteed 0 here (blocked above), so no bus_passenger
+  // field is needed on either row.
   const willConfirm  = available           // may be 0
   const willWaitlist = requestedSeats - available
 
@@ -299,7 +334,7 @@ export async function PATCH(req) {
   const oldConfirmed = myConfirmed.seats || 1
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('max_seats, max_seats_per_booking, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('max_seats, max_seats_per_booking, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   const { data: confirmedRows } = await supabaseAdmin
     .from('bookings').select('seats')
     .eq('event_id', event_id).eq('status', 'confirmed').neq('id', myConfirmed.id)
@@ -350,12 +385,48 @@ export async function PATCH(req) {
   const newConfirmed  = plan.newConfirmed
   const newWaitlisted = plan.newWaitlisted
 
+  // Community bus (migration 085) -- same "no waitlist, no split" rule as
+  // POST above. Only reachable here when this Modify keeps the booking fully
+  // confirmed (newWaitlisted === 0); othersUsed excludes this booking's own
+  // current bus usage so re-submitting an unchanged request isn't blocked by
+  // itself, mirroring how othersConfirmed already excludes myConfirmed.id
+  // for the ordinary seat cap above.
+  const ownerWantsBus = !!event?.has_bus && !!body.bus_passenger
+  const busRequested = requestedBusSeats({ ownerWantsBus, attendees: party.attendees })
+  if (busRequested > 0) {
+    if (!event?.has_bus) {
+      return NextResponse.json({ error: "This event doesn't have a bus." }, { status: 400 })
+    }
+    if (newWaitlisted > 0) {
+      return NextResponse.json({
+        error: 'This event is nearly full — bus seats can only be held alongside a fully confirmed booking. Try again once seats free up, or drop the bus seats.',
+      }, { status: 409 })
+    }
+    const { data: busBookings } = await supabaseAdmin
+      .from('bookings').select('id, status, bus_passenger').eq('event_id', event_id).eq('status', 'confirmed').neq('id', myConfirmed.id)
+    // Filtered in JS, not via .neq('owner_id', ...) -- a contact-owned
+    // walk-up booking's rows have owner_id NULL (owner_contact_id set
+    // instead, migration 061), and Postgres NULL != x is NULL (excluded by
+    // a SQL neq filter), which would have wrongly dropped every walk-up
+    // party member from the "others" count.
+    const { data: busAttendeeRows } = await supabaseAdmin
+      .from('booking_attendees').select('is_bus_passenger, owner_id').eq('event_id', event_id)
+    const othersUsed = busSeatsUsed({
+      bookings: busBookings || [],
+      attendees: (busAttendeeRows || []).filter(a => a.owner_id !== member.id),
+    })
+    const busCheck = validateBusRequest({ requested: busRequested, busMaxSeats: event.bus_max_seats, othersUsed })
+    if (!busCheck.ok) {
+      return NextResponse.json({ error: busCheck.error, bus_full: true }, { status: 409 })
+    }
+  }
+
   if (myWaitlist) {
     await supabaseAdmin.from('bookings').update({ status: 'cancelled', updated_at: new Date().toISOString() }).eq('id', myWaitlist.id)
   }
 
   const { error: updateErr } = await supabaseAdmin
-    .from('bookings').update({ seats: newConfirmed, updated_at: new Date().toISOString(),
+    .from('bookings').update({ seats: newConfirmed, updated_at: new Date().toISOString(), bus_passenger: ownerWantsBus,
       ...(bringApplicable ? { bring_category_id: body.bring_category_id || null, bring_note: body.bring_note || null } : {}) }).eq('id', myConfirmed.id)
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
 
