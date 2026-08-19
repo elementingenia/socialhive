@@ -661,7 +661,35 @@ function BookPicker({ onSelect, initialBook, colour = "var(--purple)", invalid =
 }
 
 // ── Coordinator Typeahead Picker ─────────────────────────────────────────────
-function CoordPicker({ members, value, onChange, valid = false, colour = "var(--purple)", invalid = false }) {
+// Styled toggle switch — matches Social's Toggle component exactly (app/(app)/social/events/page.js)
+// so a boolean control looks identical across hubs, per this project's UI Standards
+// (no native browser controls / cross-hub consistency). Added 2026-08-19 for Community Bus.
+function Toggle({ value, onChange, label, colour = "var(--purple)" }) {
+  return (
+    <div onClick={() => onChange(!value)} style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "0.75rem 1rem", background: "var(--surface2)",
+      borderRadius: "10px", cursor: "pointer", userSelect: "none",
+      border: "1px solid var(--border)",
+    }}>
+      <span style={{ fontSize: "0.92rem", fontWeight: 600, color: "var(--text)" }}>{label}</span>
+      <div style={{
+        width: 44, height: 24, borderRadius: 12,
+        background: value ? colour : "var(--border)",
+        position: "relative", transition: "background 0.2s", flexShrink: 0,
+      }}>
+        <div style={{
+          position: "absolute", top: 3, left: value ? 23 : 3,
+          width: 18, height: 18, borderRadius: "50%",
+          background: "#fff", transition: "left 0.2s",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+        }} />
+      </div>
+    </div>
+  )
+}
+
+function CoordPicker({ members, value, onChange, valid = false, colour = "var(--purple)", invalid = false, placeholder = "— Select coordinator —" }) {
   const chosen = members.find(m => m.id === value) || null
   const [query,  setQuery]  = useState("")
   const [open,   setOpen]   = useState(false)
@@ -697,7 +725,7 @@ function CoordPicker({ members, value, onChange, valid = false, colour = "var(--
           boxSizing: "border-box", fontFamily: "inherit", cursor: "pointer",
           display: "flex", justifyContent: "space-between", alignItems: "center",
           ...(invalid ? { border: "2px solid #dc2626", background: "rgba(220, 38, 38, 0.10)" } : {}) }}>
-        <span>{chosen ? (chosen.name || chosen.username) : "— Select coordinator —"}</span>
+        <span>{chosen ? (chosen.name || chosen.username) : placeholder}</span>
         <span style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>▾</span>
       </div>
 
@@ -1294,17 +1322,15 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       {form.location_type === "offsite" && (
         <>
           <div style={{ marginBottom: 12 }}>
-            <label style={labelStyle}>
-              <input type="checkbox" checked={form.has_bus}
-                onChange={e => { set("has_bus", e.target.checked); if (!e.target.checked) setBusDriver(null) }}
-                style={{ marginRight: 6 }} />
-              Community bus
-            </label>
+            <Toggle value={form.has_bus} colour={colour}
+              onChange={v => { set("has_bus", v); if (!v) setBusDriver(null) }}
+              label="Community bus" />
           </div>
           {form.has_bus && (
             <div style={{ marginBottom: 12 }}>
               <label style={labelStyle}>Bus Driver (optional)</label>
-              <CoordPicker members={members} value={busDriver} onChange={setBusDriver} valid colour={colour} />
+              <CoordPicker members={members} value={busDriver} onChange={setBusDriver} valid colour={colour}
+                placeholder="Search for bus driver…" />
             </div>
           )}
           {form.has_bus && (
