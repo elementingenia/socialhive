@@ -140,6 +140,40 @@ function StatusPill({ label, colour, bg }) {
   )
 }
 
+// Styled toggle switch (matches Social's/ClubHome's Toggle component exactly)
+// -- used here instead of a raw <input type="checkbox"> for the three
+// Community Bus opt-in controls (initial booking, party row, Modify), which
+// Iain flagged as inconsistent with the rest of the app's UI Standards
+// (no native form controls). Kept local to this file since EventSlideOut's
+// booking panel and party row don't currently receive a hub/club accent
+// colour prop -- threading one through every call site for a single toggle
+// wasn't worth the blast radius, so this defaults to the amber used
+// elsewhere in this same panel (the Book Now / Modify Seats buttons).
+function Toggle({ value, onChange, label, colour = "var(--amber)", disabled = false }) {
+  return (
+    <div onClick={() => !disabled && onChange(!value)} style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "0.65rem 0.85rem", background: "var(--surface2)",
+      borderRadius: 10, cursor: disabled ? "not-allowed" : "pointer", userSelect: "none",
+      border: "1px solid var(--border)", opacity: disabled ? 0.6 : 1,
+    }}>
+      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{label}</span>
+      <div style={{
+        width: 40, height: 22, borderRadius: 11,
+        background: value ? colour : "var(--border)",
+        position: "relative", transition: "background 0.2s", flexShrink: 0,
+      }}>
+        <div style={{
+          position: "absolute", top: 2, left: value ? 20 : 2,
+          width: 18, height: 18, borderRadius: "50%",
+          background: "#fff", transition: "left 0.2s",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+        }} />
+      </div>
+    </div>
+  )
+}
+
 function Toast({ msg, type }) {
   if (!msg) return null
   const bg = type === "error" ? "var(--danger)" : type === "warn" ? "var(--amber-dark)" : "#15803d"
@@ -1381,13 +1415,9 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
           picker above, so the requirement is just "pick someone" once ticked. */}
       {bus?.enabled && (
         <div style={{ marginTop: 8 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13,
-            color: (bus.full && !row.is_bus_passenger) ? "var(--text-dim)" : "var(--text)",
-            cursor: (bus.full && !row.is_bus_passenger) ? "not-allowed" : "pointer", opacity: (bus.full && !row.is_bus_passenger) ? 0.6 : 1 }}>
-            <input type="checkbox" checked={!!row.is_bus_passenger} disabled={bus.full && !row.is_bus_passenger}
-              onChange={e => onChange({ ...row, is_bus_passenger: e.target.checked })} />
-            🚌 Riding the bus
-          </label>
+          <Toggle value={!!row.is_bus_passenger} disabled={bus.full && !row.is_bus_passenger}
+            onChange={v => onChange({ ...row, is_bus_passenger: v })}
+            label="🚌 Riding the bus" />
           {bus.full && !row.is_bus_passenger && (
             <div style={{ fontSize: 11.5, color: "var(--danger)", marginTop: 2 }}>Bus is full</div>
           )}
@@ -1807,13 +1837,9 @@ function BookingSection({ event, onRefresh, onClose }) {
               )}
               {busEnabled && (
                 <div style={{ marginBottom: 10 }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600,
-                    color: (busFull && !myWantsBus) ? "var(--text-dim)" : "var(--text)",
-                    cursor: (busFull && !myWantsBus) ? "not-allowed" : "pointer", opacity: (busFull && !myWantsBus) ? 0.6 : 1 }}>
-                    <input type="checkbox" checked={myWantsBus} disabled={busFull && !myWantsBus}
-                      onChange={e => setMyWantsBus(e.target.checked)} />
-                    🚌 I need a seat on the bus
-                  </label>
+                  <Toggle value={myWantsBus} disabled={busFull && !myWantsBus}
+                    onChange={setMyWantsBus}
+                    label="🚌 I need a seat on the bus" />
                   {busFull && !myWantsBus && (
                     <div style={{ fontSize: 11.5, color: "var(--danger)", marginTop: 2 }}>The bus is full.</div>
                   )}
@@ -1995,13 +2021,9 @@ function BookingSection({ event, onRefresh, onClose }) {
           )}
           {busEnabled && (
             <div style={{ marginBottom: 10 }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600,
-                color: (modBusFull && !modWantsBus) ? "var(--text-dim)" : "var(--text)",
-                cursor: (modBusFull && !modWantsBus) ? "not-allowed" : "pointer", opacity: (modBusFull && !modWantsBus) ? 0.6 : 1 }}>
-                <input type="checkbox" checked={modWantsBus} disabled={modBusFull && !modWantsBus}
-                  onChange={e => setModWantsBus(e.target.checked)} />
-                🚌 I need a seat on the bus
-              </label>
+              <Toggle value={modWantsBus} disabled={modBusFull && !modWantsBus}
+                onChange={setModWantsBus}
+                label="🚌 I need a seat on the bus" />
               {modBusFull && !modWantsBus && (
                 <div style={{ fontSize: 11.5, color: "var(--danger)", marginTop: 2 }}>The bus is full.</div>
               )}
