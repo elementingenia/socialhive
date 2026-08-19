@@ -35,7 +35,7 @@ export async function GET(req) {
   // Fetch active bookings for the event
   const { data: activeBookings, error: be } = await supa
     .from("bookings")
-    .select("id, seats, status, payment_status, amount_paid, refund_due, refund_paid_at, has_book, book_given_at, name_hidden, booked_at, bring_note, member_id, contact_id, members(id, name, display_name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
+    .select("id, seats, status, payment_status, amount_paid, refund_due, refund_paid_at, has_book, book_given_at, name_hidden, booked_at, bring_note, bus_passenger, member_id, contact_id, members(id, name, display_name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
     .eq("event_id", eventId)
     .neq("status", "cancelled")
     .order("booked_at")

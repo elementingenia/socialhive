@@ -83,6 +83,7 @@ const RAW_SECTIONS = [
       { title: "Social hub home",              id: "sub-social-home" },
       { title: "Viewing and booking events",   id: "sub-social-events" },
       { title: "Event detail & booking",       id: "sub-social-detail" },
+      { title: "Riding the Community Bus",     id: "sub-social-bus" },
       { title: "Coordinator panel (EC only)",  id: "sub-social-ec" },
     ],
   },
@@ -93,6 +94,7 @@ const RAW_SECTIONS = [
       { title: "A club's page — welcome, contact & Ask a Question", id: "sub-clubs-page" },
       { title: "Signing up for a meeting or activity",     id: "sub-clubs-signup" },
       { title: "Bringing something",                       id: "sub-clubs-bring" },
+      { title: "Riding the Community Bus",                 id: "sub-clubs-bus" },
       { title: "Book Club — current pick, suggestions & voting", id: "sub-clubs-bookclub" },
       { title: "Coordinator & Owner panel (EC only)",       id: "sub-clubs-ec" },
     ],
@@ -821,6 +823,26 @@ export default function HelpGuidePage() {
               </Step>
             </Subsection>
 
+            <Subsection id="sub-social-bus" title="Riding the Community Bus">
+              <Step>
+                Some offsite events offer a <strong>Community Bus</strong>. If one's running, an{" "}
+                <strong>I need a seat on the bus</strong> checkbox appears on the booking panel — tick
+                it to reserve a bus seat alongside your event booking. Bus seats are counted
+                separately from event seats, so you can book the event without the bus, or book both
+                together.
+              </Step>
+              <Step>
+                If you're booking for more than one person, each named attendee has their own{" "}
+                <strong>Riding the bus</strong> checkbox — the driver needs a name for every seat on
+                the bus, so a bus seat can't be left unnamed.
+              </Step>
+              <InfoBox>
+                💡 The bus has its own seat limit, separate from the event's. Once it's full, the bus
+                checkbox disables and shows <strong>Bus is full</strong> — you can still book the event
+                itself, you just won't have a bus seat. There's no waitlist for the bus.
+              </InfoBox>
+            </Subsection>
+
             <Subsection id="sub-social-ec" title="Coordinator panel" ecOnly>
               <Step>
                 ECs see the full attendee list inside the event detail panel, with each resident's
@@ -837,6 +859,12 @@ export default function HelpGuidePage() {
                 view on every social event — not just the ones they're personally listed as
                 coordinator for.
               </InfoBox>
+              <Step>
+                On a bus-enabled event, a 🚌 marker appears next to every resident's name (and each
+                named attendee) who's riding the bus, plus a running <strong>Bus: X / Y seats
+                taken</strong> count near the top of the panel — so the bus driver always has a full,
+                current passenger list.
+              </Step>
               <Step>
                 On a paid event, tap the <strong>Unpaid / Paid</strong> switch next to a resident's
                 name to record their payment. Rather than just flipping a flag, this opens a small
@@ -920,6 +948,19 @@ export default function HelpGuidePage() {
               </Step>
             </Subsection>
 
+            <Subsection id="sub-clubs-bus" title="Riding the Community Bus">
+              <Step>
+                Offsite club activities can also offer the <strong>Community Bus</strong>, the same way
+                Social does. Tick <strong>I need a seat on the bus</strong> on the booking panel to
+                reserve one — independent of your event booking — and, for a multi-seat booking, tick
+                the box for each named attendee who needs a seat.
+              </Step>
+              <InfoBox>
+                💡 The bus has its own seat limit and no waitlist — once full, the checkbox disables and
+                shows <strong>Bus is full</strong>, but your event booking still goes ahead.
+              </InfoBox>
+            </Subsection>
+
             <Subsection id="sub-clubs-bookclub" title="Book Club — current pick, suggestions & voting">
               <Step>
                 Book Club works the same way as any other club, with a few extras on its page: the{" "}
@@ -949,6 +990,10 @@ export default function HelpGuidePage() {
                 this access — it applies automatically to everything in their club, or their hub if
                 they own Show Time or Social instead.
               </InfoBox>
+              <Step>
+                On a bus-enabled event, a 🚌 marker and running seat count show exactly who's riding —
+                the same passenger-list view Social's Coordinator panel has.
+              </Step>
             </Subsection>
           </Section>
 

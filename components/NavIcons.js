@@ -121,10 +121,19 @@ export function BarIcon({ size = 26 }) {
   )
 }
 
-// Bus — used as an event-level badge for offsite social events, not in nav.
-export function BusIcon({ size = 20 }) {
+// Bus — used as an event-level badge for offsite social events, not in nav,
+// AND inline within small attendee-row text (e.g. Social's coordinator
+// attendee list), which needs to shrink it below the `size` prop's default
+// via an inline style override. Root cause (Iain, 2026-08-19): every other
+// icon in this file is only ever used at a fixed nav/badge size via `size`,
+// so none of them accept `style` -- but app/(app)/social/events/page.js and
+// components/EventSlideOut.js both call BusIcon with a `style={{width, ...}}`
+// override, which was silently dropped (no `style` prop existed to forward),
+// so the icon always rendered at the SVG's own width/height=20 attribute
+// regardless of the caller's intent -- oversized next to 0.7-0.8rem row text.
+export function BusIcon({ size = 20, style }) {
   return (
-    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true" style={style}>
       <path fillRule="evenodd" fill="currentColor"
         d="M 2 17 Q 2 11 8 11 L 62 11 Q 68 11 68 17 L 68 53 L 2 53 Z
            M 14 44 A 9 9 0 1 0 14 62 A 9 9 0 1 0 14 44 Z

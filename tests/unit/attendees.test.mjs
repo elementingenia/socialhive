@@ -121,6 +121,21 @@ ok(resolveBringCategoryIds({ allowedCategoryIds: ['stale1','stale2'], currentCat
 }
 ok(validateBring({ required: true, bringCategoryId: 'a', allowedCategoryIds: resolveBringCategoryIds({ allowedCategoryIds: ['a'], currentCategoryIds: [] }) }).ok === true, 'club has zero current categories => resolves to something validateBring treats as unrestricted, never a hard block')
 
+// Community bus (2026-08-19) -- a row flagged is_bus_passenger must always be
+// named, regardless of the event's require_attendee_names setting.
+ok(validateParty({ seats: 2, attendees: [{ member_id: 'm1', is_bus_passenger: true }], allowGuests: false, ownerId: OWNER }).ok === true, 'named bus passenger => ok')
+const busUnnamedOptional = validateParty({ seats: 3, attendees: [{ kind: 'resident', member_id: null, contact_id: null, guest_name: '', is_bus_passenger: true }], allowGuests: false, ownerId: OWNER, required: false })
+ok(busUnnamedOptional.ok === false && /bus/.test(busUnnamedOptional.error), 'not required, blank row flagged bus => rejected, not silently dropped')
+const busUnnamedRequired = validateParty({ seats: 2, attendees: [{ member_id: null, contact_id: null, guest_name: '', is_bus_passenger: true }], allowGuests: false, ownerId: OWNER })
+ok(busUnnamedRequired.ok === false && /bus/.test(busUnnamedRequired.error), 'required, blank row flagged bus => rejected with bus-specific message')
+const busNormalised = validateParty({ seats: 2, attendees: [{ member_id: 'm1', is_bus_passenger: true }], allowGuests: false, ownerId: OWNER })
+ok(busNormalised.ok === true && busNormalised.attendees[0].is_bus_passenger === true, 'is_bus_passenger survives normalisation')
+const busDefaultFalse = validateParty({ seats: 2, attendees: [{ member_id: 'm1' }], allowGuests: false, ownerId: OWNER })
+ok(busDefaultFalse.ok === true && busDefaultFalse.attendees[0].is_bus_passenger === false, 'attendee not flagged for bus => normalises to false')
+// a non-bus blank row still behaves as before (dropped when optional)
+const nonBusBlankStillDropped = validateParty({ seats: 3, attendees: [{ member_id: 'm1' }, { member_id: null, contact_id: null, guest_name: '' }], allowGuests: false, ownerId: OWNER, required: false })
+ok(nonBusBlankStillDropped.ok === true && nonBusBlankStillDropped.attendees.length === 1, 'not required, blank non-bus row => still dropped, unaffected by bus check')
+
 // validateBringRequirement -- event-level guard (2026-08-07): an event can't
 // be saved as Required with zero categories chosen. Catches the stale-state
 // bug where a category was picked, Required turned on, then the category

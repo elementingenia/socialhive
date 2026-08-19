@@ -661,7 +661,35 @@ function BookPicker({ onSelect, initialBook, colour = "var(--purple)", invalid =
 }
 
 // ── Coordinator Typeahead Picker ─────────────────────────────────────────────
-function CoordPicker({ members, value, onChange, valid = false, colour = "var(--purple)", invalid = false }) {
+// Styled toggle switch — matches Social's Toggle component exactly (app/(app)/social/events/page.js)
+// so a boolean control looks identical across hubs, per this project's UI Standards
+// (no native browser controls / cross-hub consistency). Added 2026-08-19 for Community Bus.
+function Toggle({ value, onChange, label, colour = "var(--purple)" }) {
+  return (
+    <div onClick={() => onChange(!value)} style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between",
+      padding: "0.75rem 1rem", background: "var(--surface2)",
+      borderRadius: "10px", cursor: "pointer", userSelect: "none",
+      border: "1px solid var(--border)",
+    }}>
+      <span style={{ fontSize: "0.92rem", fontWeight: 600, color: "var(--text)" }}>{label}</span>
+      <div style={{
+        width: 44, height: 24, borderRadius: 12,
+        background: value ? colour : "var(--border)",
+        position: "relative", transition: "background 0.2s", flexShrink: 0,
+      }}>
+        <div style={{
+          position: "absolute", top: 3, left: value ? 23 : 3,
+          width: 18, height: 18, borderRadius: "50%",
+          background: "#fff", transition: "left 0.2s",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+        }} />
+      </div>
+    </div>
+  )
+}
+
+function CoordPicker({ members, value, onChange, valid = false, colour = "var(--purple)", invalid = false, placeholder = "— Select coordinator —" }) {
   const chosen = members.find(m => m.id === value) || null
   const [query,  setQuery]  = useState("")
   const [open,   setOpen]   = useState(false)
@@ -697,7 +725,7 @@ function CoordPicker({ members, value, onChange, valid = false, colour = "var(--
           boxSizing: "border-box", fontFamily: "inherit", cursor: "pointer",
           display: "flex", justifyContent: "space-between", alignItems: "center",
           ...(invalid ? { border: "2px solid #dc2626", background: "rgba(220, 38, 38, 0.10)" } : {}) }}>
-        <span>{chosen ? (chosen.name || chosen.username) : "— Select coordinator —"}</span>
+        <span>{chosen ? (chosen.name || chosen.username) : placeholder}</span>
         <span style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>▾</span>
       </div>
 
@@ -858,6 +886,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     location_type: event?.location_type || "onsite",
     location:     event?.location || "",
     location_id:  event?.location_id || null,
+    has_bus:      event?.has_bus || false,
+    bus_max_seats: event?.bus_max_seats ?? "",
     max_seats_per_booking: event?.max_seats_per_booking ?? 2,
     allow_nonresident_guests: event ? !!event.allow_nonresident_guests : true, // new events default to "Anyone" (2026-07-25)
     require_attendee_names: !!event?.require_attendee_names,
@@ -914,6 +944,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   }, [recurMode, recur.enabled, recur.rule_type, JSON.stringify(recur.rule_config), recur.month_end_policy])
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+  const [busDriver, setBusDriver] = useState(event?.bus_driver_id || null)
 
   const [saveError, setSaveError] = useState(null)
   // Mandatory-field tracking (Iain, 2026-08-04) -- this form's Save button
@@ -1057,6 +1088,9 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       location_type:   form.location_type || "onsite",
       location:        form.location || null,
       location_id:     form.location_id || null,
+      has_bus:         form.location_type === "offsite" ? !!form.has_bus : false,
+      bus_driver_id:   form.location_type === "offsite" && form.has_bus ? (busDriver || null) : null,
+      bus_max_seats:   form.location_type === "offsite" && form.has_bus && form.bus_max_seats !== "" ? Number(form.bus_max_seats) : null,
       max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
       allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
       require_attendee_names: Number(form.max_seats_per_booking) > 1 ? !!form.require_attendee_names : false,
@@ -1283,6 +1317,31 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             style={{ ...inputStyle, resize: "vertical", ...(invalidFields.includes("location") ? INVALID_FIELD_STYLE : {}) }} />
         )}
       </div>
+
+      {/* Bus — only relevant for offsite events (mirrors Social's toggle, Iain 2026-08-19) */}
+      {form.location_type === "offsite" && (
+        <>
+          <div style={{ marginBottom: 12 }}>
+            <Toggle value={form.has_bus} colour={colour}
+              onChange={v => { set("has_bus", v); if (!v) setBusDriver(null) }}
+              label="Community bus" />
+          </div>
+          {form.has_bus && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Bus Driver (optional)</label>
+              <CoordPicker members={members} value={busDriver} onChange={setBusDriver} valid colour={colour}
+                placeholder="Search for bus driver…" />
+            </div>
+          )}
+          {form.has_bus && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={labelStyle}>Bus max seats <span style={{ color: "var(--text-dim)", fontWeight: 400 }}>(optional — blank = uncapped)</span></label>
+              <input type="number" min="0" value={form.bus_max_seats}
+                onChange={e => set("bus_max_seats", e.target.value)} style={inputStyle} placeholder="Uncapped" />
+            </div>
+          )}
+        </>
+      )}
 
       {needsSpaceValidation({ location_type: form.location_type, bookable: selectedLocation?.bookable }) && (
         <div ref={el => (fieldRefs.current.event_end_time = el)} style={{ marginBottom: 12 }}>
@@ -1701,6 +1760,7 @@ export default function ClubHome({ club }) {
   const [events,      setEvents]      = useState([])  // all non-archived BC events ordered by date asc
   const [myBookings,  setMyBookings]  = useState({})  // eventId → booking
   const [seatCounts,  setSeatCounts]  = useState({})  // eventId → {confirmed, waitlist} seats
+  const [busSeatCounts, setBusSeatCounts] = useState({})  // eventId → confirmed bus seats used (all members, incl. me)
   const [myBookedIds, setMyBookedIds] = useState(new Set())  // past event ids user participated in
   const [members,     setMembers]     = useState([])
   const [loading,     setLoading]     = useState(true)
@@ -1728,6 +1788,7 @@ export default function ClubHome({ club }) {
       max_seats: ev.max_seats ?? 0,
       bookings_count: (seatCounts[ev.id]?.confirmed) || 0,
       waitlist_count: (seatCounts[ev.id]?.waitlist) || 0,
+      bus_seats_used: busSeatCounts[ev.id] || 0,
       my_bookings: (myBooking && myBooking.status !== "cancelled")
         ? [{ status: myBooking.status, seats: myBooking.seats || 1, payment_status: myBooking.payment_status ?? null, has_book: !!myBooking.has_book }]
         : [],
@@ -1779,7 +1840,7 @@ export default function ClubHome({ club }) {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver:members!bus_driver_id(name, username), image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("club_id", club.id)
       .eq("archived", false)
       .order("event_date", { ascending: true })
@@ -1811,7 +1872,7 @@ export default function ClubHome({ club }) {
     if (evs?.length) {
       const allIds = evs.map(e => e.id)
       const { data: allBk } = await supabase
-        .from("bookings").select("event_id, status, seats")
+        .from("bookings").select("event_id, status, seats, bus_passenger")
         .in("event_id", allIds).neq("status", "cancelled")
       const counts = {}
       for (const b of allBk || []) {
@@ -1820,6 +1881,39 @@ export default function ClubHome({ club }) {
         else if (b.status === "waitlist") c.waitlist += (b.seats || 1)
       }
       setSeatCounts(counts)
+
+      // Bus seats used per event — pre-aggregated here since ClubHome (unlike
+      // Social) never builds full bookings/booking_attendees arrays per event
+      // (Iain, 2026-08-19). Confirmed owner bus seats + confirmed attendees'
+      // bus seats. EventSlideOut's BookingSection falls back to this number
+      // (event.bus_seats_used) when event.bookings/booking_attendees aren't
+      // arrays, then subtracts the current member's own snapshot usage from it.
+      const busCounts = {}
+      for (const b of allBk || []) {
+        if (b.status === "confirmed" && b.bus_passenger) busCounts[b.event_id] = (busCounts[b.event_id] || 0) + 1
+      }
+      const busEventIds = (evs || []).filter(e => e.has_bus).map(e => e.id)
+      if (busEventIds.length) {
+        // booking_attendees is keyed by (event_id, owner_id), not a specific
+        // bookings row (a member's booking can split/promote between confirmed
+        // and waitlist) -- so "is this party confirmed" has to be resolved by
+        // cross-referencing against confirmed bookings.member_id, same as
+        // lib/busSeats.js's callers are expected to do.
+        const { data: confBk } = await supabase
+          .from("bookings").select("event_id, member_id")
+          .in("event_id", busEventIds).eq("status", "confirmed")
+        const confirmedOwners = new Set((confBk || []).map(b => `${b.event_id}:${b.member_id}`))
+        const { data: allAtt } = await supabase
+          .from("booking_attendees")
+          .select("event_id, owner_id, is_bus_passenger")
+          .in("event_id", busEventIds)
+        for (const a of allAtt || []) {
+          if (a.is_bus_passenger && confirmedOwners.has(`${a.event_id}:${a.owner_id}`)) {
+            busCounts[a.event_id] = (busCounts[a.event_id] || 0) + 1
+          }
+        }
+      }
+      setBusSeatCounts(busCounts)
     }
 
     // My bookings for all BC events
