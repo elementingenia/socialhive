@@ -209,6 +209,7 @@ export default function NotificationsDrawer() {
                 return (
                   <div
                     key={n.id}
+                    data-testid={`notif-row-${n.id}`}
                     onClick={target ? () => openMatter(n) : undefined}
                     style={{
                       display: "flex", gap: "0.75rem", padding: "0.85rem 1rem",

@@ -148,12 +148,18 @@ async function getTestbotMovieBooking() {
   return { ...first.events, seats: first.seats }
 }
 
-// Creates a fresh unread notification for testbot and returns its distinctive
-// message text, so the E2E notifications spec can assert on exactly this row
-// regardless of whatever else is in the table. Self-contained per run —
-// doesn't rely on a persistent fixture row staying unread across CI runs
-// (opening the drawer marks things read, which would make a static fixture
-// a one-shot test).
+// Creates a fresh unread notification for testbot and returns its id + a
+// distinctive message text, so the E2E notifications spec can assert on
+// exactly this row regardless of whatever else is in the table. The id is
+// what actually makes the scoping robust (see notifications.spec.js's
+// data-testid usage) -- message-text-based locators (hasText) still match
+// every ancestor div that merely CONTAINS the row, not just the row itself,
+// which silently widens to a multi-match once the row's own "Mark as done"
+// button disappears after ticking (2026-08-19, caught by a real CI run:
+// "strict mode violation... resolved to 2 elements" once ticking removed
+// the one distinguishing feature the old filter relied on). Self-contained
+// per run -- doesn't rely on a persistent fixture row staying unread across
+// CI runs.
 async function createTestbotNotification() {
   const members = await supaGet(`members?username=ilike.testbot&select=id`, SUPABASE_SERVICE_KEY)
   if (!members[0]) throw new Error('testbot member not found')
@@ -170,7 +176,8 @@ async function createTestbotNotification() {
     body: JSON.stringify({ member_id: members[0].id, type: 'event_updated', message }),
   })
   if (!res.ok) throw new Error(`Failed to create test notification (${res.status}): ${await res.text()}`)
-  return message
+  const [row] = await res.json()
+  return { id: row.id, message }
 }
 
 module.exports = {

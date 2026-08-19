@@ -237,7 +237,7 @@ test.describe('Waitlist confirmation', () => {
     // Open slideout for the confirmed-bookable screening (whole card is
     // clickable, not just its "Tap to book" text — a full-but-open screening
     // shows "Tap to join the waitlist" instead, same click target either way)
-    await page.locator('div', { hasText: screening.title }).first().click()
+    await page.getByText(screening.title, { exact: false }).first().click()
     await page.waitForLoadState('networkidle')
 
     // Click Book Now / Join Waitlist button
@@ -282,7 +282,7 @@ test.describe('Waitlist confirmation', () => {
       }
     })
 
-    await page.locator('div', { hasText: screening.title }).first().click()
+    await page.getByText(screening.title, { exact: false }).first().click()
     await page.waitForLoadState('networkidle')
 
     const bookBtn = page.getByRole('button', { name: /book now|join waitlist/i }).first()
