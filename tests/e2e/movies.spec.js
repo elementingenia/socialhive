@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test')
-const { getNextScreening, getTestbotMovieBooking, fmtDate, fmtDateLong, fmtTime24 } = require('./helpers')
+const { getNextScreening, getBookableScreening, getTestbotMovieBooking, fmtDate, fmtDateLong, fmtTime24 } = require('./helpers')
 
 // ── Movies Home ───────────────────────────────────────────────────────────────
 test.describe('Movies Home', () => {
@@ -208,7 +208,15 @@ test.describe('Info > Contacts', () => {
 // no longer exists anywhere in the codebase.
 test.describe('Waitlist confirmation', () => {
   test('shows split-offer dialog when server reports no seats, dismiss works', async ({ page }) => {
-    await page.goto('/movies')
+    // Navigate to the full Scheduled list and open a screening whose booking
+    // window is confirmed still open (see getBookableScreening's comment in
+    // helpers.js) rather than trusting Movies Home's "next" tile, which picks
+    // by date alone and can legitimately point at a screening that's since
+    // hit its own reservation_cutoff.
+    const screening = await getBookableScreening()
+    test.skip(!screening, 'No movie screening currently has an open booking window — content gap, not a test bug.')
+
+    await page.goto('/screenings')
     await page.waitForLoadState('networkidle')
 
     await page.route('/api/bookings', async (route) => {
@@ -226,8 +234,10 @@ test.describe('Waitlist confirmation', () => {
       }
     })
 
-    // Open slideout for next screening
-    await page.locator('text=Tap to book').first().click()
+    // Open slideout for the confirmed-bookable screening (whole card is
+    // clickable, not just its "Tap to book" text — a full-but-open screening
+    // shows "Tap to join the waitlist" instead, same click target either way)
+    await page.locator('div', { hasText: screening.title }).first().click()
     await page.waitForLoadState('networkidle')
 
     // Click Book Now / Join Waitlist button
@@ -251,7 +261,10 @@ test.describe('Waitlist confirmation', () => {
   })
 
   test('confirms waitlist placement when user accepts', async ({ page }) => {
-    await page.goto('/movies')
+    const screening = await getBookableScreening()
+    test.skip(!screening, 'No movie screening currently has an open booking window — content gap, not a test bug.')
+
+    await page.goto('/screenings')
     await page.waitForLoadState('networkidle')
 
     await page.route('/api/bookings', async (route) => {
@@ -269,7 +282,7 @@ test.describe('Waitlist confirmation', () => {
       }
     })
 
-    await page.locator('text=Tap to book').first().click()
+    await page.locator('div', { hasText: screening.title }).first().click()
     await page.waitForLoadState('networkidle')
 
     const bookBtn = page.getByRole('button', { name: /book now|join waitlist/i }).first()

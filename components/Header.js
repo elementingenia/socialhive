@@ -140,7 +140,7 @@ export default function Header() {
     <button onClick={openNotif} aria-label="Notifications" style={{ position: "relative", width: 30, height: 30, borderRadius: "50%", border: `1.5px solid ${notifCount > 0 ? "#e53e3e" : "var(--border)"}`, display: "flex", alignItems: "center", justifyContent: "center", color: notifCount > 0 ? "#e53e3e" : "var(--text-dim)", background: "none", cursor: "pointer", flexShrink: 0 }}>
       <BellIcon size={16} />
       {notifCount > 0 && (
-        <span style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: "50%", background: "#e53e3e", color: "#fff", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
+        <span data-testid="notif-badge" style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16, borderRadius: "50%", background: "#e53e3e", color: "#fff", fontSize: "0.6rem", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", lineHeight: 1 }}>
           {notifCount > 9 ? "9+" : notifCount}
         </span>
       )}

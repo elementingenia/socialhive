@@ -73,6 +73,31 @@ async function getNextScreening() {
   return rows[0] || null
 }
 
+// Root cause (2026-08-19): getNextScreening() above -- and the app's own
+// Movies Home "Next Screening" tile it mirrors -- picks the chronologically
+// soonest non-past movie event with no regard for whether its own
+// reservation_cutoff has already passed. That's correct for the tile (it's
+// showing what's actually next, closed or not), but it makes any E2E test
+// that assumes "the next screening is bookable" fragile against real content
+// drift: a real screening can sell out and hit its cutoff (this happened for
+// real -- The Guernsey Literary & Potato Peel Pie Society, cutoff 2026-08-16,
+// broke the two waitlist-confirmation tests below the moment today passed
+// that date, CI stayed red on `main` itself, unrelated to any code change).
+// This helper instead finds the soonest upcoming event whose booking window
+// is still genuinely open (cutoff null or still in the future) -- real seat
+// availability doesn't matter for these two tests, since the button shows
+// "Book Now" or "Join Waitlist" either way and both match the tests'
+// existing /book now|join waitlist/i regex; only a passed cutoff removes
+// the button entirely (EventSlideOut's "Bookings Closed" state).
+async function getBookableScreening() {
+  const nowIso = new Date().toISOString()
+  const rows = await supaGet(
+    `events?select=id,title,event_date,event_time,reservation_cutoff&hub_type=eq.movie&archived=eq.false&event_date=gte.${todayStr()}&or=(reservation_cutoff.is.null,reservation_cutoff.gte.${nowIso})&order=event_date.asc,event_time.asc&limit=1`,
+    SUPABASE_ANON_KEY
+  )
+  return rows[0] || null
+}
+
 async function getUpcomingBookclubEvent() {
   // Book Club migrated to the shared Clubs engine (/clubs/book-club, Decision #1):
   // its events are now hub_type=club scoped by club_id, NOT the legacy
@@ -150,6 +175,7 @@ async function createTestbotNotification() {
 
 module.exports = {
   getNextScreening,
+  getBookableScreening,
   getUpcomingBookclubEvent,
   getActiveClubs,
   getTestbotMovieBooking,
