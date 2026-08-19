@@ -8,7 +8,7 @@ import { authedFetch } from "@/lib/getAuthToken"
 import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import ExpandableText from "@/components/ExpandableText"
-import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge, balancePhrase, remainingBalance, wholeDollar } from "@/lib/payments"
+import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge, balancePhrase, remainingBalance, wholeDollar, paymentSummary, reconciliationIsStale } from "@/lib/payments"
 import { byOwnThenName, ordinal } from "@/lib/sortNames"
 import { resolveMemberName } from "@/lib/memberName"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
@@ -337,6 +337,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   const [saving,        setSaving]        = useState(false)
   const [cancelTarget,  setCancelTarget]  = useState(null)
   const [cancelling,    setCancelling]    = useState(false)
+  const [closingOut,    setClosingOut]    = useState(false)
   // Inline Paid/Unpaid/Partial recording (2026-08-20) -- this panel's
   // payment badge was made read-only on 2026-07-12 on the assumption every
   // paid event has Social's own inline "Scheduled tile" accordion as the
@@ -386,6 +387,30 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   function showToast(msg, type = "success") {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3000)
+  }
+
+  // Reconciliation "Close Out" (2026-08-19 -- ported from Social's own
+  // inline card, see app/(app)/social/events/page.js, so any hub/club
+  // using this shared panel gets the same reconciliation behaviour rather
+  // than a third copy of the same logic). Re-runnable, never a lock --
+  // stamps payments_reconciled_at/_by and reminds whoever is still unpaid
+  // right now.
+  async function handleCloseOutPayments() {
+    if (closingOut) return
+    setClosingOut(true)
+    try {
+      const res = await authedFetch("/api/coordinator", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: event.id, action: "close_out_payments" }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { showToast(d.error || "Could not close out", "error"); return }
+      showToast(d.reminded > 0 ? `Reminded ${d.reminded} unpaid attendee${d.reminded !== 1 ? "s" : ""}` : "Reviewed — nothing unpaid")
+      load()
+    } finally {
+      setClosingOut(false)
+    }
   }
 
   async function load() {
@@ -844,6 +869,55 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           )}
         </div>
       )}
+
+      {/* Reconciliation Summary + Close Out (2026-08-19 -- ported from
+          Social's own inline card, see app/(app)/social/events/page.js, so
+          this shared panel gives every hub/club the same reconciliation
+          behaviour rather than a third duplicate copy of it). */}
+      {paymentRequired && eventCost && (() => {
+        const summary = paymentSummary(confirmed, { payment_required: paymentRequired, cost: data?.cost }, refundPending)
+        if (!summary) return null
+        const isStale = data?.payments_reconciled_at && reconciliationIsStale({ payments_reconciled_at: data.payments_reconciled_at }, bookings)
+        return (
+          <div style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 12px", marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 6, marginBottom: data?.payments_reconciled_at || summary.unpaidCount > 0 || summary.refundsDueCount > 0 ? 8 : 0 }}>
+              <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Expected <strong style={{ color: "var(--text)" }}>${summary.expectedTotal.toFixed(2)}</strong></span>
+              <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Collected <strong style={{ color: "var(--green)" }}>${summary.collectedTotal.toFixed(2)}</strong></span>
+              <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Outstanding <strong style={{ color: summary.outstandingTotal > 0 ? "var(--amber-dark)" : "var(--text)" }}>${summary.outstandingTotal.toFixed(2)}</strong></span>
+              {summary.refundsDueCount > 0 && (
+                <span style={{ fontSize: 12, color: "var(--text-dim)" }}>Refunds due <strong style={{ color: "#92400e" }}>${summary.refundsDueTotal.toFixed(2)}</strong></span>
+              )}
+            </div>
+            {data?.payments_reconciled_at && (
+              <div style={{ fontSize: 11, color: isStale ? "var(--amber-dark)" : "var(--text-dim)", marginBottom: summary.unpaidCount > 0 ? 8 : 0 }}>
+                Last reviewed {new Date(data.payments_reconciled_at).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+                {data.reconciled_by_member && ` by ${data.reconciled_by_member.name || data.reconciled_by_member.username}`}
+                {isStale && <strong> — new activity since, worth another look</strong>}
+              </div>
+            )}
+            {summary.submittedCount > 0 && (
+              <div style={{ fontSize: 11, color: "#0f766e", marginBottom: 8 }}>
+                🧾 {summary.submittedCount} of these marked payment submitted — check and confirm below
+              </div>
+            )}
+            {summary.partialCount > 0 && (
+              <div style={{ fontSize: 11, color: "#075985", marginBottom: 8 }}>
+                {summary.partialCount} partial payment{summary.partialCount !== 1 ? "s" : ""} (${summary.partialTotal.toFixed(2)} received so far) — still short of the full amount
+              </div>
+            )}
+            {summary.unpaidCount > 0 && (
+              <button
+                disabled={closingOut}
+                onClick={handleCloseOutPayments}
+                style={{
+                  width: "100%", padding: "8px", borderRadius: 8, border: "1px solid var(--amber)",
+                  background: "var(--amber)15", color: "var(--amber-dark)", fontSize: 12, fontWeight: 700,
+                  cursor: closingOut ? "default" : "pointer", fontFamily: "inherit", opacity: closingOut ? 0.6 : 1,
+                }}>{closingOut ? "Closing out…" : `Close Out — remind ${summary.unpaidCount} unpaid`}</button>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Attendee list */}
       {(() => {
