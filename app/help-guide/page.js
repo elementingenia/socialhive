@@ -776,7 +776,8 @@ export default function HelpGuidePage() {
                 <strong>Unpaid / Paid / Partial</strong> badge — tap it to record what's been received,
                 same as Groups & Clubs (see <strong>§5 Coordinator & Owner panel</strong>). A{" "}
                 <strong>🧾 Submitted</strong> tag shows if the resident has already flagged themselves
-                as paid.
+                as paid, and the same Expected/Collected/Outstanding reconciliation summary, Close
+                Out, and Refunds Due/Issued tracking are all here too.
               </Step>
               <Step>
                 Waitlisted residents are listed in queue order (not A-Z), each with their position —{" "}
@@ -895,6 +896,15 @@ export default function HelpGuidePage() {
                 fixing a mistake.
               </Step>
               <Step>
+                Above the attendee list, a <strong>reconciliation summary</strong> tracks{" "}
+                <strong>Expected</strong>, <strong>Collected</strong>, and <strong>Outstanding</strong>{" "}
+                totals for the whole event, and calls out anything worth a second look — Submitted
+                payments awaiting confirmation, or partial payments still short. Tap{" "}
+                <strong>Close Out</strong> once you've reviewed everything — it reminds every unpaid
+                attendee and stamps a <strong>Last reviewed</strong> date, with an amber flag if
+                anything's changed since the last time.
+              </Step>
+              <Step>
                 A cancelled booking that had already been paid (in full or partially) automatically
                 appears under <strong>⚠️ Refunds Due</strong> for the amount that was actually
                 received. Once the money has genuinely been handed back to the resident, tap{" "}
@@ -994,6 +1004,25 @@ export default function HelpGuidePage() {
                 it's never invisible while you're still confirming it. Tap an already-recorded payment
                 to adjust it, or use <strong>Reset to unpaid</strong> (with a confirm step) if it was
                 entered in error.
+              </Step>
+              <Step>
+                Above the attendee list, a <strong>reconciliation summary</strong> keeps a running
+                total for the whole event — <strong>Expected</strong> (what everyone owes),{" "}
+                <strong>Collected</strong> (what's actually been recorded), and{" "}
+                <strong>Outstanding</strong> (the gap). It calls out anything that still needs a
+                look — payments marked Submitted awaiting your confirmation, and partial payments
+                still short of the full amount. Tap <strong>Close Out</strong> once you've checked
+                everything for the period — it sends a payment reminder to everyone still unpaid and
+                stamps a <strong>Last reviewed</strong> date so you (or the next coordinator) can see
+                at a glance whether anything's changed since — an amber note appears if a booking has
+                moved since the last close-out.
+              </Step>
+              <Step>
+                A cancelled booking that had already been paid automatically appears under{" "}
+                <strong>⚠️ Refunds Due</strong> for the amount received. Once the money's genuinely
+                been handed back, tap <strong>Mark Refunded</strong> — it moves to{" "}
+                <strong>✓ Refunds Issued</strong> below, so there's always a clear record of what's
+                still owed versus what's already settled.
               </Step>
               <Step>
                 A waitlist-only attendee is listed in queue order with their position —{" "}
