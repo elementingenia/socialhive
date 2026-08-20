@@ -1,6 +1,7 @@
 "use client"
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
+import { authedFetch } from "@/lib/getAuthToken"
 
 // Location Image uploader + focal-point picker -- Admin > Locations.
 // Social_Hive_Location_First_Booking_Scope_v2.md item 6 (Iain, 2026-08-17).
@@ -11,7 +12,7 @@ import { supabase } from "@/lib/supabase"
 // so this doesn't need its own PATCH route the way the event picker does
 // (which goes through /api/coordinator because an event's update path is
 // EC-gated, not admin-only).
-export default function LocationImagePicker({ locationId, imageUrl, focalX, focalY, colour, getToken, onUpdated }) {
+export default function LocationImagePicker({ locationId, imageUrl, focalX, focalY, colour, onUpdated }) {
   const [uploading, setUploading] = useState(false)
   const [localImageUrl, setLocalImageUrl] = useState(imageUrl || null)
   const [localFocalX, setLocalFocalX] = useState(focalX ?? 50)
@@ -47,11 +48,10 @@ export default function LocationImagePicker({ locationId, imageUrl, focalX, foca
 
   async function uploadImage(file) {
     setUploading(true)
-    const token = await getToken()
     const fd = new FormData()
     fd.append("location_id", locationId)
     fd.append("file", file)
-    const res = await fetch("/api/locations/image", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd })
+    const res = await authedFetch("/api/locations/image", { method: "POST", body: fd })
     const d = await res.json()
     setUploading(false)
     if (res.ok) { setLocalImageUrl(d.image_url); onUpdated?.() }
@@ -59,10 +59,9 @@ export default function LocationImagePicker({ locationId, imageUrl, focalX, foca
 
   async function removeImage() {
     setUploading(true)
-    const token = await getToken()
-    const res = await fetch("/api/locations/image", {
+    const res = await authedFetch("/api/locations/image", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ location_id: locationId }),
     })
     setUploading(false)

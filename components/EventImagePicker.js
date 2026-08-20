@@ -1,11 +1,12 @@
 "use client"
 import { useState } from "react"
+import { authedFetch } from "@/lib/getAuthToken"
 
 // Shared "Event Image" uploader + focal-point picker.
 // Lives in the event create/edit form (not the booking modal) — image upload
 // requires an existing event_id, so pass null/undefined until the event has
 // been created at least once.
-export default function EventImagePicker({ eventId, imageUrl, focalX, focalY, colour, getToken, onUpdated }) {
+export default function EventImagePicker({ eventId, imageUrl, focalX, focalY, colour, onUpdated }) {
   const [uploading,     setUploading]     = useState(false)
   const [localImageUrl, setLocalImageUrl] = useState(imageUrl || null)
   const [localFocalX,   setLocalFocalX]   = useState(focalX ?? 50)
@@ -20,10 +21,9 @@ export default function EventImagePicker({ eventId, imageUrl, focalX, focalY, co
   }
 
   async function saveFocal(x, y) {
-    const token = await getToken()
-    await fetch("/api/coordinator", {
+    await authedFetch("/api/coordinator", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event_id: eventId, action: "update_event", image_focal_x: x, image_focal_y: y }),
     })
     onUpdated?.()
@@ -46,13 +46,11 @@ export default function EventImagePicker({ eventId, imageUrl, focalX, focalY, co
 
   async function uploadImage(file) {
     setUploading(true)
-    const token = await getToken()
     const fd = new FormData()
     fd.append("event_id", eventId)
     fd.append("file", file)
-    const res = await fetch("/api/events/image", {
+    const res = await authedFetch("/api/events/image", {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
       body: fd,
     })
     const d = await res.json()
@@ -65,10 +63,9 @@ export default function EventImagePicker({ eventId, imageUrl, focalX, focalY, co
 
   async function removeImage() {
     setUploading(true)
-    const token = await getToken()
-    const res = await fetch("/api/events/image", {
+    const res = await authedFetch("/api/events/image", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ event_id: eventId }),
     })
     setUploading(false)

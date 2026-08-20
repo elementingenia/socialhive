@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "@/lib/supabase"
+import { authedFetch } from "@/lib/getAuthToken"
 import { useUI } from "@/lib/UIContext"
 
 const TOP_OFFSET = 72 // matches ProfileSlideOver
@@ -115,12 +115,7 @@ export default function NotificationsDrawer() {
   // tick, or clicking through to its matter via openMatter() below.
   const load = useCallback(async () => {
     setLoading(true)
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) { setLoading(false); return }
-
-    const res = await fetch('/api/notifications', {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    })
+    const res = await authedFetch('/api/notifications')
     if (res.ok) {
       const items = await res.json()
       setNotifs(items || [])
@@ -135,11 +130,9 @@ export default function NotificationsDrawer() {
   const markOne = useCallback(async (id) => {
     setNotifs(prev => prev.map(n => (n.id === id && !n.read_at) ? { ...n, read_at: new Date().toISOString() } : n))
     setNotifCount(c => Math.max(0, c - 1))
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return
-    await fetch('/api/notifications', {
+    await authedFetch('/api/notifications', {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ids: [id] }),
     }).catch(() => {})
     refreshNotifCount()

@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect, useCallback, useRef } from "react"
-import { supabase } from "@/lib/supabase"
+import { authedFetch } from "@/lib/getAuthToken"
 import CalendarView from "@/components/CalendarView"
 import EventSlideOut from "@/components/EventSlideOut"
 import SpaceBookingForm from "@/components/SpaceBookingForm"
@@ -20,16 +20,11 @@ export default function CalendarPage() {
     const tag = ++loadRef.current
     setLoading(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-
       // Load 90 days of events
       const from = sydneyTodayStr()
       const to = sydneyDateStrPlusDays(90)
 
-      const res = await fetch(`/api/events?from=${from}&to=${to}`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      const res = await authedFetch(`/api/events?from=${from}&to=${to}`)
       if (!res.ok) throw new Error("Failed to load events")
       const data = await res.json()
       if (tag === loadRef.current) setEvents(data)

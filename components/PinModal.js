@@ -1,6 +1,6 @@
 "use client"
 import { useState } from "react"
-import { supabase } from "@/lib/supabase"
+import { authedFetch } from "@/lib/getAuthToken"
 
 const inputStyle = {
   width: "100%", padding: "0.75rem 1rem", borderRadius: "10px",
@@ -34,10 +34,9 @@ export default function PinModal({ open, onClose }) {
     if (!/^\d{4,8}$/.test(newPin))    { setError("PIN must be 4–8 digits"); return }
 
     setSaving(true)
-    const { data: { session } } = await supabase.auth.getSession()
-    const res = await fetch("/api/pin", {
+    const res = await authedFetch("/api/pin", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ current_pin: curPin, new_pin: newPin }),
     })
     setSaving(false)
