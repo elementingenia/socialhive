@@ -1,6 +1,7 @@
 "use client"
 import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
+import { authedFetch } from "@/lib/getAuthToken"
 import { useUser } from "@/lib/UserContext"
 import { BAR_ENABLED } from "@/lib/features"
 import { isPushSupported, isIOS, isStandalone, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from "@/lib/pushClient"
@@ -171,9 +172,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
   useEffect(() => {
     if (!open) return
     setLoading(true)
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) { setLoading(false); return }
-      const res = await fetch("/api/profile", { headers: { Authorization: `Bearer ${session.access_token}` } })
+    authedFetch("/api/profile").then(async (res) => {
       if (res.ok) {
         const d = await res.json()
         setName(d.name || "")
@@ -198,10 +197,9 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
     if (!name.trim()) { showToast("Your name is required", false); return }
     if (!isValidDisplayName(displayName)) { showToast("Display name needs at least 3 letters", false); return }
     setSaving(true)
-    const { data: { session } } = await supabase.auth.getSession()
-    const res = await fetch("/api/profile", {
+    const res = await authedFetch("/api/profile", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name.trim(), display_name: displayName.trim(), email: email.trim(), house_number: house.trim(), phone: phone.trim(), hide_name: hideName, bar_opt_in: barOptIn, avatar_url: avatar }),
     })
     setSaving(false)
