@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { posterFor, posterPosition, posterAlt } from '@/lib/showing'
 import { sydneyTodayStr, isEventPast } from '@/lib/date'
+import { bookingsClosed } from '@/lib/booking'
 import EventSlideOut from '@/components/EventSlideOut'
 import EventCoordinators from '@/components/EventCoordinators'
 import FollowHubButton from '@/components/FollowHubButton'
@@ -36,7 +37,7 @@ function fmtTime(str) {
 }
 
 // ── Next Screening Card (entire card clickable) ───────────────────────────────
-function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen }) {
+function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen, canBypassClosed = false }) {
   const movie = event.movies || event.movie_snapshot
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const evDate = localDate(event.event_date)
@@ -45,15 +46,27 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen })
   const isBooked = myBooking?.has_confirmed
   const isWaitlist = myBooking?.has_waitlist && !myBooking?.has_confirmed
   const isFull = seatsLeft === 0
+  // Bug fixed 2026-08-21 (Iain): the CTA pill used to only look at seat
+  // count, so a screening past its reservation_cutoff still said "Tap to
+  // book" / "Full · Join waitlist" -- tapping through led straight to
+  // EventSlideOut's own "Bookings Closed" state, a dead-end the pill never
+  // warned about. bookingsClosed() (lib/booking.js) is the same cut-off
+  // check the modal and the server already use. An existing booker can
+  // still open the modal to modify/cancel (the API allows that after
+  // cut-off), and Owner/EC/Admin can still open it for walk-up bookings
+  // (add_booking isn't cut-off-gated server-side) -- only a resident with
+  // no booking of their own is actually blocked from opening it.
+  const closed = bookingsClosed(event)
+  const blocked = closed && !isBooked && !isWaitlist && !canBypassClosed
 
   return (
     <div
-      onClick={onOpen}
-      style={{ background: 'var(--surface)', borderRadius: '16px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow)', marginBottom: '1.25rem', cursor: 'pointer' }}
+      onClick={blocked ? undefined : onOpen}
+      style={{ background: 'var(--surface)', borderRadius: '16px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow)', marginBottom: '1.25rem', cursor: blocked ? 'default' : 'pointer' }}
     >
       <div style={{ background: 'var(--teal)', padding: '0.6rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem' }}>Next Screening</span>
-        <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.78rem', fontWeight: 600 }}>{daysLabel} · Tap to book</span>
+        <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.78rem', fontWeight: 600 }}>{daysLabel} · {closed ? 'Bookings Closed' : 'Tap to book'}</span>
       </div>
       <div style={{ display: 'flex' }}>
         {posterFor(event, movie) ? (
@@ -105,8 +118,8 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen })
               </div>
             )}
             {!isBooked && !isWaitlist && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', background: isFull ? 'rgba(217,119,6,0.1)' : 'rgba(0,128,128,0.1)', color: isFull ? 'var(--amber)' : 'var(--teal)', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
-                {isFull ? 'Full · Join waitlist →' : 'Tap to book →'}
+              <div style={{ display: 'inline-flex', alignItems: 'center', background: closed ? '#fee2e2' : isFull ? 'rgba(217,119,6,0.1)' : 'rgba(0,128,128,0.1)', color: closed ? '#991b1b' : isFull ? 'var(--amber)' : 'var(--teal)', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
+                {closed ? 'Bookings Closed' : isFull ? 'Full · Join waitlist →' : 'Tap to book →'}
               </div>
             )}
             {seatsLeft !== null && seatsLeft > 0 && (
@@ -541,7 +554,8 @@ export default function MoviesHomePage() {
       {canManage && <ManageLink href="/movies/manage" label="Manage Show Time" colour="var(--teal)" />}
 
       {nextEvent ? (
-        <NextScreeningCard event={nextEvent} myBooking={nextBookingSummary} coordinator={nextEventCoordinator} seatsLeft={nextEventSeatsLeft} onOpen={() => openSlideOutForEvent(nextEvent.id, nextEvent)} />
+        <NextScreeningCard event={nextEvent} myBooking={nextBookingSummary} coordinator={nextEventCoordinator} seatsLeft={nextEventSeatsLeft} onOpen={() => openSlideOutForEvent(nextEvent.id, nextEvent)}
+          canBypassClosed={canManage || (!!member?.id && nextEventCoordinator?.id === member.id)} />
       ) : (
         <div style={{ background: 'var(--surface)', borderRadius: '16px', border: '1px solid var(--border)', padding: '1.5rem 1.25rem', textAlign: 'center', marginBottom: '1.25rem', boxShadow: 'var(--shadow)' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>🎬</div>

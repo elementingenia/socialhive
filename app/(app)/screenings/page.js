@@ -9,7 +9,7 @@ import { computeFreeCost } from '@/lib/freeCost'
 import EventSlideOut from '@/components/EventSlideOut'
 import { BusIcon } from '@/components/NavIcons'
 import { authedFetch, getAuthToken } from '@/lib/getAuthToken'
-import { cutoffToInputValue, cutoffFromInputValue } from '@/lib/booking'
+import { cutoffToInputValue, cutoffFromInputValue, bookingsClosed } from '@/lib/booking'
 import TimeField from '@/components/TimeField'
 import { useSameDateWarning } from '@/components/SameDateWarning'
 import { useRequestOnlyAcknowledge } from '@/components/RequestOnlyAcknowledge'
@@ -639,7 +639,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
 
 // ── Booking Status Strip ───────────────────────────────────────────────────────
 // Always-visible bottom strip — shows booking state and tells user what tapping does
-function BookingStrip({ myBooking, isFull }) {
+function BookingStrip({ myBooking, isFull, closed, blocked }) {
   const hasConfirmed   = myBooking?.has_confirmed || false
   const hasWaitlist    = myBooking?.has_waitlist  || false
   const confirmedSeats = myBooking?.confirmed_seats || 0
@@ -671,6 +671,19 @@ function BookingStrip({ myBooking, isFull }) {
       </div>
     )
   }
+  // Bug fixed 2026-08-21 (Iain): neither of these branches used to check the
+  // reservation cut-off, so "Tap to join the waitlist"/"Tap to book" kept
+  // showing even after bookings had closed -- tapping through led straight
+  // into EventSlideOut's own "Bookings Closed" state. `blocked` (computed by
+  // the parent ScreeningCard via lib/booking.js's bookingsClosed()) is true
+  // only when the viewer has no booking of their own AND isn't Owner/EC/Admin.
+  if (closed) {
+    return (
+      <div style={{ ...base, background: '#fee2e2', borderTop: '1px solid #fca5a5' }}>
+        <span style={{ color: '#991b1b', fontWeight: 700 }}>Bookings are closed</span>
+      </div>
+    )
+  }
   if (isFull) {
     return (
       <div style={{ ...base, background: '#fff7ed', borderTop: '1px solid #fed7aa' }}>
@@ -689,10 +702,18 @@ function BookingStrip({ myBooking, isFull }) {
 
 // ── Screening Card ─────────────────────────────────────────────────────────────
 // Pure display — tap anywhere to open the unified slide-over for booking/modify/cancel
-function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit }) {
+function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit, canBypassClosed = false }) {
   const [showAttendees, setShowAttendees] = useState(false)
   const movie              = ev.movies
   const isFull             = ev.seats_remaining === 0
+  // Same bookings-closed consistency fix as Movies Home's NextScreeningCard
+  // (Iain, 2026-08-21) -- see lib/booking.js's bookingsClosed(). An existing
+  // booker (confirmed or waitlisted) can still open the card to modify/
+  // cancel; Owner/EC/Admin (canBypassClosed, computed by the parent) can
+  // still open it for walk-up bookings.
+  const hasOwnBooking = !!(ev.my_booking?.has_confirmed || ev.my_booking?.has_waitlist)
+  const closed = bookingsClosed(ev)
+  const blocked = closed && !hasOwnBooking && !canBypassClosed
   // Own row always pinned to the top of the list, ahead of everyone else —
   // consistent with the Coordinator View panel and every other attendee
   // list -- then A-Z by name (Iain, 2026-08-04), same as this app's other
@@ -708,8 +729,8 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit }) {
     .sort((a, b) => (a.waitlist_position || Infinity) - (b.waitlist_position || Infinity))
 
   return (
-    <div onClick={onOpen}
-      style={{ background: 'var(--surface)', borderRadius: '12px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow)', cursor: 'pointer' }}>
+    <div onClick={blocked ? undefined : onOpen}
+      style={{ background: 'var(--surface)', borderRadius: '12px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow)', cursor: blocked ? 'default' : 'pointer' }}>
 
       <div style={{ display: 'flex' }}>
         {/* A film's poster, or the uploaded image for a free-text showing — the
@@ -794,7 +815,7 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit }) {
       </div>
 
       {/* Booking status strip — always visible */}
-      <BookingStrip myBooking={ev.my_booking} isFull={isFull} />
+      <BookingStrip myBooking={ev.my_booking} isFull={isFull} closed={closed} blocked={blocked} />
 
       {/* Attendees accordion */}
       <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>
@@ -992,6 +1013,7 @@ export default function Screenings() {
                 freeCostData={freeCostData}
                 onOpen={() => openSlideOut(ev)}
                 onEdit={ev => setEditEvent(ev)}
+                canBypassClosed={canManage || (!!member?.id && ev.coordinator?.id === member.id)}
               />
             )
           })}

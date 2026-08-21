@@ -13,6 +13,7 @@ import { useOwners } from "@/lib/useOwners"
 import { FormattedText } from "@/lib/textFormatter"
 import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted, balancePhrase } from "@/lib/payments"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
+import { bookingsClosed } from "@/lib/booking"
 
 const COLOUR = "var(--terracotta)"
 
@@ -99,7 +100,7 @@ function CapacityBar({ booked, max, waitlist }) {
 }
 
 // ── Next Event tile — surface card + terracotta header strip (matches Movies) ─
-function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCount, waitlistPosition, onOpen }) {
+function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCount, waitlistPosition, onOpen, canBypassClosed = false }) {
   if (!event) {
     return (
       <div style={{
@@ -126,12 +127,19 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
   const isConfirmed = myBooking?.status === "confirmed"
   const isWaitlist  = myBooking?.status === "waitlist"
   const ecNames     = coordinators.map(c => c.name || c.username).filter(Boolean)
+  // Bug fixed 2026-08-21 (Iain): the CTA pill always said "Tap to book"
+  // regardless of the reservation cut-off having passed -- Social's tile
+  // never even distinguished "full" from "not full", so this was the ONLY
+  // signal on the tile and it was unconditionally wrong once bookings
+  // closed. Same fix shape as Movies -- see lib/booking.js's bookingsClosed().
+  const closed  = bookingsClosed(event)
+  const blocked = closed && !isConfirmed && !isWaitlist && !canBypassClosed
 
   return (
-    <div onClick={onOpen} style={{
+    <div onClick={blocked ? undefined : onOpen} style={{
       background: "var(--surface)", borderRadius: "16px",
       border: "1px solid var(--border)", overflow: "hidden",
-      boxShadow: "var(--shadow)", marginBottom: "1.25rem", cursor: "pointer",
+      boxShadow: "var(--shadow)", marginBottom: "1.25rem", cursor: blocked ? "default" : "pointer",
     }}>
       {/* Coloured header strip */}
       <div style={{
@@ -225,10 +233,10 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
           ) : (
             <div style={{
               display: "inline-flex", alignItems: "center",
-              background: COLOUR + "18", color: COLOUR,
+              background: closed ? "#fee2e2" : COLOUR + "18", color: closed ? "#991b1b" : COLOUR,
               borderRadius: "20px", padding: "0.25rem 0.75rem",
               fontSize: "0.78rem", fontWeight: 700,
-            }}>Tap to book →</div>
+            }}>{closed ? "Bookings Closed" : "Tap to book →"}</div>
           )}
         </div>
       </div>
@@ -334,6 +342,7 @@ export default function SocialHome() {
   const canManage = isAdmin || (!!member?.id && hubOwners.some(o => o.id === member.id))
   const [nextEvent,         setNextEvent]         = useState(undefined) // undefined = loading, null = none
   const [nextCoordinators,  setNextCoordinators]  = useState([])
+  const [nextEventIsEC,     setNextEventIsEC]     = useState(false)
   const [myBooking,         setMyBooking]         = useState(null)
   const [bookedCount,       setBookedCount]       = useState(0)
   const [waitlistCount,     setWaitlistCount]     = useState(0)
@@ -357,7 +366,7 @@ export default function SocialHome() {
     const [eventsRes, myBookingsRes, hubRes] = await Promise.all([
       supabase
         .from("events")
-        .select("id, title, event_date, event_time, description, max_seats, cost, payment_required, has_bus, location_type, location, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, booked_at)")
+        .select("id, title, event_date, event_time, description, max_seats, cost, payment_required, has_bus, location_type, location, reservation_cutoff, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, booked_at)")
         .eq("hub_type", "social").eq("archived", false)
         .gte("event_date", todayStr)
         .order("event_date", { ascending: true })
@@ -397,6 +406,10 @@ export default function SocialHome() {
         .select("member_id, members!event_coordinators_member_id_fkey(name, username)")
         .eq("event_id", ev.id).is("replaced_at", null).order("assigned_at")
       setNextCoordinators((ecs || []).map(ec => ec.members))
+      setNextEventIsEC((ecs || []).some(ec => ec.member_id === member.id))
+    } else {
+      setNextCoordinators([])
+      setNextEventIsEC(false)
     }
 
     setMyAllBookings((myBookingsRes.data || []).filter(b => b.events))
@@ -449,6 +462,7 @@ export default function SocialHome() {
         waitlistCount={waitlistCount}
         waitlistPosition={waitlistPosition}
         onOpen={() => nextEvent && openEventSlideOut(nextEvent)}
+        canBypassClosed={canManage || nextEventIsEC}
       />
 
       <MyBookingsCard bookings={myAllBookings} onViewAll={() => router.push("/social/events")} />

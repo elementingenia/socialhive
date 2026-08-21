@@ -14,6 +14,7 @@ import { useOwners } from "@/lib/useOwners"
 import { clubCaps } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
 import { sydneyTodayStr } from "@/lib/date"
+import { bookingsClosed } from "@/lib/booking"
 import EventCoordinators from "@/components/EventCoordinators"
 import RecurrencePicker from "@/components/RecurrencePicker"
 import { nextOccurrence } from "@/lib/recurrence"
@@ -58,9 +59,20 @@ function Toast({ msg, type }) {
 }
 
 // ── Booking Strip ────────────────────────────────────────────────────────────
-function BookingStrip({ isJoined, seats = 1, hasBook, bookReturnDate, colour = "var(--purple)" }) {
+function BookingStrip({ isJoined, seats = 1, hasBook, bookReturnDate, closed, blocked, colour = "var(--purple)" }) {
   const base = { display: "flex", alignItems: "center", justifyContent: "space-between",
     padding: "0.55rem 1rem", fontSize: "0.82rem", fontWeight: 600, gap: "0.5rem" }
+  // Bug fixed 2026-08-21 (Iain): "Tap to sign up" used to show regardless of
+  // the reservation cut-off having passed -- same fix shape as Movies/Social,
+  // see lib/booking.js's bookingsClosed(). blocked is computed by EventCard
+  // below, true only when the viewer hasn't joined AND isn't Owner/EC/Admin.
+  if (!isJoined && closed) {
+    return (
+      <div style={{ ...base, background: "#fee2e2", borderTop: "1px solid #fca5a5" }}>
+        <span style={{ color: "#991b1b", fontWeight: 700 }}>Bookings are closed</span>
+      </div>
+    )
+  }
   if (isJoined) {
     return (
       <div style={{ background: "#f0fdf4", borderTop: "1px solid #bbf7d0" }}>
@@ -232,11 +244,17 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
   }
 
   const isJoined = booking?.status === "confirmed"
+  // Bug fixed 2026-08-21 (Iain): see BookingStrip below. canManageBooks
+  // (isAdmin || isEC || isOwner, computed above) doubles as the Owner/EC/
+  // Admin bypass -- same permission shape already used for attendee
+  // management on this card, no need for a second variable.
+  const closed  = bookingsClosed(event)
+  const blocked = closed && !isJoined && !canManageBooks
 
   return (
-    <div onClick={onOpen}
+    <div onClick={blocked ? undefined : onOpen}
       style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",
-        overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 16, cursor: "pointer" }}>
+        overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 16, cursor: blocked ? "default" : "pointer" }}>
       {/* Card header */}
       <div style={{ background: colour, padding: "0.6rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <span style={{ color: clubTextOn(colour), fontWeight: 700, fontSize: "0.85rem" }}>{label}</span>
@@ -433,7 +451,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
       </div>
 
       {/* Booking status strip */}
-      <BookingStrip isJoined={isJoined} seats={booking?.seats || 1} hasBook={!!booking?.has_book} bookReturnDate={event?.book_return_date} colour={colour} />
+      <BookingStrip isJoined={isJoined} seats={booking?.seats || 1} hasBook={!!booking?.has_book} bookReturnDate={event?.book_return_date} closed={closed} blocked={blocked} colour={colour} />
     </div>
   )
 }
