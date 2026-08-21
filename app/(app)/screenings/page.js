@@ -679,8 +679,8 @@ function BookingStrip({ myBooking, isFull, closed, blocked }) {
   // only when the viewer has no booking of their own AND isn't Owner/EC/Admin.
   if (closed) {
     return (
-      <div style={{ ...base, background: 'var(--surface2)', borderTop: '1px solid var(--border)' }}>
-        <span style={{ color: 'var(--text-dim)' }}>Bookings are closed</span>
+      <div style={{ ...base, background: '#fee2e2', borderTop: '1px solid #fca5a5' }}>
+        <span style={{ color: '#991b1b', fontWeight: 700 }}>Bookings are closed</span>
       </div>
     )
   }

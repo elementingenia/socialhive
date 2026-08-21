@@ -118,7 +118,7 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen, c
               </div>
             )}
             {!isBooked && !isWaitlist && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', background: closed ? 'var(--surface2)' : isFull ? 'rgba(217,119,6,0.1)' : 'rgba(0,128,128,0.1)', color: closed ? 'var(--text-dim)' : isFull ? 'var(--amber)' : 'var(--teal)', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
+              <div style={{ display: 'inline-flex', alignItems: 'center', background: closed ? '#fee2e2' : isFull ? 'rgba(217,119,6,0.1)' : 'rgba(0,128,128,0.1)', color: closed ? '#991b1b' : isFull ? 'var(--amber)' : 'var(--teal)', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
                 {closed ? 'Bookings Closed' : isFull ? 'Full · Join waitlist →' : 'Tap to book →'}
               </div>
             )}
