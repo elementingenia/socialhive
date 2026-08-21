@@ -233,10 +233,10 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
           ) : (
             <div style={{
               display: "inline-flex", alignItems: "center",
-              background: blocked ? "var(--surface2)" : COLOUR + "18", color: blocked ? "var(--text-dim)" : COLOUR,
+              background: closed ? "var(--surface2)" : COLOUR + "18", color: closed ? "var(--text-dim)" : COLOUR,
               borderRadius: "20px", padding: "0.25rem 0.75rem",
               fontSize: "0.78rem", fontWeight: 700,
-            }}>{blocked ? "Bookings Closed" : "Tap to book →"}</div>
+            }}>{closed ? "Bookings Closed" : "Tap to book →"}</div>
           )}
         </div>
       </div>

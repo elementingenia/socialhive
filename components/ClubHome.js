@@ -59,14 +59,14 @@ function Toast({ msg, type }) {
 }
 
 // ── Booking Strip ────────────────────────────────────────────────────────────
-function BookingStrip({ isJoined, seats = 1, hasBook, bookReturnDate, blocked, colour = "var(--purple)" }) {
+function BookingStrip({ isJoined, seats = 1, hasBook, bookReturnDate, closed, blocked, colour = "var(--purple)" }) {
   const base = { display: "flex", alignItems: "center", justifyContent: "space-between",
     padding: "0.55rem 1rem", fontSize: "0.82rem", fontWeight: 600, gap: "0.5rem" }
   // Bug fixed 2026-08-21 (Iain): "Tap to sign up" used to show regardless of
   // the reservation cut-off having passed -- same fix shape as Movies/Social,
   // see lib/booking.js's bookingsClosed(). blocked is computed by EventCard
   // below, true only when the viewer hasn't joined AND isn't Owner/EC/Admin.
-  if (!isJoined && blocked) {
+  if (!isJoined && closed) {
     return (
       <div style={{ ...base, background: "var(--surface2)", borderTop: "1px solid var(--border)" }}>
         <span style={{ color: "var(--text-dim)" }}>Bookings are closed</span>
@@ -451,7 +451,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
       </div>
 
       {/* Booking status strip */}
-      <BookingStrip isJoined={isJoined} seats={booking?.seats || 1} hasBook={!!booking?.has_book} bookReturnDate={event?.book_return_date} blocked={blocked} colour={colour} />
+      <BookingStrip isJoined={isJoined} seats={booking?.seats || 1} hasBook={!!booking?.has_book} bookReturnDate={event?.book_return_date} closed={closed} blocked={blocked} colour={colour} />
     </div>
   )
 }

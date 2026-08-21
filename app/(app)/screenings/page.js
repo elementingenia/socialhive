@@ -639,7 +639,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
 
 // ── Booking Status Strip ───────────────────────────────────────────────────────
 // Always-visible bottom strip — shows booking state and tells user what tapping does
-function BookingStrip({ myBooking, isFull, blocked }) {
+function BookingStrip({ myBooking, isFull, closed, blocked }) {
   const hasConfirmed   = myBooking?.has_confirmed || false
   const hasWaitlist    = myBooking?.has_waitlist  || false
   const confirmedSeats = myBooking?.confirmed_seats || 0
@@ -677,7 +677,7 @@ function BookingStrip({ myBooking, isFull, blocked }) {
   // into EventSlideOut's own "Bookings Closed" state. `blocked` (computed by
   // the parent ScreeningCard via lib/booking.js's bookingsClosed()) is true
   // only when the viewer has no booking of their own AND isn't Owner/EC/Admin.
-  if (blocked) {
+  if (closed) {
     return (
       <div style={{ ...base, background: 'var(--surface2)', borderTop: '1px solid var(--border)' }}>
         <span style={{ color: 'var(--text-dim)' }}>Bookings are closed</span>
@@ -815,7 +815,7 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit, canBypassClo
       </div>
 
       {/* Booking status strip — always visible */}
-      <BookingStrip myBooking={ev.my_booking} isFull={isFull} blocked={blocked} />
+      <BookingStrip myBooking={ev.my_booking} isFull={isFull} closed={closed} blocked={blocked} />
 
       {/* Attendees accordion */}
       <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>

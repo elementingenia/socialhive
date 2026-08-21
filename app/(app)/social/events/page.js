@@ -99,7 +99,7 @@ function CapacityBar({ booked, max, waitlist }) {
 
 // ── Booking Status Strip ───────────────────────────────────────────────────────
 // Always-visible bottom strip — shows booking state and tells the user what tapping does
-function BookingStrip({ myBooking, event, isFull, blocked }) {
+function BookingStrip({ myBooking, event, isFull, closed, blocked }) {
   const isConfirmed = myBooking?.status === "confirmed"
   const isWaitlist  = myBooking?.status === "waitlist"
   const seats       = myBooking?.seats || 1
@@ -151,7 +151,7 @@ function BookingStrip({ myBooking, event, isFull, blocked }) {
   // branch below used to check the reservation cut-off. `blocked` (computed
   // by the parent EventCard via lib/booking.js's bookingsClosed()) is true
   // only when the viewer has no booking of their own AND isn't Owner/EC/Admin.
-  if (blocked) {
+  if (closed) {
     return (
       <div style={{ ...base, background: "var(--surface2)", borderTop: "1px solid var(--border)" }}>
         <span style={{ color: "var(--text-dim)" }}>Bookings are closed</span>
@@ -1283,7 +1283,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
         <CapacityBar booked={booked} max={event.max_seats} waitlist={waiting} />
       </div>
       {/* Booking status strip — always visible */}
-      <BookingStrip myBooking={myBooking} event={event} isFull={booked >= event.max_seats && event.max_seats > 0} blocked={blocked} />
+      <BookingStrip myBooking={myBooking} event={event} isFull={booked >= event.max_seats && event.max_seats > 0} closed={closed} blocked={blocked} />
 
       {/* Attendees accordion */}
       {event.max_seats > 0 && (

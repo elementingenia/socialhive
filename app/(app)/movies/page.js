@@ -66,7 +66,7 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen, c
     >
       <div style={{ background: 'var(--teal)', padding: '0.6rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span style={{ color: '#fff', fontWeight: 700, fontSize: '0.85rem' }}>Next Screening</span>
-        <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.78rem', fontWeight: 600 }}>{daysLabel} · {blocked ? 'Bookings Closed' : 'Tap to book'}</span>
+        <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.78rem', fontWeight: 600 }}>{daysLabel} · {closed ? 'Bookings Closed' : 'Tap to book'}</span>
       </div>
       <div style={{ display: 'flex' }}>
         {posterFor(event, movie) ? (
@@ -118,8 +118,8 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen, c
               </div>
             )}
             {!isBooked && !isWaitlist && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', background: blocked ? 'var(--surface2)' : isFull ? 'rgba(217,119,6,0.1)' : 'rgba(0,128,128,0.1)', color: blocked ? 'var(--text-dim)' : isFull ? 'var(--amber)' : 'var(--teal)', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
-                {blocked ? 'Bookings Closed' : isFull ? 'Full · Join waitlist →' : 'Tap to book →'}
+              <div style={{ display: 'inline-flex', alignItems: 'center', background: closed ? 'var(--surface2)' : isFull ? 'rgba(217,119,6,0.1)' : 'rgba(0,128,128,0.1)', color: closed ? 'var(--text-dim)' : isFull ? 'var(--amber)' : 'var(--teal)', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
+                {closed ? 'Bookings Closed' : isFull ? 'Full · Join waitlist →' : 'Tap to book →'}
               </div>
             )}
             {seatsLeft !== null && seatsLeft > 0 && (
