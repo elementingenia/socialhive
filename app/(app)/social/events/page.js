@@ -10,7 +10,7 @@ import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import EventImagePicker from "@/components/EventImagePicker"
 import ExpandableText from "@/components/ExpandableText"
 import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, isRefundPending, isRefundIssued, paymentSummary, reconciliationIsStale, balancePhrase, remainingBalance, wholeDollar, amountOwing } from "@/lib/payments"
-import { cutoffToInputValue, cutoffFromInputValue } from "@/lib/booking"
+import { cutoffToInputValue, cutoffFromInputValue, bookingsClosed } from "@/lib/booking"
 import { useLocations } from "@/lib/useLocations"
 import TimeField from "@/components/TimeField"
 import { needsSpaceValidation } from "@/lib/eventClash"
@@ -99,7 +99,7 @@ function CapacityBar({ booked, max, waitlist }) {
 
 // ── Booking Status Strip ───────────────────────────────────────────────────────
 // Always-visible bottom strip — shows booking state and tells the user what tapping does
-function BookingStrip({ myBooking, event, isFull }) {
+function BookingStrip({ myBooking, event, isFull, blocked }) {
   const isConfirmed = myBooking?.status === "confirmed"
   const isWaitlist  = myBooking?.status === "waitlist"
   const seats       = myBooking?.seats || 1
@@ -144,6 +144,17 @@ function BookingStrip({ myBooking, event, isFull }) {
       <div style={{ ...base, background: "#fffbeb", borderTop: "1px solid #fde68a" }}>
         <span style={{ color: "#d97706" }}>⏳ On waitlist · {seats} seat{seats !== 1 ? "s" : ""}</span>
         <span style={{ color: "#d97706", fontSize: "0.75rem" }}>Tap to manage →</span>
+      </div>
+    )
+  }
+  // Bug fixed 2026-08-21 (Iain): same fix as Movies/Social Home -- neither
+  // branch below used to check the reservation cut-off. `blocked` (computed
+  // by the parent EventCard via lib/booking.js's bookingsClosed()) is true
+  // only when the viewer has no booking of their own AND isn't Owner/EC/Admin.
+  if (blocked) {
+    return (
+      <div style={{ ...base, background: "var(--surface2)", borderTop: "1px solid var(--border)" }}>
+        <span style={{ color: "var(--text-dim)" }}>Bookings are closed</span>
       </div>
     )
   }
@@ -1111,6 +1122,11 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
 
   const isConfirmed = myBooking?.status === "confirmed"
   const isWaitlist  = myBooking?.status === "waitlist"
+  // Bug fixed 2026-08-21 (Iain): see BookingStrip below and lib/booking.js's
+  // bookingsClosed(). canManagePayments (isAdmin || isEC, computed further
+  // down) doubles as the Owner/EC/Admin bypass -- same permission shape,
+  // no need for a second variable.
+  const closed = bookingsClosed(event)
 
   // Own row always pinned to the top — consistent with the Coordinator View panel
   // and every other attendee list (Movies, Book Club) — then A-Z by name
@@ -1167,11 +1183,13 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
   // select picks up updated_at -- no further code change needed here then.
   const isStale = canManagePayments && isPaidEvent && reconciliationIsStale(event, event.bookings)
 
+  const blocked = closed && !isConfirmed && !isWaitlist && !canManagePayments
+
   return (
-    <div onClick={onOpen} style={{
+    <div onClick={blocked ? undefined : onOpen} style={{
       background: "var(--surface)", borderRadius: "14px",
       border: "1px solid var(--border)", overflow: "hidden",
-      opacity: isPast ? 0.65 : 1, cursor: "pointer",
+      opacity: isPast ? 0.65 : 1, cursor: blocked ? "default" : "pointer",
     }}>
       {event.image_url && (
         <img
@@ -1265,7 +1283,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
         <CapacityBar booked={booked} max={event.max_seats} waitlist={waiting} />
       </div>
       {/* Booking status strip — always visible */}
-      <BookingStrip myBooking={myBooking} event={event} isFull={booked >= event.max_seats && event.max_seats > 0} />
+      <BookingStrip myBooking={myBooking} event={event} isFull={booked >= event.max_seats && event.max_seats > 0} blocked={blocked} />
 
       {/* Attendees accordion */}
       {event.max_seats > 0 && (
