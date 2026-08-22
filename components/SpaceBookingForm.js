@@ -583,11 +583,16 @@ export default function SpaceBookingForm({
             <input type="date" value={date} min={today} onChange={e => setDate(e.target.value)} style={INPUT} />
           </div>
 
+          {/* Iain, 2026-08-22: Start showed a neutral grey border when
+              empty while End showed red -- both are equally required for
+              canSubmit below, so the asymmetric styling was misleading
+              (looked like only End was mandatory). Same red-when-empty
+              treatment on both now. */}
           <div style={{ display: "flex", gap: "0.75rem" }}>
             <div style={{ ...FIELD, flex: 1 }}>
               <label style={LABEL}>Start</label>
               <TimeField
-                value={startTime} onChange={handleStartChange} colour={startTime ? "var(--green)" : "var(--border)"}
+                value={startTime} onChange={handleStartChange} colour={startTime ? "var(--green)" : "var(--danger)"}
                 hourFloor={SPACE_HOUR_FLOOR} hourCeil={SPACE_HOUR_CEIL} disabledSlots={busySlots}
               />
             </div>
