@@ -53,11 +53,9 @@ const HUB_CONFIG = {
   },
   space: {
     colour: "var(--space)",
-    // Single-page hub for now -- no /spaces/scheduled yet (the "Next Booked
-    // Space" / "Upcoming Shared Bookings" list already lives on /spaces
-    // itself). Add a second item here if/when that list gets its own page.
     items: [
-      { path: "/spaces", label: "Space Bookings", Icon: SpaceIcon },
+      { path: "/spaces",           label: "Space Bookings", Icon: SpaceIcon },
+      { path: "/spaces/scheduled", label: "Scheduled",      Icon: CalendarIcon },
     ],
   },
 }

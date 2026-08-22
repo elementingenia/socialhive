@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useState, useCallback } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
@@ -8,57 +9,29 @@ import MySpaceBookings from "@/components/MySpaceBookings"
 import SpaceBookingForm from "@/components/SpaceBookingForm"
 import LocationScheduleView from "@/components/LocationScheduleView"
 import { SpaceIcon } from "@/components/NavIcons"
+import SharedSpaceEventRow from "@/components/SharedSpaceEventRow"
 
 // Book a Space hub home. Scope: Book_a_Space_Scope_v2.md /
 // Book_a_Space_Technical_Design.md (Iain, 2026-08-22). Merges the existing
 // Personal Space Booking feature (MySpaceBookings, SpaceBookingForm,
 // LocationScheduleView -- all pre-existing, none of their logic touched
-// here) with a "Next Booked Space" / upcoming shared-events section for
-// bookings that have been promoted to a real hub_type='space' event via
-// the "Allow others to join" toggle (see PromoteBookingModal, reached from
-// MySpaceBookings). A shared event opens through the same EventSlideOut
-// every other hub uses -- no new booking/attendee logic needed here, it
-// already renders generically for a hub_type it doesn't special-case.
-
-function fmtDate(str) {
-  if (!str) return ""
-  const [y, m, d] = str.split("-").map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })
-}
-function fmtTime(str) {
-  if (!str) return ""
-  const [h, m] = str.split(":").map(Number)
-  const ampm = h >= 12 ? "pm" : "am"
-  return `${h % 12 || 12}:${String(m).padStart(2, "0")}${ampm}`
-}
-
-function SharedEventRow({ event, onOpen }) {
-  const confirmed = (event.bookings || []).filter(b => b.status === "confirmed")
-  const seatsBooked = confirmed.reduce((s, b) => s + (b.seats || 1), 0)
-  return (
-    <div onClick={onOpen} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onOpen()}
-      style={{
-        background: "var(--surface)", border: "1px solid var(--border)",
-        borderLeft: "4px solid var(--space)", borderRadius: "14px",
-        padding: "0.9rem 1.1rem", cursor: "pointer",
-        display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem",
-      }}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "var(--text)" }}>{event.title}</div>
-        <div style={{ fontSize: "0.8rem", color: "var(--space)", fontWeight: 600, marginTop: 2 }}>
-          {fmtDate(event.event_date)} · {fmtTime(event.event_time)}{event.locations?.name ? ` · ${event.locations.name}` : ""}
-        </div>
-      </div>
-      <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", flexShrink: 0 }}>
-        {seatsBooked}{event.max_seats ? `/${event.max_seats}` : ""} booked
-      </div>
-    </div>
-  )
-}
+// here) with a "Next Booked Space" preview for bookings that have been
+// promoted to a real hub_type='space' event via the "Allow others to
+// join" toggle (see PromoteBookingModal, reached from MySpaceBookings).
+//
+// Home shows only the SOONEST shared booking, same as every other hub's
+// Home tile (Show Time's NextScreeningCard, Social's NextEventTile) --
+// the FULL chronological list lives on /spaces/scheduled instead (added
+// 2026-08-22 after Iain flagged this hub had a Home page but no Scheduled
+// page, unlike every other hub). A shared event opens through the same
+// EventSlideOut every other hub uses -- no new booking/attendee logic
+// needed here, it already renders generically for a hub_type it doesn't
+// special-case.
 
 export default function SpacesPage() {
   const { member } = useUser()
-  const [events, setEvents] = useState(null) // null = loading
+  const router = useRouter()
+  const [nextEvent, setNextEvent] = useState(undefined) // undefined = loading, null = none
   const [fullEvent, setFullEvent] = useState(null)
   const [bookingOpen, setBookingOpen] = useState(false)
   const [browsingByLocation, setBrowsingByLocation] = useState(false)
@@ -73,8 +46,8 @@ export default function SpacesPage() {
       .gte("event_date", todayStr)
       .order("event_date", { ascending: true })
       .order("event_time", { ascending: true })
-      .limit(8)
-    setEvents((data || []).filter(e => !isEventPast(e)))
+      .limit(5)
+    setNextEvent((data || []).find(e => !isEventPast(e)) || null)
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -89,7 +62,7 @@ export default function SpacesPage() {
     setFullEvent({ ...data, my_bookings })
   }
 
-  if (events === null) {
+  if (nextEvent === undefined) {
     return (
       <div style={{ padding: "1.25rem 1rem" }}>
         {[1, 2].map(i => (
@@ -110,17 +83,21 @@ export default function SpacesPage() {
         <SpaceIcon size={22} /> Book a Space
       </button>
 
-      {events.length > 0 && (
+      {nextEvent && (
         <div style={{ marginBottom: "1.5rem" }}>
-          <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-dim)",
-            textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.5rem" }}>
-            {events.length === 1 ? "Next Booked Space" : "Upcoming Shared Bookings"}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-dim)",
+              textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Next Booked Space
+            </div>
+            <button onClick={() => router.push("/spaces/scheduled")} style={{
+              background: "none", border: "none", color: "var(--space)", fontWeight: 700,
+              fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit", padding: 0,
+            }}>
+              See all →
+            </button>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-            {events.map(ev => (
-              <SharedEventRow key={ev.id} event={ev} onOpen={() => openEvent(ev.id)} />
-            ))}
-          </div>
+          <SharedSpaceEventRow event={nextEvent} onOpen={() => openEvent(nextEvent.id)} />
         </div>
       )}
 

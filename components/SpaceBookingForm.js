@@ -258,6 +258,15 @@ export default function SpaceBookingForm({
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
   const [acknowledgedClash, setAcknowledgedClash] = useState(null) // clash items the resident proceeded past, or null
+  // Iain, 2026-08-22: "the first thing you do is choose a space so there
+  // should be no reason to have to select a space once in the booking
+  // form as you are already booking a selected space" -- when arriving
+  // via the Book-by-Location hand-off (or editing an existing booking),
+  // the space is already decided; showing the full re-pick list again is
+  // redundant friction. false = show a compact "Space: X · Change" line
+  // instead of the full list; true = show the full list (the genuine
+  // Book-by-Date flow, where no location is known yet, always needs it).
+  const [wantChangeSpace, setWantChangeSpace] = useState(false)
   const [busySlots, setBusySlots] = useState(new Set())
   const [busyIntervals, setBusyIntervals] = useState([])
   const fetchTag = useRef(0)
@@ -333,6 +342,11 @@ export default function SpaceBookingForm({
       }
       setError(""); setSuccess(false); setSubmitting(false)
       setAcknowledgedClash(null)
+      // A location is already known if editing, or if handed off from
+      // Book by Location -- start collapsed to the compact summary in
+      // both cases. Book by Date (no initial* props, not editing) still
+      // needs the full list since nothing's chosen yet.
+      setWantChangeSpace(!isEdit && !initialLocationId)
     }
   }, [open, isEdit, editBooking, initialDate, initialStartTime, initialEndTime, initialLocationId])
 
@@ -380,7 +394,16 @@ export default function SpaceBookingForm({
       setLocations(list)
       if (pendingLocationId) {
         const match = list.find(l => l.id === pendingLocationId)
-        setLocationId(match?.available ? pendingLocationId : "")
+        if (match?.available) {
+          setLocationId(pendingLocationId)
+        } else {
+          // The space the resident already committed to isn't free for
+          // this window after all (e.g. they changed the date/time) --
+          // reveal the full list rather than leaving them stuck on a
+          // blank compact summary with no way to pick anything else.
+          setLocationId("")
+          setWantChangeSpace(true)
+        }
       }
     } catch {
       if (tag === fetchTag.current) { setError("Could not check availability — check your connection"); setLocations([]) }
@@ -556,7 +579,32 @@ export default function SpaceBookingForm({
             </div>
           )}
 
-          {windowValid && (
+          {windowValid && !wantChangeSpace && selectedLocation && (
+            <div style={FIELD}>
+              <label style={LABEL}>Space</label>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
+                padding: "0.7rem 0.9rem", borderRadius: 10, border: "1px solid var(--teal)", background: "var(--surface2)",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+                  {selectedLocation.image_url && (
+                    <img src={selectedLocation.image_url} alt="" style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover", flexShrink: 0 }} />
+                  )}
+                  <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>{selectedLocation.name}</span>
+                  {selectedLocation.request_only && (
+                    <span style={{ fontSize: "0.66rem", fontWeight: 700, padding: "0.12rem 0.4rem", borderRadius: 6,
+                      background: "var(--amber)1f", color: "var(--amber-dark)", whiteSpace: "nowrap" }}>Request Only</span>
+                  )}
+                </div>
+                <button type="button" onClick={() => setWantChangeSpace(true)}
+                  style={{ background: "none", border: "none", color: "var(--teal)", fontWeight: 700, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+                  Change
+                </button>
+              </div>
+            </div>
+          )}
+
+          {windowValid && wantChangeSpace && (
             <div style={FIELD}>
               <label style={LABEL}>Space</label>
               {locationsLoading ? (
@@ -568,7 +616,7 @@ export default function SpaceBookingForm({
                       key={loc.id}
                       type="button"
                       disabled={!loc.available}
-                      onClick={() => loc.available && setLocationId(loc.id)}
+                      onClick={() => { if (loc.available) { setLocationId(loc.id); setWantChangeSpace(false) } }}
                       style={{
                         textAlign: "left", padding: "0.7rem 0.9rem", borderRadius: 10,
                         border: `1px solid ${locationId === loc.id ? "var(--teal)" : "var(--border)"}`,
