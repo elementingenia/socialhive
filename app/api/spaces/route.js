@@ -5,6 +5,7 @@ import { isOverlapError, overlapMessage, toInstant, sydneyOffsetMinutes } from '
 import {
   listAvailableLocations, checkSpaceAvailability, validateSpaceBooking,
   toSpaceBookingWindow, BOOKING_REASON_MAX, validateIngeniaConfirmation,
+  promoteSpaceBookingToEvent,
 } from '@/lib/spaceBookings'
 import { resolveMemberName } from '@/lib/memberName'
 
@@ -343,10 +344,34 @@ export async function PATCH(req) {
   const member = await getMember(token)
   if (!member) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
+  const body = await req.json()
+
+  // ── "Allow others to join" -- promote a private booking to a shared event ──
+  // Scope: Book_a_Space_Scope_v2.md / Book_a_Space_Technical_Design.md
+  // (Iain, 2026-08-22). Any resident, no space_owners gate -- see
+  // lib/areaAuth.js's requireResidentOrAdmin for why this hub is
+  // deliberately narrower-but-open rather than reusing the Owner model
+  // every other hub uses. Confirmed flippable after creation, not just at
+  // booking time ("Yes can be flipped after the fact").
+  if (body.action === 'promote_to_event') {
+    const { id, title, max_seats, max_seats_per_booking, allow_nonresident_guests, has_bus, bus_max_seats } = body
+    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+    try {
+      const result = await promoteSpaceBookingToEvent(
+        supabaseAdmin, id, member.id, !!member.is_admin,
+        { title, max_seats, max_seats_per_booking, allow_nonresident_guests, has_bus, bus_max_seats },
+      )
+      if (result.error) return NextResponse.json({ error: result.error }, { status: result.status })
+      return NextResponse.json(result)
+    } catch (e) {
+      return NextResponse.json({ error: e.message }, { status: 500 })
+    }
+  }
+
   const {
     id, location_id, event_date, event_time, event_end_time, reason,
     ingenia_confirmed, ingenia_confirmed_by,
-  } = await req.json()
+  } = body
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
   const { data: existing, error: fetchError } = await supabaseAdmin
