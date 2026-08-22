@@ -57,7 +57,7 @@ function fmtSpaceTime(iso) {
 // Same visual shape as SharedSpaceEventRow -- title bold on top, date/time
 // (+ location, since this list isn't already grouped by one room the way
 // SharedSpaceEventRow's caller lists are) in the hub colour underneath.
-function PrivateBookingRow({ booking, locationName, onOpen }) {
+function PrivateBookingRow({ booking, onOpen }) {
   return (
     <div onClick={onOpen} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onOpen()}
       style={{
@@ -72,7 +72,7 @@ function PrivateBookingRow({ booking, locationName, onOpen }) {
         </div>
         <div style={{ fontSize: "0.8rem", color: "var(--amber-dark, var(--amber))", fontWeight: 600, marginTop: 2 }}>
           {fmtSpaceDate(booking.starts_at)} · {fmtSpaceTime(booking.starts_at)}–{fmtSpaceTime(booking.ends_at)}
-          {locationName ? ` · ${locationName}` : ""}
+          </div><div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem" }}><span style={{ background: "#f59e0b18", color: "var(--amber-dark, var(--amber))", borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>✓ 1 seat booked</span><span style={{ fontSize: "0.72rem", color: "var(--amber-dark, var(--amber))", fontWeight: 700, textDecoration: "underline" }}>Edit</span></div><div style={{display:"none"}}>
         </div>
       </div>
     </div>
@@ -176,7 +176,7 @@ function MySpaceBookings({ refreshSignal, onOpenSharedEvent } = {}) {
                 .slice()
                 .sort((a, c) => a.sortKey.localeCompare(c.sortKey))
                 .map(row => row.kind === "private"
-                  ? <PrivateBookingRow key={`p-${row.booking.id}`} booking={row.booking} locationName={row.booking.locations?.name} onOpen={() => setEditingBooking(row.booking)} />
+                  ? <PrivateBookingRow key={`p-${row.booking.id}`} booking={row.booking} onOpen={() => setEditingBooking(row.booking)} />
                   : (
                     <div key={`e-${row.event.id}`}>
                       <SharedSpaceEventRow event={row.event} mySeats={row.mySeats} compact onOpen={() => onOpenSharedEvent?.(row.event.id)} />
