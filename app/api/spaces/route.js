@@ -277,9 +277,24 @@ export async function GET(req) {
       if (evErr) return NextResponse.json({ error: evErr.message }, { status: 500 })
       events = evData || []
     } else {
+      // Widened 2026-08-23 (Iain: /spaces/scheduled needs to "conform to
+      // the system standard" -- the same full card every other hub's
+      // Scheduled list uses: description, location, coordinator, bus,
+      // and an attendees list) -- was previously the bare Home-tile-preview
+      // field set. member/hide_name/display_name are pulled per booking so
+      // attendee names can be resolved server-side below, respecting the
+      // same masking convention as every other hub (canManage = admin or
+      // this event's own coordinator).
       const { data: evData, error: evErr } = await supabaseAdmin
         .from('events')
-        .select('id, title, event_date, event_time, max_seats, location_id, locations(name), bookings(id, status, seats)')
+        .select(`
+          id, title, event_date, event_time, event_end_time, description,
+          location, location_type, max_seats, has_bus, reservation_cutoff,
+          location_id, locations(name),
+          bus_driver:members!bus_driver_id(id, name, username, display_name, hide_name),
+          event_coordinators(member_id, replaced_at, members!event_coordinators_member_id_fkey(id, name, username, display_name, hide_name)),
+          bookings(id, status, seats, member_id, members(id, name, username, display_name, hide_name))
+        `)
         .eq('hub_type', 'space')
         .eq('archived', false)
         .gte('event_date', calendar_from.slice(0, 10))
@@ -287,7 +302,20 @@ export async function GET(req) {
         .order('event_date', { ascending: true })
         .order('event_time', { ascending: true })
       if (evErr) return NextResponse.json({ error: evErr.message }, { status: 500 })
-      events = evData || []
+
+      events = (evData || []).map(ev => {
+        const activeCoordinators = (ev.event_coordinators || []).filter(c => !c.replaced_at)
+        const isCoordinator = activeCoordinators.some(c => c.member_id === member.id)
+        const canManage = !!member.is_admin || isCoordinator
+        const bookings = (ev.bookings || []).map(b => ({
+          id: b.id, status: b.status, seats: b.seats, member_id: b.member_id,
+          isOwn: b.member_id === member.id,
+          display_name: resolveMemberName(b.members, {
+            viewerId: member.id, canManage, selfLabel: 'You',
+          }),
+        }))
+        return { ...ev, isCoordinator, bookings }
+      })
     }
 
     return NextResponse.json({ bookings, events })

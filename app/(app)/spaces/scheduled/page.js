@@ -6,7 +6,8 @@ import { sydneyTodayStr } from "@/lib/date"
 import { toInstant, sydneyOffsetMinutes } from "@/lib/spaces"
 import { supabase } from "@/lib/supabase"
 import EventSlideOut from "@/components/EventSlideOut"
-import SharedSpaceEventRow from "@/components/SharedSpaceEventRow"
+import SpaceScheduledEventCard from "@/components/SpaceScheduledEventCard"
+import PromoteBookingModal from "@/components/PromoteBookingModal"
 
 // Space Bookings' Scheduled tab. Added 2026-08-22 after Iain flagged /spaces
 // only had a Home page, same Home-preview + Scheduled-full-list split every
@@ -32,6 +33,9 @@ export default function SpacesScheduledPage() {
   const { member } = useUser()
   const [rows, setRows] = useState(null) // null = loading; else [{kind:'event', ...}]
   const [fullEvent, setFullEvent] = useState(null)
+  // Edit pill, owner-only (Iain, 2026-08-23) -- same PromoteBookingModal
+  // edit mode My Space Bookings and the Next Scheduled Space tile use.
+  const [editingEvent, setEditingEvent] = useState(null)
 
   const load = useCallback(async () => {
     const today = sydneyTodayStr()
@@ -89,7 +93,8 @@ export default function SpacesScheduledPage() {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
           {rows.map(row => (
-            <SharedSpaceEventRow key={row.id} event={row.event} onOpen={() => openEvent(row.event.id)} />
+            <SpaceScheduledEventCard key={row.id} event={row.event}
+              onOpen={() => openEvent(row.event.id)} onEdit={setEditingEvent} />
           ))}
         </div>
       )}
@@ -100,6 +105,14 @@ export default function SpacesScheduledPage() {
         isAuthenticated={true}
         onRefresh={() => { load(); if (fullEvent) openEvent(fullEvent.id) }}
       />
+
+      {editingEvent && (
+        <PromoteBookingModal
+          editEvent={editingEvent}
+          onClose={() => setEditingEvent(null)}
+          onPromoted={() => { setEditingEvent(null); load() }}
+        />
+      )}
     </div>
   )
 }

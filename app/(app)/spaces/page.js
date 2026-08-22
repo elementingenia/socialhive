@@ -9,6 +9,7 @@ import SpaceBookingForm from "@/components/SpaceBookingForm"
 import LocationScheduleView from "@/components/LocationScheduleView"
 import { SpaceIcon } from "@/components/NavIcons"
 import NextSpaceEventTile from "@/components/NextSpaceEventTile"
+import PromoteBookingModal from "@/components/PromoteBookingModal"
 
 // Book a Space hub home. Scope: Book_a_Space_Scope_v2.md /
 // Book_a_Space_Technical_Design.md (Iain, 2026-08-22). Merges the existing
@@ -40,6 +41,10 @@ export default function SpacesPage() {
   // instance (below) never reached it (Iain, 2026-08-22: "will not appear
   // until the user manually refreshes the page").
   const [mySpacesRefresh, setMySpacesRefresh] = useState(0)
+  // Edit pill on the Next Scheduled Space tile itself, for its organiser
+  // (Iain, 2026-08-23) -- same PromoteBookingModal edit mode My Space
+  // Bookings already uses.
+  const [editingEvent, setEditingEvent] = useState(null)
 
   const load = useCallback(async () => {
     const todayStr = sydneyTodayStr()
@@ -94,10 +99,9 @@ export default function SpacesPage() {
       </button>
 
       {nextEvent && (() => {
-        const coordinators = (nextEvent.event_coordinators || [])
-          .filter(c => !c.replaced_at)
-          .map(c => c.members)
-          .filter(Boolean)
+        const activeCoordinators = (nextEvent.event_coordinators || []).filter(c => !c.replaced_at)
+        const coordinators = activeCoordinators.map(c => c.members).filter(Boolean)
+        const isCoordinator = activeCoordinators.some(c => c.member_id === member?.id)
         const confirmed = (nextEvent.bookings || []).filter(b => b.status === "confirmed")
         const bookedCount = confirmed.reduce((sum, b) => sum + (b.seats || 1), 0)
         const myBooking = (nextEvent.bookings || []).find(
@@ -110,6 +114,8 @@ export default function SpacesPage() {
               coordinators={coordinators}
               bookedCount={bookedCount}
               myBooking={myBooking}
+              isCoordinator={isCoordinator}
+              onEdit={() => setEditingEvent(nextEvent)}
               onOpen={() => openEvent(nextEvent.id)}
             />
           </div>
@@ -142,6 +148,14 @@ export default function SpacesPage() {
           setBookingOpen(true)
         }}
       />
+
+      {editingEvent && (
+        <PromoteBookingModal
+          editEvent={editingEvent}
+          onClose={() => setEditingEvent(null)}
+          onPromoted={() => { setEditingEvent(null); load() }}
+        />
+      )}
     </div>
   )
 }
