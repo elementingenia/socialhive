@@ -1185,10 +1185,11 @@ export default function HelpGuidePage() {
                 editing and cancelling" below for what that shows and how to manage a booking.
               </Step>
               <Step>
-                Tap <strong>Scheduled</strong> to see every resident's space activity coming up, both
-                bookings made just for one person and bookings that have been opened up to others (see
-                "Allow others to join" below) — the same Home-preview-plus-full-list split every other
-                hub in the app uses.
+                Tap <strong>Scheduled</strong> to see every upcoming space booking you could join —
+                bookings other residents have opened up via "Allow others to join" (see below). A
+                booking still just for one person doesn't appear here (there's nothing to book into),
+                the same way it wouldn't be visible on any other hub's Scheduled list until it's a
+                real, joinable event.
               </Step>
             </Subsection>
 

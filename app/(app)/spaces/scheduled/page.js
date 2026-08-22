@@ -6,54 +6,31 @@ import { sydneyTodayStr } from "@/lib/date"
 import { toInstant, sydneyOffsetMinutes } from "@/lib/spaces"
 import { supabase } from "@/lib/supabase"
 import EventSlideOut from "@/components/EventSlideOut"
-import SharedSpaceEventRow, { fmtSpaceEventDate, fmtSpaceEventTime } from "@/components/SharedSpaceEventRow"
+import SharedSpaceEventRow from "@/components/SharedSpaceEventRow"
 
 // Space Bookings' Scheduled tab. Added 2026-08-22 after Iain flagged /spaces
 // only had a Home page, same Home-preview + Scheduled-full-list split every
 // other hub already has (Show Time's /movies + /screenings, Social's
 // /social + /social/events).
 //
-// Iain, 2026-08-22, second pass: "The Scheduled Page will include all
-// resident bookings, as the user can see their own bookings on the home
-// page." The first version only ever listed SHARED events (bookings
-// promoted via "Allow others to join") -- this rewrite widens it to every
-// resident's space activity, shared and still-private, reusing
-// /api/spaces?calendar_from=&calendar_to= (no location_id) rather than
-// inventing new privacy-handling logic: that mode already returns every
-// CONFIRMED private space_booking with the standard Display Name /
-// hide_name masking (resolveMemberName, same convention as any other
-// attendee list) plus, as of this same change, every hub_type='space'
-// shared event in range too.
+// Corrected 2026-08-22, third pass, per Iain: "The scheduled page is only
+// for spaces booked that have invitees enabled. It is not for all space
+// bookings by all users. Idea is that the logged in user can see OTHER
+// user space bookings that they COULD attend." A private booking, by
+// definition, has no seats another resident can book into -- listing it
+// here would be misleading (nothing to tap through to attend) and a
+// privacy overreach (broadcasting who's using a room for personal use to
+// every other resident). Reverted the second pass's private-bookings
+// merge; this page shows ONLY hub_type='space' events -- bookings that
+// have been shared via "Allow others to join" -- exactly like every other
+// hub's Scheduled list only ever shows real, joinable events. A resident's
+// own private bookings still live on the Home page's My Space Bookings.
 
 const WINDOW_DAYS = 180 // generous forward window; nothing here needs an exact cap
 
-function PrivateBookingRow({ booking }) {
-  return (
-    <div style={{
-      background: "var(--surface)", border: "1px solid var(--border)",
-      borderLeft: "4px solid var(--amber)", borderRadius: "14px",
-      padding: "0.9rem 1.1rem",
-      display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem",
-    }}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "var(--text)" }}>
-          {booking.title || "Space booking"}
-        </div>
-        <div style={{ fontSize: "0.8rem", color: "var(--amber-dark, var(--amber))", fontWeight: 600, marginTop: 2 }}>
-          {fmtSpaceEventDate(booking._dateStr)} · {fmtSpaceEventTime(booking._timeStr)}
-          {booking.location_name ? ` · ${booking.location_name}` : ""}
-        </div>
-      </div>
-      <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", flexShrink: 0, textAlign: "right" }}>
-        {booking.booked_by_name}
-      </div>
-    </div>
-  )
-}
-
 export default function SpacesScheduledPage() {
   const { member } = useUser()
-  const [rows, setRows] = useState(null) // null = loading; else [{kind:'event'|'private', ...}]
+  const [rows, setRows] = useState(null) // null = loading; else [{kind:'event', ...}]
   const [fullEvent, setFullEvent] = useState(null)
 
   const load = useCallback(async () => {
@@ -70,22 +47,8 @@ export default function SpacesScheduledPage() {
     const eventRows = (data.events || []).map(ev => ({
       kind: "event", id: `event-${ev.id}`, sortKey: `${ev.event_date}T${ev.event_time || "00:00"}`, event: ev,
     }))
-    const privateRows = (data.bookings || [])
-      .filter(b => b.purpose === "private")
-      .map(b => ({
-        kind: "private", id: `private-${b.id}`, sortKey: b.starts_at,
-        booking: {
-          ...b,
-          location_name: b.location_name,
-          booked_by_name: b.booked_by_name,
-          _dateStr: b.starts_at.slice(0, 10),
-          _timeStr: new Date(b.starts_at).toLocaleTimeString("en-AU", {
-            hour: "numeric", minute: "2-digit", hour12: false, timeZone: "Australia/Sydney",
-          }),
-        },
-      }))
 
-    setRows([...eventRows, ...privateRows].sort((a, c) => a.sortKey.localeCompare(c.sortKey)))
+    setRows(eventRows.sort((a, c) => a.sortKey.localeCompare(c.sortKey)))
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -119,15 +82,15 @@ export default function SpacesScheduledPage() {
             Nothing booked yet
           </div>
           <div style={{ fontSize: "0.88rem" }}>
-            Every resident's upcoming space booking — shared or still private — will show up here.
+            No shared space bookings coming up — spaces opened up with "Allow others to join"
+            will show up here.
           </div>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-          {rows.map(row => row.kind === "event"
-            ? <SharedSpaceEventRow key={row.id} event={row.event} onOpen={() => openEvent(row.event.id)} />
-            : <PrivateBookingRow key={row.id} booking={row.booking} />
-          )}
+          {rows.map(row => (
+            <SharedSpaceEventRow key={row.id} event={row.event} onOpen={() => openEvent(row.event.id)} />
+          ))}
         </div>
       )}
 
