@@ -130,7 +130,7 @@ function SpaceBookingTile() {
       alignItems: "center", justifyContent: "space-between", marginTop: "0.5rem", marginBottom: "0.75rem",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
-        <span style={{ color: "var(--space)", lineHeight: 0 }}><SpaceIcon size={28} /></span>
+        <span style={{ color: "var(--space)", lineHeight: 0, display: "flex", alignItems: "center" }}><SpaceIcon size={40} /></span>
         <div>
           <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>Book a Space</div>
           <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{label()}</div>
