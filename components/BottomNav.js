@@ -10,7 +10,7 @@ import { BAR_ENABLED } from "@/lib/features"
 import {
   HomeIcon, MoviesIcon, CalendarIcon, SuggestionsIcon, DVDIcon,
   BookClubIcon, SocialIcon, AdminIcon, BookingsIcon, BarIcon,
-  InfoIcon, DocumentsIcon, ContactsIcon, ClubsIcon,
+  InfoIcon, DocumentsIcon, ContactsIcon, ClubsIcon, SpaceIcon,
 } from "@/components/NavIcons"
 
 const HUB_CONFIG = {
@@ -49,6 +49,15 @@ const HUB_CONFIG = {
     items: [
       { path: "/booklibrary",       label: "Library Home", Icon: BookClubIcon },
       { path: "/booklibrary/books", label: "Library",      Icon: BookClubIcon },
+    ],
+  },
+  space: {
+    colour: "var(--space)",
+    // Single-page hub for now -- no /spaces/scheduled yet (the "Next Booked
+    // Space" / "Upcoming Shared Bookings" list already lives on /spaces
+    // itself). Add a second item here if/when that list gets its own page.
+    items: [
+      { path: "/spaces", label: "Space Bookings", Icon: SpaceIcon },
     ],
   },
 }
