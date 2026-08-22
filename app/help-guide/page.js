@@ -125,7 +125,9 @@ const RAW_SECTIONS = [
   {
     id: "calendar", num: 9, title: "Community Calendar & Booking a Space",
     subs: [
-      { title: "Booking a common space",  id: "sub-calendar-space" },
+      { title: "Booking a common space from the Calendar",  id: "sub-calendar-space" },
+      { title: "The Space Bookings hub",                     id: "sub-calendar-spacehub" },
+      { title: "Allow others to join",                       id: "sub-calendar-spacepromote" },
     ],
   },
   {
@@ -1141,12 +1143,18 @@ export default function HelpGuidePage() {
               any event to open its full detail panel and book your place directly from the calendar.
             </Step>
 
-            <Subsection id="sub-calendar-space" title="Booking a common space">
+            <Subsection id="sub-calendar-space" title="Booking a common space from the Calendar">
               <Step>
-                Tap <strong>+ Book a Space</strong> at the top of the Calendar to reserve a common area
-                for your own personal use — separate from any hub or club event. Choose the date, start
-                and end time, and the space you want; the form checks for a clash against any other
-                Hive booking or event using that space before letting you confirm.
+                At the top of the Calendar you'll find two buttons: <strong>+ Book by Date</strong> —
+                pick the date and time first, then choose a free space — and{" "}
+                <strong>📍 Book by Location</strong> — pick a room first and see what's already booked
+                there over the next couple of weeks before choosing a free slot. Both end up at the
+                same booking form and book the same way; use whichever order suits how you're thinking
+                about it.
+              </Step>
+              <Step>
+                Either way, the form checks for a clash against any other Hive booking or event using
+                that space before letting you confirm.
               </Step>
               <InfoBox>
                 💡 The Hive calendar only knows about Hive bookings. The Ingenia app manages the same
@@ -1158,6 +1166,44 @@ export default function HelpGuidePage() {
                 Manager's sign-off before you use them. If you pick one, you'll be asked to tick a box
                 confirming you've already spoken to Ingenia, and to note who you spoke to, before the
                 booking can be submitted.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-calendar-spacehub" title="The Space Bookings hub">
+              <Step>
+                Every space booking you make — from the Calendar or from Home — also lives in its own
+                dedicated <strong>Space Bookings</strong> hub, the same way Show Time and Social have
+                their own Home and Scheduled pages. Reach it via the <strong>Book a Space</strong> pill
+                near the top of your Home page, which also shows your soonest upcoming shared space
+                booking (<em>"Next: [event] — [date]"</em>) once you have one.
+              </Step>
+              <Step>
+                The hub's own Home page has a <strong>Book a Space</strong> button (this is the
+                Book by Location flow), a <strong>Next Booked Space</strong> preview of the soonest
+                shared booking with a <strong>See all →</strong> link through to the full list, and
+                your <strong>My Space Bookings</strong> panel underneath — see "My Space Bookings —
+                editing and cancelling" below for what that shows and how to manage a booking.
+              </Step>
+              <Step>
+                Tap <strong>Scheduled</strong> to see every resident's space activity coming up, both
+                bookings made just for one person and bookings that have been opened up to others (see
+                "Allow others to join" below) — the same Home-preview-plus-full-list split every other
+                hub in the app uses.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-calendar-spacepromote" title="Allow others to join">
+              <Step>
+                Booked a space for something other residents might want to come along to? Open the
+                booking from <strong>My Space Bookings</strong> and tap{" "}
+                <strong>Allow others to join</strong>. This turns your personal booking into a shared
+                event other residents can see and book into — give it a title, a total number of
+                seats, and how many seats one person can book at once.
+              </Step>
+              <Step>
+                Once shared, it behaves just like any other Hive event: it appears on the Calendar and
+                in <strong>Scheduled</strong> for everyone, and residents book a seat the same way they
+                would for a Show Time screening or Social event.
               </Step>
             </Subsection>
           </Section>
@@ -1195,16 +1241,23 @@ export default function HelpGuidePage() {
 
             <Subsection id="sub-bookings-space" title="My Space Bookings — editing and cancelling">
               <Step>
-                If you have booked a common space for your own personal use (see "Booking a common
-                space" above), it appears in its own <strong>My Space Bookings</strong> panel on this
-                page, grouped by location with the soonest booking at each location listed first.
+                Every space you've booked appears in <strong>My Space Bookings</strong>, grouped by
+                location with the soonest booking at each location listed first — this includes both
+                bookings made just for yourself and any shared space events you're booked into,
+                whether you started them yourself (see "Allow others to join") or joined one someone
+                else opened up.
               </Step>
               <Step>
-                Tap <strong>Edit</strong> on a space booking to change its date, time, or location.
-                This opens the same booking form used to make it in the first place, so the change
-                still goes through the same clash-check against other Hive bookings and events, and
-                still asks for Ingenia's sign-off if you switch to a Request Only space. Tap{" "}
-                <strong>Cancel</strong> to release the booking entirely.
+                Tap a private (not-yet-shared) booking to open its edit sheet. From there you can{" "}
+                <strong>Allow others to join</strong> to turn it into a shared event,{" "}
+                <strong>Save changes</strong> after adjusting its date, time, or location — this still
+                runs the same clash-check and, if you switch to a Request Only space, still asks for
+                Ingenia's sign-off — or tap <strong>Cancel this booking</strong> at the bottom to
+                release it entirely.
+              </Step>
+              <Step>
+                Tap a shared space event and it opens the same way any other Hive event does, with
+                booking and seat details rather than the edit form above.
               </Step>
               <InfoBox>
                 💡 Editing a space booking checks the new date/time/location for clashes before
