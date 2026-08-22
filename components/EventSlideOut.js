@@ -2366,7 +2366,8 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
             <span style={{display:"inline-flex",alignItems:"center",gap:5}}><CalendarIcon size={13} />{fmtDate(event.event_date)}{event.event_time ? ` at ${fmtTime(event.event_time)}` : ''}</span>
           </div>
 
-          {/* Location — shown for social events */}
+          {/* Location — shown for any hub whenever the event carries one
+              (Iain, 2026-08-23: must show throughout, not just some hubs) */}
           {event.location && (
             <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10 }}>
               📍 {event.location_type === "offsite" ? event.location.split("\n")[0] : event.location}
