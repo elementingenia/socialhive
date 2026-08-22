@@ -983,11 +983,19 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   const fieldRefs = useRef({})
   // Order matches the form's actual screen order after the 2026-08-07
   // regrouping (bring now renders before book, not after).
-  const FIELD_ORDER = ["title", "event_date", "location", "event_end_time", "bring", "book", "coordinators"]
+  // Iain, 2026-08-22: Start Time had NO mandatory check at all here --
+  // no asterisk, no red border, not in FIELD_ORDER/computeInvalidFields --
+  // while End Time got the full treatment, so a resident could Save with
+  // no start time and no warning. Social's own event_time field hit this
+  // exact bug once already (2026-08-04, see that file's own FIELD_ORDER
+  // comment) and was fixed there; Clubs never got the equivalent fix.
+  // Mirrored here to match Social exactly, not invented fresh.
+  const FIELD_ORDER = ["title", "event_date", "event_time", "location", "event_end_time", "bring", "book", "coordinators"]
   function computeInvalidFields() {
     const invalid = []
     if (!caps.hasBooks && !form.title.trim()) invalid.push("title")
     if (!form.event_date) invalid.push("event_date")
+    if (!form.event_time) invalid.push("event_time")
     const venueMissing = form.location_type === "onsite" ? !form.location_id : !form.location.trim()
     if (venueMissing) invalid.push("location")
     if (needsSpaceValidation({ location_type: form.location_type, bookable: selectedLocation?.bookable }) && !form.event_end_time) invalid.push("event_end_time")
@@ -1004,6 +1012,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   const FIELD_MESSAGES = {
     title: "Please give the event a name.",
     event_date: "Date is required.",
+    event_time: "Start time is required.",
     location: "Please choose a venue.",
     event_end_time: "An end time is required for events in a common space.",
     book: "Please choose a book.",
@@ -1291,9 +1300,11 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
           style={{ ...inputStyle, ...(invalidFields.includes("event_date") ? INVALID_FIELD_STYLE : { border: "1.5px solid var(--green)" }) }} />
       </div>
 
-      <div style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Start Time</label>
-        <TimeField value={form.event_time} onChange={v => set("event_time", v)} colour={colour} />
+      <div ref={el => (fieldRefs.current.event_time = el)} style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Start Time <span style={{ color: "var(--danger)" }}>*</span>
+          {invalidFields.includes("event_time") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
+        </label>
+        <TimeField value={form.event_time} onChange={v => set("event_time", v)} colour={form.event_time ? "var(--green)" : "var(--danger)"} invalid={invalidFields.includes("event_time")} />
       </div>
 
       {!event && (
