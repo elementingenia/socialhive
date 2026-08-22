@@ -3,17 +3,21 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { authedFetch } from "@/lib/getAuthToken"
 import CalendarView from "@/components/CalendarView"
 import EventSlideOut from "@/components/EventSlideOut"
-import SpaceBookingForm from "@/components/SpaceBookingForm"
-import LocationScheduleView from "@/components/LocationScheduleView"
 import { sydneyTodayStr, sydneyDateStrPlusDays } from "@/lib/date"
+
+// Book by Date / Book by Location entry points removed from here 2026-08-23
+// (Iain: "should have been removed") -- Book a Space now has its own
+// dedicated hub (/spaces, "Book a Space" pill on Home), which was the
+// point of building it; keeping a second, older pair of entry points here
+// was redundant now that hub exists. Calendar stays a pure browse/view
+// surface for every hub's events, space bookings included (see the
+// "Spaces" filter pill in CalendarView.js) -- booking itself happens from
+// the hub that owns it, same as Show Time/Social/Clubs already work.
 
 export default function CalendarPage() {
   const [events, setEvents]   = useState([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
-  const [bookingSpace, setBookingSpace] = useState(false)
-  const [browsingByLocation, setBrowsingByLocation] = useState(false)
-  const [spacePrefill, setSpacePrefill] = useState(null) // { locationId, date } handed off from LocationScheduleView, or null
   const loadRef = useRef(0)
 
   const loadEvents = useCallback(async () => {
@@ -61,39 +65,6 @@ export default function CalendarPage() {
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
-      {/* Book a Space — independent of every hub/club (Iain, 2026-08-01).
-          Calendar is the entry point: it's where a resident would already be
-          checking what's on before deciding when to book their own use of a
-          room. Two ways in (Social_Hive_Location_First_Booking_Scope_v2.md,
-          decision #1, Iain 2026-08-16/17): Book by Date -- the original
-          date/time-first flow -- or Book by Location -- pick the space first,
-          see its schedule, then hand off into the same form. One booking
-          engine underneath either way. */}
-      <div style={{ padding: "12px 16px 0", display: "flex", gap: "0.6rem" }}>
-        <button
-          onClick={() => { setSpacePrefill(null); setBookingSpace(true) }}
-          style={{
-            flex: 1, background: "var(--surface)", border: "1px dashed var(--border)",
-            borderRadius: 10, padding: "0.65rem 1rem", color: "var(--text)", fontWeight: 600,
-            fontSize: "0.88rem", cursor: "pointer", display: "flex", alignItems: "center",
-            justifyContent: "center", gap: "0.4rem",
-          }}
-        >
-          <span style={{ fontSize: "1.05rem", lineHeight: 1 }}>+</span> Book by Date
-        </button>
-        <button
-          onClick={() => setBrowsingByLocation(true)}
-          style={{
-            flex: 1, background: "var(--surface)", border: "1px dashed var(--border)",
-            borderRadius: 10, padding: "0.65rem 1rem", color: "var(--text)", fontWeight: 600,
-            fontSize: "0.88rem", cursor: "pointer", display: "flex", alignItems: "center",
-            justifyContent: "center", gap: "0.4rem",
-          }}
-        >
-          <span style={{ fontSize: "1.05rem", lineHeight: 1 }}>📍</span> Book by Location
-        </button>
-      </div>
-
       {loading && events.length === 0 ? (
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "center",
@@ -120,24 +91,6 @@ export default function CalendarPage() {
         onClose={() => setSelected(null)}
         isAuthenticated={true}
         onRefresh={handleRefresh}
-      />
-
-      <SpaceBookingForm
-        open={bookingSpace}
-        onClose={() => setBookingSpace(false)}
-        onBooked={() => {}}
-        initialLocationId={spacePrefill?.locationId || ""}
-        initialDate={spacePrefill?.date || ""}
-      />
-
-      <LocationScheduleView
-        open={browsingByLocation}
-        onClose={() => setBrowsingByLocation(false)}
-        onPickSlot={({ locationId, date }) => {
-          setSpacePrefill({ locationId, date })
-          setBrowsingByLocation(false)
-          setBookingSpace(true)
-        }}
       />
     </div>
   )
