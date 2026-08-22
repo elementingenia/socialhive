@@ -213,6 +213,18 @@ export function ShedIcon({ size = 26 }) {
   )
 }
 
+// Location pin with a booking-check inside -- Book a Space hub icon
+export function SpaceIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 35 5 C 20 5 9 16 9 30 C 9 48 35 65 35 65 C 35 65 61 48 61 30 C 61 16 50 5 35 5 Z
+           M 35 12 C 46.5 12 54 20 54 30 C 54 41 35 55 35 55 C 35 55 16 41 16 30 C 16 20 23.5 12 35 12 Z
+           M 24 30 L 31 37 L 46 22 L 42 18 L 31 29 L 28 26 Z"/>
+    </svg>
+  )
+}
+
 // ── Useful Information hub icons ─────────────────────────────────────────────
 
 // Info circle with "i" — hub nav icon
