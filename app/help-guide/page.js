@@ -1179,14 +1179,14 @@ export default function HelpGuidePage() {
               </Step>
               <Step>
                 The hub's own Home page has a <strong>Book a Space</strong> button (this is the
-                Book by Location flow), a <strong>Next Booked Space</strong> preview of the soonest
-                shared booking with a <strong>See all →</strong> link through to the full list, and
+                Book by Location flow), a <strong>Next Scheduled Space</strong> preview of the soonest
+                space booking open to any resident, with an <strong>Edit</strong> button for the organiser, and
                 your <strong>My Space Bookings</strong> panel underneath — see "My Space Bookings —
                 editing and cancelling" below for what that shows and how to manage a booking.
               </Step>
               <Step>
                 Tap <strong>Scheduled</strong> to see every upcoming space booking you could join —
-                bookings other residents have opened up via "Allow others to join" (see below). A
+                bookings other residents have opened up via "Allow others to join" (see below), shown the full event-card format every other hub uses — date/time, location, coordinator, a bus row if relevant, and a capacity bar, plus a <strong>▼ Attendees</strong> toggle to see who's booked in. If you're the organiser, an <strong>Edit</strong> button sits next to the status pill. A
                 booking still just for one person doesn't appear here (there's nothing to book into),
                 the same way it wouldn't be visible on any other hub's Scheduled list until it's a
                 real, joinable event.
@@ -1258,7 +1258,7 @@ export default function HelpGuidePage() {
               </Step>
               <Step>
                 Tap a shared space event and it opens the same way any other Hive event does, with
-                booking and seat details rather than the edit form above.
+                booking and seat details rather than the edit form above. If you're the organiser, an <strong>Edit</strong> button next to the status pill lets you change the title, total seats, or naming requirement — the date, time, and location stay fixed once a booking is shared.
               </Step>
               <InfoBox>
                 💡 Editing a space booking checks the new date/time/location for clashes before
