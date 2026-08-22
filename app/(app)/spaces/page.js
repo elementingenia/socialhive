@@ -36,6 +36,12 @@ export default function SpacesPage() {
   const [bookingOpen, setBookingOpen] = useState(false)
   const [browsingByLocation, setBrowsingByLocation] = useState(false)
   const [spacePrefill, setSpacePrefill] = useState(null)
+  // Bumped whenever the CTA form below books/edits something -- MySpaceBookings
+  // is a self-contained component with its own load(), which otherwise only
+  // ever runs on mount, so a booking made via THIS page's own SpaceBookingForm
+  // instance (below) never reached it (Iain, 2026-08-22: "will not appear
+  // until the user manually refreshes the page").
+  const [mySpacesRefresh, setMySpacesRefresh] = useState(0)
 
   const load = useCallback(async () => {
     const todayStr = sydneyTodayStr()
@@ -101,7 +107,7 @@ export default function SpacesPage() {
         </div>
       )}
 
-      <MySpaceBookings />
+      <MySpaceBookings refreshSignal={mySpacesRefresh} />
 
       <EventSlideOut
         event={fullEvent}
@@ -113,7 +119,7 @@ export default function SpacesPage() {
       <SpaceBookingForm
         open={bookingOpen}
         onClose={() => setBookingOpen(false)}
-        onBooked={() => load()}
+        onBooked={() => { load(); setMySpacesRefresh(n => n + 1) }}
         initialLocationId={spacePrefill?.locationId || ""}
         initialDate={spacePrefill?.date || ""}
       />

@@ -29,7 +29,14 @@ function fmtSpaceTime(iso) {
   }).toLowerCase().replace(" ", "")
 }
 
-function MySpaceBookings() {
+// refreshSignal (optional): bump this from a parent whenever something
+// OUTSIDE this component's own actions might have changed the resident's
+// space bookings -- e.g. the "Book a Space" CTA on /spaces uses its own
+// separate SpaceBookingForm instance, so a brand-new booking never runs any
+// code inside MySpaceBookings and this list previously only refreshed on
+// mount, silently missing the new row until the resident manually
+// reloaded the page (Iain, 2026-08-22, live screenshot).
+function MySpaceBookings({ refreshSignal } = {}) {
   const [bookings, setBookings] = useState(null) // null = loading
   const [cancellingId, setCancellingId] = useState(null)
   // Iain, 2026-08-17: "My Space bookings need to be editable" -- previously
@@ -53,7 +60,7 @@ function MySpaceBookings() {
     setBookings((data.bookings || []).filter(b => b.status !== "cancelled"))
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load, refreshSignal])
 
   async function cancel(id) {
     if (!window.confirm("Cancel this space booking?")) return
@@ -102,26 +109,33 @@ function MySpaceBookings() {
                 <div key={b.id} style={{
                   background: "var(--surface)", border: "1px solid var(--border)",
                   borderLeft: "4px solid var(--amber)", borderRadius: "14px",
-                  padding: "0.9rem 1.1rem", display: "flex", alignItems: "flex-start",
-                  justifyContent: "space-between", gap: "0.75rem",
+                  padding: "0.75rem 0.9rem",
                 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* No per-tile "Space Booking" or location label -- the
-                        section header (Iain, 2026-08-04) and the location
-                        heading above (Iain, 2026-08-17) already say it. */}
-                    <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginBottom: "0.3rem" }}>
-                      {fmtSpaceDate(b.starts_at)} · {fmtSpaceTime(b.starts_at)}–{fmtSpaceTime(b.ends_at)}
-                    </div>
-                    {b.title && <div style={{ fontSize: "0.82rem", color: "var(--text)" }}>{b.title}</div>}
+                  {/* Iain, 2026-08-22: date/time on one line, description
+                      below it, action pills on their own bottom row --
+                      vertical space is precious, and the old side-by-side
+                      layout pushed the row taller than any of this
+                      actually needs, especially once a 3rd pill
+                      ("Allow others to join") was added. No per-tile
+                      "Space Booking" or location label -- the section
+                      header (Iain, 2026-08-04) and the location heading
+                      above (Iain, 2026-08-17) already say it. */}
+                  <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--text)" }}>
+                    {fmtSpaceDate(b.starts_at)} · {fmtSpaceTime(b.starts_at)}–{fmtSpaceTime(b.ends_at)}
                   </div>
-                  <div style={{ display: "flex", gap: "0.5rem", flexShrink: 0, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  {b.title && (
+                    <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "0.15rem" }}>
+                      {b.title}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.6rem" }}>
                     {b.purpose === "private" && (
                       <button
                         onClick={() => setPromotingBooking(b)}
                         disabled={cancellingId === b.id}
                         style={{
                           background: "var(--surface2)", border: "1px solid var(--space)",
-                          borderRadius: 8, padding: "0.4rem 0.75rem", fontSize: "0.78rem", fontWeight: 600,
+                          borderRadius: 8, padding: "0.35rem 0.7rem", fontSize: "0.76rem", fontWeight: 600,
                           color: "var(--space)", cursor: cancellingId === b.id ? "default" : "pointer",
                           opacity: cancellingId === b.id ? 0.6 : 1,
                         }}
@@ -134,7 +148,7 @@ function MySpaceBookings() {
                       disabled={cancellingId === b.id}
                       style={{
                         background: "var(--surface2)", border: "1px solid var(--border)",
-                        borderRadius: 8, padding: "0.4rem 0.75rem", fontSize: "0.78rem", fontWeight: 600,
+                        borderRadius: 8, padding: "0.35rem 0.7rem", fontSize: "0.76rem", fontWeight: 600,
                         color: "var(--text)", cursor: cancellingId === b.id ? "default" : "pointer",
                         opacity: cancellingId === b.id ? 0.6 : 1,
                       }}
@@ -146,7 +160,7 @@ function MySpaceBookings() {
                       disabled={cancellingId === b.id}
                       style={{
                         background: "var(--surface2)", border: "1px solid var(--border)",
-                        borderRadius: 8, padding: "0.4rem 0.75rem", fontSize: "0.78rem", fontWeight: 600,
+                        borderRadius: 8, padding: "0.35rem 0.7rem", fontSize: "0.76rem", fontWeight: 600,
                         color: "var(--danger)", cursor: cancellingId === b.id ? "default" : "pointer",
                         opacity: cancellingId === b.id ? 0.6 : 1,
                       }}

@@ -369,20 +369,32 @@ export default function SpaceBookingForm({
   // pre-select it; otherwise leave the picker to the resident, same as a
   // blank-start booking would.
   const pendingInitialLocationRef = useRef(initialLocationId || null)
+  // Iain, 2026-08-22: changing the time after a room is already picked was
+  // wiping the room out entirely (Space section AND "What's it for" both
+  // vanish, Book button disables) -- loadLocations only ever tried to
+  // preserve a selection on its very first run (the hand-off ref), so any
+  // later date/time edit unconditionally cleared locationId regardless of
+  // whether the already-picked room was still free for the new window.
+  // Mirror locationId into a ref (kept current every render, not just via
+  // an effect) so every load -- not only the first -- has a candidate to
+  // re-validate and silently keep if it's still available.
+  const locationIdRef = useRef(locationId)
+  locationIdRef.current = locationId
 
   const loadLocations = useCallback(async () => {
     if (!windowValid) { setLocations(null); return }
     const tag = ++fetchTag.current
     setLocationsLoading(true)
-    const pendingLocationId = pendingInitialLocationRef.current
+    const isHandoff = pendingInitialLocationRef.current != null
+    const candidateLocationId = pendingInitialLocationRef.current ?? locationIdRef.current
     pendingInitialLocationRef.current = null
-    if (!pendingLocationId) setLocationId("")
+    if (!candidateLocationId) setLocationId("")
     // Don't clear a pending hand-off's Ingenia state -- for editBooking this
     // is the pre-filled confirmation from the original booking, which is
-    // still valid for its own unchanged window; a genuine date/time change
-    // afterwards clears pendingLocationId and this branch no longer applies,
-    // correctly voiding the old confirmation for the new window.
-    if (!pendingLocationId) { setIngeniaConfirmed(false); setIngeniaConfirmedBy("") }
+    // still valid for its own unchanged window. Any later change -- even
+    // re-validating the SAME room after a time edit -- requires a fresh
+    // confirmation for the new window, correctly voiding the old one.
+    if (!isHandoff) { setIngeniaConfirmed(false); setIngeniaConfirmedBy("") }
     try {
       const excludeParam = isEdit ? `&exclude_booking_id=${editBooking.id}` : ""
       const res = await authedFetch(`/api/spaces?event_date=${date}&event_time=${startTime}&event_end_time=${endTime}${excludeParam}`)
@@ -392,10 +404,10 @@ export default function SpaceBookingForm({
       setError("")
       const list = data.locations || []
       setLocations(list)
-      if (pendingLocationId) {
-        const match = list.find(l => l.id === pendingLocationId)
+      if (candidateLocationId) {
+        const match = list.find(l => l.id === candidateLocationId)
         if (match?.available) {
-          setLocationId(pendingLocationId)
+          setLocationId(candidateLocationId)
         } else {
           // The space the resident already committed to isn't free for
           // this window after all (e.g. they changed the date/time) --

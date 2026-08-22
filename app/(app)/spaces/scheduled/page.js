@@ -1,35 +1,91 @@
 "use client"
 import { useEffect, useState, useCallback } from "react"
-import { supabase } from "@/lib/supabase"
+import { authedFetch } from "@/lib/getAuthToken"
 import { useUser } from "@/lib/UserContext"
-import { sydneyTodayStr, isEventPast } from "@/lib/date"
+import { sydneyTodayStr } from "@/lib/date"
+import { toInstant, sydneyOffsetMinutes } from "@/lib/spaces"
+import { supabase } from "@/lib/supabase"
 import EventSlideOut from "@/components/EventSlideOut"
-import SharedSpaceEventRow from "@/components/SharedSpaceEventRow"
+import SharedSpaceEventRow, { fmtSpaceEventDate, fmtSpaceEventTime } from "@/components/SharedSpaceEventRow"
 
-// Space Bookings' Scheduled tab -- the full chronological list of shared
-// events (bookings promoted via "Allow others to join"), same Home-preview
-// + Scheduled-full-list split every other hub already has (Show Time's
-// /movies + /screenings, Social's /social + /social/events). Added
-// 2026-08-22 after Iain flagged /spaces only had a Home page. Reuses the
-// same SharedSpaceEventRow + EventSlideOut wiring /spaces itself uses --
-// no new booking/attendee logic, just a longer, uncapped list.
+// Space Bookings' Scheduled tab. Added 2026-08-22 after Iain flagged /spaces
+// only had a Home page, same Home-preview + Scheduled-full-list split every
+// other hub already has (Show Time's /movies + /screenings, Social's
+// /social + /social/events).
+//
+// Iain, 2026-08-22, second pass: "The Scheduled Page will include all
+// resident bookings, as the user can see their own bookings on the home
+// page." The first version only ever listed SHARED events (bookings
+// promoted via "Allow others to join") -- this rewrite widens it to every
+// resident's space activity, shared and still-private, reusing
+// /api/spaces?calendar_from=&calendar_to= (no location_id) rather than
+// inventing new privacy-handling logic: that mode already returns every
+// CONFIRMED private space_booking with the standard Display Name /
+// hide_name masking (resolveMemberName, same convention as any other
+// attendee list) plus, as of this same change, every hub_type='space'
+// shared event in range too.
+
+const WINDOW_DAYS = 180 // generous forward window; nothing here needs an exact cap
+
+function PrivateBookingRow({ booking }) {
+  return (
+    <div style={{
+      background: "var(--surface)", border: "1px solid var(--border)",
+      borderLeft: "4px solid var(--amber)", borderRadius: "14px",
+      padding: "0.9rem 1.1rem",
+      display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.75rem",
+    }}>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "var(--text)" }}>
+          {booking.title || "Space booking"}
+        </div>
+        <div style={{ fontSize: "0.8rem", color: "var(--amber-dark, var(--amber))", fontWeight: 600, marginTop: 2 }}>
+          {fmtSpaceEventDate(booking._dateStr)} · {fmtSpaceEventTime(booking._timeStr)}
+          {booking.location_name ? ` · ${booking.location_name}` : ""}
+        </div>
+      </div>
+      <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", flexShrink: 0, textAlign: "right" }}>
+        {booking.booked_by_name}
+      </div>
+    </div>
+  )
+}
 
 export default function SpacesScheduledPage() {
   const { member } = useUser()
-  const [events, setEvents] = useState(null) // null = loading
+  const [rows, setRows] = useState(null) // null = loading; else [{kind:'event'|'private', ...}]
   const [fullEvent, setFullEvent] = useState(null)
 
   const load = useCallback(async () => {
-    const todayStr = sydneyTodayStr()
-    const { data } = await supabase
-      .from("events")
-      .select("id, title, event_date, event_time, max_seats, locations(name), bookings(id, status, seats)")
-      .eq("hub_type", "space").eq("archived", false)
-      .gte("event_date", todayStr)
-      .order("event_date", { ascending: true })
-      .order("event_time", { ascending: true })
-      .limit(100)
-    setEvents((data || []).filter(e => !isEventPast(e)))
+    const today = sydneyTodayStr()
+    const end = new Date()
+    end.setDate(end.getDate() + WINDOW_DAYS)
+    const endStr = sydneyTodayStr(end)
+    const from = toInstant(today, "00:00", sydneyOffsetMinutes(today)).toISOString()
+    const to = toInstant(endStr, "23:59", sydneyOffsetMinutes(endStr)).toISOString()
+    const res = await authedFetch(`/api/spaces?calendar_from=${encodeURIComponent(from)}&calendar_to=${encodeURIComponent(to)}`)
+    if (!res.ok) { setRows([]); return }
+    const data = await res.json()
+
+    const eventRows = (data.events || []).map(ev => ({
+      kind: "event", id: `event-${ev.id}`, sortKey: `${ev.event_date}T${ev.event_time || "00:00"}`, event: ev,
+    }))
+    const privateRows = (data.bookings || [])
+      .filter(b => b.purpose === "private")
+      .map(b => ({
+        kind: "private", id: `private-${b.id}`, sortKey: b.starts_at,
+        booking: {
+          ...b,
+          location_name: b.location_name,
+          booked_by_name: b.booked_by_name,
+          _dateStr: b.starts_at.slice(0, 10),
+          _timeStr: new Date(b.starts_at).toLocaleTimeString("en-AU", {
+            hour: "numeric", minute: "2-digit", hour12: false, timeZone: "Australia/Sydney",
+          }),
+        },
+      }))
+
+    setRows([...eventRows, ...privateRows].sort((a, c) => a.sortKey.localeCompare(c.sortKey)))
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -44,7 +100,7 @@ export default function SpacesScheduledPage() {
     setFullEvent({ ...data, my_bookings })
   }
 
-  if (events === null) {
+  if (rows === null) {
     return (
       <div style={{ padding: "1.25rem 1rem" }}>
         {[1, 2, 3].map(i => (
@@ -56,21 +112,22 @@ export default function SpacesScheduledPage() {
 
   return (
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
-      {events.length === 0 ? (
+      {rows.length === 0 ? (
         <div style={{ textAlign: "center", padding: "3.5rem 1.5rem", color: "var(--text-dim)" }}>
           <div style={{ fontSize: "2.25rem", marginBottom: "0.75rem" }}>📅</div>
           <div style={{ fontWeight: 700, color: "var(--text)", fontSize: "1.05rem", marginBottom: "0.5rem" }}>
-            No shared bookings yet
+            Nothing booked yet
           </div>
           <div style={{ fontSize: "0.88rem" }}>
-            When a resident books a space and turns on "Allow others to join", it'll show up here.
+            Every resident's upcoming space booking — shared or still private — will show up here.
           </div>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-          {events.map(ev => (
-            <SharedSpaceEventRow key={ev.id} event={ev} onOpen={() => openEvent(ev.id)} />
-          ))}
+          {rows.map(row => row.kind === "event"
+            ? <SharedSpaceEventRow key={row.id} event={row.event} onOpen={() => openEvent(row.event.id)} />
+            : <PrivateBookingRow key={row.id} booking={row.booking} />
+          )}
         </div>
       )}
 

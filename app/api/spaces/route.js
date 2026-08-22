@@ -188,10 +188,19 @@ export async function GET(req) {
       }
     })
 
-    // When scoped to one location, also fold in events already booked
-    // there (Show Time screenings etc, via events.location_id -- confirmed
-    // in scope v2 to already exist app-wide) so the location's schedule is
+    // When scoped to one location, fold in EVERY hub's event booked there
+    // (Show Time screenings etc, via events.location_id -- confirmed in
+    // scope v2 to already exist app-wide) so the room's own schedule is
     // complete, matching admin's SpaceBookingsTab shape but resident-facing.
+    //
+    // Without a location filter, this is the Book a Space hub's OWN
+    // Scheduled tab (Iain, 2026-08-22: "The Scheduled Page will include
+    // all resident bookings, as the user can see their own bookings on
+    // the home page") -- every resident's shared space, not just the
+    // caller's. Scoped to hub_type='space' only, unlike the location-
+    // scoped branch above: this is Book a Space's own list, not a
+    // room-availability view, so a Show Time screening that happens to
+    // use the same room has no business appearing here.
     let events = []
     if (locationFilter) {
       const { data: evData, error: evErr } = await supabaseAdmin
@@ -202,6 +211,18 @@ export async function GET(req) {
         .gte('event_date', calendar_from.slice(0, 10))
         .lte('event_date', calendar_to.slice(0, 10))
         .order('event_date', { ascending: true })
+      if (evErr) return NextResponse.json({ error: evErr.message }, { status: 500 })
+      events = evData || []
+    } else {
+      const { data: evData, error: evErr } = await supabaseAdmin
+        .from('events')
+        .select('id, title, event_date, event_time, max_seats, location_id, locations(name), bookings(id, status, seats)')
+        .eq('hub_type', 'space')
+        .eq('archived', false)
+        .gte('event_date', calendar_from.slice(0, 10))
+        .lte('event_date', calendar_to.slice(0, 10))
+        .order('event_date', { ascending: true })
+        .order('event_time', { ascending: true })
       if (evErr) return NextResponse.json({ error: evErr.message }, { status: 500 })
       events = evData || []
     }
@@ -354,12 +375,12 @@ export async function PATCH(req) {
   // every other hub uses. Confirmed flippable after creation, not just at
   // booking time ("Yes can be flipped after the fact").
   if (body.action === 'promote_to_event') {
-    const { id, title, max_seats, max_seats_per_booking, allow_nonresident_guests, has_bus, bus_max_seats } = body
+    const { id, title, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names } = body
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
     try {
       const result = await promoteSpaceBookingToEvent(
         supabaseAdmin, id, member.id, !!member.is_admin,
-        { title, max_seats, max_seats_per_booking, allow_nonresident_guests, has_bus, bus_max_seats },
+        { title, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names },
       )
       if (result.error) return NextResponse.json({ error: result.error }, { status: result.status })
       return NextResponse.json(result)

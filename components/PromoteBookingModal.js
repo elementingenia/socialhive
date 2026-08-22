@@ -3,6 +3,7 @@ import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { authedFetch } from "@/lib/getAuthToken"
 import { SPACE_EVENT_TITLE_MAX } from "@/lib/spaceBookings"
+import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 
 // "Allow others to join" -- Book a Space's toggle from a private booking
 // into a real, capacity-managed shared event. Scope: Book_a_Space_Scope_v2.md
@@ -17,6 +18,19 @@ import { SPACE_EVENT_TITLE_MAX } from "@/lib/spaceBookings"
 // out of scope -- see lib/spaceBookings.js's promoteSpaceBookingToEvent
 // comment) -- managing the resulting event (seats, cancel, attendees) is a
 // job for the event itself via EventSlideOut, same as every other hub.
+//
+// Extra-attendee rules (Iain, 2026-08-22, "NO variation from what we
+// already have"): reuses the exact same shared AttendeeNamingPicker
+// Social/Clubs/Show Time all use, gated the same way (max seats per
+// booking > 1), same field names (allow_nonresident_guests,
+// require_attendee_names). No Community Bus field here -- Social only
+// ever offers Bus for an offsite event, and a promoted space booking is
+// always an ONSITE event (see promoteSpaceBookingToEvent), so a Bus
+// toggle here would be UI that can never actually apply -- offering it
+// anyway would itself be a variation from the existing pattern, not
+// consistency with it. Flagged to Iain separately: real Bus support here
+// would need genuine offsite-gathering creation, a materially bigger
+// scope item than this promote flow.
 
 function Portal({ children }) {
   const [mounted, setMounted] = useState(false)
@@ -28,31 +42,6 @@ const LABEL = { display: "block", fontSize: "0.78rem", fontWeight: 700, color: "
 const INPUT = { width: "100%", padding: "0.75rem 1rem", borderRadius: "10px", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: "0.95rem", boxSizing: "border-box", fontFamily: "inherit" }
 const FIELD = { marginBottom: "1.1rem" }
 
-function Toggle({ value, onChange, label, colour = "var(--space)" }) {
-  return (
-    <div onClick={() => onChange(!value)} style={{
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "0.65rem 0.85rem", background: "var(--surface2)",
-      borderRadius: 10, cursor: "pointer", userSelect: "none",
-      border: "1px solid var(--border)",
-    }}>
-      <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>{label}</span>
-      <div style={{
-        width: 40, height: 22, borderRadius: 11,
-        background: value ? colour : "var(--border)",
-        position: "relative", transition: "background 0.2s", flexShrink: 0,
-      }}>
-        <div style={{
-          position: "absolute", top: 2, left: value ? 20 : 2,
-          width: 18, height: 18, borderRadius: "50%",
-          background: "#fff", transition: "left 0.2s",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-        }} />
-      </div>
-    </div>
-  )
-}
-
 // booking: { id, title } -- the private space_bookings row being promoted.
 // onPromoted(event_id) fires on success so the caller can e.g. navigate to
 // the new event or just refresh its list.
@@ -60,9 +49,11 @@ export default function PromoteBookingModal({ booking, onClose, onPromoted }) {
   const [title, setTitle] = useState("")
   const [maxSeats, setMaxSeats] = useState("10")
   const [maxPerBooking, setMaxPerBooking] = useState("4")
-  const [allowGuests, setAllowGuests] = useState(false)
-  const [hasBus, setHasBus] = useState(false)
-  const [busMaxSeats, setBusMaxSeats] = useState("")
+  // Matches Social's new-event defaults exactly (app/(app)/social/events/
+  // page.js): "Anyone" is the default for allow_nonresident_guests, naming
+  // is optional (require_attendee_names off) by default.
+  const [allowGuests, setAllowGuests] = useState(true)
+  const [requireNames, setRequireNames] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
 
@@ -70,7 +61,7 @@ export default function PromoteBookingModal({ booking, onClose, onPromoted }) {
     if (booking) {
       setTitle(booking.title || "")
       setMaxSeats("10"); setMaxPerBooking("4")
-      setAllowGuests(false); setHasBus(false); setBusMaxSeats("")
+      setAllowGuests(true); setRequireNames(false)
       setError(""); setSubmitting(false)
     }
   }, [booking])
@@ -96,7 +87,7 @@ export default function PromoteBookingModal({ booking, onClose, onPromoted }) {
           action: "promote_to_event", id: booking.id,
           title: titleTrimmed, max_seats: seatsNum, max_seats_per_booking: perBookingNum,
           allow_nonresident_guests: allowGuests,
-          has_bus: hasBus, bus_max_seats: hasBus && busMaxSeats ? Number(busMaxSeats) : null,
+          require_attendee_names: requireNames,
         }),
       })
       const data = await res.json()
@@ -141,16 +132,14 @@ export default function PromoteBookingModal({ booking, onClose, onPromoted }) {
             </div>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem", marginBottom: "1.1rem" }}>
-            <Toggle value={allowGuests} onChange={setAllowGuests} label="Anyone can book (not just residents)" />
-            <Toggle value={hasBus} onChange={setHasBus} label="Offer the Community Bus" />
-          </div>
-
-          {hasBus && (
-            <div style={FIELD}>
-              <label style={LABEL}>Bus Seats</label>
-              <input style={INPUT} type="number" min={1} value={busMaxSeats} onChange={e => setBusMaxSeats(e.target.value)} placeholder="Leave blank for no limit" />
-            </div>
+          {perBookingNum > 1 && (
+            <AttendeeNamingPicker
+              allowGuests={allowGuests}
+              onAllowGuestsChange={setAllowGuests}
+              required={requireNames}
+              onRequiredChange={setRequireNames}
+              colour="var(--space)"
+            />
           )}
 
           {error && (
