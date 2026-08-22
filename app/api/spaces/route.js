@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { notify } from '@/lib/notify'
 import { isOverlapError, overlapMessage, toInstant, sydneyOffsetMinutes } from '@/lib/spaces'
+import { sydneyTodayStr } from '@/lib/date'
 import {
   listAvailableLocations, checkSpaceAvailability, validateSpaceBooking,
   toSpaceBookingWindow, BOOKING_REASON_MAX, validateIngeniaConfirmation,
@@ -135,6 +136,18 @@ export async function GET(req) {
   // booking (unlike events, which can lack an end time -- see eventClash.js),
   // so filtering on it here is safe. A finished booking simply drops off the
   // list once its window has passed, same as the app's other "past" cutoffs.
+  //
+  // Iain, 2026-08-22 (second live review): "My Space Bookings" was ONLY ever
+  // private (purpose='private') space_bookings rows -- the moment a booking
+  // was promoted via "Allow others to join" it vanished from here entirely,
+  // and joining someone ELSE'S shared space event was never reflected here
+  // at all. Iain's rule, matching every other hub's own "My Bookings" (Show
+  // Time Home etc): a resident should see EVERY space booking they hold, own
+  // gathering or someone else's, private or shared, in one place. This mode
+  // now also returns `event_bookings` -- the caller's own active bookings on
+  // any hub_type='space' event, private-vs-shared told apart client-side by
+  // shape (a space_bookings row vs an event_bookings entry), not by this
+  // still-private-only `bookings` array changing meaning.
   if (searchParams.get('mine') === '1') {
     const { data, error } = await supabaseAdmin
       .from('space_bookings')
@@ -144,7 +157,46 @@ export async function GET(req) {
       .gte('ends_at', new Date().toISOString())
       .order('starts_at', { ascending: true })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ bookings: data || [] })
+
+    const todayStr = sydneyTodayStr()
+    const { data: myEventBookings, error: mebErr } = await supabaseAdmin
+      .from('bookings')
+      .select('id, status, seats, event_id, events!inner(id, title, event_date, event_time, max_seats, location_id, archived, hub_type, locations(name))')
+      .eq('member_id', member.id)
+      .neq('status', 'cancelled')
+      .eq('events.hub_type', 'space')
+      .eq('events.archived', false)
+      .gte('events.event_date', todayStr)
+    if (mebErr) return NextResponse.json({ error: mebErr.message }, { status: 500 })
+
+    // Fetch every OTHER attendee's booking on these same events too, purely
+    // to compute "X/Y booked" the same way SharedSpaceEventRow does
+    // elsewhere -- a second, narrow query rather than a self-referential
+    // `bookings -> events -> bookings` embed, which Supabase can't resolve
+    // unambiguously (the outer table and the nested one are both `bookings`).
+    const eventIds = [...new Set((myEventBookings || []).map(b => b.event_id))]
+    let bookingsByEvent = {}
+    if (eventIds.length) {
+      const { data: allBookings, error: allErr } = await supabaseAdmin
+        .from('bookings')
+        .select('id, event_id, status, seats')
+        .in('event_id', eventIds)
+      if (allErr) return NextResponse.json({ error: allErr.message }, { status: 500 })
+      for (const b of (allBookings || [])) {
+        (bookingsByEvent[b.event_id] ||= []).push({ id: b.id, status: b.status, seats: b.seats })
+      }
+    }
+
+    const event_bookings = (myEventBookings || []).map(b => ({
+      id: b.id, status: b.status, seats: b.seats,
+      event: {
+        id: b.events.id, title: b.events.title, event_date: b.events.event_date, event_time: b.events.event_time,
+        max_seats: b.events.max_seats, location_id: b.events.location_id, locations: b.events.locations,
+        bookings: bookingsByEvent[b.event_id] || [],
+      },
+    })).sort((a, c) => `${a.event.event_date}T${a.event.event_time || '00:00'}`.localeCompare(`${c.event.event_date}T${c.event.event_time || '00:00'}`))
+
+    return NextResponse.json({ bookings: data || [], event_bookings })
   }
 
   // Mode 3: calendar range -- also doubles as the Location-First Booking

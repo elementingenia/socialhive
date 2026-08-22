@@ -290,7 +290,7 @@ export default function BookingsPage() {
     <>
       <div style={{ padding: "1rem 1rem 6rem" }}>
 
-        <MySpaceBookings />
+        <MySpaceBookings onOpenSharedEvent={id => openBooking({ event_id: id })} />
 
         {/* Filter strip -- identical in UI AND function to Calendar's hub
             filters (components/CalendarView.js): Show Time/Social are

@@ -107,7 +107,7 @@ export default function SpacesPage() {
         </div>
       )}
 
-      <MySpaceBookings refreshSignal={mySpacesRefresh} />
+      <MySpaceBookings refreshSignal={mySpacesRefresh} onOpenSharedEvent={openEvent} />
 
       <EventSlideOut
         event={fullEvent}

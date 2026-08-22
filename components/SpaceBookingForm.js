@@ -243,6 +243,14 @@ function addHour(time) {
 export default function SpaceBookingForm({
   open, onClose, onBooked, editBooking = null,
   initialDate = "", initialStartTime = "", initialEndTime = "", initialLocationId = "",
+  // Iain, 2026-08-22: the tile-level "Allow others to join"/"Cancel" pills
+  // on My Space Bookings were inconsistent with the clean, no-pills
+  // SharedSpaceEventRow format shared events use -- consolidated here
+  // instead, same as a shared event's own Modify/Cancel live inside
+  // EventSlideOut rather than on its Home tile. Both optional and only
+  // rendered in edit mode; a caller that doesn't pass them (e.g. the
+  // Book-by-Location hand-off, which never edits) sees no change.
+  onCancelBooking = null, onPromote = null,
 }) {
   const isEdit = !!editBooking
   const [date, setDate] = useState("")
@@ -554,6 +562,16 @@ export default function SpaceBookingForm({
           </div>
         ) : (
         <div style={{ padding: "1.1rem 1.1rem 0" }}>
+          {isEdit && onPromote && (
+            <button type="button" onClick={onPromote} style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem",
+              width: "100%", background: "var(--surface2)", border: "1px solid var(--space)",
+              borderRadius: 10, padding: "0.65rem 0.9rem", marginBottom: "1rem",
+              color: "var(--space)", fontWeight: 700, fontSize: "0.88rem", cursor: "pointer", fontFamily: "inherit",
+            }}>
+              Allow others to join
+            </button>
+          )}
           <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: "1.25rem", lineHeight: 1.5 }}>
             {isEdit
               ? "Change the date, time, or space for this booking. It's re-checked for clashes the same way as a new booking."
@@ -722,11 +740,28 @@ export default function SpaceBookingForm({
             style={{
               background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10,
               padding: "0.85rem 1.5rem", fontWeight: 700, fontSize: "0.95rem", width: "100%",
-              cursor: canSubmit ? "pointer" : "not-allowed", opacity: canSubmit ? 1 : 0.5, marginBottom: "1.5rem",
+              cursor: canSubmit ? "pointer" : "not-allowed", opacity: canSubmit ? 1 : 0.5,
+              marginBottom: isEdit && onCancelBooking ? "0.6rem" : "1.5rem",
             }}
           >
             {submitting ? (isEdit ? "Saving…" : "Booking…") : (isEdit ? "Save changes" : "Book this space")}
           </button>
+
+          {isEdit && onCancelBooking && (
+            <button
+              type="button"
+              onClick={() => !submitting && onCancelBooking()}
+              disabled={submitting}
+              style={{
+                background: "none", border: "1px solid var(--danger)", color: "var(--danger)",
+                borderRadius: 10, padding: "0.75rem 1.5rem", fontWeight: 700, fontSize: "0.9rem",
+                width: "100%", cursor: submitting ? "default" : "pointer", opacity: submitting ? 0.6 : 1,
+                fontFamily: "inherit", marginBottom: "1.5rem",
+              }}
+            >
+              Cancel this booking
+            </button>
+          )}
         </div>
         )}
       </div>
