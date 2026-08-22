@@ -147,7 +147,8 @@ function MySpaceBookings({ refreshSignal, onOpenSharedEvent } = {}) {
     const name = eb.event.locations?.name || "Space"
     if (!byLocation.has(name)) byLocation.set(name, [])
     byLocation.get(name).push({
-      kind: "event", sortKey: `${eb.event.event_date}T${eb.event.event_time || "00:00"}`, event: eb.event,
+      kind: "event", sortKey: `${eb.event.event_date}T${eb.event.event_time || "00:00"}`,
+      event: eb.event, mySeats: eb.seats || 1,
     })
   }
   const locationNames = [...byLocation.keys()].sort((a, b) => a.localeCompare(b))
@@ -170,7 +171,7 @@ function MySpaceBookings({ refreshSignal, onOpenSharedEvent } = {}) {
                 .sort((a, c) => a.sortKey.localeCompare(c.sortKey))
                 .map(row => row.kind === "private"
                   ? <PrivateBookingRow key={`p-${row.booking.id}`} booking={row.booking} locationName={row.booking.locations?.name} onOpen={() => setEditingBooking(row.booking)} />
-                  : <SharedSpaceEventRow key={`e-${row.event.id}`} event={row.event} onOpen={() => onOpenSharedEvent?.(row.event.id)} />
+                  : <SharedSpaceEventRow key={`e-${row.event.id}`} event={row.event} mySeats={row.mySeats} onOpen={() => onOpenSharedEvent?.(row.event.id)} />
                 )}
             </div>
           </div>

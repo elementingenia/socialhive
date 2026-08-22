@@ -20,9 +20,23 @@ export function fmtSpaceEventTime(str) {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")}${ampm}`
 }
 
-export default function SharedSpaceEventRow({ event, onOpen }) {
+// mySeats (optional): when the caller already knows the LOGGED-IN
+// resident's own seat count on this event (e.g. MySpaceBookings, which
+// fetches it via /api/spaces?mine=1's event_bookings), show that instead
+// of the event-wide capacity fill. Iain, 2026-08-23: "any other user
+// would only see the number of seats they are booked for in that event"
+// -- the X/Y-of-total-capacity view only makes sense when the resident is
+// BROWSING to decide whether to join (the /spaces "Next Booked Space"
+// preview and /spaces/scheduled, neither of which pass this prop); once
+// they're already booked into it, what they care about is their own seat
+// count, the same way every other hub's My Bookings tile shows "you have
+// N seats" rather than the whole event's fill level.
+export default function SharedSpaceEventRow({ event, onOpen, mySeats }) {
   const confirmed = (event.bookings || []).filter(b => b.status === "confirmed")
   const seatsBooked = confirmed.reduce((s, b) => s + (b.seats || 1), 0)
+  const countLabel = mySeats != null
+    ? `${mySeats} seat${mySeats === 1 ? "" : "s"} booked`
+    : `${seatsBooked}${event.max_seats ? `/${event.max_seats}` : ""} booked`
   return (
     <div onClick={onOpen} role="button" tabIndex={0} onKeyDown={e => e.key === "Enter" && onOpen()}
       style={{
@@ -38,7 +52,7 @@ export default function SharedSpaceEventRow({ event, onOpen }) {
         </div>
       </div>
       <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", flexShrink: 0 }}>
-        {seatsBooked}{event.max_seats ? `/${event.max_seats}` : ""} booked
+        {countLabel}
       </div>
     </div>
   )
