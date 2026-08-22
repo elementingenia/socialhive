@@ -6,7 +6,7 @@
 // here, same convention as findSpaceConflict in lib/eventClash.js — verified
 // live-fire against real data instead, not with a mocked db.
 
-import { spaceBookingConflictMessage, toSpaceBookingWindow, validateSpaceBooking, BOOKING_REASON_MAX, validateIngeniaConfirmation, INGENIA_CONFIRMED_BY_MAX } from '../../lib/spaceBookings.js'
+import { spaceBookingConflictMessage, toSpaceBookingWindow, validateSpaceBooking, BOOKING_REASON_MAX, validateIngeniaConfirmation, INGENIA_CONFIRMED_BY_MAX, validatePromoteToEvent, SPACE_EVENT_TITLE_MAX } from '../../lib/spaceBookings.js'
 
 let pass = 0, fail = 0
 const ok = (cond, msg) => { cond ? pass++ : (fail++, console.log('  ✗', msg)) }
@@ -120,6 +120,35 @@ ok(validateIngeniaConfirmation({ requestOnly: true, ingeniaConfirmed: true, inge
    'name at exactly the cap is valid')
 ok(validateIngeniaConfirmation({ requestOnly: true, ingeniaConfirmed: true, ingeniaConfirmedBy: 'x'.repeat(INGENIA_CONFIRMED_BY_MAX + 1) })?.includes(String(INGENIA_CONFIRMED_BY_MAX)),
    'name one over the cap is rejected and the message names the limit')
+
+
+// ── validatePromoteToEvent ("Allow others to join" toggle, 2026-08-22) ──────
+// promoteSpaceBookingToEvent itself is I/O (writes events/space_bookings/
+// event_coordinators/bookings rows) and is deliberately NOT unit-tested here,
+// same convention as findSpaceBookingConflict/checkSpaceAvailability above --
+// verified live-fire against real data instead of a mocked db. This function
+// is the one pure part: the same validation the API route must run before
+// ever calling the I/O function.
+const validPromote = { title: 'Games Afternoon', max_seats: 10, max_seats_per_booking: 4 }
+ok(validatePromoteToEvent(validPromote) === null, 'a fully filled-in promote request is valid')
+ok(validatePromoteToEvent({ ...validPromote, title: '' }) !== null, 'empty title rejected')
+ok(validatePromoteToEvent({ ...validPromote, title: '   ' }) !== null, 'whitespace-only title rejected')
+ok(validatePromoteToEvent({ ...validPromote, title: 'x'.repeat(SPACE_EVENT_TITLE_MAX) }) === null, 'title at exactly the cap is valid')
+ok(validatePromoteToEvent({ ...validPromote, title: 'x'.repeat(SPACE_EVENT_TITLE_MAX + 1) })?.includes(String(SPACE_EVENT_TITLE_MAX)),
+   'title one over the cap is rejected and the message names the limit')
+ok(validatePromoteToEvent({ ...validPromote, max_seats: null }) !== null, 'missing max_seats rejected')
+ok(validatePromoteToEvent({ ...validPromote, max_seats: 0 }) !== null, 'zero max_seats rejected')
+ok(validatePromoteToEvent({ ...validPromote, max_seats: -1 }) !== null, 'negative max_seats rejected')
+ok(validatePromoteToEvent({ ...validPromote, max_seats: 1.5 }) !== null, 'non-integer max_seats rejected')
+ok(validatePromoteToEvent({ ...validPromote, max_seats_per_booking: null }) === null,
+   'omitted max_seats_per_booking defaults to 4, same default used elsewhere in this app')
+ok(validatePromoteToEvent({ ...validPromote, max_seats: 4, max_seats_per_booking: null }) === null,
+   'default of 4 is valid when total seats is also 4')
+ok(validatePromoteToEvent({ ...validPromote, max_seats_per_booking: 0 }) !== null, 'zero max_seats_per_booking rejected')
+ok(validatePromoteToEvent({ ...validPromote, max_seats: 4, max_seats_per_booking: 5 }) !== null,
+   'seats-per-booking greater than total seats rejected')
+ok(validatePromoteToEvent({ ...validPromote, max_seats: 4, max_seats_per_booking: 4 }) === null,
+   'seats-per-booking equal to total seats is valid')
 
 console.log(`spaceBookings: ${pass} passed, ${fail} failed`)
 if (fail) process.exit(1)

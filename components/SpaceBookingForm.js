@@ -243,6 +243,14 @@ function addHour(time) {
 export default function SpaceBookingForm({
   open, onClose, onBooked, editBooking = null,
   initialDate = "", initialStartTime = "", initialEndTime = "", initialLocationId = "",
+  // Iain, 2026-08-22: the tile-level "Allow others to join"/"Cancel" pills
+  // on My Space Bookings were inconsistent with the clean, no-pills
+  // SharedSpaceEventRow format shared events use -- consolidated here
+  // instead, same as a shared event's own Modify/Cancel live inside
+  // EventSlideOut rather than on its Home tile. Both optional and only
+  // rendered in edit mode; a caller that doesn't pass them (e.g. the
+  // Book-by-Location hand-off, which never edits) sees no change.
+  onCancelBooking = null, onPromote = null,
 }) {
   const isEdit = !!editBooking
   const [date, setDate] = useState("")
@@ -258,6 +266,15 @@ export default function SpaceBookingForm({
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
   const [acknowledgedClash, setAcknowledgedClash] = useState(null) // clash items the resident proceeded past, or null
+  // Iain, 2026-08-22: "the first thing you do is choose a space so there
+  // should be no reason to have to select a space once in the booking
+  // form as you are already booking a selected space" -- when arriving
+  // via the Book-by-Location hand-off (or editing an existing booking),
+  // the space is already decided; showing the full re-pick list again is
+  // redundant friction. false = show a compact "Space: X · Change" line
+  // instead of the full list; true = show the full list (the genuine
+  // Book-by-Date flow, where no location is known yet, always needs it).
+  const [wantChangeSpace, setWantChangeSpace] = useState(false)
   const [busySlots, setBusySlots] = useState(new Set())
   const [busyIntervals, setBusyIntervals] = useState([])
   const fetchTag = useRef(0)
@@ -333,6 +350,11 @@ export default function SpaceBookingForm({
       }
       setError(""); setSuccess(false); setSubmitting(false)
       setAcknowledgedClash(null)
+      // A location is already known if editing, or if handed off from
+      // Book by Location -- start collapsed to the compact summary in
+      // both cases. Book by Date (no initial* props, not editing) still
+      // needs the full list since nothing's chosen yet.
+      setWantChangeSpace(!isEdit && !initialLocationId)
     }
   }, [open, isEdit, editBooking, initialDate, initialStartTime, initialEndTime, initialLocationId])
 
@@ -355,20 +377,32 @@ export default function SpaceBookingForm({
   // pre-select it; otherwise leave the picker to the resident, same as a
   // blank-start booking would.
   const pendingInitialLocationRef = useRef(initialLocationId || null)
+  // Iain, 2026-08-22: changing the time after a room is already picked was
+  // wiping the room out entirely (Space section AND "What's it for" both
+  // vanish, Book button disables) -- loadLocations only ever tried to
+  // preserve a selection on its very first run (the hand-off ref), so any
+  // later date/time edit unconditionally cleared locationId regardless of
+  // whether the already-picked room was still free for the new window.
+  // Mirror locationId into a ref (kept current every render, not just via
+  // an effect) so every load -- not only the first -- has a candidate to
+  // re-validate and silently keep if it's still available.
+  const locationIdRef = useRef(locationId)
+  locationIdRef.current = locationId
 
   const loadLocations = useCallback(async () => {
     if (!windowValid) { setLocations(null); return }
     const tag = ++fetchTag.current
     setLocationsLoading(true)
-    const pendingLocationId = pendingInitialLocationRef.current
+    const isHandoff = pendingInitialLocationRef.current != null
+    const candidateLocationId = pendingInitialLocationRef.current ?? locationIdRef.current
     pendingInitialLocationRef.current = null
-    if (!pendingLocationId) setLocationId("")
+    if (!candidateLocationId) setLocationId("")
     // Don't clear a pending hand-off's Ingenia state -- for editBooking this
     // is the pre-filled confirmation from the original booking, which is
-    // still valid for its own unchanged window; a genuine date/time change
-    // afterwards clears pendingLocationId and this branch no longer applies,
-    // correctly voiding the old confirmation for the new window.
-    if (!pendingLocationId) { setIngeniaConfirmed(false); setIngeniaConfirmedBy("") }
+    // still valid for its own unchanged window. Any later change -- even
+    // re-validating the SAME room after a time edit -- requires a fresh
+    // confirmation for the new window, correctly voiding the old one.
+    if (!isHandoff) { setIngeniaConfirmed(false); setIngeniaConfirmedBy("") }
     try {
       const excludeParam = isEdit ? `&exclude_booking_id=${editBooking.id}` : ""
       const res = await authedFetch(`/api/spaces?event_date=${date}&event_time=${startTime}&event_end_time=${endTime}${excludeParam}`)
@@ -378,9 +412,18 @@ export default function SpaceBookingForm({
       setError("")
       const list = data.locations || []
       setLocations(list)
-      if (pendingLocationId) {
-        const match = list.find(l => l.id === pendingLocationId)
-        setLocationId(match?.available ? pendingLocationId : "")
+      if (candidateLocationId) {
+        const match = list.find(l => l.id === candidateLocationId)
+        if (match?.available) {
+          setLocationId(candidateLocationId)
+        } else {
+          // The space the resident already committed to isn't free for
+          // this window after all (e.g. they changed the date/time) --
+          // reveal the full list rather than leaving them stuck on a
+          // blank compact summary with no way to pick anything else.
+          setLocationId("")
+          setWantChangeSpace(true)
+        }
       }
     } catch {
       if (tag === fetchTag.current) { setError("Could not check availability — check your connection"); setLocations([]) }
@@ -519,6 +562,16 @@ export default function SpaceBookingForm({
           </div>
         ) : (
         <div style={{ padding: "1.1rem 1.1rem 0" }}>
+          {isEdit && onPromote && (
+            <button type="button" onClick={onPromote} style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: "0.4rem",
+              width: "100%", background: "var(--surface2)", border: "1px solid var(--space)",
+              borderRadius: 10, padding: "0.65rem 0.9rem", marginBottom: "1rem",
+              color: "var(--space)", fontWeight: 700, fontSize: "0.88rem", cursor: "pointer", fontFamily: "inherit",
+            }}>
+              Allow others to join
+            </button>
+          )}
           <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: "1.25rem", lineHeight: 1.5 }}>
             {isEdit
               ? "Change the date, time, or space for this booking. It's re-checked for clashes the same way as a new booking."
@@ -530,11 +583,16 @@ export default function SpaceBookingForm({
             <input type="date" value={date} min={today} onChange={e => setDate(e.target.value)} style={INPUT} />
           </div>
 
+          {/* Iain, 2026-08-22: Start showed a neutral grey border when
+              empty while End showed red -- both are equally required for
+              canSubmit below, so the asymmetric styling was misleading
+              (looked like only End was mandatory). Same red-when-empty
+              treatment on both now. */}
           <div style={{ display: "flex", gap: "0.75rem" }}>
             <div style={{ ...FIELD, flex: 1 }}>
               <label style={LABEL}>Start</label>
               <TimeField
-                value={startTime} onChange={handleStartChange} colour={startTime ? "var(--green)" : "var(--border)"}
+                value={startTime} onChange={handleStartChange} colour={startTime ? "var(--green)" : "var(--danger)"}
                 hourFloor={SPACE_HOUR_FLOOR} hourCeil={SPACE_HOUR_CEIL} disabledSlots={busySlots}
               />
             </div>
@@ -556,7 +614,32 @@ export default function SpaceBookingForm({
             </div>
           )}
 
-          {windowValid && (
+          {windowValid && !wantChangeSpace && selectedLocation && (
+            <div style={FIELD}>
+              <label style={LABEL}>Space</label>
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem",
+                padding: "0.7rem 0.9rem", borderRadius: 10, border: "1px solid var(--teal)", background: "var(--surface2)",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", minWidth: 0 }}>
+                  {selectedLocation.image_url && (
+                    <img src={selectedLocation.image_url} alt="" style={{ width: 32, height: 32, borderRadius: 6, objectFit: "cover", flexShrink: 0 }} />
+                  )}
+                  <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>{selectedLocation.name}</span>
+                  {selectedLocation.request_only && (
+                    <span style={{ fontSize: "0.66rem", fontWeight: 700, padding: "0.12rem 0.4rem", borderRadius: 6,
+                      background: "var(--amber)1f", color: "var(--amber-dark)", whiteSpace: "nowrap" }}>Request Only</span>
+                  )}
+                </div>
+                <button type="button" onClick={() => setWantChangeSpace(true)}
+                  style={{ background: "none", border: "none", color: "var(--teal)", fontWeight: 700, fontSize: "0.8rem", cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+                  Change
+                </button>
+              </div>
+            </div>
+          )}
+
+          {windowValid && wantChangeSpace && (
             <div style={FIELD}>
               <label style={LABEL}>Space</label>
               {locationsLoading ? (
@@ -568,7 +651,7 @@ export default function SpaceBookingForm({
                       key={loc.id}
                       type="button"
                       disabled={!loc.available}
-                      onClick={() => loc.available && setLocationId(loc.id)}
+                      onClick={() => { if (loc.available) { setLocationId(loc.id); setWantChangeSpace(false) } }}
                       style={{
                         textAlign: "left", padding: "0.7rem 0.9rem", borderRadius: 10,
                         border: `1px solid ${locationId === loc.id ? "var(--teal)" : "var(--border)"}`,
@@ -662,11 +745,28 @@ export default function SpaceBookingForm({
             style={{
               background: "var(--teal)", color: "#fff", border: "none", borderRadius: 10,
               padding: "0.85rem 1.5rem", fontWeight: 700, fontSize: "0.95rem", width: "100%",
-              cursor: canSubmit ? "pointer" : "not-allowed", opacity: canSubmit ? 1 : 0.5, marginBottom: "1.5rem",
+              cursor: canSubmit ? "pointer" : "not-allowed", opacity: canSubmit ? 1 : 0.5,
+              marginBottom: isEdit && onCancelBooking ? "0.6rem" : "1.5rem",
             }}
           >
             {submitting ? (isEdit ? "Saving…" : "Booking…") : (isEdit ? "Save changes" : "Book this space")}
           </button>
+
+          {isEdit && onCancelBooking && (
+            <button
+              type="button"
+              onClick={() => !submitting && onCancelBooking()}
+              disabled={submitting}
+              style={{
+                background: "none", border: "1px solid var(--danger)", color: "var(--danger)",
+                borderRadius: 10, padding: "0.75rem 1.5rem", fontWeight: 700, fontSize: "0.9rem",
+                width: "100%", cursor: submitting ? "default" : "pointer", opacity: submitting ? 0.6 : 1,
+                fontFamily: "inherit", marginBottom: "1.5rem",
+              }}
+            >
+              Cancel this booking
+            </button>
+          )}
         </div>
         )}
       </div>

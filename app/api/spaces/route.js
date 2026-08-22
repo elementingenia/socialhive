@@ -2,9 +2,11 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { notify } from '@/lib/notify'
 import { isOverlapError, overlapMessage, toInstant, sydneyOffsetMinutes } from '@/lib/spaces'
+import { sydneyTodayStr } from '@/lib/date'
 import {
   listAvailableLocations, checkSpaceAvailability, validateSpaceBooking,
   toSpaceBookingWindow, BOOKING_REASON_MAX, validateIngeniaConfirmation,
+  promoteSpaceBookingToEvent,
 } from '@/lib/spaceBookings'
 import { resolveMemberName } from '@/lib/memberName'
 
@@ -134,6 +136,18 @@ export async function GET(req) {
   // booking (unlike events, which can lack an end time -- see eventClash.js),
   // so filtering on it here is safe. A finished booking simply drops off the
   // list once its window has passed, same as the app's other "past" cutoffs.
+  //
+  // Iain, 2026-08-22 (second live review): "My Space Bookings" was ONLY ever
+  // private (purpose='private') space_bookings rows -- the moment a booking
+  // was promoted via "Allow others to join" it vanished from here entirely,
+  // and joining someone ELSE'S shared space event was never reflected here
+  // at all. Iain's rule, matching every other hub's own "My Bookings" (Show
+  // Time Home etc): a resident should see EVERY space booking they hold, own
+  // gathering or someone else's, private or shared, in one place. This mode
+  // now also returns `event_bookings` -- the caller's own active bookings on
+  // any hub_type='space' event, private-vs-shared told apart client-side by
+  // shape (a space_bookings row vs an event_bookings entry), not by this
+  // still-private-only `bookings` array changing meaning.
   if (searchParams.get('mine') === '1') {
     const { data, error } = await supabaseAdmin
       .from('space_bookings')
@@ -143,7 +157,46 @@ export async function GET(req) {
       .gte('ends_at', new Date().toISOString())
       .order('starts_at', { ascending: true })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    return NextResponse.json({ bookings: data || [] })
+
+    const todayStr = sydneyTodayStr()
+    const { data: myEventBookings, error: mebErr } = await supabaseAdmin
+      .from('bookings')
+      .select('id, status, seats, event_id, events!inner(id, title, event_date, event_time, max_seats, location_id, archived, hub_type, locations(name))')
+      .eq('member_id', member.id)
+      .neq('status', 'cancelled')
+      .eq('events.hub_type', 'space')
+      .eq('events.archived', false)
+      .gte('events.event_date', todayStr)
+    if (mebErr) return NextResponse.json({ error: mebErr.message }, { status: 500 })
+
+    // Fetch every OTHER attendee's booking on these same events too, purely
+    // to compute "X/Y booked" the same way SharedSpaceEventRow does
+    // elsewhere -- a second, narrow query rather than a self-referential
+    // `bookings -> events -> bookings` embed, which Supabase can't resolve
+    // unambiguously (the outer table and the nested one are both `bookings`).
+    const eventIds = [...new Set((myEventBookings || []).map(b => b.event_id))]
+    let bookingsByEvent = {}
+    if (eventIds.length) {
+      const { data: allBookings, error: allErr } = await supabaseAdmin
+        .from('bookings')
+        .select('id, event_id, status, seats')
+        .in('event_id', eventIds)
+      if (allErr) return NextResponse.json({ error: allErr.message }, { status: 500 })
+      for (const b of (allBookings || [])) {
+        (bookingsByEvent[b.event_id] ||= []).push({ id: b.id, status: b.status, seats: b.seats })
+      }
+    }
+
+    const event_bookings = (myEventBookings || []).map(b => ({
+      id: b.id, status: b.status, seats: b.seats,
+      event: {
+        id: b.events.id, title: b.events.title, event_date: b.events.event_date, event_time: b.events.event_time,
+        max_seats: b.events.max_seats, location_id: b.events.location_id, locations: b.events.locations,
+        bookings: bookingsByEvent[b.event_id] || [],
+      },
+    })).sort((a, c) => `${a.event.event_date}T${a.event.event_time || '00:00'}`.localeCompare(`${c.event.event_date}T${c.event.event_time || '00:00'}`))
+
+    return NextResponse.json({ bookings: data || [], event_bookings })
   }
 
   // Mode 3: calendar range -- also doubles as the Location-First Booking
@@ -187,10 +240,19 @@ export async function GET(req) {
       }
     })
 
-    // When scoped to one location, also fold in events already booked
-    // there (Show Time screenings etc, via events.location_id -- confirmed
-    // in scope v2 to already exist app-wide) so the location's schedule is
+    // When scoped to one location, fold in EVERY hub's event booked there
+    // (Show Time screenings etc, via events.location_id -- confirmed in
+    // scope v2 to already exist app-wide) so the room's own schedule is
     // complete, matching admin's SpaceBookingsTab shape but resident-facing.
+    //
+    // Without a location filter, this is the Book a Space hub's OWN
+    // Scheduled tab (Iain, 2026-08-22: "The Scheduled Page will include
+    // all resident bookings, as the user can see their own bookings on
+    // the home page") -- every resident's shared space, not just the
+    // caller's. Scoped to hub_type='space' only, unlike the location-
+    // scoped branch above: this is Book a Space's own list, not a
+    // room-availability view, so a Show Time screening that happens to
+    // use the same room has no business appearing here.
     let events = []
     if (locationFilter) {
       const { data: evData, error: evErr } = await supabaseAdmin
@@ -201,6 +263,18 @@ export async function GET(req) {
         .gte('event_date', calendar_from.slice(0, 10))
         .lte('event_date', calendar_to.slice(0, 10))
         .order('event_date', { ascending: true })
+      if (evErr) return NextResponse.json({ error: evErr.message }, { status: 500 })
+      events = evData || []
+    } else {
+      const { data: evData, error: evErr } = await supabaseAdmin
+        .from('events')
+        .select('id, title, event_date, event_time, max_seats, location_id, locations(name), bookings(id, status, seats)')
+        .eq('hub_type', 'space')
+        .eq('archived', false)
+        .gte('event_date', calendar_from.slice(0, 10))
+        .lte('event_date', calendar_to.slice(0, 10))
+        .order('event_date', { ascending: true })
+        .order('event_time', { ascending: true })
       if (evErr) return NextResponse.json({ error: evErr.message }, { status: 500 })
       events = evData || []
     }
@@ -343,10 +417,34 @@ export async function PATCH(req) {
   const member = await getMember(token)
   if (!member) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
+  const body = await req.json()
+
+  // ── "Allow others to join" -- promote a private booking to a shared event ──
+  // Scope: Book_a_Space_Scope_v2.md / Book_a_Space_Technical_Design.md
+  // (Iain, 2026-08-22). Any resident, no space_owners gate -- see
+  // lib/areaAuth.js's requireResidentOrAdmin for why this hub is
+  // deliberately narrower-but-open rather than reusing the Owner model
+  // every other hub uses. Confirmed flippable after creation, not just at
+  // booking time ("Yes can be flipped after the fact").
+  if (body.action === 'promote_to_event') {
+    const { id, title, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names } = body
+    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+    try {
+      const result = await promoteSpaceBookingToEvent(
+        supabaseAdmin, id, member.id, !!member.is_admin,
+        { title, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names },
+      )
+      if (result.error) return NextResponse.json({ error: result.error }, { status: result.status })
+      return NextResponse.json(result)
+    } catch (e) {
+      return NextResponse.json({ error: e.message }, { status: 500 })
+    }
+  }
+
   const {
     id, location_id, event_date, event_time, event_end_time, reason,
     ingenia_confirmed, ingenia_confirmed_by,
-  } = await req.json()
+  } = body
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
   const { data: existing, error: fetchError } = await supabaseAdmin
