@@ -2,7 +2,7 @@
 import { useState, useMemo, useRef, useEffect } from "react"
 import { HUB_COLOURS } from "@/lib/navUtils"
 import { useMyClubs } from "@/lib/useMyClubs"
-import { MoviesIcon, SocialIcon } from "@/components/NavIcons"
+import { MoviesIcon, SocialIcon, SpaceIcon } from "@/components/NavIcons"
 import ClubScopeDropdown from "@/components/ClubScopeDropdown"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ function hubKeyOf(ev) {
   return ev?.club_id ? "club" : ev?.hub_type
 }
 function hubLabel(hub_type) {
-  const labels = { movie: "Show Time", bookclub: "Book Club", social: "Social", club: "Group/Club" }
+  const labels = { movie: "Show Time", bookclub: "Book Club", social: "Social", club: "Group/Club", space: "Spaces" }
   return labels[hub_type] || hub_type
 }
 // A club event shows its OWN club name and colour, so Dinner Club and Book
@@ -475,7 +475,7 @@ function MonthView({ events, onEventTap }) {
 // ── CalendarView (main export) ────────────────────────────────────────────────
 export default function CalendarView({ events = [], onEventTap, defaultView = "week" }) {
   const [view, setView] = useState(defaultView)
-  const [activeHubs, setActiveHubs] = useState(["movie", "club", "social"])
+  const [activeHubs, setActiveHubs] = useState(["movie", "club", "social", "space"])
   // Club filter: 'all' | 'mine' | a specific club id (Iain 2026-07-18).
   const [clubScope, setClubScope] = useState("all")
   const { myClubIds } = useMyClubs()
@@ -558,6 +558,7 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
         {[
           { key: "movie",    label: "Show Time", Icon: MoviesIcon },
           { key: "social",   label: "Social", Icon: SocialIcon },
+          { key: "space",    label: "Spaces", Icon: SpaceIcon },
         ].map(({ key, label, Icon }) => {
           const on = activeHubs.includes(key)
           const colour = HUB_COLOURS[key] || "var(--amber)"
