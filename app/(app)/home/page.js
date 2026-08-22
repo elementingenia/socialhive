@@ -3,8 +3,9 @@ import { useEffect, useState } from "react"
 import { FormattedText } from "@/lib/textFormatter"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import { useUser } from "@/lib/UserContext"
-import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon } from "@/components/NavIcons"
+import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon } from "@/components/NavIcons"
 import { BAR_ENABLED } from "@/lib/features"
 import AskQuestion from "@/components/AskQuestion"
 
@@ -81,6 +82,61 @@ function HubTiles() {
       {HUBS.map(h => h.ask
         ? <AskQuestion key={h.key} pickTarget colour={h.colour} trigger={(open) => tile(h, open)} />
         : tile(h, () => router.push(h.path)))}
+    </div>
+  )
+}
+
+// Full-width pill below the Home grid (Iain, 2026-08-22, Book_a_Space_Scope_
+// v2.md: "New dedicated Home tile -- a full-width pill below the second row
+// -- not squeezed into the existing two-row grid"). Same shape as
+// BarTabCard below -- reusing that pattern rather than inventing a new
+// pill style, per the app's canonical-asset convention. Unlike BarTabCard
+// this is NOT opt-in gated -- every resident can use Book a Space.
+function SpaceBookingTile() {
+  const router = useRouter()
+  const [nextEvent, setNextEvent] = useState(undefined) // undefined = loading, null = none
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const todayStr = sydneyTodayStr()
+      const { data } = await supabase
+        .from("events")
+        .select("id, title, event_date, event_time")
+        .eq("hub_type", "space").eq("archived", false)
+        .gte("event_date", todayStr)
+        .order("event_date", { ascending: true })
+        .order("event_time", { ascending: true })
+        .limit(5)
+      if (cancelled) return
+      setNextEvent((data || []).find(e => !isEventPast(e)) || null)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  function label() {
+    if (nextEvent === undefined) return "Loading…"
+    if (!nextEvent) return "Book a room, or open one up to others"
+    const [y, m, d] = nextEvent.event_date.split("-").map(Number)
+    const dateStr = new Date(y, m - 1, d).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })
+    return `Next: ${nextEvent.title} — ${dateStr}`
+  }
+
+  return (
+    <div onClick={() => router.push("/spaces")} style={{
+      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px",
+      padding: "1rem 1.25rem", cursor: "pointer", display: "flex",
+      alignItems: "center", justifyContent: "space-between", marginTop: "0.5rem", marginBottom: "0.75rem",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <span style={{ color: "var(--space)", lineHeight: 0 }}><SpaceIcon size={28} /></span>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>Book a Space</div>
+          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{label()}</div>
+        </div>
+      </div>
+      <span style={{ color: "var(--text-dim)", fontSize: "1.1rem" }}>›</span>
     </div>
   )
 }
@@ -199,6 +255,9 @@ export default function HomePage() {
 
           {/* Hub tiles — between main and sub notices */}
           <HubTiles />
+
+          {/* Book a Space — full-width pill, not part of the two-row grid */}
+          <SpaceBookingTile />
 
           {/* Sub notices */}
           {subTexts.map((t, i) => <SubNoticeCard key={i} text={t} />)}
