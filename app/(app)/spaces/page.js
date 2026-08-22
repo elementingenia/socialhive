@@ -1,6 +1,5 @@
 "use client"
 import { useEffect, useState, useCallback } from "react"
-import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
@@ -9,7 +8,7 @@ import MySpaceBookings from "@/components/MySpaceBookings"
 import SpaceBookingForm from "@/components/SpaceBookingForm"
 import LocationScheduleView from "@/components/LocationScheduleView"
 import { SpaceIcon } from "@/components/NavIcons"
-import SharedSpaceEventRow from "@/components/SharedSpaceEventRow"
+import NextSpaceEventTile from "@/components/NextSpaceEventTile"
 
 // Book a Space hub home. Scope: Book_a_Space_Scope_v2.md /
 // Book_a_Space_Technical_Design.md (Iain, 2026-08-22). Merges the existing
@@ -30,7 +29,6 @@ import SharedSpaceEventRow from "@/components/SharedSpaceEventRow"
 
 export default function SpacesPage() {
   const { member } = useUser()
-  const router = useRouter()
   const [nextEvent, setNextEvent] = useState(undefined) // undefined = loading, null = none
   const [fullEvent, setFullEvent] = useState(null)
   const [bookingOpen, setBookingOpen] = useState(false)
@@ -47,14 +45,20 @@ export default function SpacesPage() {
     const todayStr = sydneyTodayStr()
     const { data } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, max_seats, locations(name), bookings(id, status, seats)")
+      .select(`
+        id, title, event_date, event_time, event_end_time, description,
+        location, location_type, max_seats, has_bus, reservation_cutoff,
+        bus_driver:members!bus_driver_id(name, username),
+        event_coordinators(member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username)),
+        bookings(id, status, seats, member_id)
+      `)
       .eq("hub_type", "space").eq("archived", false)
       .gte("event_date", todayStr)
       .order("event_date", { ascending: true })
       .order("event_time", { ascending: true })
       .limit(5)
     setNextEvent((data || []).find(e => !isEventPast(e)) || null)
-  }, [])
+  }, [member?.id])
 
   useEffect(() => { load() }, [load])
 
@@ -89,23 +93,28 @@ export default function SpacesPage() {
         <SpaceIcon size={22} /> Book a Space
       </button>
 
-      {nextEvent && (
-        <div style={{ marginBottom: "1.5rem" }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--text-dim)",
-              textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Next Booked Space
-            </div>
-            <button onClick={() => router.push("/spaces/scheduled")} style={{
-              background: "none", border: "none", color: "var(--space)", fontWeight: 700,
-              fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit", padding: 0,
-            }}>
-              See all →
-            </button>
+      {nextEvent && (() => {
+        const coordinators = (nextEvent.event_coordinators || [])
+          .filter(c => !c.replaced_at)
+          .map(c => c.members)
+          .filter(Boolean)
+        const confirmed = (nextEvent.bookings || []).filter(b => b.status === "confirmed")
+        const bookedCount = confirmed.reduce((sum, b) => sum + (b.seats || 1), 0)
+        const myBooking = (nextEvent.bookings || []).find(
+          b => b.member_id === member?.id && b.status !== "cancelled",
+        ) || null
+        return (
+          <div style={{ marginBottom: "0.5rem" }}>
+            <NextSpaceEventTile
+              event={nextEvent}
+              coordinators={coordinators}
+              bookedCount={bookedCount}
+              myBooking={myBooking}
+              onOpen={() => openEvent(nextEvent.id)}
+            />
           </div>
-          <SharedSpaceEventRow event={nextEvent} onOpen={() => openEvent(nextEvent.id)} />
-        </div>
-      )}
+        )
+      })()}
 
       <MySpaceBookings refreshSignal={mySpacesRefresh} onOpenSharedEvent={openEvent} />
 
