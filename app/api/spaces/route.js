@@ -6,8 +6,9 @@ import { sydneyTodayStr } from '@/lib/date'
 import {
   listAvailableLocations, checkSpaceAvailability, validateSpaceBooking,
   toSpaceBookingWindow, BOOKING_REASON_MAX, validateIngeniaConfirmation,
-  promoteSpaceBookingToEvent,
+  promoteSpaceBookingToEvent, updateSpaceEvent,
 } from '@/lib/spaceBookings'
+import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { resolveMemberName } from '@/lib/memberName'
 
 // Personal Space Booking. Scope: Social_Hive_Personal_Space_Booking_Scope.md
@@ -161,7 +162,7 @@ export async function GET(req) {
     const todayStr = sydneyTodayStr()
     const { data: myEventBookings, error: mebErr } = await supabaseAdmin
       .from('bookings')
-      .select('id, status, seats, event_id, events!inner(id, title, event_date, event_time, max_seats, location_id, archived, hub_type, locations(name))')
+      .select('id, status, seats, event_id, events!inner(id, title, event_date, event_time, event_end_time, description, location, location_type, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, location_id, archived, hub_type, locations(name), event_coordinators(member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username)), has_bus, bus_driver:members!bus_driver_id(name, username))')
       .eq('member_id', member.id)
       .neq('status', 'cancelled')
       .eq('events.hub_type', 'space')
@@ -187,14 +188,24 @@ export async function GET(req) {
       }
     }
 
-    const event_bookings = (myEventBookings || []).map(b => ({
-      id: b.id, status: b.status, seats: b.seats,
-      event: {
-        id: b.events.id, title: b.events.title, event_date: b.events.event_date, event_time: b.events.event_time,
-        max_seats: b.events.max_seats, location_id: b.events.location_id, locations: b.events.locations,
-        bookings: bookingsByEvent[b.event_id] || [],
-      },
-    })).sort((a, c) => `${a.event.event_date}T${a.event.event_time || '00:00'}`.localeCompare(`${c.event.event_date}T${c.event.event_time || '00:00'}`))
+    const event_bookings = (myEventBookings || []).map(b => {
+      const coords = (b.events.event_coordinators || []).filter(c => !c.replaced_at)
+      return {
+        id: b.id, status: b.status, seats: b.seats,
+        isCoordinator: coords.some(c => c.member_id === member.id),
+        event: {
+          id: b.events.id, title: b.events.title, event_date: b.events.event_date, event_time: b.events.event_time,
+          event_end_time: b.events.event_end_time, description: b.events.description,
+          location: b.events.location, location_type: b.events.location_type,
+          max_seats: b.events.max_seats, max_seats_per_booking: b.events.max_seats_per_booking,
+          allow_nonresident_guests: b.events.allow_nonresident_guests, require_attendee_names: b.events.require_attendee_names,
+          location_id: b.events.location_id, locations: b.events.locations,
+          has_bus: b.events.has_bus, bus_driver: b.events.bus_driver,
+          coordinators: coords.map(c => c.members).filter(Boolean),
+          bookings: bookingsByEvent[b.event_id] || [],
+        },
+      }
+    }).sort((a, c) => `${a.event.event_date}T${a.event.event_time || '00:00'}`.localeCompare(`${c.event.event_date}T${c.event.event_time || '00:00'}`))
 
     return NextResponse.json({ bookings: data || [], event_bookings })
   }
@@ -435,6 +446,31 @@ export async function PATCH(req) {
         { title, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names },
       )
       if (result.error) return NextResponse.json({ error: result.error }, { status: result.status })
+      return NextResponse.json(result)
+    } catch (e) {
+      return NextResponse.json({ error: e.message }, { status: 500 })
+    }
+  }
+
+  // ── Edit an already-shared space event ────────────────────────────────
+  // Iain, 2026-08-23: "I cannot EDIT a space once booked, only cancel it...
+  // there needs to be an Edit Pill than [that] enable[s] the creator/owner
+  // of the booking to modify the details (which would trigger an alert to
+  // any who have booked a seat in the event if invitees was open)."
+  if (body.action === 'update_space_event') {
+    const { id, title, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names } = body
+    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+    try {
+      const result = await updateSpaceEvent(
+        supabaseAdmin, id, member.id, !!member.is_admin,
+        { title, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names },
+      )
+      if (result.error) return NextResponse.json({ error: result.error }, { status: result.status })
+      if (result.changed) {
+        await notifyEventAttendees(supabaseAdmin, id, 'event_updated',
+          `${title.trim()} has been updated — check the details.`,
+          { excludeMemberId: member.id })
+      }
       return NextResponse.json(result)
     } catch (e) {
       return NextResponse.json({ error: e.message }, { status: 500 })

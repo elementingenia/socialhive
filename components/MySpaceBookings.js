@@ -103,6 +103,12 @@ function MySpaceBookings({ refreshSignal, onOpenSharedEvent } = {}) {
   // rather than a field on SpaceBookingForm -- see that component's own
   // comment for why.
   const [promotingBooking, setPromotingBooking] = useState(null)
+  // Edit an already-shared event (Iain, 2026-08-23) -- separate from
+  // promotingBooking above: that's PromoteBookingModal in its normal
+  // "share a private booking" mode, this is the SAME component in its new
+  // editEvent mode (see that file's own comment). Only the event's own
+  // coordinator (its organiser) sees the Edit pill that opens this.
+  const [editingEvent, setEditingEvent] = useState(null)
 
   const load = useCallback(async () => {
     const res = await authedFetch("/api/spaces?mine=1")
@@ -148,7 +154,7 @@ function MySpaceBookings({ refreshSignal, onOpenSharedEvent } = {}) {
     if (!byLocation.has(name)) byLocation.set(name, [])
     byLocation.get(name).push({
       kind: "event", sortKey: `${eb.event.event_date}T${eb.event.event_time || "00:00"}`,
-      event: eb.event, mySeats: eb.seats || 1,
+      event: eb.event, mySeats: eb.seats || 1, isCoordinator: !!eb.isCoordinator,
     })
   }
   const locationNames = [...byLocation.keys()].sort((a, b) => a.localeCompare(b))
@@ -171,7 +177,23 @@ function MySpaceBookings({ refreshSignal, onOpenSharedEvent } = {}) {
                 .sort((a, c) => a.sortKey.localeCompare(c.sortKey))
                 .map(row => row.kind === "private"
                   ? <PrivateBookingRow key={`p-${row.booking.id}`} booking={row.booking} locationName={row.booking.locations?.name} onOpen={() => setEditingBooking(row.booking)} />
-                  : <SharedSpaceEventRow key={`e-${row.event.id}`} event={row.event} mySeats={row.mySeats} onOpen={() => onOpenSharedEvent?.(row.event.id)} />
+                  : (
+                    <div key={`e-${row.event.id}`}>
+                      <SharedSpaceEventRow event={row.event} mySeats={row.mySeats} compact onOpen={() => onOpenSharedEvent?.(row.event.id)} />
+                      {row.isCoordinator && (
+                        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.35rem" }}>
+                          <button type="button" onClick={() => setEditingEvent(row.event)}
+                            style={{
+                              background: "none", border: "1px solid var(--space)", color: "var(--space)",
+                              borderRadius: "20px", padding: "0.25rem 0.75rem", fontSize: "0.75rem",
+                              fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+                            }}>
+                            Edit
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )
                 )}
             </div>
           </div>
@@ -195,6 +217,14 @@ function MySpaceBookings({ refreshSignal, onOpenSharedEvent } = {}) {
           booking={promotingBooking}
           onClose={() => setPromotingBooking(null)}
           onPromoted={() => { setPromotingBooking(null); load() }}
+        />
+      )}
+
+      {editingEvent && (
+        <PromoteBookingModal
+          editEvent={editingEvent}
+          onClose={() => setEditingEvent(null)}
+          onPromoted={() => { setEditingEvent(null); load() }}
         />
       )}
     </div>

@@ -31,7 +31,15 @@ export function fmtSpaceEventTime(str) {
 // they're already booked into it, what they care about is their own seat
 // count, the same way every other hub's My Bookings tile shows "you have
 // N seats" rather than the whole event's fill level.
-export default function SharedSpaceEventRow({ event, onOpen, mySeats }) {
+//
+// compact (optional): matches Social's own "My Bookings" row exactly
+// (Iain, 2026-08-23, item 5.2 -- title, date/time, a seats PILL to the
+// right; no location line) -- used by MySpaceBookings for a shared event
+// the caller already holds a seat on. Default (false) keeps the existing
+// richer row (title, date/time · location, plain count) used for
+// /spaces/scheduled's browse-to-join list, where location is exactly the
+// thing a resident is deciding on.
+export default function SharedSpaceEventRow({ event, onOpen, mySeats, compact = false }) {
   const confirmed = (event.bookings || []).filter(b => b.status === "confirmed")
   const seatsBooked = confirmed.reduce((s, b) => s + (b.seats || 1), 0)
   const countLabel = mySeats != null
@@ -48,12 +56,22 @@ export default function SharedSpaceEventRow({ event, onOpen, mySeats }) {
       <div style={{ minWidth: 0 }}>
         <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "var(--text)" }}>{event.title}</div>
         <div style={{ fontSize: "0.8rem", color: "var(--space)", fontWeight: 600, marginTop: 2 }}>
-          {fmtSpaceEventDate(event.event_date)} · {fmtSpaceEventTime(event.event_time)}{event.locations?.name ? ` · ${event.locations.name}` : ""}
+          {fmtSpaceEventDate(event.event_date)} · {fmtSpaceEventTime(event.event_time)}
+          {!compact && event.locations?.name ? ` · ${event.locations.name}` : ""}
         </div>
       </div>
-      <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", flexShrink: 0 }}>
-        {countLabel}
-      </div>
+      {compact ? (
+        <span style={{
+          flexShrink: 0, background: "var(--space)" + "18", color: "var(--space)",
+          borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700,
+        }}>
+          ✓ {countLabel}
+        </span>
+      ) : (
+        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", flexShrink: 0 }}>
+          {countLabel}
+        </div>
+      )}
     </div>
   )
 }

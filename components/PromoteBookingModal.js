@@ -45,28 +45,46 @@ const FIELD = { marginBottom: "1.1rem" }
 // booking: { id, title } -- the private space_bookings row being promoted.
 // onPromoted(event_id) fires on success so the caller can e.g. navigate to
 // the new event or just refresh its list.
-export default function PromoteBookingModal({ booking, onClose, onPromoted }) {
+//
+// editEvent (optional): pass an ALREADY-SHARED event instead of a private
+// booking to switch this into edit mode (Iain, 2026-08-23: "the creator/
+// owner of the booking" needs a way to "modify the details" of a space
+// booking once shared, not just Cancel it -- previously unbuilt). Same
+// fields, same form, different verb: prefills from the event's current
+// values and PATCHes action=update_space_event instead of promote_to_event.
+// Deliberately reuses this component rather than a second near-identical
+// one -- the field set (title/seats/naming) is identical either way.
+export default function PromoteBookingModal({ booking, editEvent, onClose, onPromoted }) {
+  const isEdit = !!editEvent
+  const source = editEvent || booking
   const [title, setTitle] = useState("")
   const [maxSeats, setMaxSeats] = useState("10")
   const [maxPerBooking, setMaxPerBooking] = useState("4")
   // Matches Social's new-event defaults exactly (app/(app)/social/events/
   // page.js): "Anyone" is the default for allow_nonresident_guests, naming
-  // is optional (require_attendee_names off) by default.
+  // is optional (require_attendee_names off) by default. Edit mode prefills
+  // the event's REAL current values instead of these defaults.
   const [allowGuests, setAllowGuests] = useState(true)
   const [requireNames, setRequireNames] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState("")
 
   useEffect(() => {
-    if (booking) {
-      setTitle(booking.title || "")
+    if (!source) return
+    setTitle(source.title || "")
+    if (isEdit) {
+      setMaxSeats(String(editEvent.max_seats ?? 10))
+      setMaxPerBooking(String(editEvent.max_seats_per_booking ?? 4))
+      setAllowGuests(!!editEvent.allow_nonresident_guests)
+      setRequireNames(!!editEvent.require_attendee_names)
+    } else {
       setMaxSeats("10"); setMaxPerBooking("4")
       setAllowGuests(true); setRequireNames(false)
-      setError(""); setSubmitting(false)
     }
-  }, [booking])
+    setError(""); setSubmitting(false)
+  }, [booking, editEvent, isEdit, source])
 
-  if (!booking) return null
+  if (!source) return null
 
   const titleTrimmed = title.trim()
   const seatsNum = Number(maxSeats)
@@ -84,17 +102,17 @@ export default function PromoteBookingModal({ booking, onClose, onPromoted }) {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "promote_to_event", id: booking.id,
+          action: isEdit ? "update_space_event" : "promote_to_event", id: source.id,
           title: titleTrimmed, max_seats: seatsNum, max_seats_per_booking: perBookingNum,
           allow_nonresident_guests: allowGuests,
           require_attendee_names: requireNames,
         }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || "Could not share this booking"); setSubmitting(false); return }
+      if (!res.ok) { setError(data.error || (isEdit ? "Could not save these changes" : "Could not share this booking")); setSubmitting(false); return }
       onPromoted?.(data.event_id)
     } catch {
-      setError("Could not share this booking — check your connection")
+      setError((isEdit ? "Could not save these changes" : "Could not share this booking") + " — check your connection")
       setSubmitting(false)
     }
   }
@@ -110,9 +128,13 @@ export default function PromoteBookingModal({ booking, onClose, onPromoted }) {
           maxWidth: 400, width: "100%", maxHeight: "90vh", overflowY: "auto",
           boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
         }}>
-          <div style={{ fontWeight: 800, fontSize: "1.05rem", marginBottom: 4 }}>Allow others to join</div>
+          <div style={{ fontWeight: 800, fontSize: "1.05rem", marginBottom: 4 }}>
+            {isEdit ? "Edit this booking" : "Allow others to join"}
+          </div>
           <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginBottom: 16 }}>
-            This turns your booking into a shared event other residents can see and book into.
+            {isEdit
+              ? "Anyone already booked in will be told about any change you make here."
+              : "This turns your booking into a shared event other residents can see and book into."}
           </div>
 
           <div style={FIELD}>
@@ -159,7 +181,7 @@ export default function PromoteBookingModal({ booking, onClose, onPromoted }) {
               style={{ flex: 1, padding: "0.7rem", borderRadius: 10, border: "none",
                 background: "var(--space)", color: "#fff", fontWeight: 700, fontFamily: "inherit",
                 cursor: canSubmit ? "pointer" : "default", opacity: canSubmit ? 1 : 0.6 }}>
-              {submitting ? "Sharing…" : "Share this booking"}
+              {isEdit ? (submitting ? "Saving…" : "Save changes") : (submitting ? "Sharing…" : "Share this booking")}
             </button>
           </div>
         </div>
