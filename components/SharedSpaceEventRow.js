@@ -20,6 +20,13 @@ export function fmtSpaceEventTime(str) {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")}${ampm}`
 }
 
+// Iain, 2026-08-23: the compact pill below wasn't rendering as a pill at
+// all -- "var(--space)" + "18" is the invalid CSS string "var(--space)18",
+// silently dropped by the browser, leaving no background. A colour+alpha
+// suffix needs a literal hex; --space is fixed to this one hub so a literal
+// constant is simplest (same fix applied to NextSpaceEventTile.js).
+const SPACE_HEX = "#f97316"
+
 // mySeats (optional): when the caller already knows the LOGGED-IN
 // resident's own seat count on this event (e.g. MySpaceBookings, which
 // fetches it via /api/spaces?mine=1's event_bookings), show that instead
@@ -62,7 +69,7 @@ export default function SharedSpaceEventRow({ event, onOpen, mySeats, compact = 
       </div>
       {compact ? (
         <span style={{
-          flexShrink: 0, background: "var(--space)" + "18", color: "var(--space)",
+          flexShrink: 0, background: SPACE_HEX + "18", color: "var(--space)",
           borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700,
         }}>
           ✓ {countLabel}

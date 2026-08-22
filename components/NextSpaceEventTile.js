@@ -17,6 +17,15 @@ import { fmtSpaceEventDate, fmtSpaceEventTime } from "@/components/SharedSpaceEv
 // rather than left rendering nothing.
 
 const COLOUR = "var(--space)"
+// Iain, 2026-08-23: the status/CTA pills below need a colour + alpha-suffix
+// background (`COLOUR + "18"`), but that trick only works on a literal hex --
+// `var(--space)` + "18" produces the invalid CSS string "var(--space)18",
+// which the browser silently drops, leaving no background at all (exactly
+// the "not a pill" bug he flagged, comparing this tile against Social's own
+// NextEventTile). Same failure class already documented in RichEditor.js's
+// resolveColour() comment. --space is fixed to this one hub, so a literal
+// constant is simplest -- no need for RichEditor's var()->hex resolver.
+const COLOUR_HEX = "#f97316"
 
 function CapacityBar({ booked, max }) {
   if (!max || max <= 0) return null
@@ -44,7 +53,7 @@ function CapacityBar({ booked, max }) {
 // coordinators: [{name, username}] for this event (its organiser(s)).
 // myBooking: the viewer's own active booking on this event, or null.
 // bookedCount: sum of confirmed seats across all attendees.
-export default function NextSpaceEventTile({ event, coordinators = [], myBooking, bookedCount = 0, onOpen }) {
+export default function NextSpaceEventTile({ event, coordinators = [], myBooking, bookedCount = 0, onOpen, isCoordinator = false, onEdit }) {
   if (!event) {
     return (
       <div style={{
@@ -53,7 +62,7 @@ export default function NextSpaceEventTile({ event, coordinators = [], myBooking
         boxShadow: "var(--shadow)", marginBottom: "1.25rem",
       }}>
         <div style={{ background: COLOUR, padding: "0.6rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.85rem" }}>Next Booked Space</span>
+          <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.85rem" }}>Next Scheduled Space</span>
         </div>
         <div style={{ padding: "1.25rem 1rem", textAlign: "center" }}>
           <div style={{ fontSize: "1.8rem", marginBottom: "0.4rem" }}>🏡</div>
@@ -87,7 +96,7 @@ export default function NextSpaceEventTile({ event, coordinators = [], myBooking
         background: COLOUR, padding: "0.6rem 1rem",
         display: "flex", justifyContent: "space-between", alignItems: "center",
       }}>
-        <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.85rem" }}>Next Booked Space</span>
+        <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.85rem" }}>Next Scheduled Space</span>
         <span style={{ color: "rgba(255,255,255,0.9)", fontSize: "0.78rem", fontWeight: 600 }}>{daysLabel} ›</span>
       </div>
 
@@ -125,11 +134,11 @@ export default function NextSpaceEventTile({ event, coordinators = [], myBooking
 
         <CapacityBar booked={bookedCount} max={event.max_seats} />
 
-        <div style={{ marginTop: "0.6rem" }}>
+        <div style={{ marginTop: "0.6rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
           {isConfirmed ? (
             <div style={{
               display: "inline-flex", alignItems: "center",
-              background: COLOUR + "18", color: COLOUR,
+              background: COLOUR_HEX + "18", color: COLOUR,
               borderRadius: "20px", padding: "0.25rem 0.75rem",
               fontSize: "0.78rem", fontWeight: 700,
             }}>{`✓ ${myBooking.seats || 1} seat${(myBooking.seats || 1) !== 1 ? "s" : ""} booked`}</div>
@@ -143,10 +152,25 @@ export default function NextSpaceEventTile({ event, coordinators = [], myBooking
           ) : (
             <div style={{
               display: "inline-flex", alignItems: "center",
-              background: closed ? "#fee2e2" : COLOUR + "18", color: closed ? "#991b1b" : COLOUR,
+              background: closed ? "#fee2e2" : COLOUR_HEX + "18", color: closed ? "#991b1b" : COLOUR,
               borderRadius: "20px", padding: "0.25rem 0.75rem",
               fontSize: "0.78rem", fontWeight: 700,
             }}>{closed ? "Bookings Closed" : "Tap to book →"}</div>
+          )}
+          {/* Edit -- organiser only (Iain, 2026-08-23: "Edit option for the
+              event owner, user that booked the space ONLY"), same place as
+              My Space Bookings' own Edit pill so both surfaces are
+              consistent. Not admin-gated in the UI even though the backend
+              (updateSpaceEvent) also allows admin -- this button is
+              specifically the owner's control, matching his wording. */}
+          {isCoordinator && onEdit && (
+            <button type="button" onClick={e => { e.stopPropagation(); onEdit() }} style={{
+              background: "none", border: "1px solid var(--border)", color: "var(--text-dim)",
+              borderRadius: "20px", padding: "0.24rem 0.7rem", fontSize: "0.75rem",
+              fontWeight: 700, fontFamily: "inherit", cursor: "pointer",
+            }}>
+              Edit
+            </button>
           )}
         </div>
       </div>
