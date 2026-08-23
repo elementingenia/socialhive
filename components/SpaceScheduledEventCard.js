@@ -52,8 +52,10 @@ export default function SpaceScheduledEventCard({ event, onOpen, onEdit }) {
     .filter(Boolean)
   const ecNames = coordinators.map(c => c.display_name || c.name || c.username).filter(Boolean)
 
-  const confirmedBookings = (event.bookings || []).filter(b => b.status === "confirmed")
-  const waitlistBookings  = (event.bookings || []).filter(b => b.status === "waitlist")
+  // You always first, then A-Z (Iain, 2026-08-23 round 4).
+  const bySelfFirst = (a, b) => byOwnThenName(a.isOwn, b.isOwn, a.display_name, b.display_name)
+  const confirmedBookings = (event.bookings || []).filter(b => b.status === "confirmed").sort(bySelfFirst)
+  const waitlistBookings = (event.bookings || []).filter(b => b.status === "waitlist").sort(bySelfFirst)
   const booked  = confirmedBookings.reduce((s, b) => s + (b.seats || 1), 0)
   const waiting = waitlistBookings.length
   const myBooking = (event.bookings || []).find(b => b.isOwn && b.status !== "cancelled") || null
@@ -156,11 +158,22 @@ export default function SpaceScheduledEventCard({ event, onOpen, onEdit }) {
               {confirmedBookings.length === 0 && waitlistBookings.length === 0 && (
                 <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>No one booked yet.</div>
               )}
-              {confirmedBookings.map(b => (
-                <div key={b.id} style={{ fontSize: "0.8rem", color: "var(--text)", display: "flex", justifyContent: "space-between" }}>
-                  <span>{b.isOwn ? <strong>You</strong> : b.display_name}</span>
-                  <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats || 1) !== 1 ? "s" : ""}</span>
-                </div>
+{confirmedBookings.map(b => (
+  <div key={b.id}>
+  <div style={{ fontSize: "0.8rem", color: "var(--text)", display: "flex", justifyContent: "space-between" }}>
+                       <span>{b.isOwn ? <strong>You</strong> : b.display_name}</span>
+                       <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats || 1) !== 1 ? "s" : ""}</span>
+  </div>
+{(b.party || []).length > 0 && (
+  <div style={{ paddingLeft: "0.85rem", marginTop: "0.05rem", display: "flex", flexDirection: "column", gap: "0.05rem" }}>
+{b.party.map((p, j) => (
+  <span key={j} style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>
+             + {p.isOwn ? "You" : p.display_name}{p.guest_name ? " (guest)" : ""}
+</span>
+))}
+</div>
+)}
+</div>
               ))}
               {waitlistBookings.map(b => (
                 <div key={b.id} style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "flex", justifyContent: "space-between" }}>
