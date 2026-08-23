@@ -293,7 +293,8 @@ export async function GET(req) {
           location_id, locations(name),
           bus_driver:members!bus_driver_id(id, name, username, display_name, hide_name),
           event_coordinators(member_id, replaced_at, members!event_coordinators_member_id_fkey(id, name, username, display_name, hide_name)),
-          bookings(id, status, seats, member_id, members(id, name, username, display_name, hide_name))
+          bookings(id, status, seats, member_id, members(id, name, username, display_name, hide_name)),
+          booking_attendees(owner_id, member_id, contact_id, guest_name, members!member_id(id, name, username, display_name, hide_name), contacts!contact_id(name))
         `)
         .eq('hub_type', 'space')
         .eq('archived', false)
@@ -307,13 +308,36 @@ export async function GET(req) {
         const activeCoordinators = (ev.event_coordinators || []).filter(c => !c.replaced_at)
         const isCoordinator = activeCoordinators.some(c => c.member_id === member.id)
         const canManage = !!member.is_admin || isCoordinator
-        const bookings = (ev.bookings || []).map(b => ({
-          id: b.id, status: b.status, seats: b.seats, member_id: b.member_id,
-          isOwn: b.member_id === member.id,
-          display_name: resolveMemberName(b.members, {
-            viewerId: member.id, canManage, selfLabel: 'You',
-          }),
-        }))
+        // Named extra attendees (booking_attendees), grouped by the
+        // booker's member_id -- same shape/masking rule as every other
+        // hub's attendee panel (Social's page.js's partyByOwner). Contact-
+        // owned parties (owner_contact_id) don't apply here -- space
+        // bookings are always member-owned, unlike a hub's walk-up flow.
+        const partyByOwner = {}
+        for (const p of ev.booking_attendees || []) {
+          if (!p.owner_id) continue
+          ;(partyByOwner[p.owner_id] = partyByOwner[p.owner_id] || []).push(p)
+        }
+        const bookings = (ev.bookings || []).map(b => {
+          const isOwn = b.member_id === member.id
+          const party = (partyByOwner[b.member_id] || []).map(p => ({
+            member_id: p.member_id, contact_id: p.contact_id, guest_name: p.guest_name,
+            isOwn: p.member_id === member.id,
+            display_name: p.guest_name
+              ? p.guest_name
+              : p.contact_id
+              ? (p.contacts?.name || 'Resident')
+              : resolveMemberName(p.members, { viewerId: member.id, canManage, selfLabel: 'You' }),
+          }))
+          return {
+            id: b.id, status: b.status, seats: b.seats, member_id: b.member_id,
+            isOwn,
+            display_name: resolveMemberName(b.members, {
+              viewerId: member.id, canManage, selfLabel: 'You',
+            }),
+            party,
+          }
+        })
         return { ...ev, isCoordinator, bookings }
       })
     }
