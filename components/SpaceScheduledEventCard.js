@@ -3,6 +3,7 @@ import { useState } from "react"
 import EventCoordinators from "@/components/EventCoordinators"
 import { BusIcon } from "@/components/NavIcons"
 import { bookingsClosed } from "@/lib/booking"
+import { byOwnThenName } from '@/lib/sortNames'
 import { fmtSpaceEventDate, fmtSpaceEventTime } from "@/components/SharedSpaceEventRow"
 
 // Full "system standard" event card for /spaces/scheduled -- Iain,
