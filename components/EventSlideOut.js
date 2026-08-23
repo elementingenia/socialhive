@@ -994,7 +994,20 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                     style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--text-dim)", textDecoration: "underline" }}>Change</button>
                 </div>
 
-                {!isBook && <SeatSelector value={addSeats} min={1} max={4} onChange={setAddSeats} />}
+                {/* Cap read from the event's own max_seats_per_booking (2026-08-23
+                    fix) -- this was the one seat-count entry point PR #69
+                    (2026-08-08) missed when it fixed the other four hardcoded-4
+                    sites. A coordinator could set this stepper up to 4 regardless
+                    of the event's real cap, the naming picker below honoured
+                    THAT count, but the server (add_booking, app/api/coordinator/
+                    route.js) silently clamped seats to the event's actual cap via
+                    maxSeatsPerBooking() -- so a walk-up booking for an event
+                    capped below 4 could ask for e.g. 2 named attendees while the
+                    server only expected 1, rejecting a fully-named submission
+                    with a confusing "Please name all 1 additional attendee"
+                    error. Confirmed against a real production event ("The Way",
+                    max_seats_per_booking=2) that reproduced exactly this. */}
+                {!isBook && <SeatSelector value={addSeats} min={1} max={maxPerBooking} onChange={setAddSeats} />}
 
                 {!isBook && addSeats > 1 && (
                   <div style={{ marginBottom: 12 }}>
