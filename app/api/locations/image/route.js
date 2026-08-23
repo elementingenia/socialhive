@@ -1,5 +1,6 @@
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
+import { resizeImage, MAX_AGE_SECONDS } from "@/lib/imageResize"
 
 // Location image upload -- Social_Hive_Location_First_Booking_Scope_v2.md,
 // item 6 (Iain, 2026-08-17). Admin-only (locations aren't owned by an EC/
@@ -37,13 +38,14 @@ export async function POST(req) {
     if (oldPath) await supa.storage.from("location-images").remove([oldPath])
   }
 
-  const ext = file.name?.split(".").pop() || "jpg"
+  // Resize/re-encode before upload -- see lib/imageResize.js for why.
+  const rawBytes = Buffer.from(await file.arrayBuffer())
+  const { buffer: bytes, contentType, ext } = await resizeImage(rawBytes)
   const path = `${locationId}/cover.${ext}`
-  const bytes = await file.arrayBuffer()
 
   const { error: upErr } = await supa.storage
     .from("location-images")
-    .upload(path, bytes, { contentType: file.type, upsert: true })
+    .upload(path, bytes, { contentType, upsert: true, cacheControl: MAX_AGE_SECONDS })
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
 
   const { data: { publicUrl } } = supa.storage.from("location-images").getPublicUrl(path)

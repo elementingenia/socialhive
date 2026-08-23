@@ -1,5 +1,6 @@
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
+import { resizeImage, MAX_AGE_SECONDS } from "@/lib/imageResize"
 
 
 // Which events carry their own image.
@@ -59,19 +60,26 @@ export async function POST(req) {
     return NextResponse.json({ error: "Image upload isn't supported for this event type" }, { status: 400 })
   }
 
-  // Delete existing image if present
+  // Delete existing image if present. Must strip the `?t=` cache-busting
+  // query string before removing -- without this, remove() is given a key
+  // that never matches a real object (silently no-ops), and the old file
+  // is orphaned in Storage forever every time the cover's extension
+  // changes on re-upload. Confirmed as the root cause of 2 real orphaned
+  // files in production (2026-08-23) -- DELETE below already had this
+  // fix; POST never did.
   if (event.image_url) {
-    const oldPath = event.image_url.split("/event-images/").pop()
+    const oldPath = event.image_url.split("/event-images/").pop()?.split("?")[0]
     if (oldPath) await supa.storage.from("event-images").remove([oldPath])
   }
 
-  const ext = file.name?.split(".").pop() || "jpg"
+  // Resize/re-encode before upload -- see lib/imageResize.js for why.
+  const rawBytes = Buffer.from(await file.arrayBuffer())
+  const { buffer: bytes, contentType, ext } = await resizeImage(rawBytes)
   const path = `${eventId}/cover.${ext}`
-  const bytes = await file.arrayBuffer()
 
   const { error: upErr } = await supa.storage
     .from("event-images")
-    .upload(path, bytes, { contentType: file.type, upsert: true })
+    .upload(path, bytes, { contentType, upsert: true, cacheControl: MAX_AGE_SECONDS })
 
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
 

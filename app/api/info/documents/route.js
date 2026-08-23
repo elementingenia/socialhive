@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
+import { resizeImage, MAX_AGE_SECONDS } from '@/lib/imageResize'
 async function getAdminMember(token) {
   if (!token) return null
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
@@ -24,13 +25,24 @@ export async function POST(req) {
   if (!title) return NextResponse.json({ error: 'Title required' }, { status: 400 })
   if (!file)  return NextResponse.json({ error: 'File required' }, { status: 400 })
 
-  const bytes  = await file.arrayBuffer()
-  const buffer = Buffer.from(bytes)
-  const ext    = file.name.split('.').pop()
-  const path   = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+  const bytes = await file.arrayBuffer()
+  let buffer      = Buffer.from(bytes)
+  let ext         = file.name.split('.').pop()
+  let contentType = file.type
+
+  // Resize/re-encode images only -- PDFs and other document types pass
+  // through untouched. See lib/imageResize.js for why this exists.
+  if (file.type?.startsWith('image/')) {
+    const resized = await resizeImage(buffer)
+    buffer = resized.buffer
+    contentType = resized.contentType
+    ext = resized.ext
+  }
+
+  const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
 
   const { error: upErr } = await supabaseAdmin.storage
-    .from('community-docs').upload(path, buffer, { contentType: file.type })
+    .from('community-docs').upload(path, buffer, { contentType, cacheControl: MAX_AGE_SECONDS })
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
 
   const { data: { publicUrl } } = supabaseAdmin.storage
@@ -42,8 +54,8 @@ export async function POST(req) {
     category_id: categoryId || null,
     file_url: publicUrl,
     file_name: file.name,
-    file_type: file.type,
-    file_size: file.size,
+    file_type: contentType,
+    file_size: buffer.length,
     uploaded_by: member.id,
   }).select().single()
 
