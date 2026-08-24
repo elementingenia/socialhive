@@ -152,7 +152,16 @@ export default function NotificationsDrawer() {
 
   if (!mounted) return null
 
+  // Read notifications drop below every unread one (2026-08-24, Iain --
+  // previously there was no read/unread grouping at all: /api/notifications
+  // returns everything sorted by created_at alone, so a ticked notification
+  // just stayed wherever its own timestamp put it, potentially above
+  // genuinely new unread ones). Each half keeps the API's own created_at-desc
+  // order -- this is a stable partition, not a re-sort, so "New" stays
+  // newest-first and "Earlier" stays newest-read-content-first too.
   const unread = notifs.filter(n => !n.read_at)
+  const read = notifs.filter(n => n.read_at)
+  const ordered = [...unread, ...read]
 
   return (
     <>
@@ -196,12 +205,19 @@ export default function NotificationsDrawer() {
               {unread.length > 0 && (
                 <div style={{ padding: "0.5rem 1rem 0.25rem", fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.08em" }}>New</div>
               )}
-              {notifs.map((n) => {
+              {ordered.map((n, i) => {
                 const isNew = !n.read_at
                 const target = targetForNotif(n)
+                // "Earlier" header renders once, right where the list
+                // crosses from unread into read (i.e. the first read row,
+                // when there's at least one unread row above it).
+                const isFirstRead = !isNew && unread.length > 0 && i === unread.length
                 return (
-                  <div
-                    key={n.id}
+                  <div key={n.id}>
+                    {isFirstRead && (
+                      <div style={{ padding: "0.6rem 1rem 0.25rem", fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.08em", borderTop: "1px solid var(--border)" }}>Earlier</div>
+                    )}
+                    <div
                     data-testid={`notif-row-${n.id}`}
                     onClick={target ? () => openMatter(n) : undefined}
                     style={{
@@ -239,6 +255,7 @@ export default function NotificationsDrawer() {
                     ) : (
                       <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--border)", flexShrink: 0, marginTop: 6 }} />
                     )}
+                    </div>
                   </div>
                 )
               })}
