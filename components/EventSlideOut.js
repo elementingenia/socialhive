@@ -1242,6 +1242,18 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                     const bal = remainingBalance(firstConf, event, confirmedSeats)
                     const enteredAmt = payRecordAmount === "" ? null : (parseFloat(payRecordAmount) || 0)
                     const willComplete = enteredAmt !== null && bal != null && Math.round(enteredAmt) === Math.round(bal)
+                    // 2026-08-24 fix (BUG-024): amount != balance requires a
+                    // comment before Save can run -- that block already
+                    // existed via the `disabled` attribute, but the button
+                    // gave no visual or interactive cue it was blocked, so
+                    // an EC clicking a short/over payment saw nothing happen
+                    // with no explanation. commentNeeded/saveBlocked below
+                    // drive real disabled styling, a hover tooltip, and a
+                    // persistent inline warning + red textarea border.
+                    const commentNeeded = !willComplete
+                    const pending = payTogglingId === firstConf.id
+                    const saveBlocked = commentNeeded && !payRecordNote.trim()
+                    const saveDisabled = pending || saveBlocked
                     return (
                       <div onClick={e => e.stopPropagation()} style={{ marginTop: 8, padding: 8, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, display: "flex", flexDirection: "column", gap: 6 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -1252,14 +1264,23 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                         </div>
                         <textarea placeholder={willComplete ? "Comment (optional)" : "Comment (required if amount doesn't complete the balance)"}
                           value={payRecordNote} onChange={e => setPayRecordNote(e.target.value)} rows={2}
-                          style={{ width: "100%", padding: "6px 8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: 11, boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
+                          style={{ width: "100%", padding: "6px 8px", borderRadius: 8, border: `1px solid ${saveBlocked ? "var(--red, #dc2626)" : "var(--border)"}`, background: "var(--surface)", color: "var(--text)", fontSize: 11, boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
+                        {saveBlocked && (
+                          <div style={{ fontSize: 11, color: "var(--red, #dc2626)", fontWeight: 600 }}>
+                            ⚠ Add a comment before saving — the amount doesn't complete the balance.
+                          </div>
+                        )}
                         <div style={{ display: "flex", gap: 6 }}>
                           <button onClick={() => { setPayRecordingId(null); setPayResetConfirmId(null) }}
                             style={{ flex: 1, padding: 6, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "inherit" }}>Cancel</button>
                           <button
-                            disabled={payTogglingId === firstConf.id || (!willComplete && !payRecordNote.trim())}
-                            onClick={() => { handlePaymentToggle(firstConf, payRecordAmount, payRecordNote); setPayRecordingId(null) }}
-                            style={{ flex: 1, padding: 6, borderRadius: 8, border: "none", background: colour, color: clubTextOn(colour), cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: "inherit" }}>Save</button>
+                            disabled={saveDisabled}
+                            title={saveBlocked ? "Add a comment before saving — the amount doesn't complete the balance." : undefined}
+                            onClick={() => {
+                              if (saveBlocked) return
+                              handlePaymentToggle(firstConf, payRecordAmount, payRecordNote); setPayRecordingId(null)
+                            }}
+                            style={{ flex: 1, padding: 6, borderRadius: 8, border: "none", background: saveDisabled ? "var(--surface2)" : colour, color: saveDisabled ? "var(--text-dim)" : clubTextOn(colour), cursor: saveDisabled ? "not-allowed" : "pointer", opacity: saveDisabled ? 0.6 : 1, fontSize: 11, fontWeight: 700, fontFamily: "inherit" }}>Save</button>
                         </div>
                         {(isPaid || isPartial) && (
                           payResetConfirmId === firstConf.id ? (

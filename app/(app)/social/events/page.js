@@ -1518,6 +1518,17 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                           // payment off.
                           const enteredAmt = recordAmount === "" ? null : (parseFloat(recordAmount) || 0)
                           const willComplete = enteredAmt !== null && Math.round(enteredAmt) === Math.round(balanceNum)
+                          // 2026-08-24 fix (BUG-024): mirrors the identical
+                          // fix in components/EventSlideOut.js's shared
+                          // CoordinatorPanel -- Social keeps its own,
+                          // separate copy of this payment-record panel (see
+                          // project history), so the same disabled-styling/
+                          // hover-tooltip/inline-warning fix has to be
+                          // applied here too, or the two drift again.
+                          const commentNeeded = !willComplete
+                          const pending = togglingId === b.id
+                          const saveBlocked = commentNeeded && !recordNote.trim()
+                          const saveDisabled = pending || saveBlocked
                           return (
                           <div onClick={e => e.stopPropagation()} style={{ marginTop: "0.4rem", padding: "0.5rem", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, display: "flex", flexDirection: "column", gap: "0.35rem" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
@@ -1531,13 +1542,22 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                             )}
                             <textarea placeholder={willComplete ? "Comment (optional)" : "Comment (required — amount doesn't complete the balance owed)"}
                               value={recordNote} onChange={e => setRecordNote(e.target.value)} rows={2}
-                              style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: "0.78rem", boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
+                              style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 8, border: `1px solid ${saveBlocked ? "var(--red, #dc2626)" : "var(--border)"}`, background: "var(--surface)", color: "var(--text)", fontSize: "0.78rem", boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
+                            {saveBlocked && (
+                              <div style={{ fontSize: "0.68rem", color: "var(--red, #dc2626)", fontWeight: 600 }}>
+                                ⚠ Add a comment before saving — the amount doesn't complete the balance owed.
+                              </div>
+                            )}
                             <div style={{ display: "flex", gap: "0.4rem" }}>
                               <button onClick={() => { setRecordingId(null); setResetConfirmId(null) }} style={{ flex: 1, padding: "0.35rem", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600, fontFamily: "inherit" }}>Cancel</button>
                               <button
-                                disabled={togglingId === b.id || (!willComplete && !recordNote.trim())}
-                                onClick={() => { onTogglePayment(event.id, b, recordAmount, recordNote); setRecordingId(null) }}
-                                style={{ flex: 1, padding: "0.35rem", borderRadius: 8, border: "none", background: "var(--terracotta)", color: "#fff", cursor: "pointer", fontSize: "0.75rem", fontWeight: 700, fontFamily: "inherit" }}>Save</button>
+                                disabled={saveDisabled}
+                                title={saveBlocked ? "Add a comment before saving — the amount doesn't complete the balance owed." : undefined}
+                                onClick={() => {
+                                  if (saveBlocked) return
+                                  onTogglePayment(event.id, b, recordAmount, recordNote); setRecordingId(null)
+                                }}
+                                style={{ flex: 1, padding: "0.35rem", borderRadius: 8, border: "none", background: saveDisabled ? "var(--surface2)" : "var(--terracotta)", color: saveDisabled ? "var(--text-dim)" : "#fff", cursor: saveDisabled ? "not-allowed" : "pointer", opacity: saveDisabled ? 0.6 : 1, fontSize: "0.75rem", fontWeight: 700, fontFamily: "inherit" }}>Save</button>
                             </div>
                             {/* Reset to unpaid -- explicit, confirmed, separate from Save
                                 (2026-08-11 hotfix). This is the only path that wipes
