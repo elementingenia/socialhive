@@ -2003,7 +2003,19 @@ function BookingSection({ event, onRefresh, onClose }) {
             </div>
           ) : (
             <>
-              {!isBookclubEvent && availableSeats > 0 && (
+              {/* Seat picker used to only render while availableSeats > 0,
+                  so once an event hit 0 confirmed seats free, a resident
+                  joining the waitlist could only ever request exactly 1
+                  seat -- no way to ask for 2 together, even though
+                  max_seats_per_booking allowed it and the server/SplitDialog
+                  already fully support an all-waitlist multi-seat request
+                  (see the allWaitlist branch in SplitDialog, and handleBook's
+                  own "N seats added to waitlist" toast, both pre-existing and
+                  previously unreachable). Fixed 2026-08-23 (Iain, "The Way"):
+                  the picker now always shows once bookings aren't closed --
+                  requesting more than what's free correctly triggers the
+                  existing split-confirmation dialog either way. */}
+              {!isBookclubEvent && (
                 <>
                   <SeatSelector value={seats} min={1} max={maxPerBooking} onChange={setSeats} />
                   {isMovieEvent && maxPerBooking > 1 && (
