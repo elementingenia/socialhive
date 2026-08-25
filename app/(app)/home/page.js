@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import { useUser } from "@/lib/UserContext"
 import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon } from "@/components/NavIcons"
-import { BAR_ENABLED } from "@/lib/features"
+import { BAR_ENABLED, SPACE_BOOKINGS_ENABLED } from "@/lib/features"
 import AskQuestion from "@/components/AskQuestion"
 
 // Home hub grid — kept to at most TWO rows (Iain: mobile vertical space is
@@ -256,8 +256,8 @@ export default function HomePage() {
           {/* Hub tiles — between main and sub notices */}
           <HubTiles />
 
-          {/* Book a Space — full-width pill, not part of the two-row grid */}
-          <SpaceBookingTile />
+          {/* Book a Space — full-width pill, not part of the two-row grid (feature parked, see lib/features.js) */}
+          {SPACE_BOOKINGS_ENABLED && <SpaceBookingTile />}
 
           {/* Sub notices */}
           {subTexts.map((t, i) => <SubNoticeCard key={i} text={t} />)}
