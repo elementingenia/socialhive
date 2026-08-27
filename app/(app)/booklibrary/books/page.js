@@ -466,13 +466,36 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
           </div>
 
           {mode === 'title' ? (
-            <div style={{ position:'relative' }}>
-              <input value={search} onChange={e => doSearch(e.target.value)}
-                placeholder="Search book title…"
-                style={{ width:'100%', padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
-              {searching && <div style={{ position:'absolute', right:'0.75rem', top:'50%', transform:'translateY(-50%)', fontSize:'0.75rem', color:'var(--text-dim)' }}>…</div>}
+            <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+              {/* 2026-08-25 fix: Title search already ran live-as-you-type
+                  via onChange, but had no visible "do this to search"
+                  affordance the way Barcode/ISBN mode does -- Iain flagged
+                  typing a single letter looked broken with no way to
+                  trigger anything. Root cause was twofold: (1) the server
+                  (app/api/books/search) silently returns zero results for
+                  anything under 2 characters with no explanation, and (2)
+                  this tab had no button at all, unlike the other tab, so
+                  there was nothing to click even if a resident didn't
+                  trust/notice the type-ahead behaviour. Added a matching
+                  Search button (same layout as Barcode mode) that
+                  re-triggers the same search explicitly, plus a short hint
+                  for the sub-2-character case -- live search-as-you-type is
+                  kept, this is additive parity, not a replacement. */}
+              <div style={{ position:'relative', display:'flex', gap:'0.5rem' }}>
+                <input value={search} onChange={e => doSearch(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') doSearch(search) }}
+                  placeholder="Search book title…"
+                  style={{ flex:1, padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
+                <button onClick={() => doSearch(search)} disabled={searching || search.trim().length < 2}
+                  style={{ flexShrink:0, padding:'0 1.1rem', background:'var(--purple)', color:'#fff', border:'none', borderRadius:'12px', fontSize:'0.9rem', fontWeight:700, cursor:(searching||search.trim().length<2)?'not-allowed':'pointer', opacity:(searching||search.trim().length<2)?0.5:1 }}>
+                  {searching ? '…' : 'Search'}
+                </button>
+              </div>
+              {search.trim().length === 1 && (
+                <div style={{ fontSize:'0.8rem', color:'var(--text-dim)' }}>Type at least 2 characters to search</div>
+              )}
               {results.length > 0 && !selected && (
-                <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', zIndex:50, overflow:'hidden', boxShadow:'0 4px 16px rgba(0,0,0,0.2)', marginTop:'0.25rem' }}>
+                <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', zIndex:50, overflow:'hidden', boxShadow:'0 4px 16px rgba(0,0,0,0.2)' }}>
                   {results.map(r => (
                     <div key={r.google_books_id} onClick={() => handleSelect(r)}
                       style={{ display:'flex', alignItems:'center', gap:'0.65rem', padding:'0.65rem 0.85rem', cursor:'pointer', borderBottom:'1px solid var(--border)' }}>
