@@ -378,6 +378,22 @@ function BookCard({ book, activeLoan, myLoan, onClick }) {
 }
 
 // ── Add Book Sheet (admin/owner only) ──────────────────────────────────────────
+// 2026-08-27 fix (BUG-027): both search modes used to collapse every
+// non-success outcome down to "zero results", so a genuine Google Books
+// outage or quota exhaustion looked identical to "that ISBN/title really
+// isn't listed" -- confirmed live: three ISBNs Iain knew were valid (from
+// this app's own already-enriched Book Library data) all came back
+// "No book found for that barcode" while the actual server response was
+// {results:[], error:"quota_exceeded"}. This maps the two real API error
+// codes (see app/api/books/search/route.js) to an honest, distinct
+// message so a resident/EC isn't told a valid book doesn't exist when
+// the real problem is the external API being temporarily unavailable.
+function searchUnavailableMessage(error) {
+  if (error === 'quota_exceeded') return "Book search has hit today's usage limit — try again later, or add the book's details manually."
+  if (error === 'search_unavailable') return 'Book search is temporarily unavailable — try again in a moment.'
+  return null
+}
+
 function AddBookSheet({ session, onAdded, onClose, addToast }) {
   const [mode,        setMode]        = useState('barcode') // 'title' | 'barcode' — Iain, 2026-08-13: barcode is manual entry, no camera scan for now. Default + left-most (2026-08-13): barcode is the fast path for adding a physical copy in hand; title search is the deliberate opt-in.
   const [search,      setSearch]      = useState('')
@@ -385,22 +401,25 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
   const [results,     setResults]     = useState([])
   const [searching,   setSearching]   = useState(false)
   const [barcodeError,setBarcodeError]= useState('')
+  const [searchError, setSearchError] = useState('')
   const [selected,    setSelected]    = useState(null)
   const [adding,      setAdding]      = useState(false)
   const [isDuplicate, setIsDuplicate] = useState(false)
 
   function switchMode(next) {
-    setMode(next); setSearch(''); setBarcode(''); setResults([]); setSelected(null); setIsDuplicate(false); setBarcodeError('')
+    setMode(next); setSearch(''); setBarcode(''); setResults([]); setSelected(null); setIsDuplicate(false); setBarcodeError(''); setSearchError('')
   }
 
   async function doSearch(q) {
-    setSearch(q); setSelected(null); setIsDuplicate(false)
+    setSearch(q); setSelected(null); setIsDuplicate(false); setSearchError('')
     if (!q.trim()) { setResults([]); return }
     setSearching(true)
     const res = await fetch('/api/books/search?q=' + encodeURIComponent(q))
     const data = await res.json()
-    setResults(data.results || [])
     setSearching(false)
+    const unavailable = searchUnavailableMessage(data.error)
+    if (unavailable) { setSearchError(unavailable); setResults([]); return }
+    setResults(data.results || [])
   }
 
   // Barcode mode: NOT live search-as-you-type — the number must be entered
@@ -415,6 +434,8 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
     const data = await res.json()
     setSearching(false)
     if (data.error === 'invalid_isbn') { setBarcodeError('Enter a full 10 or 13-digit ISBN'); setResults([]); return }
+    const unavailable = searchUnavailableMessage(data.error)
+    if (unavailable) { setBarcodeError(unavailable); setResults([]); return }
     if (!data.results?.length) { setBarcodeError('No book found for that barcode'); setResults([]); return }
     setResults(data.results)
   }
@@ -494,6 +515,7 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
               {search.trim().length === 1 && (
                 <div style={{ fontSize:'0.8rem', color:'var(--text-dim)' }}>Type at least 2 characters to search</div>
               )}
+              {searchError && <div style={{ fontSize:'0.8rem', color:'var(--danger)' }}>{searchError}</div>}
               {results.length > 0 && !selected && (
                 <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', zIndex:50, overflow:'hidden', boxShadow:'0 4px 16px rgba(0,0,0,0.2)' }}>
                   {results.map(r => (
