@@ -47,7 +47,7 @@ const RAW_SECTIONS = [
   {
     id: "pagetexts", num: 2, title: "Page Texts — Wording Across the App",
     subs: [
-      { title: "Hive Home — the Main & Sub Notices", id: "sub-pt-home" },
+      { title: "Happenings Home — the Main & Sub Notices", id: "sub-pt-home" },
       { title: "Show Time, Social & Library wording", id: "sub-pt-other" },
       { title: "Loan caps — what happens at the limit", id: "sub-pt-loancap" },
     ],
@@ -398,19 +398,26 @@ export default function AdminGuidePage() {
           </Section>
 
           <Section id="pagetexts" num={2} title="Page Texts — Wording Across the App">
-            <Subsection id="sub-pt-home" title="Hive Home — the Main & Sub Notices">
+            <Subsection id="sub-pt-home" title="Happenings Home — the Main & Sub Notices">
               <Step>
                 This is the actual, working way to change what residents see on the <strong>Home</strong>{" "}
-                screen banner. Open <strong>Admin → Page Texts → Hive Home</strong>. The main text box is
+                screen banner. Open <strong>Admin → Page Texts → Happenings Home</strong>. The main text box is
                 the <strong>Main Notice</strong> shown at the top of Home; below it you can add, edit, or
                 remove any number of <strong>Sub Notices</strong> — each one its own rich-text box with a{" "}
                 <strong>×</strong> to remove it. Saving here writes straight to what every resident sees on
                 their next Home load — there's no draft/publish step.
               </Step>
               <InfoBox>
-                💡 If you're looking for "where do I post a notice", this Hive Home section is it for the
+                💡 If you're looking for "where do I post a notice", this Happenings Home section is it for the
                 whole-community Home banner. See Section 11 for how this differs from a Group/Club notice.
               </InfoBox>
+              <Step>
+                Added 2026-08-28 after resident feedback that the Main Notice was hard to read: the text box
+                toolbar now has three <strong>A</strong> buttons (small/medium/large) alongside Bold/Italic/
+                Underline — select some text in the box, then tap the size you want. The Main Notice's banner
+                itself was also softened (a light tint with a coloured accent stripe, replacing the old solid
+                orange fill) for better readability without losing the Happenings Home colour identity.
+              </Step>
             </Subsection>
             <Subsection id="sub-pt-other" title="Show Time, Social & Library wording">
               <Step>
@@ -811,7 +818,7 @@ export default function AdminGuidePage() {
               </Step>
               <Step>
                 <strong>1. Home banner (Main + Sub Notices)</strong> — community-wide, shown to every
-                resident on the Home screen. Set at <strong>Admin → Page Texts → Hive Home</strong>{" "}
+                resident on the Home screen. Set at <strong>Admin → Page Texts → Happenings Home</strong>{" "}
                 (Section 2). Admin-only.
               </Step>
               <Step>

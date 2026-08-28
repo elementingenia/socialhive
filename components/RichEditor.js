@@ -97,6 +97,31 @@ export default function RichEditor({
     onChange(ref.current?.innerHTML || '')
   }
 
+  // ── Font size control ──────────────────────────────────────────────────────
+  // Added 2026-08-28 per Iain's explicit request (Home banner readability
+  // feedback -- "Lets have a font size option in the admin screen?" -- rather
+  // than a one-off hardcoded size bump). execCommand('fontSize', ...) only
+  // understands the legacy 1-7 HTML scale, which can't express a real pixel
+  // value and renders inconsistently across browsers -- so we use size="7" as
+  // a disposable marker, then immediately replace every resulting <font>
+  // element with a <span style="font-size:Npx"> carrying the real size the
+  // admin picked. Applied to the current text selection, same interaction
+  // pattern as Bold/Italic/Underline/Colour above (select text, tap the size).
+  function applyFontSize(px) {
+    ref.current?.focus()
+    document.execCommand('fontSize', false, '7')
+    if (ref.current) {
+      const marked = ref.current.querySelectorAll('font[size="7"]')
+      marked.forEach(f => {
+        const span = document.createElement('span')
+        span.style.fontSize = px + 'px'
+        while (f.firstChild) span.appendChild(f.firstChild)
+        f.parentNode.replaceChild(span, f)
+      })
+    }
+    onChange(ref.current?.innerHTML || '')
+  }
+
   const btnBase = {
     padding: '3px 9px', borderRadius: 6, border: '1px solid var(--border)',
     background: 'var(--surface2)', cursor: 'pointer', fontSize: '0.8rem',
@@ -128,6 +153,14 @@ export default function RichEditor({
           <button type="button" onMouseDown={e => { e.preventDefault(); exec('foreColor', '#ffffff') }}
             style={{ ...btnBase, background: '#444', color: '#fff', fontWeight: 700 }}>White</button>
         )}
+        <span style={{ display: 'flex', gap: 2, alignItems: 'center', marginLeft: 4, paddingLeft: 4, borderLeft: '1px solid var(--border)' }}>
+          <button type="button" onMouseDown={e => { e.preventDefault(); applyFontSize(15) }}
+            title="Normal text size" style={{ ...btnBase, fontSize: '0.7rem', padding: '3px 7px' }}>A</button>
+          <button type="button" onMouseDown={e => { e.preventDefault(); applyFontSize(19) }}
+            title="Large text" style={{ ...btnBase, fontSize: '0.9rem', padding: '3px 7px' }}>A</button>
+          <button type="button" onMouseDown={e => { e.preventDefault(); applyFontSize(24) }}
+            title="Extra large text" style={{ ...btnBase, fontSize: '1.05rem', padding: '3px 7px' }}>A</button>
+        </span>
         <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', marginLeft: 4 }}>
           Select text then tap format
         </span>

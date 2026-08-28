@@ -31,20 +31,30 @@ function HubContent({ text, c1Colour, c2Colour }) {
   return <FormattedText text={text} c1Colour={c1Colour} c2Colour={c2Colour} />
 }
 
+// Softened 2026-08-28 (Iain feedback, first-impression readability): the
+// Main Notice used to be a full solid-amber fill with black text -- high
+// contrast on paper (~9:1) but visually loud as the only saturated block on
+// an otherwise white/card Home screen, and residents found it hard to read.
+// Now uses the same tint + accent-border "shaded callout" treatment as
+// Iain's own reference document style, reusing existing design tokens
+// (--amber-light, --amber, --text) rather than inventing new colours.
+// Base font size bumped 0.95rem -> 1.05rem; admins can go further per-notice
+// via RichEditor's new font-size control (see components/RichEditor.js).
 function MainNoticeCard({ text, memberName }) {
   if (!text) return null
   return (
     <div style={{
-      background: "var(--amber)", color: "#000", borderRadius: "14px",
+      background: "var(--amber-light)", color: "var(--text)", borderRadius: "14px",
+      borderLeft: "5px solid var(--amber)",
       padding: "1.1rem 1.25rem", marginBottom: "0.75rem",
     }}>
       {memberName && (
-        <div style={{ fontSize: "0.88rem", fontWeight: 700, opacity: 0.8, marginBottom: "0.4rem" }}>
+        <div style={{ fontSize: "0.95rem", fontWeight: 700, opacity: 0.85, marginBottom: "0.45rem" }}>
           Welcome {memberName},
         </div>
       )}
-      <div style={{ fontSize: "0.95rem", lineHeight: 1.5 }}>
-        <HubContent text={text} c1Colour="var(--teal)" c2Colour="rgba(0,0,0,0.65)" />
+      <div style={{ fontSize: "1.05rem", lineHeight: 1.6 }}>
+        <HubContent text={text} c1Colour="var(--teal)" c2Colour="var(--text-dim)" />
       </div>
     </div>
   )
@@ -55,10 +65,12 @@ function SubNoticeCard({ text }) {
   return (
     <div style={{
       background: "var(--surface)", color: "var(--text)", borderRadius: "12px",
+      borderLeft: "4px solid var(--amber)",
       padding: "0.85rem 1.1rem", marginBottom: "0.6rem",
-      border: "1px solid var(--border)", fontSize: "0.88rem", lineHeight: 1.5,
+      border: "1px solid var(--border)", borderLeftWidth: "4px", borderLeftColor: "var(--amber)",
+      fontSize: "0.95rem", lineHeight: 1.55,
     }}>
-      <HubContent text={text} c1Colour="var(--amber)" c2Colour="var(--text-dim)" />
+      <HubContent text={text} c1Colour="var(--amber-dark)" c2Colour="var(--text-dim)" />
     </div>
   )
 }
