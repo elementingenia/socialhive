@@ -63,6 +63,16 @@ export function bbToHtml(text, hubColour) {
 //                (the editor surface is always var(--surface) = #fff) and on
 //                the final near-white card, so it's dropped. Offers
 //                Black / Colour.
+//   bg="tint"  — text renders against a SOFT tint + accent-border card, not
+//                a solid fill (Happenings Home's Main/Sub Notice, restyled
+//                2026-08-28 for readability -- see app/(app)/home/page.js's
+//                MainNoticeCard/SubNoticeCard). The editor preview mirrors
+//                that exact look (hubColour tint background, hubColour left
+//                accent border, var(--text) default text) instead of the old
+//                solid-tile preview, which no longer matched what residents
+//                actually see once this section stopped using a solid fill.
+//                Offers Black / Colour, same as "card" -- White is unreadable
+//                against a light tint just like it is against a white card.
 //
 // Fixed 2026-08-05 after both failure modes were reported live: "Colour" on
 // the club Landing Page Text was indistinguishable from the welcome tile
@@ -78,7 +88,8 @@ export default function RichEditor({
   const [focused, setFocused] = useState(false)
   const hex = resolveColour(hubColour)
   const isTile = bg === 'tile'
-  const editorBg = isTile ? hex : 'var(--surface)'
+  const isTint = bg === 'tint'
+  const editorBg = isTile ? hex : (isTint ? hex + '1a' : 'var(--surface)')
   const defaultTextColour = isTile ? clubTextOn(hex) : 'var(--text)'
 
   const compactHeight = minHeight ?? (subOnly ? 56 : 80)
@@ -177,6 +188,7 @@ export default function RichEditor({
             minHeight: focused ? expandedHeight : compactHeight,
             transition: 'min-height 0.15s ease',
             border: '1px solid var(--border)', borderRadius: 10,
+            borderLeft: isTint ? `4px solid ${hex}` : '1px solid var(--border)',
             padding: '0.75rem 1rem', background: editorBg,
             color: defaultTextColour, fontSize: '0.95rem', lineHeight: 1.55,
             outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',

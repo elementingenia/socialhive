@@ -13,7 +13,7 @@ import { HUB_SECTIONS } from '@/lib/hubSections'
 // fetch) in exchange for a component that works standing alone. The write
 // goes through PATCH /api/hub-settings, which is itself Owner-scoped per
 // hub_type (see app/api/hub-settings/route.js's HUB_TYPE_TO_OWNER_KEY).
-function SubRow({ item, hubColour, onChange, onDelete }) {
+function SubRow({ item, hubColour, previewBg, onChange, onDelete }) {
   return (
     <div style={{ display: 'flex', gap: 6, marginBottom: 8, alignItems: 'flex-start' }}>
       <div style={{ flex: 1 }}>
@@ -22,7 +22,7 @@ function SubRow({ item, hubColour, onChange, onDelete }) {
           initialValue={item.text}
           hubColour={hubColour}
           subOnly
-          bg="tile"
+          bg={previewBg}
           onChange={html => onChange(item.id, html)}
         />
       </div>
@@ -67,6 +67,15 @@ export default function HubTextSection({ sectionKey }) {
 
   if (!sec) return null
   if (loading || !draft) return <div style={{ color: 'var(--text-dim)', textAlign: 'center', padding: '2rem' }}>Loading…</div>
+
+  // Happenings Home stopped rendering its Main/Sub Notice as a solid colour
+  // fill on 2026-08-28 (readability fix) -- it's now a soft tint + accent
+  // border (see app/(app)/home/page.js's MainNoticeCard/SubNoticeCard). This
+  // editor's preview must match what residents actually see, so only the
+  // 'home' section gets the softer 'tint' preview; every other section
+  // (Show Time, Social, Library) still renders as a genuine solid-colour
+  // WelcomeBanner on its own page, so 'tile' (solid fill) stays correct there.
+  const previewBg = sectionKey === 'home' ? 'tint' : 'tile'
 
   function setDraftField(field, val) { setDraft(d => ({ ...d, [field]: val })) }
 
@@ -122,7 +131,7 @@ export default function HubTextSection({ sectionKey }) {
             initialValue={draft.text || ''}
             hubColour={sec.hex}
             subOnly={false}
-            bg="tile"
+            bg={previewBg}
             onChange={html => setDraftField('text', html)}
           />
         </div>
@@ -138,6 +147,7 @@ export default function HubTextSection({ sectionKey }) {
                 key={item.id}
                 item={item}
                 hubColour={sec.hex}
+                previewBg={previewBg}
                 onChange={(id, html) => {
                   const next = subs.map(s => s.id === id ? { ...s, text: html } : s)
                   setDraftField('subs', next)
