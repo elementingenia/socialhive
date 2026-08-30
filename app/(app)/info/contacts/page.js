@@ -53,12 +53,29 @@ function csvEscape(val) {
 
 function exportContactsCsv(entries, scopeLabel) {
   const header = ["House #", "Name", "Phone", "Email"]
-  const rows = entries.map(e => [
-    e.isResident ? (e.house_number || "") : "",
-    e.realName ? `${e.name} (${e.realName})` : e.name,
-    e.phone || "",
-    e.email || "",
-  ])
+  const withHouse = entries.map(e => ({
+    house: e.isResident ? (e.house_number || "") : "",
+    name: e.realName ? `${e.name} (${e.realName})` : e.name,
+    phone: e.phone || "",
+    email: e.email || "",
+  }))
+  // Sorted by house number by default (Iain, 2026-08-30) -- numeric, not
+  // alphabetic (house_number is stored as text, e.g. "007", so a plain
+  // string sort would put "10" before "9"). Anything without a house
+  // number (non-resident contacts, or a resident with none on file) has
+  // no meaningful position in a house-number order, so those sort last,
+  // alphabetically by name among themselves rather than being scattered.
+  const sorted = [...withHouse].sort((a, b) => {
+    const an = parseInt(a.house, 10)
+    const bn = parseInt(b.house, 10)
+    const aValid = !isNaN(an)
+    const bValid = !isNaN(bn)
+    if (aValid && bValid) return an - bn || a.name.localeCompare(b.name)
+    if (aValid) return -1
+    if (bValid) return 1
+    return a.name.localeCompare(b.name)
+  })
+  const rows = sorted.map(r => [r.house, r.name, r.phone, r.email])
   const csv = [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\r\n")
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" })
   const url = URL.createObjectURL(blob)
