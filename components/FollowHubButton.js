@@ -2,14 +2,24 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
+import { useOwners } from "@/lib/useOwners"
+import { clubInk } from "@/lib/clubColours"
+import MembersToggle from "@/components/MembersToggle"
 
 // Opt-in "Follow this hub" toggle (Iain 2026-07-18). Following a fixed hub
 // (Movies now) gets you notified when a new event is added there — the same
 // idea as joining a club. Writes hub_followers via the member's own RLS.
 export default function FollowHubButton({ hubType, colour = "var(--teal)", label = "Join" }) {
-  const { member } = useUser()
+  const { member, isAdmin } = useUser()
   const [following, setFollowing] = useState(null) // null = loading
   const [busy, setBusy] = useState(false)
+
+  // Member count + expandable name list, Owner/admin only (Iain, 2026-08-31)
+  // — reuses the same admin-or-area-owner eligibility this project already
+  // gates Post notice / EC view on, via the pre-existing space_owners
+  // primitive (lib/useOwners.js), rather than inventing a separate check.
+  const { owners } = useOwners("hub", hubType)
+  const isOwner = isAdmin || (!!member?.id && owners.some(o => o.id === member.id))
 
   useEffect(() => {
     if (!member?.id) { setFollowing(false); return }
@@ -33,14 +43,18 @@ export default function FollowHubButton({ hubType, colour = "var(--teal)", label
 
   if (following === null) return null
   return (
-    <button onClick={toggle} disabled={busy}
-      title={following ? "You'll stop getting alerts about new events here" : "Join to get notified when a new event is added here"}
-      style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.9rem",
-        borderRadius: 20, fontFamily: "inherit", fontWeight: 700, fontSize: "0.82rem",
-        cursor: busy ? "wait" : "pointer", whiteSpace: "nowrap",
-        border: `1.5px solid ${colour}`, background: following ? "var(--surface)" : colour,
-        color: following ? colour : "#fff" }}>
-      {following ? `✓ Joined` : `+ ${label}`}
-    </button>
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <button onClick={toggle} disabled={busy}
+        title={following ? "You'll stop getting alerts about new events here" : "Join to get notified when a new event is added here"}
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.9rem",
+          borderRadius: 20, fontFamily: "inherit", fontWeight: 700, fontSize: "0.82rem",
+          cursor: busy ? "wait" : "pointer", whiteSpace: "nowrap",
+          border: `1.5px solid ${colour}`, background: following ? "var(--surface)" : colour,
+          color: following ? colour : "#fff" }}>
+        {following ? `✓ Joined` : `+ ${label}`}
+      </button>
+      <MembersToggle table="hub_followers" column="hub_type" value={hubType}
+        colour={clubInk(colour)} visible={isOwner} />
+    </div>
   )
 }

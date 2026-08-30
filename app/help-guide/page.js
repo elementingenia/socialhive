@@ -791,6 +791,13 @@ export default function HelpGuidePage() {
                 view on every screening — not just the ones they're personally listed as coordinator
                 for.
               </InfoBox>
+              <Step>
+                Next to the <strong>+ Join</strong> button on the Show Time home page (which any
+                resident can tap to get notified whenever a new screening is added), the Owner and
+                admins see a <strong>👥 N members</strong> count. Tapping it expands to show every
+                resident who's followed Show Time, A–Z — collapse it again the same way. Nobody else
+                sees this count or list.
+              </Step>
             </Subsection>
           </Section>
 
@@ -1036,6 +1043,12 @@ export default function HelpGuidePage() {
                 this access — it applies automatically to everything in their club, or their hub if
                 they own Show Time or Social instead.
               </InfoBox>
+              <Step>
+                Next to the club's own <strong>Join</strong> button (which lets any resident opt in to
+                that club's notices), the club's Owner and admins see a <strong>👥 N members</strong>{" "}
+                count. Tapping it expands to show every member's name, A–Z — tap again to collapse.
+                Nobody else sees this count or list.
+              </Step>
               <Step>
                 On a bus-enabled event, a 🚌 marker and running seat count show exactly who's riding —
                 the same passenger-list view Social's Coordinator panel has.

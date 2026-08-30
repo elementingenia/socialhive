@@ -19,6 +19,7 @@ import EventCoordinators from "@/components/EventCoordinators"
 import RecurrencePicker from "@/components/RecurrencePicker"
 import { nextOccurrence } from "@/lib/recurrence"
 import EventImagePicker from "@/components/EventImagePicker"
+import MembersToggle from "@/components/MembersToggle"
 import { useLocations } from "@/lib/useLocations"
 import { cutoffToDateValue, cutoffFromDateValue } from "@/lib/booking"
 import TimeField from "@/components/TimeField"
@@ -1727,6 +1728,10 @@ function ClubSocial({ club, colour, isAdmin }) {
             {joined ? "✓ Joined" : "Join"}
           </button>
         )}
+        {/* Member count + expandable name list, Owner/admin only (Iain,
+            2026-08-31) — same admin-or-owner gate as Post notice below. */}
+        <MembersToggle table="club_members" column="club_id" value={club.id}
+          colour={clubInk(colour)} visible={isAdmin || isOwner} />
         {(isAdmin || isOwner) && !composing && (
           <button onClick={() => setComposing(true)}
             style={{ padding: "0.4rem 0.9rem", borderRadius: 20, border: `1px dashed ${colour}`,
