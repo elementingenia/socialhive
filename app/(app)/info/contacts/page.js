@@ -5,6 +5,7 @@ import { useUser } from "@/lib/UserContext"
 import ResidentEditForm, { Sheet, CategoryPicker, COLOUR, inputStyle, labelStyle, getToken, CreateLoginForm } from "@/components/ResidentEditPanel"
 import { isBuiltInCategory } from "@/lib/contactCategories"
 import { formatPhoneInput } from "@/lib/phone"
+import { sydneyTodayStr } from "@/lib/date"
 import { isExternalContact, displayRecipientName } from "@/lib/categoryQuestions"
 import { resolveMemberName } from "@/lib/memberName"
 import AskQuestion from "@/components/AskQuestion"
@@ -28,6 +29,47 @@ const toolbarButtonStyle = {
 }
 const inviteButtonStyle = {
   ...toolbarButtonStyle, border: "none", background: COLOUR, color: "#fff",
+}
+const exportButtonStyle = {
+  padding: "0.5rem 0.7rem", borderRadius: 8, border: "1px solid var(--border)",
+  background: "var(--surface)", color: "var(--text)", fontWeight: 700,
+  fontSize: "0.78rem", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
+}
+
+// Admin-only export (2026-08-30, Iain: "publish option ... whatever they have
+// the filtering set to"). Deliberately a client-side CSV download rather than
+// a server-side push to Google Drive -- this app has never had server-side
+// Drive credentials wired in (every Drive upload to date has gone through
+// Claude's own Drive connector outside the app), and building that out is a
+// genuinely bigger, separate piece of infrastructure than a button. A CSV
+// download opens straight into Excel/Numbers/Sheets and needs nothing new.
+// Exports exactly the `filtered` array already on screen -- same category +
+// search state the admin is looking at, not a fresh unfiltered pull -- so it
+// can never show the admin one list and export a different one.
+function csvEscape(val) {
+  const s = val == null ? "" : String(val)
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
+}
+
+function exportContactsCsv(entries, scopeLabel) {
+  const header = ["House #", "Name", "Phone", "Email"]
+  const rows = entries.map(e => [
+    e.isResident ? (e.house_number || "") : "",
+    e.realName ? `${e.name} (${e.realName})` : e.name,
+    e.phone || "",
+    e.email || "",
+  ])
+  const csv = [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\r\n")
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  const dateStr = sydneyTodayStr()
+  a.href = url
+  a.download = `Contacts_${scopeLabel}_${dateStr}.csv`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
 }
 
 // ── Contact card ─────────────────────────────────────────────────────────────
@@ -594,6 +636,15 @@ export default function ContactsPage() {
   const categoryFiltered = activeFilter === "all"
     ? entries
     : entries.filter(e => e.categoryIds.includes(activeFilter))
+
+  // Label for the export filename -- mirrors whichever category chip is
+  // active, "All" otherwise. Sanitised to filesystem-safe characters only.
+  const exportScopeLabel = useMemo(() => {
+    const raw = (!activeFilter || activeFilter === "all")
+      ? "All"
+      : (categories.find(c => c.id === activeFilter)?.name || "Filtered")
+    return raw.replace(/[^a-z0-9]+/gi, "_")
+  }, [activeFilter, categories])
   // Searches name, title/role, phone, email and house number -- not just name
   // (Iain, 2026-07-29). Phone matching ignores spaces and punctuation so
   // "0412" finds "+61 412 ...", and house only counts for a Resident, matching
@@ -669,6 +720,14 @@ export default function ContactsPage() {
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
           style={{ ...inputStyle, flex: 1 }} />
         <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", whiteSpace: "nowrap" }}>{filtered.length}</span>
+        {isAdmin && (
+          <button
+            onClick={() => exportContactsCsv(filtered, exportScopeLabel)}
+            title="Download the list currently shown (House #, Name, Phone, Email) as a CSV"
+            style={exportButtonStyle}>
+            ⬇ Export
+          </button>
+        )}
       </div>
 
       {isAdmin && (

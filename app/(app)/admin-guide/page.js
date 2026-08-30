@@ -790,6 +790,19 @@ export default function AdminGuidePage() {
                 rather than continuing to use the one you just handed them indefinitely.
               </Step>
             </Subsection>
+            <Subsection id="sub-acc-export" title="Exporting the list — Export button (added 2026-08-30)">
+              <Step>
+                An <strong>⬇ Export</strong> button sits next to the search bar on Info → Contacts,
+                admin-only. It downloads a CSV of exactly the list you're currently looking at —{" "}
+                <strong>House #, Name, Phone, Email</strong> — respecting whichever category chip and search
+                text are active at the time. Filter to a category first (or leave "All Categories" selected)
+                and the export matches it exactly; there's no separate "export everything" option.
+              </Step>
+              <Step>
+                This is a plain file download, not a push to Google Drive or anywhere else — it opens
+                straight into Excel, Numbers, or Google Sheets once downloaded, the same as any other CSV.
+              </Step>
+            </Subsection>
           </Section>
 
           <Section id="hidename" num={10} title="Private / Hide Name — Where It Actually Applies">
