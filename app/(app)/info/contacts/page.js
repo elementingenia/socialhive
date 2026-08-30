@@ -84,7 +84,7 @@ function exportContactsCsv(entries, scopeLabel) {
 // on the compact line -- admins additionally get "Edit" alongside it, since
 // viewing details and editing them are different actions (2026-07-12,
 // clarified same day: Edit alone isn't a substitute for a quick "More").
-function ContactCard({ contact, badge, external = false, isResident = true, onEdit }) {
+function ContactCard({ contact, badges = [], external = false, isResident = true, onEdit }) {
   const hasMore = !!(contact.title || contact.phone || contact.email)
   // External contacts open with their details already showing. They can't be
   // messaged in the app, so the useful thing is their phone/email -- burying
@@ -106,12 +106,12 @@ function ContactCard({ contact, badge, external = false, isResident = true, onEd
           {isResident && contact.house_number && (
             <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>· #{contact.house_number}</span>
           )}
-          {badge && (
-            <span style={{
+          {badges.map(b => (
+            <span key={b} style={{
               fontSize: "0.6rem", fontWeight: 700, padding: "0.05rem 0.4rem",
               borderRadius: 10, background: "var(--surface2)", color: "var(--text-dim)",
-            }}>{badge}</span>
-          )}
+            }}>{b}</span>
+          ))}
           {/* Colour is never the only signal -- this label carries the meaning
               for colour-vision-deficient and screen-reader users. The contact
               NAME stays full-strength var(--text); only the container is
@@ -599,7 +599,7 @@ export default function ContactsPage() {
         // member is never external.
         external: false,
         isResident: true,   // members are implicitly Residents (migration 029)
-      badge: isAdmin && m.hide_name ? "Private" : null,
+      badges: [isAdmin && m.is_admin && "Admin", isAdmin && m.hide_name && "Private"].filter(Boolean),
       }
     })
     const contactEntries = displayContacts.map(c => ({
@@ -618,7 +618,7 @@ export default function ContactsPage() {
       // Manager has one on file sometimes, but showing it implies they live
       // here (Iain, 2026-07-29), so it is hidden unless they're a Resident.
       isResident: !!residentsId && (c.contact_category_members || []).some(x => x.category_id === residentsId),
-      badge: isAdmin && !c.active ? "Hidden" : null,
+      badges: isAdmin && !c.active ? ["Hidden"] : [],
     }))
     return [...memberEntries, ...contactEntries].sort((a, b) => a.name.localeCompare(b.name))
   }, [members, displayContacts, contactByMemberId, residentsId, isAdmin])
@@ -796,7 +796,7 @@ export default function ContactsPage() {
         </div>
       ) : (
         sortedFiltered.map(e => (
-          <ContactCard key={e.key} contact={e} badge={e.badge} external={e.external} isResident={e.isResident}
+          <ContactCard key={e.key} contact={e} badges={e.badges} external={e.external} isResident={e.isResident}
             onEdit={isAdmin ? () => setSheet(e.isMember ? { type: "resident", member: e.member } : { type: "contact", contact: e.contact }) : null} />
         ))
       )}

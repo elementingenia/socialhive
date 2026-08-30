@@ -106,6 +106,8 @@ const RAW_SECTIONS = [
       { title: "Deactivate vs. Delete — not interchangeable", id: "sub-acc-remove" },
       { title: "Creating a login for a resident", id: "sub-acc-create" },
       { title: "Reset PIN — what it forces on next login", id: "sub-acc-pin" },
+      { title: "Exporting the list — Export button", id: "sub-acc-export" },
+      { title: "Admin badge — seeing who is Admin at a glance", id: "sub-acc-adminbadge" },
     ],
   },
   {
@@ -807,6 +809,21 @@ export default function AdminGuidePage() {
                 currently selected on screen — a resident-facing control above the search box, added
                 2026-08-30, not admin-only — so the downloaded file's row order always matches what
                 you were just looking at.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-acc-adminbadge" title="Admin badge — seeing who is Admin at a glance (added 2026-08-31)">
+              <Step>
+                Every resident with <strong>Admin rights</strong> now shows a small <strong>Admin</strong>{" "}
+                badge next to their name on Info → Contacts — admin view only, same place the existing{" "}
+                <strong>Private</strong> and <strong>Hidden</strong> badges appear. A resident who is both
+                Admin and Private shows both badges together.
+              </Step>
+              <Step>
+                This is computed live from each member's <code>is_admin</code> flag — there's no separate
+                "Admins" category, group, or list to keep in sync, and it never appears as a filter chip.
+                Iain: "I have no way of seeing who is Admin. Lets have a fixed Contact Group called Admins
+                and add anyone set as Admin to it (but not have it as a category)" — the badge satisfies
+                this without adding a manually-maintained group anywhere.
               </Step>
             </Subsection>
           </Section>
