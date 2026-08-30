@@ -51,31 +51,18 @@ function csvEscape(val) {
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s
 }
 
+// Exports rows in whatever order they're passed -- the page's own
+// `sortedFiltered` (House # or Name, per the on-screen toggle) is always
+// what's handed in, so the export matches the screen exactly rather than
+// re-deriving its own separate order.
 function exportContactsCsv(entries, scopeLabel) {
   const header = ["House #", "Name", "Phone", "Email"]
-  const withHouse = entries.map(e => ({
-    house: e.isResident ? (e.house_number || "") : "",
-    name: e.realName ? `${e.name} (${e.realName})` : e.name,
-    phone: e.phone || "",
-    email: e.email || "",
-  }))
-  // Sorted by house number by default (Iain, 2026-08-30) -- numeric, not
-  // alphabetic (house_number is stored as text, e.g. "007", so a plain
-  // string sort would put "10" before "9"). Anything without a house
-  // number (non-resident contacts, or a resident with none on file) has
-  // no meaningful position in a house-number order, so those sort last,
-  // alphabetically by name among themselves rather than being scattered.
-  const sorted = [...withHouse].sort((a, b) => {
-    const an = parseInt(a.house, 10)
-    const bn = parseInt(b.house, 10)
-    const aValid = !isNaN(an)
-    const bValid = !isNaN(bn)
-    if (aValid && bValid) return an - bn || a.name.localeCompare(b.name)
-    if (aValid) return -1
-    if (bValid) return 1
-    return a.name.localeCompare(b.name)
-  })
-  const rows = sorted.map(r => [r.house, r.name, r.phone, r.email])
+  const rows = entries.map(e => [
+    e.isResident ? (e.house_number || "") : "",
+    e.realName ? `${e.name} (${e.realName})` : e.name,
+    e.phone || "",
+    e.email || "",
+  ])
   const csv = [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\r\n")
   const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" })
   const url = URL.createObjectURL(blob)
@@ -516,6 +503,11 @@ export default function ContactsPage() {
   const [sheet, setSheet]           = useState(null) // null | "add" | "categories" | "invite" | {type,member|contact}
   const [search, setSearch]         = useState("")
   const [inviteCode, setInviteCode] = useState("")
+  // Sort order for the visible list AND its export -- House # is the
+  // default (Iain, 2026-08-30: "By House # (set as default sort order
+  // lowest to highest)"), Name is the alternative. Not persisted across
+  // visits -- always starts on the default each time the page loads.
+  const [sortMode, setSortMode]     = useState("house")
 
   const load = useCallback(async () => {
     const [catRes, memberRes, contactRes, inviteRes] = await Promise.all([
@@ -679,6 +671,28 @@ export default function ContactsPage() {
     })
   }, [categoryFiltered, search])
 
+  // House-number sort is numeric, not alphabetic -- house_number is stored
+  // as text (e.g. "007"), so a plain string sort would put "10" ahead of
+  // "9". Anything with no house number (non-resident contacts, or a
+  // resident with none on file) has no meaningful position in a
+  // house-number order, so those sort last, alphabetically by name among
+  // themselves. `entries` is already name-sorted (see its own useMemo
+  // above), so "By Name" just returns `filtered` as-is rather than
+  // re-sorting something that's already in the right order.
+  const sortedFiltered = useMemo(() => {
+    if (sortMode === "name") return filtered
+    return [...filtered].sort((a, b) => {
+      const an = parseInt(a.isResident ? a.house_number : "", 10)
+      const bn = parseInt(b.isResident ? b.house_number : "", 10)
+      const aValid = !isNaN(an)
+      const bValid = !isNaN(bn)
+      if (aValid && bValid) return an - bn || a.name.localeCompare(b.name)
+      if (aValid) return -1
+      if (bValid) return 1
+      return a.name.localeCompare(b.name)
+    })
+  }, [filtered, sortMode])
+
   const initializing = loading || activeFilter === null
 
   if (initializing) return (
@@ -733,13 +747,32 @@ export default function ContactsPage() {
         </div>
       )}
 
+      {/* Sort order -- visible to everyone, not just admins (Iain,
+          2026-08-30: "so that user can choose"). House # is the default
+          on every page load, per his explicit instruction, not persisted
+          across visits. Same pill-button styling as the category chips
+          above, per this project's reuse-the-canonical-asset rule, just
+          sized down to read as a secondary control rather than a second
+          row of primary filters. */}
+      <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", marginBottom: "0.6rem" }}>
+        <span style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontWeight: 600 }}>Sort:</span>
+        {[{ key: "house", label: "House #" }, { key: "name", label: "Name" }].map(opt => (
+          <button key={opt.key} onClick={() => setSortMode(opt.key)} style={{
+            padding: "0.25rem 0.7rem", borderRadius: 20, border: "none",
+            fontFamily: "inherit", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer",
+            background: sortMode === opt.key ? COLOUR : "var(--surface2)",
+            color: sortMode === opt.key ? "#fff" : "var(--text-dim)",
+          }}>{opt.label}</button>
+        ))}
+      </div>
+
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "1rem" }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
           style={{ ...inputStyle, flex: 1 }} />
-        <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", whiteSpace: "nowrap" }}>{filtered.length}</span>
+        <span style={{ fontSize: "0.78rem", color: "var(--text-dim)", whiteSpace: "nowrap" }}>{sortedFiltered.length}</span>
         {isAdmin && (
           <button
-            onClick={() => exportContactsCsv(filtered, exportScopeLabel)}
+            onClick={() => exportContactsCsv(sortedFiltered, exportScopeLabel)}
             title="Download the list currently shown (House #, Name, Phone, Email) as a CSV"
             style={exportButtonStyle}>
             ⬇ Export
@@ -756,13 +789,13 @@ export default function ContactsPage() {
         </div>
       )}
 
-      {filtered.length === 0 ? (
+      {sortedFiltered.length === 0 ? (
         <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--text-dim)", fontSize: "0.9rem" }}>
           <div style={{ fontSize: "1.8rem", marginBottom: "0.5rem" }}>👥</div>
           No contacts in this category
         </div>
       ) : (
-        filtered.map(e => (
+        sortedFiltered.map(e => (
           <ContactCard key={e.key} contact={e} badge={e.badge} external={e.external} isResident={e.isResident}
             onEdit={isAdmin ? () => setSheet(e.isMember ? { type: "resident", member: e.member } : { type: "contact", contact: e.contact }) : null} />
         ))

@@ -1054,6 +1054,11 @@ export default function HelpGuidePage() {
                 <strong>Ask a question</strong> option that routes your question to the right person or
                 category.
               </Step>
+              <Step>
+                A <strong>Sort</strong> option above the search box lets you list the contacts by{" "}
+                <strong>House #</strong> (lowest to highest — the default) or by <strong>Name</strong>{" "}
+                (A to Z), whichever is easier to scan for what you're looking for.
+              </Step>
             </Subsection>
 
             <Subsection id="sub-info-documents" title="Community documents">

@@ -802,6 +802,12 @@ export default function AdminGuidePage() {
                 This is a plain file download, not a push to Google Drive or anywhere else — it opens
                 straight into Excel, Numbers, or Google Sheets once downloaded, the same as any other CSV.
               </Step>
+              <Step>
+                The export also follows whichever <strong>Sort</strong> order (House # or Name) is
+                currently selected on screen — a resident-facing control above the search box, added
+                2026-08-30, not admin-only — so the downloaded file's row order always matches what
+                you were just looking at.
+              </Step>
             </Subsection>
           </Section>
 
