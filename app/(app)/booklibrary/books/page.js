@@ -102,12 +102,15 @@ function MyLoansSheet({ myLoans, books, onReturn, onClose, addToast }) {
 }
 
 // ── Book Detail sheet ─────────────────────────────────────────────────────────
-function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCount, loanCap, activeLoan, onClose, onDeleted, onLoansChanged, addToast }) {
+function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCount, loanCap, activeLoan, onClose, onDeleted, onLoansChanged, onUpdated, addToast }) {
   const [deleting,      setDeleting]      = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [borrowing,     setBorrowing]     = useState(false)
   const [returning,     setReturning]     = useState(false)
   const [showNotes,     setShowNotes]     = useState(false)
+  const [editingIsbn,   setEditingIsbn]   = useState(false)
+  const [isbnDraft,     setIsbnDraft]     = useState('')
+  const [savingIsbn,    setSavingIsbn]    = useState(false)
   const genres = parseGenres(book.genre)
 
   const iMineToReturn = activeLoan && activeLoan.member_id === memberId
@@ -156,6 +159,40 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
     setDeleting(false)
     if (!res.ok) { const d=await res.json().catch(()=>({})); addToast(d.error||'Delete failed','error'); return }
     addToast(book.title + ' removed'); onClose(); onDeleted()
+  }
+
+  // ISBN edit/add (2026-08-31, Iain: "if already saved, changing it would
+  // run the search for that bar code, refreshing to the new code... when
+  // no code is stored, allowing a user to enter one") — same barcode/ISBN
+  // lookup AddBookSheet's barcode mode uses, run server-side against the
+  // new value and applied back onto this book's record if it finds a match.
+  function startEditIsbn() {
+    setIsbnDraft(book.isbn || '')
+    setEditingIsbn(true)
+  }
+
+  async function handleSaveIsbn() {
+    setSavingIsbn(true)
+    const res = await fetch('/api/books/' + book.id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session?.access_token },
+      body: JSON.stringify({ isbn: isbnDraft }),
+    })
+    const d = await res.json().catch(() => ({}))
+    setSavingIsbn(false)
+    if (!res.ok) {
+      const msg = d.error === 'invalid_isbn'
+        ? 'Enter a full 10 or 13-digit ISBN'
+        : searchUnavailableMessage(d.error) || d.error || 'Could not update ISBN'
+      addToast(msg, 'error')
+      return
+    }
+    setEditingIsbn(false)
+    if (!isbnDraft.trim()) addToast('ISBN removed')
+    else if (d.unchanged) addToast('ISBN unchanged')
+    else if (d.found) addToast('ISBN updated — book details refreshed')
+    else addToast('ISBN saved — no matching Google Books entry found for that code', 'error')
+    onUpdated()
   }
 
   return (
@@ -237,11 +274,31 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
                 </div>
               )}
 
-              {(book.isbn || book.publisher || book.notes) && (
+              {editingIsbn ? (
+                <div style={{ display:'flex', alignItems:'center', gap:'0.4rem', marginTop:'-0.15rem', flexWrap:'wrap' }}>
+                  <input autoFocus value={isbnDraft} onChange={e=>setIsbnDraft(e.target.value)}
+                    placeholder="Enter ISBN (10 or 13 digits)" disabled={savingIsbn}
+                    style={{ flex:'1 1 180px', minWidth:0, padding:'0.35rem 0.6rem', borderRadius:'8px', border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:'0.78rem', fontFamily:'monospace', boxSizing:'border-box' }} />
+                  <button onClick={handleSaveIsbn} disabled={savingIsbn}
+                    style={{ background:'var(--purple)', border:'none', borderRadius:'8px', padding:'0.35rem 0.7rem', fontSize:'0.7rem', fontWeight:700, color:'#fff', cursor:savingIsbn?'not-allowed':'pointer', opacity:savingIsbn?0.6:1 }}>
+                    {savingIsbn ? 'Saving…' : 'Save'}
+                  </button>
+                  <button onClick={() => setEditingIsbn(false)} disabled={savingIsbn}
+                    style={{ background:'none', border:'1px solid var(--border)', borderRadius:'8px', padding:'0.35rem 0.7rem', fontSize:'0.7rem', fontWeight:600, color:'var(--text-dim)', cursor:savingIsbn?'not-allowed':'pointer' }}>
+                    Cancel
+                  </button>
+                </div>
+              ) : (book.isbn || book.publisher || book.notes || canManage) && (
                 <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginTop:'-0.4rem', flexWrap:'wrap' }}>
                   {book.isbn && <span title="ISBN" style={{ fontSize:'0.72rem', color:'var(--text-dim)', opacity:0.75, fontFamily:'monospace' }}>{book.isbn}</span>}
                   {book.isbn && book.publisher && <span style={{ fontSize:'0.72rem', color:'var(--text-dim)', opacity:0.5 }}>·</span>}
                   {book.publisher && <span style={{ fontSize:'0.72rem', color:'var(--text-dim)', opacity:0.75 }}>{book.publisher}</span>}
+                  {canManage && (
+                    <button onClick={startEditIsbn}
+                      style={{ background:'none', border:'1px solid var(--border)', borderRadius:'20px', padding:'0.1rem 0.55rem', fontSize:'0.68rem', fontWeight:600, color:'var(--text-dim)', cursor:'pointer' }}>
+                      {book.isbn ? '✎ Edit ISBN' : '+ Add ISBN'}
+                    </button>
+                  )}
                   {book.notes && (
                     <button onClick={() => setShowNotes(true)}
                       style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'20px', padding:'0.1rem 0.55rem', fontSize:'0.68rem', fontWeight:600, color:'var(--purple)', cursor:'pointer' }}>
@@ -781,6 +838,7 @@ export default function BookLibraryPage() {
           onClose={()=>setSelected(null)}
           onDeleted={()=>{ setSelected(null); loadData() }}
           onLoansChanged={()=>{ loadLoans(); setSelected(null) }}
+          onUpdated={loadData}
           addToast={addToast}
         />
       )}
