@@ -1207,7 +1207,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
             cause as the confirmed ClubHome.js Edit-button bug. */}
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.35rem" }}>
           <div style={{ fontWeight: 700, fontSize: "1rem", lineHeight: 1.2, flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{event.title}</div>
-          <div style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: "0.4rem", flexShrink: 0 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: "0.4rem", flexShrink: 0 }}>
             {/* Status pill sits to the left of Edit on the same row (or alone,
                 right-aligned, when Edit isn't shown) — it used to stack in its
                 own column below Edit, wasting a line on every card. */}
@@ -1412,7 +1412,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                           {isPrivate && isAdmin && !isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
                           {b.bus_passenger && <BusIcon style={{ width: 12, height: 12, marginLeft: 4, verticalAlign: "-1px", opacity: 0.75 }} />}
                         </span>
-                        <span style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
+                        <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
                           {canManagePayments && submitted && (
                             <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#0f766e", background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 8, padding: "0.05rem 0.35rem" }}>🧾 Submitted</span>
                           )}

@@ -88,7 +88,7 @@ export default function SpaceScheduledEventCard({ event, onOpen, onEdit }) {
             cause as the confirmed ClubHome.js Edit-button bug. */}
         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.35rem" }}>
           <div style={{ fontWeight: 700, fontSize: "1rem", lineHeight: 1.2, flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{event.title}</div>
-          <div style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: "0.4rem", flexShrink: 0 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: "0.4rem", flexShrink: 0 }}>
             {isConfirmed && (
               <span style={{
                 background: COLOUR_HEX + "18", color: COLOUR,

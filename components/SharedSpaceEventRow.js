@@ -47,7 +47,7 @@ export default function SharedSpaceEventRow({ event, onOpen, onEdit, mySeats, co
           <div style={{ fontSize: "0.8rem", color: "var(--space)", fontWeight: 600, minWidth: 0, flex: "1 1 auto", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {fmtSpaceEventDate(event.event_date)} · {fmtSpaceEventTime(event.event_time)}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
             <span style={{
               background: SPACE_HEX + "18", color: "var(--space)",
               borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700, whiteSpace: "nowrap",

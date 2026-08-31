@@ -1203,7 +1203,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                         )
                       })()}
                     </div>
-                    <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0, alignItems: "center" }}>
                       {paymentRequired && confirmedSeats > 0 && firstConf && computeIsSubmitted(firstConf) && (
                         <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 7px", borderRadius: 10,
                           background: "#f0fdfa", color: "#0f766e", border: "1px solid #99f6e4" }}>🧾 Submitted</span>

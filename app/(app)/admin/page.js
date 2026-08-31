@@ -1591,7 +1591,7 @@ function ClubsTab() {
                 <div style={{ fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>/clubs/{c.slug}{c.catalogue_module === 'books' ? ' · Books catalogue' : ''}</div>
               </div>
-              <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', flexShrink: 0 }}>
                 <button onClick={() => setEditing(c)} style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.82rem' }}>Edit</button>
                 {c.slug !== 'book-club' && (
                   <button onClick={() => archive(c)} style={{ padding: '0.4rem 0.7rem', borderRadius: 8, border: '1px solid #fca5a5', background: '#fee2e2', color: '#991b1b', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.82rem' }}>Archive</button>

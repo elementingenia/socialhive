@@ -269,8 +269,8 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
           line rather than vanishing if it still doesn't fit. */}
       <div style={{ background: colour, padding: "0.6rem 1rem", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "4px 8px" }}>
         <span style={{ color: clubTextOn(colour), fontWeight: 700, fontSize: "0.85rem", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1 1 auto" }}>{label}</span>
-        <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <span style={{ color: clubTextOn(colour), opacity: 0.85, fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap" }}>{fmtDate(event.event_date)}</span>
+        <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "4px 8px", minWidth: 0 }}>
+          <span style={{ color: clubTextOn(colour), opacity: 0.85, fontSize: "0.78rem", fontWeight: 600 }}>{fmtDate(event.event_date)}</span>
           {onEdit && (isAdmin || isOwner) && (
             <button onClick={(e) => { e.stopPropagation(); onEdit() }}
               style={{ background: "rgba(255,255,255,0.9)", color: clubInk(colour), border: "none", borderRadius: 14,
