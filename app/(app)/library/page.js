@@ -703,7 +703,17 @@ export default function LibraryPage() {
     return matchSearch && matchGenre
   })
   const sorted = [...filtered].sort((a,b) => {
-    if (sortBy==='community') { const d=(avgVotes[b.id]?.avg||0)-(avgVotes[a.id]?.avg||0); return d!==0?d:(parseFloat(b.rating_imdb)||0)-(parseFloat(a.rating_imdb)||0) }
+    if (sortBy==='community') {
+      // Highest average vote first; a tie on average is broken by whichever
+      // score is backed by more votes (Iain, 2026-08-31: "two movies scoring
+      // 9 but one has got that from 2 user votes and the other from 5, the
+      // one with 5 user votes has a higher overall ranking"), not IMDb rating.
+      const avgDiff = (avgVotes[b.id]?.avg||0)-(avgVotes[a.id]?.avg||0)
+      if (avgDiff !== 0) return avgDiff
+      const countDiff = (avgVotes[b.id]?.count||0)-(avgVotes[a.id]?.count||0)
+      if (countDiff !== 0) return countDiff
+      return (parseFloat(b.rating_imdb)||0)-(parseFloat(a.rating_imdb)||0)
+    }
     if (sortBy==='imdb') return (parseFloat(b.rating_imdb)||0)-(parseFloat(a.rating_imdb)||0)
     return a.title.localeCompare(b.title)
   })
