@@ -1200,8 +1200,13 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
       )}
       <div style={{ padding: "0.9rem 1rem" }}>
         {/* Title + badges */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.35rem" }}>
-          <div style={{ fontWeight: 700, fontSize: "1rem", lineHeight: 1.2, flex: 1 }}>{event.title}</div>
+        {/* Accessibility fix (2026-08-31): flexWrap + title ellipsis so a
+            long event title can't push the status pill/Edit button past the
+            visible area -- app/globals.css's html{overflow-x:hidden} means
+            that overflow isn't scrollable, it's just invisible. Same root
+            cause as the confirmed ClubHome.js Edit-button bug. */}
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem", marginBottom: "0.35rem" }}>
+          <div style={{ fontWeight: 700, fontSize: "1rem", lineHeight: 1.2, flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{event.title}</div>
           <div style={{ display: "flex", flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: "0.4rem", flexShrink: 0 }}>
             {/* Status pill sits to the left of Edit on the same row (or alone,
                 right-aligned, when Edit isn't shown) — it used to stack in its
@@ -1401,8 +1406,8 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                     const isRecording = recordingId === b.id
                     return (
                       <div key={i} style={{ padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", gap: "0.5rem" }}>
-                        <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--terracotta)" : "var(--text)", minWidth: 0 }}>
+                        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", gap: "0.5rem" }}>
+                        <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--terracotta)" : "var(--text)", minWidth: 0, flex: "1 1 auto", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {label}
                           {isPrivate && isAdmin && !isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
                           {b.bus_passenger && <BusIcon style={{ width: 12, height: 12, marginLeft: 4, verticalAlign: "-1px", opacity: 0.75 }} />}

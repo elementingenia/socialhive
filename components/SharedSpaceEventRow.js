@@ -39,8 +39,12 @@ export default function SharedSpaceEventRow({ event, onOpen, onEdit, mySeats, co
           padding: "0.9rem 1.1rem", cursor: "pointer",
         }}>
         <div style={{ fontWeight: 700, fontSize: "0.92rem", color: "var(--text)" }}>{event.title}</div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginTop: 2 }}>
-          <div style={{ fontSize: "0.8rem", color: "var(--space)", fontWeight: 600, minWidth: 0 }}>
+        {/* Accessibility fix (2026-08-31): flexWrap + ellipsis so the seat
+            pill/Edit button can't be clipped off-screen by app/globals.css's
+            html{overflow-x:hidden} at larger text sizes -- same root cause
+            as the confirmed ClubHome.js Edit-button bug. */}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", marginTop: 2 }}>
+          <div style={{ fontSize: "0.8rem", color: "var(--space)", fontWeight: 600, minWidth: 0, flex: "1 1 auto", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {fmtSpaceEventDate(event.event_date)} · {fmtSpaceEventTime(event.event_time)}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>

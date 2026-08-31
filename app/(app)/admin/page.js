@@ -1583,10 +1583,13 @@ function ClubsTab() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
           {clubs.map(c => (
-            <div key={c.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: `4px solid ${c.colour || 'var(--purple)'}`, borderRadius: 12, padding: '0.85rem 1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 700, color: 'var(--text)' }}>{c.name}</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>/clubs/{c.slug}{c.catalogue_module === 'books' ? ' · Books catalogue' : ''}</div>
+            <div key={c.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: `4px solid ${c.colour || 'var(--purple)'}`, borderRadius: 12, padding: '0.85rem 1rem', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+              {/* Accessibility fix (2026-08-31): flexWrap + name ellipsis so
+                  Edit/Archive can't be clipped off-screen by app/globals.css's
+                  html{overflow-x:hidden} at larger text sizes. */}
+              <div style={{ minWidth: 0, flex: '1 1 auto', overflow: 'hidden' }}>
+                <div style={{ fontWeight: 700, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>/clubs/{c.slug}{c.catalogue_module === 'books' ? ' · Books catalogue' : ''}</div>
               </div>
               <div style={{ display: 'flex', gap: '0.4rem', flexShrink: 0 }}>
                 <button onClick={() => setEditing(c)} style={{ padding: '0.4rem 0.8rem', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text)', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', fontSize: '0.82rem' }}>Edit</button>

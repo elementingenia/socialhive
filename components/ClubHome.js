@@ -257,14 +257,24 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
       style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",
         overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 16, cursor: blocked ? "default" : "pointer" }}>
       {/* Card header */}
-      <div style={{ background: colour, padding: "0.6rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <span style={{ color: clubTextOn(colour), fontWeight: 700, fontSize: "0.85rem" }}>{label}</span>
+      {/* Accessibility fix (2026-08-31): this row used to have no flexWrap and
+          no shrink/ellipsis protection on {label}, so at larger OS text-size
+          settings the row's total content width could exceed the card, and
+          because app/globals.css sets html{overflow-x:hidden} app-wide, the
+          overflow wasn't scrollable -- it just silently clipped the Edit
+          button off-screen with no way to reach it (reported live: a resident
+          on a phone with larger accessibility text couldn't see or tap Edit
+          in a club). minWidth:0+ellipsis keeps the common case unchanged;
+          flexWrap is the belt-and-braces fallback so Edit drops to its own
+          line rather than vanishing if it still doesn't fit. */}
+      <div style={{ background: colour, padding: "0.6rem 1rem", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "4px 8px" }}>
+        <span style={{ color: clubTextOn(colour), fontWeight: 700, fontSize: "0.85rem", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1 1 auto" }}>{label}</span>
         <span style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <span style={{ color: clubTextOn(colour), opacity: 0.85, fontSize: "0.78rem", fontWeight: 600 }}>{fmtDate(event.event_date)}</span>
+          <span style={{ color: clubTextOn(colour), opacity: 0.85, fontSize: "0.78rem", fontWeight: 600, whiteSpace: "nowrap" }}>{fmtDate(event.event_date)}</span>
           {onEdit && (isAdmin || isOwner) && (
             <button onClick={(e) => { e.stopPropagation(); onEdit() }}
               style={{ background: "rgba(255,255,255,0.9)", color: clubInk(colour), border: "none", borderRadius: 14,
-                padding: "3px 12px", fontWeight: 700, fontSize: "0.72rem", cursor: "pointer", fontFamily: "inherit" }}>✎ Edit</button>
+                padding: "3px 12px", fontWeight: 700, fontSize: "0.72rem", cursor: "pointer", fontFamily: "inherit", flexShrink: 0, whiteSpace: "nowrap" }}>✎ Edit</button>
           )}
         </span>
       </div>
@@ -476,20 +486,20 @@ function UpcomingDatesAccordion({ events, myBookings, onOpen, onEdit = null, col
           {events.map(ev => {
             const booked = !!myBookings[ev.id]
             return (
-              <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 4, borderBottom: "1px solid var(--border)" }}>
+              <div key={ev.id} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 4, borderBottom: "1px solid var(--border)" }}>
                 <button onClick={() => onOpen(ev)}
-                  style={{ flex: 1, minWidth: 0, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
+                  style={{ flex: "1 1 auto", minWidth: 0, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8,
                     padding: "0.6rem 0.7rem", background: "none", border: "none", cursor: "pointer",
                     textAlign: "left", fontFamily: "inherit" }}>
-                  <span style={{ minWidth: 0 }}>
+                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     <span style={{ fontWeight: 700, fontSize: "0.85rem", color: clubInk(colour) }}>{fmt(ev.event_date)}</span>
                     {ev.event_time && <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}> · {ev.event_time.slice(0,5)}</span>}
                   </span>
-                  <span style={{ flexShrink: 0, fontSize: "0.72rem", fontWeight: 700, color: booked ? "#15803d" : colour }}>{booked ? "✓ Booked" : "Book →"}</span>
+                  <span style={{ flexShrink: 0, fontSize: "0.72rem", fontWeight: 700, color: booked ? "#15803d" : colour, whiteSpace: "nowrap" }}>{booked ? "✓ Booked" : "Book →"}</span>
                 </button>
                 {onEdit && (
                   <button onClick={() => onEdit(ev)} aria-label="Edit this date" title="Edit this date"
-                    style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", fontSize: "0.72rem", fontWeight: 700, padding: "0.4rem 0.6rem", color: clubInk(colour) }}>✎ Edit</button>
+                    style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", fontSize: "0.72rem", fontWeight: 700, padding: "0.4rem 0.6rem", color: clubInk(colour), whiteSpace: "nowrap" }}>✎ Edit</button>
                 )}
               </div>
             )

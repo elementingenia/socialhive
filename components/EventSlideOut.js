@@ -1163,9 +1163,14 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
               return (
                 <div key={member?.id || contact?.id || name} style={{ background: isOwnBooking ? colour + "10" : "var(--surface2)", borderRadius: 10, padding: "10px 12px",
                   border: `${isOwnBooking ? 2 : 1}px solid ${borderCol}` }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: 14, color: isOwnBooking ? colour : "var(--text)" }}>
+                  {/* Accessibility fix (2026-08-31): flexWrap added so the
+                      payment toggle/badges on the right can never be clipped
+                      off-screen by app/globals.css's html{overflow-x:hidden}
+                      at larger text sizes -- see ClubHome.js's EventCard
+                      header for the confirmed root cause of this pattern. */}
+                  <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                    <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: isOwnBooking ? colour : "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {isWaitlistOnly && waitlistPosition && (
                           <span style={{ color: "var(--amber-dark)", marginRight: 5 }}>({ordinal(waitlistPosition)})</span>
                         )}
