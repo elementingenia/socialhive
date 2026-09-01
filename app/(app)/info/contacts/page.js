@@ -512,7 +512,7 @@ export default function ContactsPage() {
   const load = useCallback(async () => {
     const [catRes, memberRes, contactRes, inviteRes] = await Promise.all([
       supabase.from("contact_categories").select("id, name, display_order, askable").eq("active", true).order("display_order"),
-      supabase.from("members").select("id, name, display_name, username, email, house_number, phone, hide_name, is_admin").eq("status", "active"),
+      supabase.from("members").select("id, name, display_name, username, email, house_number, phone, hide_name, is_admin, is_test").eq("status", "active"),
       supabase.from("contacts")
         .select("id, name, title, phone, email, house_number, member_id, active, contact_category_members(category_id)")
         .order("display_order"),
@@ -564,8 +564,15 @@ export default function ContactsPage() {
   // every viewer always sees their OWN name regardless of their own Private
   // flag -- Private only hides you from other (non-admin) residents, not
   // from yourself (Iain, 2026-07-12).
+  // Test/fixture accounts (members.is_test, migration 087) are hidden from
+  // this directory for everyone except admins -- mirrors events.is_test
+  // (migration 036)'s existing "invisible to residents, still usable/
+  // findable in the backend" pattern. Root cause this fixes: testbot
+  // (status=active, hide_name=true, no house number/phone) was showing up
+  // here as an unexplained "Resident" card with blank details, which
+  // raised real community concern (Iain, 2026-09-02).
   const entries = useMemo(() => {
-    const memberEntries = members.map(m => {
+    const memberEntries = members.filter(m => !m.is_test || isAdmin).map(m => {
       const linked = contactByMemberId[m.id]
       const isSelf = m.id === me?.id
       const maskedForViewer = m.hide_name && !isAdmin && !isSelf
@@ -599,7 +606,7 @@ export default function ContactsPage() {
         // member is never external.
         external: false,
         isResident: true,   // members are implicitly Residents (migration 029)
-      badges: [isAdmin && m.is_admin && "Admin", isAdmin && m.hide_name && "Private"].filter(Boolean),
+      badges: [isAdmin && m.is_test && "Test Account", isAdmin && m.is_admin && "Admin", isAdmin && m.hide_name && "Private"].filter(Boolean),
       }
     })
     const contactEntries = displayContacts.map(c => ({

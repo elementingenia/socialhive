@@ -37,8 +37,11 @@ export async function GET(req) {
   const [viewer, cats, { data: admins }] = await Promise.all([
     getMember(req),
     askableCategories(),
+    // is_test accounts (migration 087, e.g. testbot) are excluded from the
+    // admin catch-all -- a resident should never be able to pick a test
+    // fixture as an "Ask an Admin" recipient (Iain, 2026-09-02).
     supabaseAdmin.from("members").select("id, name, display_name, hide_name")
-      .eq("status", "active").eq("is_admin", true),
+      .eq("status", "active").eq("is_admin", true).eq("is_test", false),
   ])
   if (!viewer) return NextResponse.json({ error: "Unauthorised" }, { status: 401 })
 
