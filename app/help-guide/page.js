@@ -363,22 +363,42 @@ export default function HelpGuidePage() {
           padding: "2rem 1.5rem 1.75rem",
           position: "relative",
         }}>
-          <button
-            className="no-print"
-            onClick={() => window.print()}
-            style={{
-              position: "absolute", top: "1rem", right: "1rem",
-              padding: "0.45rem 1rem",
-              background: "rgba(255,255,255,0.2)",
-              color: "#fff",
-              border: "1px solid rgba(255,255,255,0.4)",
-              borderRadius: 20,
-              fontSize: "0.78rem",
-              fontWeight: 600,
-              cursor: "pointer",
-              fontFamily: "inherit",
-            }}
-          >↓ Save as PDF</button>
+          <div className="no-print" style={{
+            position: "absolute", top: "1rem", right: "1rem",
+            display: "flex", flexWrap: "wrap", gap: "0.5rem",
+            justifyContent: "flex-end", maxWidth: "calc(100% - 2rem)",
+          }}>
+            <a
+              href="/home"
+              style={{
+                padding: "0.45rem 1rem",
+                background: "rgba(255,255,255,0.2)",
+                color: "#fff",
+                border: "1px solid rgba(255,255,255,0.4)",
+                borderRadius: 20,
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: "inherit",
+                textDecoration: "none",
+                whiteSpace: "nowrap",
+              }}
+            >← Back to Element Happenings</a>
+            <button
+              onClick={() => window.print()}
+              style={{
+                padding: "0.45rem 1rem",
+                background: "rgba(255,255,255,0.2)",
+                color: "#fff",
+                border: "1px solid rgba(255,255,255,0.4)",
+                borderRadius: 20,
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                fontFamily: "inherit",
+              }}
+            >↓ Save as PDF</button>
+          </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "1rem", marginBottom: "1rem" }}>
             <img src="/logo_hex_bee.png" alt="" style={{ width: 52, height: 52, filter: "brightness(0) invert(1) opacity(0.9)" }} />
