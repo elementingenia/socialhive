@@ -18,6 +18,19 @@ const BTN_GHOST = {
   background: "transparent", color: "var(--voting)", border: "1px solid var(--voting)",
   borderRadius: "10px", padding: "0.6rem 1rem", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer",
 }
+// Iain, 2026-09-03 round-3 review: the "Closing date/time" datetime-local
+// field overflowed the screen edge on his real phone. A native
+// datetime-local control's internal segments (day/month/year/hour/min/
+// am-pm) have their own intrinsic minimum width that iOS Safari can
+// render wider than an author-specified width in a narrow column --
+// same overflow *symptom* as BUG-035, different mechanism (that one was
+// a flex/flexWrap gap; this is a native replaced-control's own layout).
+// Tighter padding + a smaller font reduces the intrinsic footprint below
+// a narrow phone's viewport width without touching the shared INPUT
+// object every other field on this page relies on.
+const DATETIME_INPUT = {
+  ...INPUT, padding: "0.6rem 0.5rem", fontSize: "0.85rem", maxWidth: "100%",
+}
 // Format a Date as a local "YYYY-MM-DDTHH:mm" string for a <input
 // type="datetime-local"> default value -- deliberately NOT
 // toISOString().slice(...), which is UTC and would show the wrong local
@@ -134,6 +147,20 @@ function CreateEventForm({ onCreated }) {
   function addChoice() { setChoices(cs => [...cs, { type: "text", label: "", candidate_member_id: null }]) }
   function removeChoice(i) { setChoices(cs => cs.filter((_, idx) => idx !== i)) }
 
+  // Iain, 2026-09-03 round-3 review: "How Many choices a voter can pick
+  // should be numerical based on choices configured" -- the max-selections
+  // field was a free number input with no relationship to the Choices list
+  // above it, so it could be set higher than the number of real choices
+  // (or left stale after choices were removed). Bound it to the actual
+  // filled-in choice count instead.
+  const filledChoiceCount = Math.max(2, choices.filter(c => (c.label || "").trim()).length)
+  useEffect(() => {
+    setMaxSelections(m => {
+      const n = Number(m) || 2
+      return Math.min(Math.max(n, 2), filledChoiceCount)
+    })
+  }, [filledChoiceCount])
+
   async function save() {
     setError("")
     const cleanChoices = choices
@@ -209,7 +236,14 @@ function CreateEventForm({ onCreated }) {
       {voteMode === "multi" && (
         <>
           <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Maximum number of choices</label>
-          <input type="number" min={1} style={{ ...INPUT, marginBottom: "0.6rem" }} value={maxSelections} onChange={e => setMaxSelections(e.target.value)} />
+          <input
+            type="number" min={2} max={filledChoiceCount} style={{ ...INPUT, marginBottom: "0.2rem" }}
+            value={maxSelections}
+            onChange={e => setMaxSelections(Math.min(Math.max(Number(e.target.value) || 2, 2), filledChoiceCount))}
+          />
+          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: "0.6rem" }}>
+            Between 2 and {filledChoiceCount} — the number of choices configured above
+          </div>
         </>
       )}
 
@@ -522,7 +556,7 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
           {event.status === "draft" && canManageThis && (
             <div style={{ marginBottom: "0.6rem" }}>
               <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Closing date/time</label>
-              <input type="datetime-local" style={{ ...INPUT, marginBottom: "0.5rem" }} value={closesAtInput} onChange={e => setClosesAtInput(e.target.value)} />
+              <input type="datetime-local" style={{ ...DATETIME_INPUT, marginBottom: "0.5rem" }} value={closesAtInput} onChange={e => setClosesAtInput(e.target.value)} />
               <button style={BTN_PRIMARY} disabled={busy} onClick={setClosesAt}>Open this vote</button>
             </div>
           )}
@@ -607,6 +641,15 @@ function EditEventForm({ event, choices: initialChoices, onSaved, onCancel }) {
   function addChoice() { setChoices(cs => [...cs, { type: "text", label: "", candidate_member_id: null }]) }
   function removeChoice(i) { setChoices(cs => cs.filter((_, idx) => idx !== i)) }
 
+  // Same bound-to-actual-choices fix as CreateEventForm -- see its comment.
+  const filledChoiceCount = Math.max(2, choices.filter(c => (c.label || "").trim()).length)
+  useEffect(() => {
+    setMaxSelections(m => {
+      const n = Number(m) || 2
+      return Math.min(Math.max(n, 2), filledChoiceCount)
+    })
+  }, [filledChoiceCount])
+
   async function save() {
     setError("")
     if (!title.trim()) return setError("Title is required")
@@ -684,7 +727,14 @@ function EditEventForm({ event, choices: initialChoices, onSaved, onCancel }) {
           {voteMode === "multi" && (
             <>
               <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Maximum number of choices</label>
-              <input type="number" min={1} style={{ ...INPUT, marginBottom: "0.6rem" }} value={maxSelections} onChange={e => setMaxSelections(e.target.value)} />
+              <input
+                type="number" min={2} max={filledChoiceCount} style={{ ...INPUT, marginBottom: "0.2rem" }}
+                value={maxSelections}
+                onChange={e => setMaxSelections(Math.min(Math.max(Number(e.target.value) || 2, 2), filledChoiceCount))}
+              />
+              <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: "0.6rem" }}>
+                Between 2 and {filledChoiceCount} — the number of choices configured above
+              </div>
             </>
           )}
 
@@ -696,7 +746,7 @@ function EditEventForm({ event, choices: initialChoices, onSaved, onCancel }) {
       )}
 
       <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Closing date/time</label>
-      <input type="datetime-local" style={{ ...INPUT, marginBottom: "0.6rem" }} value={closesAt} onChange={e => setClosesAt(e.target.value)} />
+      <input type="datetime-local" style={{ ...DATETIME_INPUT, marginBottom: "0.6rem" }} value={closesAt} onChange={e => setClosesAt(e.target.value)} />
 
       <div style={{ marginBottom: "0.9rem" }}>
         <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Who can see the result</label>
