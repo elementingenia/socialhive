@@ -139,8 +139,13 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen, c
 
 // ── My Bookings Card (→ /bookings) ────────────────────────────────────────────
 function MyBookingsCard({ bookings, onViewAll, onOpenEvent }) {
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  const upcoming = bookings.filter(b => b.status !== 'cancelled' && b.events?.hub_type === 'movie' && localDate(b.events?.event_date) >= today)
+  // isEventPast (not a date-only >= today check) so a same-day booking
+  // whose event has already started drops out of "active" the moment it
+  // starts, not just at the next midnight -- same bug class fixed for the
+  // Next Screening tile above (see isEventPast's own comment), reported by
+  // Iain via screenshot 2026-09-02: a 2pm booking was still shown here at
+  // 4pm the same day, after Next Screening had already correctly moved on.
+  const upcoming = bookings.filter(b => b.status !== 'cancelled' && b.events?.hub_type === 'movie' && !isEventPast(b.events))
 
   // Group by event_id
   const grouped = {}

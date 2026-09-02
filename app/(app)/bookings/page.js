@@ -9,6 +9,7 @@ import { MoviesIcon, SocialIcon } from "@/components/NavIcons"
 import ClubScopeDropdown from "@/components/ClubScopeDropdown"
 import { useMyClubs } from "@/lib/useMyClubs"
 import MySpaceBookings from "@/components/MySpaceBookings"
+import { isEventPast } from "@/lib/date"
 
 const HUB_COLOURS = {
   movie:    "var(--teal)",
@@ -220,8 +221,6 @@ export default function BookingsPage() {
     setSelectedEvent({ ...data, my_bookings })
   }
 
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-
   // Every club actually appearing in this member's bookings, for the
   // dropdown's per-club options -- same derivation Calendar uses off
   // `events`, just off `b.events` here (only club_id/clubs.name are
@@ -262,13 +261,19 @@ export default function BookingsPage() {
     return Object.values(grouped)
   }
 
+  // isEventPast (not a date-only new Date(...) >= today check) -- a
+  // same-day booking whose event has already started must move to Past
+  // the moment it starts, not just at the next local midnight. Same bug
+  // class fixed in Movies'/Social's own MyBookingsCard, 2026-09-02,
+  // reported by Iain via screenshot: this is the actual "View all" page
+  // those tiles link to, so it had the identical gap.
   const upcoming = groupBookings(
-    filtered.filter(b => b.events && new Date(b.events.event_date + "T00:00:00") >= today)
+    filtered.filter(b => b.events && !isEventPast(b.events))
   ).sort((a, b) => a.event.event_date.localeCompare(b.event.event_date))
 
   // Exclude waitlist-only from past (no seat was held)
   const past = groupBookings(
-    filtered.filter(b => b.events && new Date(b.events.event_date + "T00:00:00") < today && b.status !== "waitlist")
+    filtered.filter(b => b.events && isEventPast(b.events) && b.status !== "waitlist")
   ).sort((a, b) => b.event.event_date.localeCompare(a.event.event_date))
 
   if (loading) {

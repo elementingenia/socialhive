@@ -246,11 +246,14 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
 
 // ── My Social Bookings tile — amber header (matches Movies pattern) ──────────
 function MyBookingsCard({ bookings, onViewAll }) {
-  const today    = new Date(); today.setHours(0, 0, 0, 0)
+  // isEventPast (not a date-only >= today check) -- same fix as Movies'
+  // MyBookingsCard (2026-09-02): a same-day booking whose event has already
+  // started must drop out of "active" the moment it starts, not just at
+  // the next midnight.
   const upcoming = bookings.filter(b =>
     b.status !== "cancelled" &&
     b.events?.hub_type === "social" &&
-    localDate(b.events?.event_date) >= today
+    !isEventPast(b.events)
   )
 
   const sorted = [...upcoming].sort((a, b) =>
