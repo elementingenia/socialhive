@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation"
 import { authedFetch } from "@/lib/getAuthToken"
 import { supabase } from "@/lib/supabase"
 import { VotingIcon } from "@/components/NavIcons"
+import { FormattedText } from "@/lib/textFormatter"
+import { sydneyTodayStr } from "@/lib/date"
 
 const INPUT = {
   width: "100%", padding: "0.75rem 1rem", borderRadius: "10px",
@@ -18,19 +20,11 @@ const BTN_GHOST = {
   background: "transparent", color: "var(--voting)", border: "1px solid var(--voting)",
   borderRadius: "10px", padding: "0.6rem 1rem", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer",
 }
-// Iain, 2026-09-03 round-3 review: the "Closing date/time" datetime-local
-// field overflowed the screen edge on his real phone. A native
-// datetime-local control's internal segments (day/month/year/hour/min/
-// am-pm) have their own intrinsic minimum width that iOS Safari can
-// render wider than an author-specified width in a narrow column --
-// same overflow *symptom* as BUG-035, different mechanism (that one was
-// a flex/flexWrap gap; this is a native replaced-control's own layout).
-// Tighter padding + a smaller font reduces the intrinsic footprint below
-// a narrow phone's viewport width without touching the shared INPUT
-// object every other field on this page relies on.
-const DATETIME_INPUT = {
-  ...INPUT, padding: "0.6rem 0.5rem", fontSize: "0.85rem", maxWidth: "100%",
-}
+// Round-3 (2026-09-03) fixed the datetime-local mobile overflow with a
+// tighter-padded style; round-4 (same day) replaced the datetime-local
+// input entirely with ClosingDateTimeField (date + hour-only select) per
+// Iain's follow-up review, which made that overflow fix moot -- see
+// ClosingDateTimeField's own comment below for the current approach.
 // Format a Date as a local "YYYY-MM-DDTHH:mm" string for a <input
 // type="datetime-local"> default value -- deliberately NOT
 // toISOString().slice(...), which is UTC and would show the wrong local
@@ -39,6 +33,50 @@ const DATETIME_INPUT = {
 function toLocalDatetimeInput(d) {
   const pad = n => String(n).padStart(2, "0")
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+const ALL_HOURS_24 = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"))
+
+// Iain, 2026-09-03 round-4 review: "There is no obvious way to close the
+// calendar picker for the Closing Date/Time" + "Time should only be hours,
+// no minutes required." Replaces the single native datetime-local input
+// (whose combined date+time widget has no obvious dismiss on some
+// browsers/OSes, on top of the mobile overflow already fixed in round-3)
+// with a plain native `type="date"` (already used everywhere else in this
+// app with no complaints -- tap a day, it closes itself) plus a small
+// hour-only <select> styled to match this app's standing form-control
+// convention. Minutes are always :00 -- not offered at all, since a
+// closing time genuinely doesn't need minute precision. Keeps the same
+// "YYYY-MM-DDTHH:mm" string contract the rest of this file already uses
+// for closesAtInput/closesAt, so nothing downstream (setClosesAt/save)
+// needed to change.
+function ClosingDateTimeField({ value, onChange }) {
+  const [datePart, timePart] = value ? value.split("T") : ["", ""]
+  const hourPart = timePart ? timePart.slice(0, 2) : ""
+
+  function setDate(d) {
+    onChange(d ? `${d}T${hourPart || "12"}:00` : "")
+  }
+  function setHour(h) {
+    if (!h) return
+    onChange(`${datePart || sydneyTodayStr()}T${h}:00`)
+  }
+
+  const selectStyle = {
+    padding: "0.7rem 0.6rem", borderRadius: "10px", border: "1px solid var(--border)",
+    background: "var(--surface)", color: "var(--text)", fontSize: "0.95rem",
+    fontFamily: "inherit", appearance: "none", WebkitAppearance: "none", flex: 1,
+  }
+
+  return (
+    <div style={{ display: "flex", gap: "0.5rem" }}>
+      <input type="date" style={{ ...INPUT, flex: 2 }} value={datePart} min={sydneyTodayStr()} onChange={e => setDate(e.target.value)} />
+      <select value={hourPart} onChange={e => setHour(e.target.value)} style={selectStyle}>
+        <option value="" disabled>Hour</option>
+        {ALL_HOURS_24.map(hh => <option key={hh} value={hh}>{hh}:00</option>)}
+      </select>
+    </div>
+  )
 }
 
 function typeBtnStyle(active) {
@@ -402,6 +440,21 @@ function CoordPicker({ members, value, onChange }) {
 // appearing?" -- root cause confirmed by grep: this page never fetched
 // hub-settings or rendered a banner at all, unlike every other hub.
 const VOTING_WELCOME_KEY = "voting_welcome_dismissed"
+// Iain, 2026-09-03 round-4 review: "Welcome tile should be the hub colour as
+// the fill and text the colour selected in the Admin/Voting option." This
+// was rendering as a bordered/tinted card -- the OLD Happenings Home style
+// from before that section's 2026-08-28 readability rework -- while every
+// other hub's own welcome banner (Show Time/Social/Library) renders as a
+// genuine SOLID hub-colour fill, and Admin > Page Texts > Voting's own
+// RichEditor preview (bg="tile" -- see HubTextSection.js/lib/hubSections.js)
+// already previews it that way. The editor and the live page had drifted
+// apart -- same class of bug as BUG-033 (Home's Page Texts preview not
+// matching its real page), just the reverse direction here. Rebuilt to
+// match Show Time's WelcomeBanner (app/(app)/movies/page.js) exactly: solid
+// var(--voting) fill, white base text, dangerouslySetInnerHTML for the
+// admin's saved rich text (their own inline Black/White colour choice from
+// the RichEditor toolbar travels with the HTML), FormattedText as a
+// fallback for any legacy plain-string value.
 function WelcomeBanner({ text }) {
   const [dismissed, setDismissed] = useState(false)
   useEffect(() => {
@@ -415,22 +468,24 @@ function WelcomeBanner({ text }) {
         try { localStorage.removeItem(VOTING_WELCOME_KEY) } catch { /* ignore */ }
         setDismissed(false)
       }}
-        style={{ background: "none", border: "none", color: "var(--voting)", fontSize: "0.85rem", cursor: "pointer", padding: 0, marginBottom: "0.8rem" }}>
-        ℹ Show welcome message
+        style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: "var(--voting)", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", padding: "0 0 0.75rem", fontFamily: "inherit" }}>
+        <span style={{ fontSize: "1rem" }}>ℹ</span> Show welcome message
       </button>
     )
   }
   return (
-    <div style={{ background: "var(--surface)", border: "1px solid var(--voting)", borderLeft: "3px solid var(--voting)", borderRadius: "10px", padding: "0.8rem 1rem", marginBottom: "1rem", position: "relative" }}>
+    <div style={{ background: "var(--voting)", borderRadius: "14px", padding: "0.9rem 1rem", marginBottom: "1rem", position: "relative" }}>
+      <div style={{ fontSize: "0.88rem", lineHeight: 1.55, color: "#fff", paddingRight: "1.2rem" }}>
+        {isHtml
+          ? <span dangerouslySetInnerHTML={{ __html: text }} />
+          : <FormattedText text={text} c1Colour="var(--voting)" c2Colour="var(--text-dim)" />}
+      </div>
       <button onClick={() => {
         try { localStorage.setItem(VOTING_WELCOME_KEY, "1") } catch { /* ignore */ }
         setDismissed(true)
       }}
-        style={{ position: "absolute", top: "0.4rem", right: "0.6rem", background: "none", border: "none", color: "var(--text-dim)", fontSize: "1rem", cursor: "pointer" }}
+        style={{ position: "absolute", top: 8, right: 10, background: "none", border: "none", color: "rgba(255,255,255,0.7)", fontSize: "1rem", cursor: "pointer", lineHeight: 1, padding: 4 }}
         aria-label="Dismiss">×</button>
-      {isHtml
-        ? <div style={{ fontSize: "0.9rem", paddingRight: "1.2rem" }} dangerouslySetInnerHTML={{ __html: text }} />
-        : <div style={{ fontSize: "0.9rem", paddingRight: "1.2rem", whiteSpace: "pre-wrap" }}>{text}</div>}
     </div>
   )
 }
@@ -443,6 +498,15 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState("")
   const [editing, setEditing] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
+  // Iain, 2026-09-03 round-4 review: "When vote is submitted, the user
+  // should be able to see what they voted for." Ballots are structurally
+  // anonymous (see lib/voting.js's header comment -- no member_id on
+  // voting_ballots at all), so this can only ever be an honest same-
+  // session echo of the choices just picked, never something re-fetched
+  // after a reload. Set once, right after a successful cast; stays sticky
+  // for the rest of this page view.
+  const [justVoted, setJustVoted] = useState(null)
 
   async function loadDetail() {
     const res = await authedFetch(`/api/voting/${event.id}`)
@@ -466,6 +530,26 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
     const json = await res.json().catch(() => ({}))
     setBusy(false)
     if (!res.ok) return setMsg(json.error || "Could not open this vote")
+    onChanged(); loadDetail()
+  }
+
+  // Iain, 2026-09-03 round-4 review: "Once a user click OPEN for a voting
+  // event, the OPEN option should revert to CLOSE - leaving it as open is
+  // confusing." Manual early close -- see app/api/voting/[id]/close/route.js
+  // for why this is "bring closes_at forward to now" rather than a new
+  // status. Two-step confirm (not a raw window.confirm) to match this
+  // page's own lightweight in-component pattern rather than pulling in a
+  // separate Modal component for one action.
+  async function doClose() {
+    setMsg(""); setBusy(true)
+    const res = await authedFetch(`/api/voting/${event.id}/close`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    const json = await res.json().catch(() => ({}))
+    setBusy(false)
+    setConfirmClose(false)
+    if (!res.ok) return setMsg(json.error || "Could not close this vote")
     onChanged(); loadDetail()
   }
 
@@ -494,7 +578,17 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
     const json = await res.json().catch(() => ({}))
     setBusy(false)
     if (!res.ok) return setMsg(json.error || "Could not record your vote")
-    setMsg("Your vote has been recorded.")
+    // Iain, 2026-09-03 round-4 review: "Current design state they have
+    // voted twice - repetitive" -- this used to ALSO setMsg("Your vote has
+    // been recorded.") on top of the separate "✓ You've voted in this
+    // ballot." block that renders once detail.myParticipation is set below,
+    // so a successful vote showed two near-identical confirmations at once.
+    // Now just captures which choices were picked (labels, from the
+    // choices already loaded into `detail` -- not re-fetched from the
+    // anonymous ballot) so the single confirmation block can say what was
+    // voted for instead of a generic "recorded".
+    const labels = (detail?.choices || []).filter(c => selected.includes(c.id)).map(c => c.label)
+    setJustVoted(labels)
     loadDetail(); onChanged()
   }
 
@@ -510,17 +604,41 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
     onChanged(); loadDetail()
   }
 
+  // Iain, 2026-09-03 round-4 review: "User max votes should be pro-active
+  // not re-active - if two choices only out of three, when two choices are
+  // made they simply should not be able to make a 3rd choice rather than
+  // allowing them to select 3 only to find out after that they can only
+  // select 2." The server (validateBallotSelection, lib/voting.js) already
+  // enforced this correctly -- the gap was purely client-side, where
+  // nothing stopped a 4th checkbox tick until Cast failed with a server
+  // error. Now refuses to add past max_selections client-side; unticking
+  // one always frees up a slot again, and choosing FEWER than the max
+  // remains completely fine (this only ever blocks going OVER).
   function toggleChoice(id) {
     const mode = detail?.event?.vote_mode
     if (mode === "single") { setSelected([id]); return }
-    setSelected(sel => sel.includes(id) ? sel.filter(x => x !== id) : [...sel, id])
+    const max = detail?.event?.max_selections || (detail?.choices || []).length
+    setSelected(sel => {
+      if (sel.includes(id)) return sel.filter(x => x !== id)
+      if (sel.length >= max) return sel
+      return [...sel, id]
+    })
   }
 
   return (
     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px", padding: "1rem", marginBottom: "0.75rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.4rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", flex: 1, minWidth: 0 }} onClick={() => setExpanded(v => !v)}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.4rem" }}>
+        <div style={{ cursor: "pointer", flex: 1, minWidth: 0 }} onClick={() => setExpanded(v => !v)}>
           <div style={{ fontWeight: 700 }}>{event.title}</div>
+          {/* Iain, 2026-09-03 round-4 review: "Each event Tile should
+              display the Title AND the Description" -- description was
+              already returned by GET /api/voting (the list route), just
+              never rendered until a card was expanded. Shown here on the
+              collapsed tile itself now; the expanded detail view below
+              still repeats it (detail.event.description), which is fine --
+              same description, just visible at both states rather than
+              hidden until expand. */}
+          {event.description && <div style={{ color: "var(--text-dim)", fontSize: "0.85rem", marginTop: "0.15rem" }}>{event.description}</div>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           {canManageThis && (event.status === "draft" || event.status === "open") && (
@@ -555,29 +673,78 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
 
           {event.status === "draft" && canManageThis && (
             <div style={{ marginBottom: "0.6rem" }}>
-              <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Closing date/time</label>
-              <input type="datetime-local" style={{ ...DATETIME_INPUT, marginBottom: "0.5rem" }} value={closesAtInput} onChange={e => setClosesAtInput(e.target.value)} />
+              <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Closing date/time</label>
+              <div style={{ marginBottom: "0.5rem" }}>
+                <ClosingDateTimeField value={closesAtInput} onChange={setClosesAtInput} />
+              </div>
               <button style={BTN_PRIMARY} disabled={busy} onClick={setClosesAt}>Open this vote</button>
+            </div>
+          )}
+
+          {/* Iain, 2026-09-03 round-4 review: "Once a user click OPEN for a
+              voting event, the OPEN option should revert to CLOSE - leaving
+              it as open is confusing." Manual early close, admin/Owner/
+              coordinator only -- see doClose() and app/api/voting/[id]/
+              close/route.js. Two-step confirm since this genuinely ends the
+              vote for everyone. */}
+          {event.status === "open" && canManageThis && (
+            <div style={{ marginBottom: "0.6rem" }}>
+              {!confirmClose ? (
+                <button style={BTN_GHOST} disabled={busy} onClick={() => setConfirmClose(true)}>Close this vote now</button>
+              ) : (
+                <div style={{ background: "var(--amber-light)", borderLeft: "3px solid var(--amber)", borderRadius: "8px", padding: "0.6rem", fontSize: "0.85rem" }}>
+                  <div style={{ marginBottom: "0.5rem" }}>Close voting now, ahead of its scheduled closing time? This can't be undone.</div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button style={{ ...BTN_PRIMARY, background: "var(--terracotta)", width: "auto", padding: "0.5rem 0.9rem" }} disabled={busy} onClick={doClose}>Yes, close it</button>
+                    <button style={{ ...BTN_GHOST, padding: "0.5rem 0.9rem" }} disabled={busy} onClick={() => setConfirmClose(false)}>Cancel</button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {event.status === "open" && !detail.myParticipation && detail.eligibility?.eligible && (
             <div style={{ marginBottom: "0.6rem" }}>
-              {(detail.choices || []).map(c => (
-                <label key={c.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0", borderBottom: "1px solid var(--border)" }}>
-                  <input
-                    type={detail.event.vote_mode === "single" ? "radio" : "checkbox"}
-                    name="voting-choice" checked={selected.includes(c.id)} onChange={() => toggleChoice(c.id)}
-                  />
-                  {c.label}
-                </label>
-              ))}
+              {/* Iain, 2026-09-03 round-4 review, item 6 -- proactive, not
+                  reactive, max-selection guidance and enforcement. */}
+              <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", marginBottom: "0.4rem" }}>
+                {detail.event.vote_mode === "single"
+                  ? "Choose one option."
+                  : (() => {
+                      const max = detail.event.max_selections || (detail.choices || []).length
+                      return `Choose up to ${max} option${max === 1 ? "" : "s"} — choosing fewer is fine.`
+                    })()}
+              </div>
+              {(detail.choices || []).map(c => {
+                const max = detail.event.max_selections || (detail.choices || []).length
+                const atMax = detail.event.vote_mode !== "single" && selected.length >= max && !selected.includes(c.id)
+                return (
+                  <label key={c.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0", borderBottom: "1px solid var(--border)", opacity: atMax ? 0.5 : 1 }}>
+                    <input
+                      type={detail.event.vote_mode === "single" ? "radio" : "checkbox"}
+                      name="voting-choice" checked={selected.includes(c.id)} disabled={atMax}
+                      onChange={() => toggleChoice(c.id)}
+                    />
+                    {c.label}
+                  </label>
+                )
+              })}
               <button style={{ ...BTN_PRIMARY, marginTop: "0.6rem" }} disabled={busy} onClick={castVote}>Cast my vote</button>
             </div>
           )}
 
+          {/* Iain, 2026-09-03 round-4 review, item 7 -- was two overlapping
+              confirmations ("✓ You've voted in this ballot." here PLUS a
+              separate "Your vote has been recorded." msg from castVote()).
+              Now one block: right after casting (justVoted set, this
+              session only) it names the actual choices; on a later reload
+              (justVoted null -- votes are structurally anonymous, so this
+              can't be re-derived from the server) it falls back to the
+              same plain confirmation as before. */}
           {event.status === "open" && detail.myParticipation && (
-            <div style={{ color: "#16a34a", fontWeight: 600, marginBottom: "0.6rem" }}>✓ You've voted in this ballot.</div>
+            <div style={{ color: "#16a34a", fontWeight: 600, marginBottom: "0.6rem" }}>
+              ✓ {justVoted && justVoted.length > 0 ? `You voted for: ${justVoted.join(", ")}.` : "You've voted in this ballot."}
+            </div>
           )}
 
           {event.status === "open" && !detail.myParticipation && !detail.eligibility?.eligible && (
@@ -600,7 +767,11 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
             <PublishReview eventId={event.id} onPublish={doPublish} busy={busy} />
           )}
 
-          {msg && <div style={{ fontSize: "0.85rem", color: msg.includes("recorded") ? "#16a34a" : "var(--terracotta)" }}>{msg}</div>}
+          {/* msg is now error-only -- the one success case it used to
+              carry ("Your vote has been recorded.") was removed as part of
+              round-4 item 7's duplicate-confirmation fix above, since that
+              string is what this colour check was matching on. */}
+          {msg && <div style={{ fontSize: "0.85rem", color: "var(--terracotta)" }}>{msg}</div>}
         </div>
       )}
     </div>
@@ -745,8 +916,10 @@ function EditEventForm({ event, choices: initialChoices, onSaved, onCancel }) {
         </>
       )}
 
-      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Closing date/time</label>
-      <input type="datetime-local" style={{ ...DATETIME_INPUT, marginBottom: "0.6rem" }} value={closesAt} onChange={e => setClosesAt(e.target.value)} />
+      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Closing date/time</label>
+      <div style={{ marginBottom: "0.6rem" }}>
+        <ClosingDateTimeField value={closesAt} onChange={setClosesAt} />
+      </div>
 
       <div style={{ marginBottom: "0.9rem" }}>
         <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Who can see the result</label>
