@@ -23,7 +23,7 @@ export async function GET() {
   // Return empty object if table doesn't exist yet.
   const { data, error } = await supa
     .from("hub_settings")
-    .select("hub_type, welcome_text, sub_messages, loan_cap")
+    .select("hub_type, welcome_text, sub_messages, loan_cap, enabled")
 
   if (error) {
     // Column or table missing — try without sub_messages
@@ -34,7 +34,7 @@ export async function GET() {
     }
     const out = {}
     for (const row of fallback.data || []) {
-      out[row.hub_type] = { text: row.welcome_text || "", subs: [] }
+      out[row.hub_type] = { text: row.welcome_text || "", subs: [], enabled: true }
     }
     return Response.json(out)
   }
@@ -45,13 +45,17 @@ export async function GET() {
       text: row.welcome_text || "",
       subs: Array.isArray(row.sub_messages) ? row.sub_messages : [],
       loanCap: typeof row.loan_cap === "number" ? row.loan_cap : 3,
+      // Voting hub show/hide (2026-09-02). Defaults true for every existing
+      // hub (migration 088's ALTER TABLE default) -- only 'voting' is seeded
+      // false, and only 'voting' currently has any UI reading this field.
+      enabled: row.enabled !== false,
     }
   }
   return Response.json(out)
 }
 
 export async function PATCH(req) {
-  const { hub_type, welcome_text, sub_messages, location_id, loan_cap } = await req.json()
+  const { hub_type, welcome_text, sub_messages, location_id, loan_cap, enabled } = await req.json()
   if (!hub_type) return Response.json({ error: "hub_type required" }, { status: 400 })
 
   // AUTH FROM THE TOKEN, not from the request body — the bearer token is the
@@ -87,6 +91,15 @@ export async function PATCH(req) {
   const update = { updated_at: new Date().toISOString(), updated_by: member.id }
   if (welcome_text !== undefined) update.welcome_text = welcome_text
   if (sub_messages !== undefined) update.sub_messages = sub_messages
+  // Hub show/hide toggle -- admin-only, full stop, regardless of whether this
+  // hub_type has an Owner mapping above (Iain, 2026-09-02, re: Voting: "Hub
+  // toggle admin-only, event creation via existing requireAdminOrAreaOwner").
+  // An Owner can still reach this route for welcome_text etc via the branch
+  // above; they just can't flip `enabled` even if they got this far.
+  if (enabled !== undefined) {
+    if (!member.is_admin) return Response.json({ error: "Admins only can show/hide a hub" }, { status: 403 })
+    update.enabled = !!enabled
+  }
   // null is meaningful here — it clears the hub's nominated venue.
   if (location_id !== undefined) update.location_id = location_id
   // Owner/admin-configurable loan cap (Iain, 2026-08-12: don't hardcode the
