@@ -5,6 +5,7 @@ import { useOwners } from '@/lib/useOwners'
 import ExpandableText from '@/components/ExpandableText'
 import { useAdaptiveClamp } from '@/lib/useAdaptiveClamp'
 import { resolveMemberName } from '@/lib/memberName'
+import BarcodeScannerModal from '@/components/BarcodeScannerModal'
 
 function parseGenres(g) {
   if (!g) return []
@@ -111,6 +112,7 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
   const [editingIsbn,   setEditingIsbn]   = useState(false)
   const [isbnDraft,     setIsbnDraft]     = useState('')
   const [savingIsbn,    setSavingIsbn]    = useState(false)
+  const [scanningIsbn,  setScanningIsbn]  = useState(false)
   const genres = parseGenres(book.genre)
 
   const iMineToReturn = activeLoan && activeLoan.member_id === memberId
@@ -279,6 +281,12 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
                   <input autoFocus value={isbnDraft} onChange={e=>setIsbnDraft(e.target.value)}
                     placeholder="Enter ISBN (10 or 13 digits)" disabled={savingIsbn}
                     style={{ flex:'1 1 180px', minWidth:0, padding:'0.35rem 0.6rem', borderRadius:'8px', border:'1px solid var(--border)', background:'var(--surface)', color:'var(--text)', fontSize:'0.78rem', fontFamily:'monospace', boxSizing:'border-box' }} />
+                  {/* Camera scan (2026-09-02) -- additive next to the manual
+                      field above, same as AddBookSheet's barcode mode. */}
+                  <button onClick={() => setScanningIsbn(true)} disabled={savingIsbn} title="Scan barcode with camera"
+                    style={{ flexShrink:0, background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'8px', padding:'0.35rem 0.55rem', fontSize:'0.85rem', cursor:savingIsbn?'not-allowed':'pointer' }}>
+                    📷
+                  </button>
                   <button onClick={handleSaveIsbn} disabled={savingIsbn}
                     style={{ background:'var(--purple)', border:'none', borderRadius:'8px', padding:'0.35rem 0.7rem', fontSize:'0.7rem', fontWeight:700, color:'#fff', cursor:savingIsbn?'not-allowed':'pointer', opacity:savingIsbn?0.6:1 }}>
                     {savingIsbn ? 'Saving…' : 'Save'}
@@ -287,6 +295,11 @@ function BookDetailSheet({ book, isAdmin, canManage, session, memberId, myLoanCo
                     style={{ background:'none', border:'1px solid var(--border)', borderRadius:'8px', padding:'0.35rem 0.7rem', fontSize:'0.7rem', fontWeight:600, color:'var(--text-dim)', cursor:savingIsbn?'not-allowed':'pointer' }}>
                     Cancel
                   </button>
+                  {scanningIsbn && (
+                    <BarcodeScannerModal
+                      onDetected={code => { setScanningIsbn(false); setIsbnDraft(code) }}
+                      onClose={() => setScanningIsbn(false)} />
+                  )}
                 </div>
               ) : (book.isbn || book.publisher || book.notes || canManage) && (
                 <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginTop:'-0.4rem', flexWrap:'wrap' }}>
@@ -462,6 +475,7 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
   const [selected,    setSelected]    = useState(null)
   const [adding,      setAdding]      = useState(false)
   const [isDuplicate, setIsDuplicate] = useState(false)
+  const [scanning,    setScanning]    = useState(false)
 
   function switchMode(next) {
     setMode(next); setSearch(''); setBarcode(''); setResults([]); setSelected(null); setIsDuplicate(false); setBarcodeError(''); setSearchError('')
@@ -483,11 +497,17 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
   // in full and this only fires on an explicit button click (Iain,
   // 2026-08-13: "must be entered in its entirety with a specific search
   // button being clicked... Simple enough for now").
-  async function doBarcodeSearch() {
+  // scannedCode override lets the barcode camera scanner (2026-09-02) run
+  // the search on its own decoded value immediately, without waiting for
+  // a state update + re-render round trip -- otherwise the very next
+  // line's setBarcode() wouldn't have landed yet when this function reads
+  // `barcode` from closure.
+  async function doBarcodeSearch(scannedCode) {
     setSelected(null); setIsDuplicate(false); setBarcodeError('')
-    if (!barcode.trim()) return
+    const code = (scannedCode ?? barcode).trim()
+    if (!code) return
     setSearching(true)
-    const res = await fetch('/api/books/search?isbn=' + encodeURIComponent(barcode.trim()))
+    const res = await fetch('/api/books/search?isbn=' + encodeURIComponent(code))
     const data = await res.json()
     setSearching(false)
     if (data.error === 'invalid_isbn') { setBarcodeError('Enter a full 10 or 13-digit ISBN'); setResults([]); return }
@@ -495,6 +515,12 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
     if (unavailable) { setBarcodeError(unavailable); setResults([]); return }
     if (!data.results?.length) { setBarcodeError('No book found for that barcode'); setResults([]); return }
     setResults(data.results)
+  }
+
+  function handleScanned(code) {
+    setScanning(false)
+    setBarcode(code)
+    doBarcodeSearch(code)
   }
 
   async function handleSelect(r) {
@@ -591,17 +617,31 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
             </div>
           ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+              {/* Camera scan (2026-09-02) -- additive next to the existing
+                  manual field below, never a replacement, so a camera
+                  failure/unsupported browser never blocks entering a
+                  barcode by hand. */}
+              <button onClick={() => setScanning(true)}
+                style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:'0.5rem', padding:'0.65rem', background:'var(--surface2)', border:'1.5px dashed var(--border)', borderRadius:'12px', fontSize:'0.88rem', fontWeight:700, color:'var(--purple)', cursor:'pointer', fontFamily:'inherit' }}>
+                📷 Scan barcode with camera
+              </button>
+              <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', color:'var(--text-dim)', fontSize:'0.75rem' }}>
+                <div style={{ flex:1, height:1, background:'var(--border)' }} />
+                or enter manually
+                <div style={{ flex:1, height:1, background:'var(--border)' }} />
+              </div>
               <div style={{ display:'flex', gap:'0.5rem' }}>
                 <input value={barcode} onChange={e => { setBarcode(e.target.value); setBarcodeError('') }}
                   onKeyDown={e => { if (e.key === 'Enter') doBarcodeSearch() }}
                   inputMode="numeric" placeholder="Enter full ISBN / barcode number…"
                   style={{ flex:1, padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
-                <button onClick={doBarcodeSearch} disabled={searching || !barcode.trim()}
+                <button onClick={() => doBarcodeSearch()} disabled={searching || !barcode.trim()}
                   style={{ flexShrink:0, padding:'0 1.1rem', background:'var(--purple)', color:'#fff', border:'none', borderRadius:'12px', fontSize:'0.9rem', fontWeight:700, cursor:(searching||!barcode.trim())?'not-allowed':'pointer', opacity:(searching||!barcode.trim())?0.5:1 }}>
                   {searching ? '…' : 'Search'}
                 </button>
               </div>
               {barcodeError && <div style={{ fontSize:'0.8rem', color:'var(--danger)' }}>{barcodeError}</div>}
+              {scanning && <BarcodeScannerModal onDetected={handleScanned} onClose={() => setScanning(false)} />}
               {results.length > 0 && !selected && (
                 <div style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', overflow:'hidden' }}>
                   {results.map(r => (
