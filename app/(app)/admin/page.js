@@ -6,7 +6,7 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon } from '@/components/NavIcons'
 import OwnersManager from '@/components/OwnersManager'
 import ResidentEditForm, { Sheet, labelStyle } from '@/components/ResidentEditPanel'
 import { CLUB_COLOURS, nextClubColour } from '@/lib/clubColours'
@@ -36,6 +36,13 @@ const SECTIONS = [
   ...(BAR_ENABLED ? [{ key: 'Bar', label: 'Bar', Icon: BarIcon }] : []),
   { key: 'Locations', label: 'Locations',  Icon: InfoIcon },
   { key: 'Tools',     label: 'Tools',      Icon: ToolsIcon },
+  // Voting hub -- always visible in Admin (unlike Show Time/Social/Library,
+  // which are reached via a "Manage" link on their own live page) because
+  // Voting starts hidden-by-default (hub_settings.voting.enabled = false)
+  // with no other discoverable link anywhere until an admin turns it on --
+  // this tile IS that discovery path, so it can't itself be gated behind
+  // the flag it exists to control. Routes straight to /voting/manage.
+  { key: 'Voting',    label: 'Voting',     Icon: VotingIcon, href: '/voting/manage' },
 ]
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -1498,7 +1505,7 @@ export default function AdminPage() {
           const isLast = i === SECTIONS.length - 1
           const spanFull = isLast && SECTIONS.length % 2 === 1
           return (
-            <button key={s.key} onClick={() => setTab(s.key)}
+            <button key={s.key} onClick={() => s.href ? router.push(s.href) : setTab(s.key)}
               style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'14px', padding:'1rem 0.75rem', display:'flex', flexDirection:'column', alignItems:'center', gap:'0.35rem', cursor:'pointer', fontFamily:'inherit',
                 ...(spanFull ? { gridColumn:'1/-1' } : {}) }}>
               <span style={{ color:'var(--text)', lineHeight:0 }}><s.Icon size={32} /></span>
@@ -1543,6 +1550,12 @@ function HubOwnersTab() {
           <BookClubIcon size={18} /> Library
         </div>
         <OwnersManager contextType="hub" contextKey="library" />
+      </div>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: 'var(--voting)', marginBottom: '0.5rem' }}>
+          <VotingIcon size={18} /> Voting
+        </div>
+        <OwnersManager contextType="hub" contextKey="voting" />
       </div>
     </div>
   )
