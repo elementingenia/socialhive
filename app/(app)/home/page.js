@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { FormattedText } from "@/lib/textFormatter"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { authedFetch } from "@/lib/getAuthToken"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import { useUser } from "@/lib/UserContext"
 import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon } from "@/components/NavIcons"
@@ -174,10 +175,7 @@ function VotingTile() {
       setEnabled(isEnabled)
       if (!isEnabled) { setOpenEvent(null); return }
 
-      const { data: { session } } = await supabase.auth.getSession()
-      const token = session?.access_token
-      if (!token) { setOpenEvent(null); return }
-      const res = await fetch("/api/voting", { headers: { Authorization: `Bearer ${token}` } }).catch(() => null)
+      const res = await authedFetch("/api/voting").catch(() => null)
       const json = res ? await res.json().catch(() => ({})) : {}
       if (cancelled) return
       setOpenEvent((json.events || []).find(e => e.status === "open") || null)

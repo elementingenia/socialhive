@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { resolveMember } from '@/lib/areaAuth'
+import { resolveMember, isAreaOwner } from '@/lib/areaAuth'
 import { computeVotingStatus, canSeeResults, tallyBallots, isEligibleToVote } from '@/lib/voting'
 
 export const dynamic = 'force-dynamic'
@@ -57,10 +57,12 @@ export async function GET(req, { params }) {
     results = choices.map(c => ({ choice_id: c.id, label: c.label, votes: tally.get(c.id) || 0 }))
   }
 
+  const canManage = !!member.is_admin || await isAreaOwner(member.id, 'hub', 'voting')
   return NextResponse.json({
     event: { ...event, status: votingStatus },
     choices,
     isAdmin: !!member.is_admin,
+    canManage,
     myParticipation: myParticipation ? { votedAt: myParticipation.cast_at } : null,
     eligibility,
     turnout,

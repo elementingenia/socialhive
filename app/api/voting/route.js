@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { requireAdminOrAreaOwner, resolveMember } from '@/lib/areaAuth'
+import { requireAdminOrAreaOwner, resolveMember, isAreaOwner } from '@/lib/areaAuth'
 import { computeVotingStatus } from '@/lib/voting'
 
 export const dynamic = 'force-dynamic'
@@ -21,7 +21,8 @@ export async function GET(req) {
   if (qErr) return NextResponse.json({ error: qErr.message }, { status: 500 })
 
   const events = data.map(e => ({ ...e, status: computeVotingStatus(e) }))
-  return NextResponse.json({ events, isAdmin: !!member.is_admin })
+  const canManage = !!member.is_admin || await isAreaOwner(member.id, 'hub', 'voting')
+  return NextResponse.json({ events, isAdmin: !!member.is_admin, canManage })
 }
 
 // POST /api/voting — create a new event (Draft) + its choices in one call.

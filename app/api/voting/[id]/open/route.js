@@ -21,15 +21,21 @@ export async function POST(req, { params }) {
   if (computeVotingStatus(event) !== 'draft') {
     return NextResponse.json({ error: 'Only a Draft event can be opened' }, { status: 400 })
   }
-  if (!event.closes_at) {
+
+  // closes_at can be set on this same call (the create-form UI doesn't ask
+  // for it up front, since a Draft may sit unopened for a while) or must
+  // already be on the row -- either way it's required before opening.
+  const body = await req.json().catch(() => ({}))
+  const closesAt = body.closes_at || event.closes_at
+  if (!closesAt) {
     return NextResponse.json({ error: 'Set a closing date/time before opening this vote' }, { status: 400 })
   }
-  if (new Date(event.closes_at).getTime() <= Date.now()) {
+  if (new Date(closesAt).getTime() <= Date.now()) {
     return NextResponse.json({ error: 'Closing date/time must be in the future' }, { status: 400 })
   }
 
   const { data: updated, error: updErr } = await supabaseAdmin
-    .from('voting_events').update({ opened_at: new Date().toISOString() }).eq('id', event.id).select().single()
+    .from('voting_events').update({ opened_at: new Date().toISOString(), closes_at: closesAt }).eq('id', event.id).select().single()
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
 
   return NextResponse.json({ event: { ...updated, status: computeVotingStatus(updated) } })
