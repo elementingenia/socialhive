@@ -1,7 +1,8 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { authedFetch } from "@/lib/getAuthToken"
+import { supabase } from "@/lib/supabase"
 import { VotingIcon } from "@/components/NavIcons"
 
 const INPUT = {
@@ -16,6 +17,14 @@ const BTN_PRIMARY = {
 const BTN_GHOST = {
   background: "transparent", color: "var(--voting)", border: "1px solid var(--voting)",
   borderRadius: "10px", padding: "0.6rem 1rem", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer",
+}
+function typeBtnStyle(active) {
+  return {
+    flex: 1, padding: "0.45rem 0.6rem", borderRadius: "8px", fontWeight: 600, fontSize: "0.8rem",
+    border: `1px solid ${active ? "var(--voting)" : "var(--border)"}`,
+    background: active ? "var(--voting)" : "var(--surface)",
+    color: active ? "#fff" : "var(--text)", cursor: "pointer", fontFamily: "inherit",
+  }
 }
 
 const STATUS_LABEL = { draft: "Draft", open: "Open", closed: "Closed", published: "Published" }
@@ -82,21 +91,42 @@ function CreateEventForm({ onCreated }) {
   const [allowSelfVote, setAllowSelfVote] = useState(true)
   const [visOutcome, setVisOutcome] = useState("residents")
   const [visTurnout, setVisTurnout] = useState("residents")
-  const [choices, setChoices] = useState(["", ""])
+  // Each choice is either free text (a plain option like "Yes"/"No", or a
+  // motion name) or a resident (a real member_id) -- Iain, 2026-09-02: a
+  // resident option is imperative, since "Allow candidates to vote for
+  // themselves" (allow_self_vote / validateSelfVote in lib/voting.js) can
+  // only ever mean anything for a choice that's actually tied to a real
+  // member_id. Free-text choices are unaffected by that toggle -- there's
+  // no "self" to detect.
+  const [choices, setChoices] = useState([
+    { type: "text", label: "", candidate_member_id: null },
+    { type: "text", label: "", candidate_member_id: null },
+  ])
+  const [members, setMembers] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
-  function setChoice(i, val) {
-    setChoices(cs => cs.map((c, idx) => idx === i ? val : c))
+  useEffect(() => {
+    supabase.from("members").select("id, name").order("name")
+      .then(({ data }) => setMembers(data || []))
+  }, [])
+
+  function setChoice(i, patch) {
+    setChoices(cs => cs.map((c, idx) => idx === i ? { ...c, ...patch } : c))
   }
-  function addChoice() { setChoices(cs => [...cs, ""]) }
+  function addChoice() { setChoices(cs => [...cs, { type: "text", label: "", candidate_member_id: null }]) }
   function removeChoice(i) { setChoices(cs => cs.filter((_, idx) => idx !== i)) }
 
   async function save() {
     setError("")
-    const cleanChoices = choices.map(c => c.trim()).filter(Boolean)
+    const cleanChoices = choices
+      .map(c => ({ ...c, label: (c.label || "").trim() }))
+      .filter(c => c.label)
     if (!title.trim()) return setError("Title is required")
     if (cleanChoices.length < 2) return setError("At least two choices are required")
+    if (cleanChoices.some(c => c.type === "resident" && !c.candidate_member_id)) {
+      return setError("Pick a resident for every resident choice, or switch it to free text")
+    }
 
     setSaving(true)
     const res = await authedFetch("/api/voting", {
@@ -111,7 +141,7 @@ function CreateEventForm({ onCreated }) {
         allow_self_vote: allowSelfVote,
         results_visibility_outcome: visOutcome,
         results_visibility_turnout: visTurnout,
-        choices: cleanChoices.map(label => ({ label })),
+        choices: cleanChoices.map(c => ({ label: c.label, candidate_member_id: c.candidate_member_id || null })),
       }),
     })
     const json = await res.json().catch(() => ({}))
@@ -131,12 +161,14 @@ function CreateEventForm({ onCreated }) {
       <textarea style={{ ...INPUT, marginBottom: "0.6rem", minHeight: "70px" }} value={description} onChange={e => setDescription(e.target.value)} />
 
       <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Choices</label>
-      {choices.map((c, i) => (
-        <div key={i} style={{ display: "flex", gap: "0.4rem", marginBottom: "0.4rem" }}>
-          <input style={INPUT} value={c} onChange={e => setChoice(i, e.target.value)} placeholder={`Choice ${i + 1}`} />
-          {choices.length > 2 && <button style={{ ...BTN_GHOST, padding: "0.5rem 0.7rem" }} onClick={() => removeChoice(i)}>✕</button>}
-        </div>
-      ))}
+      {choices.map((c, i) => {
+        const takenIds = new Set(choices.filter((_, idx) => idx !== i).map(o => o.candidate_member_id).filter(Boolean))
+        return (
+          <ChoiceRow key={i} choice={c} index={i} members={members} takenIds={takenIds}
+            onChange={patch => setChoice(i, patch)}
+            onRemove={choices.length > 2 ? () => removeChoice(i) : null} />
+        )
+      })}
       <button style={{ ...BTN_GHOST, marginBottom: "0.8rem" }} onClick={addChoice}>+ Add choice</button>
 
       <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Who can vote</label>
@@ -157,10 +189,13 @@ function CreateEventForm({ onCreated }) {
         </>
       )}
 
-      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.6rem", fontSize: "0.9rem" }}>
+      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.2rem", fontSize: "0.9rem" }}>
         <input type="checkbox" checked={allowSelfVote} onChange={e => setAllowSelfVote(e.target.checked)} />
         Allow candidates to vote for themselves
       </label>
+      <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.6rem" }}>
+        Only applies to Resident choices below — a resident can't be blocked from voting for a plain text option.
+      </div>
 
       <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Who can see the result</label>
       <select style={{ ...INPUT, marginBottom: "0.6rem", appearance: "none", WebkitAppearance: "none" }} value={visOutcome} onChange={e => setVisOutcome(e.target.value)}>
@@ -176,6 +211,62 @@ function CreateEventForm({ onCreated }) {
 
       {error && <div style={{ color: "var(--terracotta)", marginBottom: "0.6rem", fontSize: "0.85rem" }}>{error}</div>}
       <button style={BTN_PRIMARY} disabled={saving} onClick={save}>{saving ? "Saving…" : "Save as Draft"}</button>
+    </div>
+  )
+}
+
+// A single choice on the create-vote form -- either free text (a plain
+// option/motion, no self-vote concept) or a resident (a real member_id,
+// which is what lets "Allow candidates to vote for themselves" actually do
+// anything -- see validateSelfVote in lib/voting.js). Resident search is
+// live/2-char-minimum per this app's dropdown-with-many-options convention
+// (Info > Contacts, OwnersManager.js), not a native <select> of 165 names.
+function ChoiceRow({ choice, index, members, takenIds, onChange, onRemove }) {
+  const [search, setSearch] = useState("")
+
+  const results = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (q.length < 2) return []
+    return members.filter(m => !takenIds.has(m.id) && (m.name || "").toLowerCase().includes(q)).slice(0, 20)
+  }, [search, members, takenIds])
+
+  function pickResident(m) {
+    onChange({ type: "resident", candidate_member_id: m.id, label: m.name })
+    setSearch("")
+  }
+  function switchType(type) {
+    if (type === choice.type) return
+    onChange({ type, candidate_member_id: null, label: type === "text" ? "" : choice.label })
+    setSearch("")
+  }
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: "10px", padding: "0.6rem", marginBottom: "0.5rem" }}>
+      <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.4rem" }}>
+        <button type="button" style={typeBtnStyle(choice.type === "text")} onClick={() => switchType("text")}>Free text</button>
+        <button type="button" style={typeBtnStyle(choice.type === "resident")} onClick={() => switchType("resident")}>Resident</button>
+        {onRemove && <button type="button" style={{ ...BTN_GHOST, padding: "0.45rem 0.6rem", flex: "0 0 auto" }} onClick={onRemove}>✕</button>}
+      </div>
+
+      {choice.type === "text" ? (
+        <input style={INPUT} value={choice.label} onChange={e => onChange({ label: e.target.value })} placeholder={`Choice ${index + 1}`} />
+      ) : choice.candidate_member_id ? (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0.5rem 0.75rem", borderRadius: "8px", background: "var(--surface2)" }}>
+          <span style={{ fontWeight: 600 }}>{choice.label}</span>
+          <button type="button" style={{ ...BTN_GHOST, padding: "0.3rem 0.6rem", fontSize: "0.78rem" }} onClick={() => onChange({ candidate_member_id: null, label: "" })}>Change</button>
+        </div>
+      ) : (
+        <div style={{ position: "relative" }}>
+          <input style={INPUT} value={search} onChange={e => setSearch(e.target.value)} placeholder="Search residents by name (min 2 characters)" />
+          {results.length > 0 && (
+            <div style={{ position: "absolute", zIndex: 5, top: "100%", left: 0, right: 0, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "8px", marginTop: "0.25rem", maxHeight: "220px", overflowY: "auto" }}>
+              {results.map(m => (
+                <div key={m.id} onClick={() => pickResident(m)} style={{ padding: "0.6rem 0.75rem", cursor: "pointer", borderBottom: "1px solid var(--border)" }}>{m.name}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
