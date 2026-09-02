@@ -15,13 +15,21 @@ export async function GET(req) {
 
   const { data, error: qErr } = await supabaseAdmin
     .from('voting_events')
-    .select('id, title, description, eligibility_mode, vote_mode, max_selections, allow_self_vote, results_visibility_outcome, results_visibility_turnout, opened_at, closes_at, published_at, created_at, archived')
+    .select('id, title, description, eligibility_mode, vote_mode, max_selections, allow_self_vote, results_visibility_outcome, results_visibility_turnout, coordinator_id, opened_at, closes_at, published_at, created_at, archived')
     .eq('archived', false)
     .order('created_at', { ascending: false })
   if (qErr) return NextResponse.json({ error: qErr.message }, { status: 500 })
 
-  const events = data.map(e => ({ ...e, status: computeVotingStatus(e) }))
   const canManage = !!member.is_admin || await isAreaOwner(member.id, 'hub', 'voting')
+  // Per-event edit rights: the hub-wide canManage above, OR this specific
+  // event's own assigned coordinator (Iain, 2026-09-02 review: "There is no
+  // event coordinator option which should be in scope" -- a coordinator
+  // needs to see Edit on their own event even if they're not a Voting Owner).
+  const events = data.map(e => ({
+    ...e,
+    status: computeVotingStatus(e),
+    canManageEvent: canManage || (!!e.coordinator_id && e.coordinator_id === member.id),
+  }))
   return NextResponse.json({ events, isAdmin: !!member.is_admin, canManage })
 }
 
@@ -37,7 +45,7 @@ export async function POST(req) {
   const {
     title, description, eligibility_mode, vote_mode, max_selections,
     allow_self_vote, results_visibility_outcome, results_visibility_turnout,
-    closes_at, choices,
+    coordinator_id, closes_at, choices,
   } = body
 
   if (!title || !String(title).trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 })
@@ -57,6 +65,7 @@ export async function POST(req) {
       allow_self_vote: allow_self_vote !== false,
       results_visibility_outcome: results_visibility_outcome === 'admin_only' ? 'admin_only' : 'residents',
       results_visibility_turnout: results_visibility_turnout === 'admin_only' ? 'admin_only' : 'residents',
+      coordinator_id: coordinator_id || null,
       closes_at: closes_at || null,
       created_by: member.id,
     })

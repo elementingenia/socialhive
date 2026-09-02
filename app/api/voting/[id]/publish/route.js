@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { requireAdminOrAreaOwner } from '@/lib/areaAuth'
+import { requireVotingEventManage } from '@/lib/areaAuth'
 import { computeVotingStatus, householdAnomalyReport } from '@/lib/voting'
 
 export const dynamic = 'force-dynamic'
@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
 // identifiable data by design (see migration 088), so it must never be
 // exposed to a resident.
 export async function GET(req, { params }) {
-  const { error, status } = await requireAdminOrAreaOwner(req, 'hub', 'voting')
+  const { error, status } = await requireVotingEventManage(req, params.id)
   if (error) return NextResponse.json({ error }, { status })
 
   const { data: event, error: eErr } = await supabaseAdmin
@@ -45,7 +45,7 @@ export async function GET(req, { params }) {
 // the anomaly report (GET, above) is a human checkpoint, not an automatic
 // gate; an admin who's reviewed it and decided to proceed anyway can.
 export async function POST(req, { params }) {
-  const { error, status } = await requireAdminOrAreaOwner(req, 'hub', 'voting')
+  const { error, status } = await requireVotingEventManage(req, params.id)
   if (error) return NextResponse.json({ error }, { status })
 
   const { data: event, error: eErr } = await supabaseAdmin

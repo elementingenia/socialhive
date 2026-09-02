@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { requireAdminOrAreaOwner } from '@/lib/areaAuth'
+import { requireVotingEventManage } from '@/lib/areaAuth'
 import { computeVotingStatus } from '@/lib/voting'
 
 export const dynamic = 'force-dynamic'
@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
 // Open->Closed is a live time comparison (lib/voting.js's
 // computeVotingStatus), so there's nothing to auto-close against otherwise.
 export async function POST(req, { params }) {
-  const { error, status } = await requireAdminOrAreaOwner(req, 'hub', 'voting')
+  const { error, status } = await requireVotingEventManage(req, params.id)
   if (error) return NextResponse.json({ error }, { status })
 
   const { data: event, error: eErr } = await supabaseAdmin

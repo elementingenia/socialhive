@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { authedFetch } from "@/lib/getAuthToken"
 import { supabase } from "@/lib/supabase"
@@ -18,6 +18,16 @@ const BTN_GHOST = {
   background: "transparent", color: "var(--voting)", border: "1px solid var(--voting)",
   borderRadius: "10px", padding: "0.6rem 1rem", fontWeight: 600, fontSize: "0.85rem", cursor: "pointer",
 }
+// Format a Date as a local "YYYY-MM-DDTHH:mm" string for a <input
+// type="datetime-local"> default value -- deliberately NOT
+// toISOString().slice(...), which is UTC and would show the wrong local
+// time (same class of bug this repo's ESLint rule already bans for
+// date-only derivations; this is the timestamp equivalent).
+function toLocalDatetimeInput(d) {
+  const pad = n => String(n).padStart(2, "0")
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 function typeBtnStyle(active) {
   return {
     flex: 1, padding: "0.45rem 0.6rem", borderRadius: "8px", fontWeight: 600, fontSize: "0.8rem",
@@ -37,6 +47,7 @@ export default function VotingHubPage() {
   const [canManage, setCanManage] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [error, setError] = useState("")
+  const [welcomeText, setWelcomeText] = useState("")
 
   async function load() {
     const res = await authedFetch("/api/voting")
@@ -47,7 +58,10 @@ export default function VotingHubPage() {
     setCanManage(!!json.canManage)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    fetch("/api/hub-settings").then(r => r.json()).then(d => setWelcomeText(d.voting?.text || "")).catch(() => {})
+  }, [])
 
   return (
     <div style={{ padding: "1rem", maxWidth: "640px", margin: "0 auto" }}>
@@ -65,6 +79,8 @@ export default function VotingHubPage() {
         </div>
       )}
 
+      <WelcomeBanner text={welcomeText} />
+
       {error && <div style={{ color: "var(--terracotta)", marginBottom: "1rem" }}>{error}</div>}
 
       {showCreate && <CreateEventForm onCreated={() => { setShowCreate(false); load() }} />}
@@ -76,7 +92,7 @@ export default function VotingHubPage() {
         </div>
       )}
       {(events || []).map(e => (
-        <EventCard key={e.id} event={e} isAdmin={isAdmin} canManage={canManage} onChanged={load} />
+        <EventCard key={e.id} event={e} isAdmin={isAdmin} canManage={canManage} canManageEvent={e.canManageEvent} onChanged={load} />
       ))}
     </div>
   )
@@ -91,6 +107,7 @@ function CreateEventForm({ onCreated }) {
   const [allowSelfVote, setAllowSelfVote] = useState(true)
   const [visOutcome, setVisOutcome] = useState("residents")
   const [visTurnout, setVisTurnout] = useState("residents")
+  const [coordinator, setCoordinator] = useState(null)
   // Each choice is either free text (a plain option like "Yes"/"No", or a
   // motion name) or a resident (a real member_id) -- Iain, 2026-09-02: a
   // resident option is imperative, since "Allow candidates to vote for
@@ -141,6 +158,7 @@ function CreateEventForm({ onCreated }) {
         allow_self_vote: allowSelfVote,
         results_visibility_outcome: visOutcome,
         results_visibility_turnout: visTurnout,
+        coordinator_id: coordinator || null,
         choices: cleanChoices.map(c => ({ label: c.label, candidate_member_id: c.candidate_member_id || null })),
       }),
     })
@@ -169,19 +187,25 @@ function CreateEventForm({ onCreated }) {
             onRemove={choices.length > 2 ? () => removeChoice(i) : null} />
         )
       })}
-      <button style={{ ...BTN_GHOST, marginBottom: "0.8rem" }} onClick={addChoice}>+ Add choice</button>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.8rem" }}>
+        <button style={BTN_GHOST} onClick={addChoice}>+ Add choice</button>
+      </div>
 
-      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Who can vote</label>
-      <select style={{ ...INPUT, marginBottom: "0.6rem", appearance: "none", WebkitAppearance: "none" }} value={eligibilityMode} onChange={e => setEligibilityMode(e.target.value)}>
-        <option value="per_resident">Every resident, one vote each</option>
-        <option value="per_household">One vote per household</option>
-      </select>
+      <div style={{ marginBottom: "0.9rem" }}>
+        <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Who can vote</label>
+        <div style={{ display: "flex", gap: "0.4rem" }}>
+          <button type="button" style={typeBtnStyle(eligibilityMode === "per_resident")} onClick={() => setEligibilityMode("per_resident")}>One Vote per Resident</button>
+          <button type="button" style={typeBtnStyle(eligibilityMode === "per_household")} onClick={() => setEligibilityMode("per_household")}>One Vote per Household</button>
+        </div>
+      </div>
 
-      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>How many choices can a voter pick</label>
-      <select style={{ ...INPUT, marginBottom: "0.6rem", appearance: "none", WebkitAppearance: "none" }} value={voteMode} onChange={e => setVoteMode(e.target.value)}>
-        <option value="single">Exactly one</option>
-        <option value="multi">More than one</option>
-      </select>
+      <div style={{ marginBottom: "0.9rem" }}>
+        <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>How many choices can a voter pick</label>
+        <div style={{ display: "flex", gap: "0.4rem" }}>
+          <button type="button" style={typeBtnStyle(voteMode === "single")} onClick={() => setVoteMode("single")}>Exactly one</button>
+          <button type="button" style={typeBtnStyle(voteMode === "multi")} onClick={() => setVoteMode("multi")}>More than one</button>
+        </div>
+      </div>
       {voteMode === "multi" && (
         <>
           <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Maximum number of choices</label>
@@ -197,17 +221,26 @@ function CreateEventForm({ onCreated }) {
         Only applies to Resident choices below — a resident can't be blocked from voting for a plain text option.
       </div>
 
-      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Who can see the result</label>
-      <select style={{ ...INPUT, marginBottom: "0.6rem", appearance: "none", WebkitAppearance: "none" }} value={visOutcome} onChange={e => setVisOutcome(e.target.value)}>
-        <option value="residents">All residents</option>
-        <option value="admin_only">Admins only</option>
-      </select>
+      <div style={{ marginBottom: "0.9rem" }}>
+        <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Who can see the result</label>
+        <div style={{ display: "flex", gap: "0.4rem" }}>
+          <button type="button" style={typeBtnStyle(visOutcome === "residents")} onClick={() => setVisOutcome("residents")}>All residents</button>
+          <button type="button" style={typeBtnStyle(visOutcome === "admin_only")} onClick={() => setVisOutcome("admin_only")}>Admins only</button>
+        </div>
+      </div>
 
-      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Who can see how many people voted</label>
-      <select style={{ ...INPUT, marginBottom: "0.8rem", appearance: "none", WebkitAppearance: "none" }} value={visTurnout} onChange={e => setVisTurnout(e.target.value)}>
-        <option value="residents">All residents</option>
-        <option value="admin_only">Admins only</option>
-      </select>
+      <div style={{ marginBottom: "0.8rem" }}>
+        <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Who can see how many people voted</label>
+        <div style={{ display: "flex", gap: "0.4rem" }}>
+          <button type="button" style={typeBtnStyle(visTurnout === "residents")} onClick={() => setVisTurnout("residents")}>All residents</button>
+          <button type="button" style={typeBtnStyle(visTurnout === "admin_only")} onClick={() => setVisTurnout("admin_only")}>Admins only</button>
+        </div>
+      </div>
+
+      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Coordinator (optional)</label>
+      <div style={{ marginBottom: "0.8rem" }}>
+        <CoordPicker members={members} value={coordinator} onChange={setCoordinator} />
+      </div>
 
       {error && <div style={{ color: "var(--terracotta)", marginBottom: "0.6rem", fontSize: "0.85rem" }}>{error}</div>}
       <button style={BTN_PRIMARY} disabled={saving} onClick={save}>{saving ? "Saving…" : "Save as Draft"}</button>
@@ -271,13 +304,111 @@ function ChoiceRow({ choice, index, members, takenIds, onChange, onRemove }) {
   )
 }
 
-function EventCard({ event, isAdmin, canManage, onChanged }) {
+// Coordinator picker for a voting event -- same custom dropdown-with-search
+// pattern as Show Time/Social/Clubs' own CoordPicker (app/(app)/screenings/
+// page.js), not a native <select> of every resident's name, and not shared
+// as a component since each hub's copy has already drifted slightly (colour
+// token, "username" fallback) -- kept local and voting-coloured here too.
+function CoordPicker({ members, value, onChange }) {
+  const chosen = members.find(m => m.id === value) || null
+  const [query, setQuery] = useState("")
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef(null)
+
+  const filtered = members.filter(m => !query || (m.name || "").toLowerCase().includes(query.toLowerCase()))
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener("mousedown", handleClick)
+    return () => document.removeEventListener("mousedown", handleClick)
+  }, [])
+
+  return (
+    <div ref={containerRef} style={{ position: "relative" }}>
+      <div onClick={() => { setOpen(o => !o); setQuery("") }}
+        role="button" tabIndex={0} aria-haspopup="listbox" aria-expanded={open}
+        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); setQuery("") } }}
+        style={{ ...INPUT, color: chosen ? "var(--text)" : "var(--text-dim)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", border: `1.5px solid ${open ? "var(--voting)" : "var(--border)"}` }}>
+        <span>{chosen ? chosen.name : "— No coordinator —"}</span>
+        <span style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>▾</span>
+      </div>
+      {open && (
+        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "0 4px 20px rgba(0,0,0,0.12)", zIndex: 60, overflow: "hidden" }}>
+          <div style={{ padding: "0.5rem 0.75rem", borderBottom: "1px solid var(--border)" }}>
+            <input autoFocus type="text" placeholder="Search name…" value={query} onChange={e => setQuery(e.target.value)}
+              style={{ width: "100%", border: "none", background: "transparent", color: "var(--text)", fontSize: "0.9rem", outline: "none", fontFamily: "inherit" }} />
+          </div>
+          <div style={{ maxHeight: 300, overflowY: "auto" }}>
+            {value && (
+              <div onClick={() => { onChange(null); setOpen(false) }}
+                style={{ padding: "0.65rem 1rem", cursor: "pointer", fontSize: "0.85rem", color: "var(--text-dim)", borderBottom: "1px solid var(--border)" }}>
+                — Clear selection —
+              </div>
+            )}
+            {filtered.map(m => (
+              <div key={m.id} onClick={() => { onChange(m.id); setOpen(false) }}
+                style={{ padding: "0.65rem 1rem", cursor: "pointer", background: m.id === value ? "rgba(124,58,237,0.08)" : "transparent", borderBottom: "1px solid var(--border)", fontWeight: m.id === value ? 700 : 400, fontSize: "0.88rem", color: m.id === value ? "var(--voting)" : "var(--text)" }}>
+                {m.name}
+              </div>
+            ))}
+            {filtered.length === 0 && <div style={{ padding: "0.9rem 1rem", fontSize: "0.85rem", color: "var(--text-dim)" }}>No match</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Welcome banner for the Voting hub, same pattern as Show Time's
+// WelcomeBanner (app/(app)/movies/page.js) -- reads hub_settings.voting.text
+// via GET /api/hub-settings and is dismissible per-browser (localStorage).
+// Iain, 2026-09-02 review: "The Voting Hub Welcome Message is not
+// appearing?" -- root cause confirmed by grep: this page never fetched
+// hub-settings or rendered a banner at all, unlike every other hub.
+const VOTING_WELCOME_KEY = "voting_welcome_dismissed"
+function WelcomeBanner({ text }) {
+  const [dismissed, setDismissed] = useState(false)
+  useEffect(() => {
+    try { setDismissed(localStorage.getItem(VOTING_WELCOME_KEY) === "1") } catch {}
+  }, [])
+  if (!text) return null
+  const isHtml = /<[a-z][\s\S]*>/i.test(text)
+  if (dismissed) {
+    return (
+      <button onClick={() => {
+        try { localStorage.removeItem(VOTING_WELCOME_KEY) } catch { /* ignore */ }
+        setDismissed(false)
+      }}
+        style={{ background: "none", border: "none", color: "var(--voting)", fontSize: "0.85rem", cursor: "pointer", padding: 0, marginBottom: "0.8rem" }}>
+        ℹ Show welcome message
+      </button>
+    )
+  }
+  return (
+    <div style={{ background: "var(--surface)", border: "1px solid var(--voting)", borderLeft: "3px solid var(--voting)", borderRadius: "10px", padding: "0.8rem 1rem", marginBottom: "1rem", position: "relative" }}>
+      <button onClick={() => {
+        try { localStorage.setItem(VOTING_WELCOME_KEY, "1") } catch { /* ignore */ }
+        setDismissed(true)
+      }}
+        style={{ position: "absolute", top: "0.4rem", right: "0.6rem", background: "none", border: "none", color: "var(--text-dim)", fontSize: "1rem", cursor: "pointer" }}
+        aria-label="Dismiss">×</button>
+      {isHtml
+        ? <div style={{ fontSize: "0.9rem", paddingRight: "1.2rem" }} dangerouslySetInnerHTML={{ __html: text }} />
+        : <div style={{ fontSize: "0.9rem", paddingRight: "1.2rem", whiteSpace: "pre-wrap" }}>{text}</div>}
+    </div>
+  )
+}
+
+function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
   const [expanded, setExpanded] = useState(false)
   const [detail, setDetail] = useState(null)
   const [closesAtInput, setClosesAtInput] = useState("")
   const [selected, setSelected] = useState([])
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState("")
+  const [editing, setEditing] = useState(false)
 
   async function loadDetail() {
     const res = await authedFetch(`/api/voting/${event.id}`)
@@ -286,6 +417,11 @@ function EventCard({ event, isAdmin, canManage, onChanged }) {
   }
 
   useEffect(() => { if (expanded && !detail) loadDetail() }, [expanded, detail])
+
+  // detail.canManageEvent is fresher (recomputed server-side against the
+  // latest coordinator_id) than the list-derived canManageEvent prop -- use
+  // it once loaded, fall back to the prop before the detail fetch resolves.
+  const canManageThis = detail ? !!detail.canManageEvent : !!canManageEvent
 
   async function doOpen() {
     setMsg(""); setBusy(true)
@@ -348,19 +484,42 @@ function EventCard({ event, isAdmin, canManage, onChanged }) {
 
   return (
     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px", padding: "1rem", marginBottom: "0.75rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", flexWrap: "wrap", gap: "0.4rem" }}
-        onClick={() => setExpanded(v => !v)}>
-        <div style={{ fontWeight: 700 }}>{event.title}</div>
-        <span style={{ fontSize: "0.75rem", fontWeight: 700, color: STATUS_COLOUR[event.status], border: `1px solid ${STATUS_COLOUR[event.status]}`, borderRadius: "999px", padding: "0.15rem 0.6rem" }}>
-          {STATUS_LABEL[event.status]}
-        </span>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.4rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", flex: 1, minWidth: 0 }} onClick={() => setExpanded(v => !v)}>
+          <div style={{ fontWeight: 700 }}>{event.title}</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {canManageThis && (event.status === "draft" || event.status === "open") && (
+            <button
+              style={{ ...BTN_GHOST, padding: "0.25rem 0.6rem", fontSize: "0.75rem" }}
+              onClick={e => { e.stopPropagation(); setExpanded(true); setEditing(v => !v) }}
+            >
+              {editing ? "Cancel edit" : "Edit"}
+            </button>
+          )}
+          <span style={{ cursor: "pointer" }} onClick={() => setExpanded(v => !v)}>
+            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: STATUS_COLOUR[event.status], border: `1px solid ${STATUS_COLOUR[event.status]}`, borderRadius: "999px", padding: "0.15rem 0.6rem" }}>
+              {STATUS_LABEL[event.status]}
+            </span>
+          </span>
+        </div>
       </div>
 
-      {expanded && detail && (
+      {expanded && detail && editing && (
+        <EditEventForm
+          event={detail.event}
+          choices={detail.choices}
+          onSaved={() => { setEditing(false); onChanged(); loadDetail() }}
+          onCancel={() => setEditing(false)}
+        />
+      )}
+
+      {expanded && detail && !editing && (
         <div style={{ marginTop: "0.75rem" }}>
           {detail.event.description && <p style={{ color: "var(--text-dim)", fontSize: "0.9rem" }}>{detail.event.description}</p>}
+          {detail.coordinatorName && <p style={{ color: "var(--text-dim)", fontSize: "0.85rem", marginTop: "-0.4rem" }}>Coordinator: {detail.coordinatorName}</p>}
 
-          {event.status === "draft" && canManage && (
+          {event.status === "draft" && canManageThis && (
             <div style={{ marginBottom: "0.6rem" }}>
               <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Closing date/time</label>
               <input type="datetime-local" style={{ ...INPUT, marginBottom: "0.5rem" }} value={closesAtInput} onChange={e => setClosesAtInput(e.target.value)} />
@@ -403,13 +562,168 @@ function EventCard({ event, isAdmin, canManage, onChanged }) {
             </div>
           )}
 
-          {event.status === "closed" && canManage && (
+          {event.status === "closed" && canManageThis && (
             <PublishReview eventId={event.id} onPublish={doPublish} busy={busy} />
           )}
 
           {msg && <div style={{ fontSize: "0.85rem", color: msg.includes("recorded") ? "#16a34a" : "var(--terracotta)" }}>{msg}</div>}
         </div>
       )}
+    </div>
+  )
+}
+
+// Edit an existing event -- Draft gets the full create-form field set
+// (eligibility/vote mode/choices included, since nothing has been voted on
+// yet); Open is metadata-only (title/description/closing time/coordinator/
+// visibility) -- eligibility_mode, vote_mode and choices are locked server-
+// side once a vote is open (see the PATCH route's own comment for why).
+// Iain, 2026-09-02 review: "When an event is in draft or open once created
+// there is no Edit option for the Admin/Owner/EC."
+function EditEventForm({ event, choices: initialChoices, onSaved, onCancel }) {
+  const isDraft = event.status === "draft"
+  const [title, setTitle] = useState(event.title || "")
+  const [description, setDescription] = useState(event.description || "")
+  const [eligibilityMode, setEligibilityMode] = useState(event.eligibility_mode || "per_resident")
+  const [voteMode, setVoteMode] = useState(event.vote_mode || "single")
+  const [maxSelections, setMaxSelections] = useState(event.max_selections || 2)
+  const [allowSelfVote, setAllowSelfVote] = useState(event.allow_self_vote !== false)
+  const [visOutcome, setVisOutcome] = useState(event.results_visibility_outcome || "residents")
+  const [visTurnout, setVisTurnout] = useState(event.results_visibility_turnout || "residents")
+  const [coordinator, setCoordinator] = useState(event.coordinator_id || null)
+  const [closesAt, setClosesAt] = useState(event.closes_at ? toLocalDatetimeInput(new Date(event.closes_at)) : "")
+  const [choices, setChoices] = useState(
+    (initialChoices || []).map(c => ({ type: c.candidate_member_id ? "resident" : "text", label: c.label, candidate_member_id: c.candidate_member_id || null }))
+  )
+  const [members, setMembers] = useState([])
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    supabase.from("members").select("id, name").order("name").then(({ data }) => setMembers(data || []))
+  }, [])
+
+  function setChoice(i, patch) { setChoices(cs => cs.map((c, idx) => idx === i ? { ...c, ...patch } : c)) }
+  function addChoice() { setChoices(cs => [...cs, { type: "text", label: "", candidate_member_id: null }]) }
+  function removeChoice(i) { setChoices(cs => cs.filter((_, idx) => idx !== i)) }
+
+  async function save() {
+    setError("")
+    if (!title.trim()) return setError("Title is required")
+    const payload = {
+      title: title.trim(),
+      description: description.trim() || null,
+      coordinator_id: coordinator || null,
+      results_visibility_outcome: visOutcome,
+      results_visibility_turnout: visTurnout,
+      closes_at: closesAt ? new Date(closesAt).toISOString() : null,
+    }
+    if (isDraft) {
+      const cleanChoices = choices.map(c => ({ ...c, label: (c.label || "").trim() })).filter(c => c.label)
+      if (cleanChoices.length < 2) return setError("At least two choices are required")
+      if (cleanChoices.some(c => c.type === "resident" && !c.candidate_member_id)) {
+        return setError("Pick a resident for every resident choice, or switch it to free text")
+      }
+      payload.eligibility_mode = eligibilityMode
+      payload.vote_mode = voteMode
+      payload.max_selections = voteMode === "multi" ? Number(maxSelections) || null : null
+      payload.allow_self_vote = allowSelfVote
+      payload.choices = cleanChoices.map(c => ({ label: c.label, candidate_member_id: c.candidate_member_id || null }))
+    }
+
+    setSaving(true)
+    const res = await authedFetch(`/api/voting/${event.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+    })
+    const json = await res.json().catch(() => ({}))
+    setSaving(false)
+    if (!res.ok) return setError(json.error || "Could not save changes")
+    onSaved()
+  }
+
+  return (
+    <div style={{ background: "var(--surface2)", border: "1px solid var(--voting)", borderRadius: "12px", padding: "0.9rem", marginTop: "0.75rem" }}>
+      <div style={{ fontWeight: 700, marginBottom: "0.6rem" }}>Edit vote{!isDraft ? " (Open — details only)" : ""}</div>
+
+      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Title</label>
+      <input style={{ ...INPUT, marginBottom: "0.6rem" }} value={title} onChange={e => setTitle(e.target.value)} />
+
+      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Description (optional)</label>
+      <textarea style={{ ...INPUT, marginBottom: "0.6rem", minHeight: "60px" }} value={description} onChange={e => setDescription(e.target.value)} />
+
+      {isDraft && (
+        <>
+          <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Choices</label>
+          {choices.map((c, i) => {
+            const takenIds = new Set(choices.filter((_, idx) => idx !== i).map(o => o.candidate_member_id).filter(Boolean))
+            return (
+              <ChoiceRow key={i} choice={c} index={i} members={members} takenIds={takenIds}
+                onChange={patch => setChoice(i, patch)}
+                onRemove={choices.length > 2 ? () => removeChoice(i) : null} />
+            )
+          })}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.8rem" }}>
+            <button style={BTN_GHOST} onClick={addChoice}>+ Add choice</button>
+          </div>
+
+          <div style={{ marginBottom: "0.9rem" }}>
+            <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Who can vote</label>
+            <div style={{ display: "flex", gap: "0.4rem" }}>
+              <button type="button" style={typeBtnStyle(eligibilityMode === "per_resident")} onClick={() => setEligibilityMode("per_resident")}>One Vote per Resident</button>
+              <button type="button" style={typeBtnStyle(eligibilityMode === "per_household")} onClick={() => setEligibilityMode("per_household")}>One Vote per Household</button>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: "0.9rem" }}>
+            <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>How many choices can a voter pick</label>
+            <div style={{ display: "flex", gap: "0.4rem" }}>
+              <button type="button" style={typeBtnStyle(voteMode === "single")} onClick={() => setVoteMode("single")}>Exactly one</button>
+              <button type="button" style={typeBtnStyle(voteMode === "multi")} onClick={() => setVoteMode("multi")}>More than one</button>
+            </div>
+          </div>
+          {voteMode === "multi" && (
+            <>
+              <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Maximum number of choices</label>
+              <input type="number" min={1} style={{ ...INPUT, marginBottom: "0.6rem" }} value={maxSelections} onChange={e => setMaxSelections(e.target.value)} />
+            </>
+          )}
+
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.8rem", fontSize: "0.9rem" }}>
+            <input type="checkbox" checked={allowSelfVote} onChange={e => setAllowSelfVote(e.target.checked)} />
+            Allow candidates to vote for themselves
+          </label>
+        </>
+      )}
+
+      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Closing date/time</label>
+      <input type="datetime-local" style={{ ...INPUT, marginBottom: "0.6rem" }} value={closesAt} onChange={e => setClosesAt(e.target.value)} />
+
+      <div style={{ marginBottom: "0.9rem" }}>
+        <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Who can see the result</label>
+        <div style={{ display: "flex", gap: "0.4rem" }}>
+          <button type="button" style={typeBtnStyle(visOutcome === "residents")} onClick={() => setVisOutcome("residents")}>All residents</button>
+          <button type="button" style={typeBtnStyle(visOutcome === "admin_only")} onClick={() => setVisOutcome("admin_only")}>Admins only</button>
+        </div>
+      </div>
+
+      <div style={{ marginBottom: "0.9rem" }}>
+        <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Who can see how many people voted</label>
+        <div style={{ display: "flex", gap: "0.4rem" }}>
+          <button type="button" style={typeBtnStyle(visTurnout === "residents")} onClick={() => setVisTurnout("residents")}>All residents</button>
+          <button type="button" style={typeBtnStyle(visTurnout === "admin_only")} onClick={() => setVisTurnout("admin_only")}>Admins only</button>
+        </div>
+      </div>
+
+      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Coordinator (optional)</label>
+      <div style={{ marginBottom: "0.8rem" }}>
+        <CoordPicker members={members} value={coordinator} onChange={setCoordinator} />
+      </div>
+
+      {error && <div style={{ color: "var(--terracotta)", marginBottom: "0.6rem", fontSize: "0.85rem" }}>{error}</div>}
+      <div style={{ display: "flex", gap: "0.5rem" }}>
+        <button style={BTN_PRIMARY} disabled={saving} onClick={save}>{saving ? "Saving…" : "Save changes"}</button>
+        <button style={BTN_GHOST} onClick={onCancel}>Cancel</button>
+      </div>
     </div>
   )
 }
