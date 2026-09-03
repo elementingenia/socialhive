@@ -2501,7 +2501,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
                       <button onClick={() => setShowMenu(true)} style={{
                         background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700,
                         color: clubInk(colour), textDecoration: "underline", fontFamily: "inherit", padding: 0,
-                      }}>View Menu</button>
+                      }}>Menu/View Details</button>
                     )}
                   </div>
                   {event.description && <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.6, margin: "8px 0 0" }} dangerouslySetInnerHTML={{ __html: bbToHtml(event.description, colour) }} />}

@@ -950,9 +950,9 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
           )}
 
 
-          {/* Dining Option */}
+          {/* Menu/Additional Info (was "Dining Option" -- Iain, 2026-09-03 round-5: "the concept of Dining option is now broader") */}
           <div style={FIELD}>
-            <Toggle value={form.has_dining} onChange={v => set("has_dining", v)} label="Dining option" />
+            <Toggle value={form.has_dining} onChange={v => set("has_dining", v)} label="Menu/Additional Info" />
           </div>
           {form.has_dining && (
             <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
