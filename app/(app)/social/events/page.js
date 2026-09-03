@@ -722,31 +722,71 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 
   async function getToken() { return session.access_token }
 
+  // Uploads straight to Supabase Storage via a signed upload URL rather
+  // than routing the file bytes through our own API route -- a raw
+  // multipart POST used to hand the whole file to our Vercel function,
+  // which silently 413s on any request body over Vercel's hard 4.5MB
+  // limit, and this call had no error handling at all around it, so a
+  // file over that ceiling left "Uploading..." spinning forever with no
+  // feedback (BUG-040, reported on a 4.66MB event flyer PDF). The
+  // "event-menus" Storage bucket itself allows up to 10MB, confirmed
+  // directly -- the real ceiling was Vercel's function body limit, not
+  // anything Storage- or app-imposed, so bypassing our own function for
+  // the actual bytes removes it. try/catch/finally now guarantees the
+  // spinner always clears and a real error always shows, regardless of
+  // failure mode.
   async function uploadMenuFile(file) {
     setUploadingMenu(true)
-    const fd = new FormData()
-    fd.append("event_id", activeId)
-    fd.append("file", file)
-    const res = await fetch("/api/events/menu", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + (await getAuthToken()) },
-      body: fd,
-    })
-    const d = await res.json()
-    setUploadingMenu(false)
-    if (res.ok) { setLocalMenuUrl(d.menu_url); setLocalMenuFileName(d.menu_file_name) }
-    else setError(d.error || "Menu upload failed")
+    setError(null)
+    try {
+      const token = await getAuthToken()
+      const signRes = await fetch("/api/events/menu", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ event_id: activeId, action: "sign", file_name: file.name, content_type: file.type }),
+      })
+      const signData = await signRes.json().catch(() => ({}))
+      if (!signRes.ok) throw new Error(signData.error || "Could not prepare the upload")
+
+      const { error: upErr } = await supabase.storage
+        .from("event-menus")
+        .uploadToSignedUrl(signData.path, signData.token, file, { contentType: file.type })
+      if (upErr) throw new Error(upErr.message || "Upload failed")
+
+      const completeRes = await fetch("/api/events/menu", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ event_id: activeId, action: "complete", path: signData.path, file_name: file.name }),
+      })
+      const d = await completeRes.json().catch(() => ({}))
+      if (!completeRes.ok) throw new Error(d.error || "Could not save the uploaded menu")
+      setLocalMenuUrl(d.menu_url)
+      setLocalMenuFileName(d.menu_file_name)
+    } catch (err) {
+      setError(err.message || "Menu upload failed")
+    } finally {
+      setUploadingMenu(false)
+    }
   }
 
   async function removeMenuFile() {
     setUploadingMenu(true)
-    const res = await fetch("/api/events/menu", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await getAuthToken()) },
-      body: JSON.stringify({ event_id: activeId }),
-    })
-    setUploadingMenu(false)
-    if (res.ok) { setLocalMenuUrl(null); setLocalMenuFileName(null) }
+    setError(null)
+    try {
+      const res = await fetch("/api/events/menu", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await getAuthToken()) },
+        body: JSON.stringify({ event_id: activeId }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || "Could not remove the menu")
+      setLocalMenuUrl(null)
+      setLocalMenuFileName(null)
+    } catch (err) {
+      setError(err.message || "Could not remove the menu")
+    } finally {
+      setUploadingMenu(false)
+    }
   }
 
   return (
