@@ -702,7 +702,7 @@ function BookingStrip({ myBooking, isFull, closed, blocked }) {
 
 // ── Screening Card ─────────────────────────────────────────────────────────────
 // Pure display — tap anywhere to open the unified slide-over for booking/modify/cancel
-function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit, canBypassClosed = false }) {
+function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit, canBypassClosed = false }) {
   const [showAttendees, setShowAttendees] = useState(false)
   const movie              = ev.movies
   const isFull             = ev.seats_remaining === 0
@@ -747,7 +747,7 @@ function ScreeningCard({ ev, isAdmin, freeCostData, onOpen, onEdit, canBypassClo
             <div style={{ color: 'var(--teal)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', lineHeight: 1.2 }}>
               {fmtDateLong(ev.event_date)}{ev.event_time ? ' · ' + fmtTime24(ev.event_time) : ''}
             </div>
-            {isAdmin && onEdit && (
+            {(isAdmin || isEC) && onEdit && (
               <button onClick={e => { e.stopPropagation(); onEdit(ev) }}
                 style={{ background: 'none', border: '1px solid var(--teal)', borderRadius: '8px', padding: '0.2rem 0.65rem', fontSize: '0.72rem', color: 'var(--teal)', cursor: 'pointer', fontWeight: 600, flexShrink: 0 }}>
                 Edit
@@ -1010,6 +1010,7 @@ export default function Screenings() {
                 key={ev.id}
                 ev={ev}
                 isAdmin={canManage}
+                isEC={!!member?.id && ev.coordinator?.id === member.id}
                 freeCostData={freeCostData}
                 onOpen={() => openSlideOut(ev)}
                 onEdit={ev => setEditEvent(ev)}

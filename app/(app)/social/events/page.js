@@ -1267,7 +1267,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
             {daysLabel && !isConfirmed && !isWaitlist && (
               <span style={{ background: "var(--terracotta)18", color: "var(--terracotta)", borderRadius: "20px", padding: "0.2rem 0.55rem", fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap" }}>{daysLabel}</span>
             )}
-            {isAdmin && (
+            {(isAdmin || isEC) && (
               <button onClick={e => { e.stopPropagation(); onEdit() }} style={{
                 background: "var(--surface2)", border: "1px solid var(--border)",
                 borderRadius: "8px", padding: "0.2rem 0.6rem",

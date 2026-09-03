@@ -271,7 +271,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
         <span style={{ color: clubTextOn(colour), fontWeight: 700, fontSize: "0.85rem", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1 1 auto" }}>{label}</span>
         <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "4px 8px", minWidth: 0 }}>
           <span style={{ color: clubTextOn(colour), opacity: 0.85, fontSize: "0.78rem", fontWeight: 600 }}>{fmtDate(event.event_date)}</span>
-          {onEdit && (isAdmin || isOwner) && (
+          {onEdit && (isAdmin || isOwner || isEC) && (
             <button onClick={(e) => { e.stopPropagation(); onEdit() }}
               style={{ background: "rgba(255,255,255,0.9)", color: clubInk(colour), border: "none", borderRadius: 14,
                 padding: "3px 12px", fontWeight: 700, fontSize: "0.72rem", cursor: "pointer", fontFamily: "inherit", flexShrink: 0, whiteSpace: "nowrap" }}>✎ Edit</button>
@@ -468,7 +468,10 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
 }
 
 // ── Closed Events Accordion ───────────────────────────────────────────────────
-function UpcomingDatesAccordion({ events, myBookings, onOpen, onEdit = null, colour = "var(--purple)" }) {
+function UpcomingDatesAccordion({ events, myBookings, onOpen, onEdit = null, colour = "var(--purple)", club = null }) {
+  const { member, isAdmin } = useUser()
+  const { owners: accordionOwners } = useOwners("club", club?.id)
+  const isOwner = !!member?.id && accordionOwners.some(o => o.id === member.id)
   const [open, setOpen] = useState(false)
   if (!events.length) return null
   const fmt = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })
@@ -497,7 +500,7 @@ function UpcomingDatesAccordion({ events, myBookings, onOpen, onEdit = null, col
                   </span>
                   <span style={{ flexShrink: 0, fontSize: "0.72rem", fontWeight: 700, color: booked ? "#15803d" : colour, whiteSpace: "nowrap" }}>{booked ? "✓ Booked" : "Book →"}</span>
                 </button>
-                {onEdit && (
+                {onEdit && (isAdmin || isOwner || (!!member && (ev.event_coordinators || []).some(ec => !ec.replaced_at && ec.member_id === member.id))) && (
                   <button onClick={() => onEdit(ev)} aria-label="Edit this date" title="Edit this date"
                     style={{ flexShrink: 0, background: "none", border: "none", cursor: "pointer", fontSize: "0.72rem", fontWeight: 700, padding: "0.4rem 0.6rem", color: clubInk(colour), whiteSpace: "nowrap" }}>✎ Edit</button>
                 )}
@@ -2171,13 +2174,13 @@ export default function ClubHome({ club }) {
             label={act.isSeries ? "Next date" : "Event"}
             booking={myBookings[act.parent.id]}
             onOpen={() => openSlideOut(act.parent)}
-            onEdit={canManage && !showForm ? () => { setEditEvent(act.parent); setShowForm(true) } : null}
+            onEdit={!showForm ? () => { setEditEvent(act.parent); setShowForm(true) } : null}
             colour={colour}
             club={club}
             showToast={showToast}
           />
           <UpcomingDatesAccordion events={act.children} myBookings={myBookings}
-            onOpen={openSlideOut} onEdit={canManage && !showForm ? (ev) => { setEditEvent(ev); setShowForm(true) } : null} colour={colour} />
+            onOpen={openSlideOut} onEdit={!showForm ? (ev) => { setEditEvent(ev); setShowForm(true) } : null} colour={colour} club={club} />
         </div>
       )) : (
         <div style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",
