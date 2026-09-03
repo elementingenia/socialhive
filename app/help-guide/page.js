@@ -137,6 +137,14 @@ const RAW_SECTIONS = [
       { title: "My Space Bookings — editing and cancelling", id: "sub-bookings-space" },
     ],
   },
+  {
+    id: "voting", num: 11, title: "Voting",
+    subs: [
+      { title: "Casting your vote",                id: "sub-voting-cast" },
+      { title: "Results and turnout",               id: "sub-voting-results" },
+      { title: "Running a vote (Owner/admin only)",  id: "sub-voting-ec" },
+    ],
+  },
 ]
 
 // Bar section parked (feature not in scope) — see lib/features.js. Filtered
@@ -1302,6 +1310,68 @@ export default function HelpGuidePage() {
                 💡 Editing a space booking checks the new date/time/location for clashes before
                 saving — if it isn't free, you'll be asked to pick a different slot rather than
                 losing your existing booking.
+              </InfoBox>
+            </Subsection>
+          </Section>
+
+          {/* ── 9. VOTING ── */}
+          <Section id="voting" num={secNum("voting")} title="Voting">
+            <Step>
+              Voting is used for occasional community decisions — like a committee election — and
+              only appears on Home while an admin has it switched on. If you don't see a Voting
+              tile, there's nothing currently active.
+            </Step>
+
+            <Subsection id="sub-voting-cast" title="Casting your vote">
+              <Step>
+                Open the Voting tile and tap the vote you want to take part in. Depending on how it
+                was set up, you'll either pick exactly one option or up to a stated number of
+                options. Once you tap <strong>Cast my vote</strong>, that's final — you can't change
+                it afterwards, and the app won't let you vote twice.
+              </Step>
+              <Step>
+                Some votes are set up as <strong>one vote per household</strong> rather than one per
+                resident. If someone else at your address has already voted, you won't be able to
+                vote again — and if your unit's house number isn't registered against your account,
+                contact the office to get it added before a household vote opens.
+              </Step>
+              <InfoBox>
+                🔒 Your vote itself is always anonymous — the app can confirm that you voted, but
+                never records which option you chose against your name. Nobody, including admins,
+                can see how an individual voted.
+              </InfoBox>
+            </Subsection>
+
+            <Subsection id="sub-voting-results" title="Results and turnout">
+              <Step>
+                Once a vote closes, results appear on the same screen — but only once an admin has
+                reviewed and published them. Whether you can see the final count, and whether you
+                can see how many people voted at all, depends on choices made when that particular
+                vote was set up; some votes keep one or both of those private.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-voting-ec" title="Running a vote (Owner/admin only)" ecOnly>
+              <Step>
+                An admin, or this hub's Owner, can start a new vote from the Voting page — set a
+                title, add choices, decide who's eligible (every resident, or one per household), how
+                many choices someone can pick, whether a candidate can vote for themselves, and who
+                gets to see the outcome and turnout.
+              </Step>
+              <Step>
+                A new vote starts as a <strong>Draft</strong> — nothing is visible to residents until
+                you set a closing date/time and tap <strong>Open this vote</strong>. It closes
+                automatically once that date/time passes; nobody needs to do anything for that part.
+              </Step>
+              <Step>
+                Once closed, review the vote before publishing — for a per-household vote, the app
+                flags any household that recorded more than one vote so you can check it before
+                results go out. Tap <strong>Publish results</strong> once you're satisfied.
+              </Step>
+              <InfoBox>
+                💡 The Voting tile itself can be switched on or off from{" "}
+                <strong>Manage Voting</strong> (reached from the Voting page) — admins only. Turn it
+                off between voting periods so it doesn't sit unused on Home.
               </InfoBox>
             </Subsection>
           </Section>

@@ -225,6 +225,20 @@ export function SpaceIcon({ size = 26 }) {
   )
 }
 
+// Ballot box with a checked slip -- Voting hub icon
+export function VotingIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 10 30 L 60 30 L 60 62 C 60 64.2 58.2 66 56 66 L 14 66 C 11.8 66 10 64.2 10 62 Z
+           M 16 36 L 16 60 L 54 60 L 54 36 Z
+           M 8 24 L 62 24 L 62 30 L 8 30 Z
+           M 22 4 L 48 4 L 48 22 L 40 22 L 40 12 L 30 12 L 30 22 L 22 22 Z
+           M 27 40 L 33 46 L 45 32 L 41 28 L 33 38 L 30 35 Z"/>
+    </svg>
+  )
+}
+
 // ── Useful Information hub icons ─────────────────────────────────────────────
 
 // Info circle with "i" — hub nav icon

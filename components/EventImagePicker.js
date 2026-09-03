@@ -6,7 +6,16 @@ import { authedFetch } from "@/lib/getAuthToken"
 // Lives in the event create/edit form (not the booking modal) — image upload
 // requires an existing event_id, so pass null/undefined until the event has
 // been created at least once.
-export default function EventImagePicker({ eventId, imageUrl, focalX, focalY, colour, onUpdated }) {
+export default function EventImagePicker({
+  eventId, imageUrl, focalX, focalY, colour, onUpdated,
+  // Overrides for callers whose image doesn't live on the shared `events`
+  // table (e.g. Voting's own voting_events row) -- default to the
+  // original events-table endpoints so every existing caller is unchanged.
+  uploadUrl = "/api/events/image",
+  deleteUrl = "/api/events/image",
+  idField = "event_id",
+  onSaveFocal,
+}) {
   const [uploading,     setUploading]     = useState(false)
   const [localImageUrl, setLocalImageUrl] = useState(imageUrl || null)
   const [localFocalX,   setLocalFocalX]   = useState(focalX ?? 50)
@@ -21,11 +30,18 @@ export default function EventImagePicker({ eventId, imageUrl, focalX, focalY, co
   }
 
   async function saveFocal(x, y) {
-    await authedFetch("/api/coordinator", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event_id: eventId, action: "update_event", image_focal_x: x, image_focal_y: y }),
-    })
+    // Default: the shared events-table path via /api/coordinator's
+    // update_event action. onSaveFocal lets a caller with its own PATCH
+    // contract (Voting's /api/voting/[id]) plug in instead.
+    if (onSaveFocal) {
+      await onSaveFocal(x, y)
+    } else {
+      await authedFetch("/api/coordinator", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: eventId, action: "update_event", image_focal_x: x, image_focal_y: y }),
+      })
+    }
     onUpdated?.()
   }
 
@@ -47,9 +63,9 @@ export default function EventImagePicker({ eventId, imageUrl, focalX, focalY, co
   async function uploadImage(file) {
     setUploading(true)
     const fd = new FormData()
-    fd.append("event_id", eventId)
+    fd.append(idField, eventId)
     fd.append("file", file)
-    const res = await authedFetch("/api/events/image", {
+    const res = await authedFetch(uploadUrl, {
       method: "POST",
       body: fd,
     })
@@ -63,10 +79,10 @@ export default function EventImagePicker({ eventId, imageUrl, focalX, focalY, co
 
   async function removeImage() {
     setUploading(true)
-    const res = await authedFetch("/api/events/image", {
+    const res = await authedFetch(deleteUrl, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event_id: eventId }),
+      body: JSON.stringify({ [idField]: eventId }),
     })
     setUploading(false)
     if (res.ok) {

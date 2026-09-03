@@ -11,7 +11,7 @@ import { clubInk } from "@/lib/clubColours"
 //
 // stopPropagation is essential: tiles are tap-to-open, so tapping the names must
 // open the ask modal WITHOUT also opening the tile's slide-out.
-export default function EventCoordinators({ eventId, eventTitle, names, colour = "var(--amber)", style }) {
+export default function EventCoordinators({ eventId, eventTitle, names, colour = "var(--amber)", style, contextType = "event" }) {
   const list = (names || []).filter(Boolean)
   if (!list.length) return null
   const ink = clubInk(colour) // readable on the light card background (no-op for dark colours)
@@ -19,7 +19,7 @@ export default function EventCoordinators({ eventId, eventTitle, names, colour =
     <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", ...style }}>
       Coordinator{list.length > 1 ? "s" : ""}:{" "}
       <AskQuestion
-        contextType="event"
+        contextType={contextType}
         contextKey={eventId}
         contextLabel={eventTitle}
         colour={colour}

@@ -3,9 +3,10 @@ import { useEffect, useState } from "react"
 import { FormattedText } from "@/lib/textFormatter"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+import { authedFetch } from "@/lib/getAuthToken"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import { useUser } from "@/lib/UserContext"
-import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon } from "@/components/NavIcons"
+import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon } from "@/components/NavIcons"
 import { BAR_ENABLED, SPACE_BOOKINGS_ENABLED } from "@/lib/features"
 import AskQuestion from "@/components/AskQuestion"
 
@@ -153,6 +154,64 @@ function SpaceBookingTile() {
   )
 }
 
+// Full-width pill below the Home grid, same shape as SpaceBookingTile above
+// -- Voting is occasional (an election cycle or two a year), not a routine
+// tile, so it lives here rather than in the fixed 6-col grid (Iain,
+// 2026-09-02: "the option to Show/Hide the HUB so its not a constant").
+// Gated entirely on hub_settings.voting.enabled -- an admin-only toggle
+// (see app/api/hub-settings/route.js) -- so this renders nothing at all
+// until an admin turns Voting on.
+function VotingTile() {
+  const router = useRouter()
+  const [enabled, setEnabled] = useState(false)
+  const [openEvent, setOpenEvent] = useState(undefined) // undefined = loading
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const hs = await fetch("/api/hub-settings").then(r => r.json()).catch(() => ({}))
+      if (cancelled) return
+      const isEnabled = !!hs?.voting?.enabled
+      setEnabled(isEnabled)
+      if (!isEnabled) { setOpenEvent(null); return }
+
+      const res = await authedFetch("/api/voting").catch(() => null)
+      const json = res ? await res.json().catch(() => ({})) : {}
+      if (cancelled) return
+      setOpenEvent((json.events || []).find(e => e.status === "open") || null)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  if (!enabled) return null
+
+  function label() {
+    if (openEvent === undefined) return "Loading…"
+    if (!openEvent) return "No vote is currently open"
+    const closes = new Date(openEvent.closes_at)
+    const closesStr = isNaN(closes.getTime()) ? "" : ` — closes ${closes.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}`
+    return `${openEvent.title}${closesStr}`
+  }
+
+  return (
+    <div onClick={() => router.push("/voting")} style={{
+      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px",
+      padding: "1rem 1.25rem", cursor: "pointer", display: "flex",
+      alignItems: "center", justifyContent: "space-between", marginTop: "0.5rem", marginBottom: "0.75rem",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <span style={{ color: "var(--voting)", lineHeight: 0, display: "flex", alignItems: "center" }}><VotingIcon size={40} /></span>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>Voting</div>
+          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{label()}</div>
+        </div>
+      </div>
+      <span style={{ color: "var(--text-dim)", fontSize: "1.1rem" }}>›</span>
+    </div>
+  )
+}
+
 function BarTabCard({ memberId }) {
   const router = useRouter()
   const [openTotal,    setOpenTotal]    = useState(null)
@@ -270,6 +329,7 @@ export default function HomePage() {
 
           {/* Book a Space — full-width pill, not part of the two-row grid (feature parked, see lib/features.js) */}
           {SPACE_BOOKINGS_ENABLED && <SpaceBookingTile />}
+          <VotingTile />
 
           {/* Sub notices */}
           {subTexts.map((t, i) => <SubNoticeCard key={i} text={t} />)}
