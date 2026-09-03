@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabase"
 import { VotingIcon } from "@/components/NavIcons"
 import { FormattedText } from "@/lib/textFormatter"
 import { sydneyTodayStr } from "@/lib/date"
+import ExpandableText from "@/components/ExpandableText"
+import EventImagePicker from "@/components/EventImagePicker"
 
 const INPUT = {
   width: "100%", padding: "0.75rem 1rem", borderRadius: "10px",
@@ -36,6 +38,38 @@ function toLocalDatetimeInput(d) {
 }
 
 const ALL_HOURS_24 = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"))
+
+// Formats a closes_at ISO timestamp for display -- e.g. "Fri 25 Sep, 6pm".
+function fmtClosesAt(iso) {
+  if (!iso) return null
+  const d = new Date(iso)
+  const datePart = d.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })
+  const hour = d.getHours()
+  const timePart = hour === 0 ? "12am" : hour < 12 ? `${hour}am` : hour === 12 ? "12pm" : `${hour - 12}pm`
+  return `${datePart}, ${timePart}`
+}
+
+// Iain, 2026-09-03 round-5 review: "Voting Event should show how the user
+// voted once they have their vote saved" -- previously this only survived
+// the same browser SESSION (see castVote()'s justVoted comment), because
+// voting_ballots is structurally anonymous by design (no member_id at
+// all -- lib/voting.js's header comment) and can never be re-derived from
+// the server after a reload. The fix that respects that anonymity: record
+// the choice on THIS DEVICE ONLY, in localStorage, never on the server.
+// This is honestly just the resident's own on-device memory of their own
+// action -- it adds no new server-side data, doesn't touch the anonymous
+// ballot table, and doesn't survive a different browser/device (same as
+// nothing else in this app does either).
+function myChoiceKey(eventId) { return `voting_myChoice_${eventId}` }
+function loadMyChoice(eventId) {
+  try {
+    const raw = localStorage.getItem(myChoiceKey(eventId))
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+function saveMyChoice(eventId, labels) {
+  try { localStorage.setItem(myChoiceKey(eventId), JSON.stringify(labels)) } catch { /* ignore */ }
+}
 
 // Iain, 2026-09-03 round-4 review: "There is no obvious way to close the
 // calendar picker for the Closing Date/Time" + "Time should only be hours,
@@ -242,6 +276,10 @@ function CreateEventForm({ onCreated }) {
 
       <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Description (optional)</label>
       <textarea style={{ ...INPUT, marginBottom: "0.6rem", minHeight: "70px" }} value={description} onChange={e => setDescription(e.target.value)} />
+
+      <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontStyle: "italic", marginBottom: "0.9rem" }}>
+        You'll be able to add an image once you've created the vote -- edit it from there.
+      </div>
 
       <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Choices</label>
       {choices.map((c, i) => {
@@ -506,7 +544,7 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
   // session echo of the choices just picked, never something re-fetched
   // after a reload. Set once, right after a successful cast; stays sticky
   // for the rest of this page view.
-  const [justVoted, setJustVoted] = useState(null)
+  const [justVoted, setJustVoted] = useState(() => loadMyChoice(event.id))
 
   async function loadDetail() {
     const res = await authedFetch(`/api/voting/${event.id}`)
@@ -589,6 +627,7 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
     // voted for instead of a generic "recorded".
     const labels = (detail?.choices || []).filter(c => selected.includes(c.id)).map(c => c.label)
     setJustVoted(labels)
+    saveMyChoice(event.id, labels)
     loadDetail(); onChanged()
   }
 
@@ -625,25 +664,49 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
     })
   }
 
+  // Iain, 2026-09-03 round-5 review, item 5: "Formatting of tile should
+  // conform to format seen in all other events throughout the system but
+  // based primarily on the Social design for the pertinent content."
+  // Rebuilt to match app/(app)/social/events/page.js's EventCard shape:
+  // optional cover image on top, then a title+status-pill+Edit header row,
+  // then an always-visible meta block (coordinator, description, votes
+  // cast, closing date) -- none of it gated behind expand any more, same
+  // as Social never gates its description/location/coordinator behind a
+  // click. Only the interactive vote-casting/manage actions stay behind
+  // Edit/expand, since those genuinely need the per-viewer detail fetch
+  // (eligibility, participation, choices).
+  const closesLabel = fmtClosesAt(event.closes_at)
+  const isClosedOrPublished = event.status === "closed" || event.status === "published"
+
   return (
-    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px", padding: "1rem", marginBottom: "0.75rem" }}>
+    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px", overflow: "hidden", marginBottom: "0.75rem" }}>
+      {event.image_url && (
+        <img
+          src={event.image_url}
+          alt={event.title}
+          style={{ width: "100%", height: 140, objectFit: "cover", display: "block", objectPosition: `${event.image_focal_x ?? 50}% ${event.image_focal_y ?? 50}%` }}
+        />
+      )}
+      <div style={{ padding: "1rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.4rem" }}>
         <div style={{ cursor: "pointer", flex: 1, minWidth: 0 }} onClick={() => setExpanded(v => !v)}>
-          <div style={{ fontWeight: 700 }}>{event.title}</div>
-          {/* Iain, 2026-09-03 round-4 review: "Each event Tile should
-              display the Title AND the Description" -- description was
-              already returned by GET /api/voting (the list route), just
-              never rendered until a card was expanded. Shown here on the
-              collapsed tile itself now; the expanded detail view below
-              still repeats it (detail.event.description), which is fine --
-              same description, just visible at both states rather than
-              hidden until expand. */}
-          {event.description && <div style={{ color: "var(--text-dim)", fontSize: "0.85rem", marginTop: "0.15rem" }}>{event.description}</div>}
+          <div style={{ fontWeight: 700, fontSize: "1rem" }}>{event.title}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {/* Status pill -- deliberately neutral-bordered Edit next to a
+              colour-bordered status pill (round-5 item 3: the two used to
+              share the same hub-coloured outline style, so "Open" read as
+              a second, dead-looking button rather than plain status text.
+              Matches Social's Edit convention -- neutral surface/border,
+              not hub-coloured -- so the coloured pill is unambiguously
+              status, never an action). */}
           {canManageThis && (event.status === "draft" || event.status === "open") && (
             <button
-              style={{ ...BTN_GHOST, padding: "0.25rem 0.6rem", fontSize: "0.75rem" }}
+              style={{
+                background: "var(--surface2)", border: "1px solid var(--border)",
+                borderRadius: "8px", padding: "0.2rem 0.6rem", fontSize: "0.72rem", fontWeight: 700,
+                cursor: "pointer", color: "var(--text-dim)", fontFamily: "inherit",
+              }}
               onClick={e => { e.stopPropagation(); setExpanded(true); setEditing(v => !v) }}
             >
               {editing ? "Cancel edit" : "Edit"}
@@ -657,6 +720,44 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
         </div>
       </div>
 
+      {/* Coordinator */}
+      {event.coordinatorName && (
+        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.2rem" }}>Coordinator: {event.coordinatorName}</div>
+      )}
+
+      {/* Description -- shown once, here, regardless of expand/collapse
+          (round-5 item 2: this used to also repeat verbatim in the
+          expanded detail view below, which Iain flagged as a genuine
+          duplicate, not a deliberate "visible at both states" choice as
+          round-4 had assumed). ExpandableText clamps + fades exactly like
+          every other hub's event description. */}
+      {event.description && (
+        <div style={{ marginTop: "0.3rem", marginBottom: "0.2rem" }}>
+          <ExpandableText text={event.description} fontSize={13} lineHeight={1.5} maxLines={2} colour="var(--voting)" />
+        </div>
+      )}
+
+      {/* Votes cast -- round-5 item 6: "useful data point to show at all
+          times even when tile is in closed state." event.votesCast is null
+          when the viewer isn't permitted to see it (results_visibility_
+          turnout='admin_only' and this viewer isn't admin) or the event is
+          still Draft -- render nothing in that case, same as Social omits
+          a cost pill for a free event rather than showing "$0". */}
+      {event.votesCast !== null && event.votesCast !== undefined && (
+        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.15rem" }}>
+          {event.votesCast} vote{event.votesCast === 1 ? "" : "s"} cast
+        </div>
+      )}
+
+      {/* Closing date -- round-5 item 7: "should also display when in
+          closed state," not just while the vote is still open. Worded
+          past/future tense to match. */}
+      {closesLabel && (
+        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.15rem" }}>
+          {isClosedOrPublished ? `Closed ${closesLabel}` : `Closes ${closesLabel}`}
+        </div>
+      )}
+
       {expanded && detail && editing && (
         <EditEventForm
           event={detail.event}
@@ -668,9 +769,6 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
 
       {expanded && detail && !editing && (
         <div style={{ marginTop: "0.75rem" }}>
-          {detail.event.description && <p style={{ color: "var(--text-dim)", fontSize: "0.9rem" }}>{detail.event.description}</p>}
-          {detail.coordinatorName && <p style={{ color: "var(--text-dim)", fontSize: "0.85rem", marginTop: "-0.4rem" }}>Coordinator: {detail.coordinatorName}</p>}
-
           {event.status === "draft" && canManageThis && (
             <div style={{ marginBottom: "0.6rem" }}>
               <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Closing date/time</label>
@@ -751,15 +849,17 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
             <div style={{ color: "var(--terracotta)", marginBottom: "0.6rem" }}>{detail.eligibility.reason}</div>
           )}
 
+          {/* Votes-cast count now lives in the always-visible meta block
+              above (round-5 item 6) -- this block is outcome (the actual
+              per-choice tally) only. */}
           {(event.status === "closed" || event.status === "published") && (
             <div style={{ marginBottom: "0.6rem" }}>
-              {detail.turnout && <div style={{ fontSize: "0.9rem", marginBottom: "0.4rem" }}>{detail.turnout.votesCast} vote{detail.turnout.votesCast === 1 ? "" : "s"} cast</div>}
               {detail.results && detail.results.map(r => (
                 <div key={r.choice_id} style={{ display: "flex", justifyContent: "space-between", padding: "0.3rem 0" }}>
                   <span>{r.label}</span><strong>{r.votes}</strong>
                 </div>
               ))}
-              {!detail.results && !detail.turnout && <div style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>Results aren't visible to you for this vote.</div>}
+              {!detail.results && <div style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>The outcome isn't visible to you for this vote.</div>}
             </div>
           )}
 
@@ -774,6 +874,7 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
           {msg && <div style={{ fontSize: "0.85rem", color: "var(--terracotta)" }}>{msg}</div>}
         </div>
       )}
+      </div>
     </div>
   )
 }
@@ -864,6 +965,33 @@ function EditEventForm({ event, choices: initialChoices, onSaved, onCancel }) {
 
       <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Description (optional)</label>
       <textarea style={{ ...INPUT, marginBottom: "0.6rem", minHeight: "60px" }} value={description} onChange={e => setDescription(e.target.value)} />
+
+      {/* Image -- round-5 item 4: "Voting event should have an image
+          upload option like other events throughout the system." Mirrors
+          Social's EventImagePicker usage exactly (components/EventImagePicker.js),
+          pointed at the new /api/voting/[id]/image route via the picker's
+          uploadUrl/deleteUrl overrides, and at this route's own PATCH for
+          the focal-point drag-save via onSaveFocal (voting_events has no
+          /api/coordinator equivalent -- that route is events-table only). */}
+      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Image (optional)</label>
+      <div style={{ marginBottom: "0.9rem" }}>
+        <EventImagePicker
+          eventId={event.id}
+          imageUrl={event.image_url}
+          focalX={event.image_focal_x}
+          focalY={event.image_focal_y}
+          colour="var(--voting)"
+          uploadUrl={`/api/voting/${event.id}/image`}
+          deleteUrl={`/api/voting/${event.id}/image`}
+          idField="voting_event_id"
+          onSaveFocal={async (x, y) => {
+            await authedFetch(`/api/voting/${event.id}`, {
+              method: "PATCH", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ image_focal_x: x, image_focal_y: y }),
+            })
+          }}
+        />
+      </div>
 
       {isDraft && (
         <>

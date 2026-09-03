@@ -42,7 +42,14 @@ export async function GET(req, { params }) {
 
   let turnout = null
   let results = null
-  const showTurnout = ['closed', 'published'].includes(votingStatus) && canSeeResults(event, { field: 'results_visibility_turnout', isAdmin: member.is_admin })
+  // Iain, 2026-09-03 round-5 review: "I would think number of votes
+  // already cast would be a useful data point to show at all times even
+  // when tile is in closed state" -- turnout (a plain count, not who or
+  // what anyone voted) is now visible from Open onward, not just once the
+  // vote has ended. Outcome stays Closed/Published only -- showing partial
+  // results mid-vote could sway later voters, a real concern Iain never
+  // raised changing, so that gate is untouched.
+  const showTurnout = votingStatus !== 'draft' && canSeeResults(event, { field: 'results_visibility_turnout', isAdmin: member.is_admin })
   const showOutcome = ['closed', 'published'].includes(votingStatus) && canSeeResults(event, { field: 'results_visibility_outcome', isAdmin: member.is_admin })
 
   if (showTurnout) {
@@ -122,6 +129,8 @@ export async function PATCH(req, { params }) {
   if (body.results_visibility_turnout !== undefined) {
     patch.results_visibility_turnout = body.results_visibility_turnout === 'admin_only' ? 'admin_only' : 'residents'
   }
+  if (body.image_focal_x !== undefined) patch.image_focal_x = Number(body.image_focal_x) || 50
+  if (body.image_focal_y !== undefined) patch.image_focal_y = Number(body.image_focal_y) || 50
   if (body.closes_at !== undefined) {
     if (body.closes_at && new Date(body.closes_at).getTime() <= Date.now()) {
       return NextResponse.json({ error: 'Closing date/time must be in the future' }, { status: 400 })
