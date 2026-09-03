@@ -239,6 +239,21 @@ export function VotingIcon({ size = 26 }) {
   )
 }
 
+// Star burst / sparkle -- Special Events hub icon (2026-09-04). A one-off
+// occasional-event hub, same design family as Social -- kept visually
+// distinct (a starburst, not a party/calendar glyph already used elsewhere)
+// per the "reuse the canonical asset" rule: this is a genuinely new concept,
+// not an approximation of an existing one, so a new icon is correct here.
+export function SpecialEventsIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 35 2 L 41 24 L 63 18 L 47 34 L 65 46 L 42 44 L 46 66 L 35 47 L 24 66 L 28 44 L 5 46 L 23 34 L 7 18 L 29 24 Z
+           M 35 27 C 39.4 27 43 30.6 43 35 C 43 39.4 39.4 43 35 43 C 30.6 43 27 39.4 27 35 C 27 30.6 30.6 27 35 27 Z"/>
+    </svg>
+  )
+}
+
 // ── Useful Information hub icons ─────────────────────────────────────────────
 
 // Info circle with "i" — hub nav icon

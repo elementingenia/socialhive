@@ -423,7 +423,7 @@ export async function PATCH(req) {
     }
 
     const { data: ev } = await supa
-      .from("events").select("id, max_seats, max_seats_per_booking, hub_type, book_id, payment_required, title, allow_nonresident_guests, require_attendee_names")
+      .from("events").select("id, max_seats, max_seats_per_booking, unassigned_seats_count, hub_type, book_id, payment_required, title, allow_nonresident_guests, require_attendee_names")
       .eq("id", event_id).single()
     if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
 
@@ -483,7 +483,7 @@ export async function PATCH(req) {
       .from("bookings").select("seats, status").eq("event_id", event_id).neq("status", "cancelled")
     const confirmedSeats = (allBookings || [])
       .filter(b => b.status === "confirmed").reduce((s, b) => s + (b.seats || 1), 0)
-    const available = Math.max(0, (ev.max_seats || 0) - confirmedSeats)
+    const available = Math.max(0, (ev.max_seats || 0) - (ev.unassigned_seats_count || 0) - confirmedSeats)
 
     let bookingStatus
     if (force_status === "waitlist") bookingStatus = "waitlist"
@@ -579,7 +579,7 @@ export async function PATCH(req) {
     }
 
     const { data: ev } = await supa
-      .from("events").select("id, title, max_seats, max_seats_per_booking, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names")
+      .from("events").select("id, title, max_seats, max_seats_per_booking, unassigned_seats_count, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names")
       .eq("id", event_id).single()
     if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
 

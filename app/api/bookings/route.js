@@ -37,7 +37,7 @@ export async function POST(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('id, max_seats, max_seats_per_booking, hub_type, book_id, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('id, max_seats, max_seats_per_booking, unassigned_seats_count, hub_type, book_id, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
 
   // Cap reads the event's own max_seats_per_booking (falls back to 4) --
@@ -127,7 +127,7 @@ export async function POST(req) {
     .filter(b => b.status === 'confirmed')
     .reduce((sum, b) => sum + (b.seats || 1), 0)
 
-  const available = Math.max(0, event.max_seats - confirmedSeats)
+  const available = Math.max(0, event.max_seats - (event.unassigned_seats_count || 0) - confirmedSeats)
 
   const myBookings  = (allBookings || []).filter(b => b.member_id === member.id)
   const myConfirmed = myBookings.find(b => b.status === 'confirmed')
@@ -334,7 +334,7 @@ export async function PATCH(req) {
   const oldConfirmed = myConfirmed.seats || 1
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('max_seats, max_seats_per_booking, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('max_seats, max_seats_per_booking, unassigned_seats_count, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   const { data: confirmedRows } = await supabaseAdmin
     .from('bookings').select('seats')
     .eq('event_id', event_id).eq('status', 'confirmed').neq('id', myConfirmed.id)
