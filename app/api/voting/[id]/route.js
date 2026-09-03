@@ -179,3 +179,49 @@ export async function PATCH(req, { params }) {
 
   return NextResponse.json({ event: { ...updated, status: computeVotingStatus(updated) } })
 }
+
+// DELETE /api/voting/[id] — cancel/abandon a vote. Admin, this hub's
+// Owner, or the event's own assigned Coordinator (same gate as PATCH).
+// Iain, 2026-09-03 round-5 review: "Still no option to abandon the vote
+// event or cancel it when in draft state (or when open with no votes
+// cast)." Allowed while Draft (nothing has happened yet) or while Open
+// PROVIDED zero residents have voted so far -- the real participation
+// count is checked directly here, not read off the viewer's own
+// (visibility-gated) turnout figure, so a coordinator who can't see the
+// turnout count still gets an accurate accept/reject rather than a
+// false "looks safe" from their own restricted view. Once anyone has
+// voted, or once the vote is Closed/Published, cancelling is refused --
+// abandoning a vote with real responses (even Closed-but-unpublished
+// ones) would silently discard something residents actually did.
+// Soft-deletes via `archived`, the same convention voting_events already
+// uses in the list route's `.eq('archived', false)` filter, rather than
+// a hard delete -- keeps the row (and its choices/participation/ballots,
+// which for an allowed cancellation are always empty anyway) around for
+// audit rather than destroying it outright.
+export async function DELETE(req, { params }) {
+  const { error, status } = await requireVotingEventManage(req, params.id)
+  if (error) return NextResponse.json({ error }, { status })
+
+  const { data: event, error: eErr } = await supabaseAdmin
+    .from('voting_events').select('*').eq('id', params.id).single()
+  if (eErr || !event) return NextResponse.json({ error: 'Voting event not found' }, { status: 404 })
+
+  const votingStatus = computeVotingStatus(event)
+  if (votingStatus === 'closed' || votingStatus === 'published') {
+    return NextResponse.json({ error: 'This vote has already closed and can no longer be cancelled' }, { status: 400 })
+  }
+
+  if (votingStatus === 'open') {
+    const { count } = await supabaseAdmin
+      .from('voting_participation').select('id', { count: 'exact', head: true }).eq('voting_event_id', event.id)
+    if ((count || 0) > 0) {
+      return NextResponse.json({ error: 'This vote already has responses and can no longer be cancelled' }, { status: 400 })
+    }
+  }
+
+  const { error: updErr } = await supabaseAdmin.from('voting_events').update({ archived: true }).eq('id', event.id)
+  if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
+
+  return NextResponse.json({ ok: true })
+}
+

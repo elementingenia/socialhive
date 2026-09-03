@@ -8,6 +8,7 @@ import { FormattedText } from "@/lib/textFormatter"
 import { sydneyTodayStr } from "@/lib/date"
 import ExpandableText from "@/components/ExpandableText"
 import EventImagePicker from "@/components/EventImagePicker"
+import { useUser } from "@/lib/UserContext"
 
 const INPUT = {
   width: "100%", padding: "0.75rem 1rem", borderRadius: "10px",
@@ -529,7 +530,9 @@ function WelcomeBanner({ text }) {
 }
 
 function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
+  const { member } = useUser()
   const [expanded, setExpanded] = useState(false)
+  const [confirmCancel, setConfirmCancel] = useState(false)
   const [detail, setDetail] = useState(null)
   const [closesAtInput, setClosesAtInput] = useState("")
   const [selected, setSelected] = useState([])
@@ -589,6 +592,22 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
     setConfirmClose(false)
     if (!res.ok) return setMsg(json.error || "Could not close this vote")
     onChanged(); loadDetail()
+  }
+
+  // Iain, 2026-09-03 round-5 review, item 2: "Still no option to abandon
+  // the vote event or cancel it when in draft state (or when open with no
+  // votes cast)." Mirrors doClose()'s two-step confirm pattern; the real
+  // "is this actually safe" check (Draft, or Open with zero real votes) is
+  // enforced server-side in the DELETE route -- this button just offers
+  // the action and surfaces whatever the server decides.
+  async function doCancel() {
+    setMsg(""); setBusy(true)
+    const res = await authedFetch(`/api/voting/${event.id}`, { method: "DELETE" })
+    const json = await res.json().catch(() => ({}))
+    setBusy(false)
+    setConfirmCancel(false)
+    if (!res.ok) return setMsg(json.error || "Could not cancel this vote")
+    onChanged()
   }
 
   async function setClosesAt() {
@@ -689,8 +708,8 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
       )}
       <div style={{ padding: "1rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.4rem" }}>
-        <div style={{ cursor: "pointer", flex: 1, minWidth: 0 }} onClick={() => setExpanded(v => !v)}>
-          <div style={{ fontWeight: 700, fontSize: "1rem" }}>{event.title}</div>
+        <div style={{ cursor: "pointer", flex: "1 1 auto", minWidth: 0 }} onClick={() => setExpanded(v => !v)}>
+          <div style={{ fontWeight: 700, fontSize: "1rem", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{event.title}</div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
           {/* Status pill -- deliberately neutral-bordered Edit next to a
@@ -737,17 +756,24 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
         </div>
       )}
 
-      {/* Votes cast -- round-5 item 6: "useful data point to show at all
-          times even when tile is in closed state." event.votesCast is null
-          when the viewer isn't permitted to see it (results_visibility_
-          turnout='admin_only' and this viewer isn't admin) or the event is
-          still Draft -- render nothing in that case, same as Social omits
-          a cost pill for a free event rather than showing "$0". */}
-      {event.votesCast !== null && event.votesCast !== undefined && (
-        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.15rem" }}>
-          {event.votesCast} vote{event.votesCast === 1 ? "" : "s"} cast
+      {/* Votes cast + "You have voted" -- round-5 item 6 (always-visible
+          count) combined with round-6's request to match the reference
+          mockup, which shows both on one row rather than the confirmation
+          living only in the expanded detail view. justVoted comes from
+          localStorage (see its declaration below) so this needs no expand/
+          detail fetch to show -- same reasoning as item 1's original fix,
+          just moved up onto the collapsed tile itself. event.votesCast is
+          null when the viewer isn't permitted to see it or the event is
+          still Draft -- render just the "You have voted" side in that case
+          rather than a misleading "0 votes cast". */}
+      {(event.votesCast !== null && event.votesCast !== undefined) || justVoted ? (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.4rem", fontSize: "0.78rem", marginTop: "0.15rem" }}>
+          <span style={{ color: "var(--text-dim)" }}>
+            {event.votesCast !== null && event.votesCast !== undefined ? `${event.votesCast} vote${event.votesCast === 1 ? "" : "s"} cast` : ""}
+          </span>
+          {justVoted && <span style={{ color: "#16a34a", fontWeight: 700 }}>✓ You have voted</span>}
         </div>
-      )}
+      ) : null}
 
       {/* Closing date -- round-5 item 7: "should also display when in
           closed state," not just while the vote is still open. Worded
@@ -776,6 +802,37 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
                 <ClosingDateTimeField value={closesAtInput} onChange={setClosesAtInput} />
               </div>
               <button style={BTN_PRIMARY} disabled={busy} onClick={setClosesAt}>Open this vote</button>
+            </div>
+          )}
+
+          {/* Cancel/abandon -- Draft always, Open only while genuinely
+              nothing has been voted on yet (server is the real gate; see
+              doCancel()). Kept visually separate (terracotta, own row)
+              from the primary Open/Close actions above so it doesn't read
+              as an equally-weighted option. */}
+          {canManageThis && (event.status === "draft" || (event.status === "open" && (event.votesCast === 0 || event.votesCast == null))) && (
+            <div style={{ marginBottom: "0.6rem" }}>
+              {!confirmCancel ? (
+                <button
+                  style={{ ...BTN_GHOST, color: "var(--terracotta)", borderColor: "var(--terracotta)" }}
+                  disabled={busy}
+                  onClick={() => setConfirmCancel(true)}
+                >
+                  {event.status === "draft" ? "Cancel this vote" : "Cancel this vote (abandon)"}
+                </button>
+              ) : (
+                <div style={{ background: "var(--amber-light)", borderLeft: "3px solid var(--amber)", borderRadius: "8px", padding: "0.6rem", fontSize: "0.85rem" }}>
+                  <div style={{ marginBottom: "0.5rem" }}>
+                    {event.status === "draft"
+                      ? "Cancel this vote? It will be removed and this can't be undone."
+                      : "Abandon this vote before anyone has voted? It will be removed and this can't be undone."}
+                  </div>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <button style={{ ...BTN_PRIMARY, background: "var(--terracotta)", width: "auto", padding: "0.5rem 0.9rem" }} disabled={busy} onClick={doCancel}>Yes, cancel it</button>
+                    <button style={{ ...BTN_GHOST, padding: "0.5rem 0.9rem" }} disabled={busy} onClick={() => setConfirmCancel(false)}>Never mind</button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -816,14 +873,27 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
               {(detail.choices || []).map(c => {
                 const max = detail.event.max_selections || (detail.choices || []).length
                 const atMax = detail.event.vote_mode !== "single" && selected.length >= max && !selected.includes(c.id)
+                // Round-5 review, item 1: "I can still vote for myself even
+                // when the toggle is off for self voting." The server has
+                // always rejected this (validateSelfVote, lib/voting.js) --
+                // confirmed directly against this exact event/account via
+                // the real API before assuming otherwise. The actual gap
+                // was purely client-side: nothing here ever disabled or
+                // even flagged a self-candidate choice, so the block only
+                // ever surfaced as a late, confusing error after Cast,
+                // never as something visible at the moment of choosing.
+                const isSelfBlocked = detail.event.allow_self_vote === false && c.candidate_member_id && c.candidate_member_id === member?.id
                 return (
-                  <label key={c.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0", borderBottom: "1px solid var(--border)", opacity: atMax ? 0.5 : 1 }}>
+                  <label key={c.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0", borderBottom: "1px solid var(--border)", opacity: (atMax || isSelfBlocked) ? 0.5 : 1 }}>
                     <input
                       type={detail.event.vote_mode === "single" ? "radio" : "checkbox"}
-                      name="voting-choice" checked={selected.includes(c.id)} disabled={atMax}
+                      name="voting-choice" checked={selected.includes(c.id)} disabled={atMax || isSelfBlocked}
                       onChange={() => toggleChoice(c.id)}
                     />
-                    {c.label}
+                    <span>
+                      {c.label}
+                      {isSelfBlocked && <span style={{ marginLeft: "0.4rem", fontSize: "0.72rem", color: "var(--text-dim)", fontStyle: "italic" }}>(you can't vote for yourself in this ballot)</span>}
+                    </span>
                   </label>
                 )
               })}
