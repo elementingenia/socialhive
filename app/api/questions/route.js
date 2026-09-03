@@ -28,13 +28,15 @@ async function enrich(rows, viewer) {
   const askerIds = [...new Set(rows.map(r => r.asker_member_id))]
   const clubIds  = [...new Set(rows.filter(r => r.context_type === "club").map(r => r.context_key))]
   const eventIds = [...new Set(rows.filter(r => r.context_type === "event").map(r => r.context_key))]
+  const votingIds = [...new Set(rows.filter(r => r.context_type === "voting_event").map(r => r.context_key))]
   const catIds   = [...new Set(rows.filter(r => r.context_type === "category").map(r => r.context_key))]
   const qIds     = rows.map(r => r.id)
 
-  const [{ data: askers }, { data: clubs }, { data: events }, { data: cats }, { data: replies }] = await Promise.all([
+  const [{ data: askers }, { data: clubs }, { data: events }, { data: votingEvents }, { data: cats }, { data: replies }] = await Promise.all([
     supabaseAdmin.from("members").select("id, name, display_name, hide_name").in("id", askerIds),
     clubIds.length  ? supabaseAdmin.from("clubs").select("id, name").in("id", clubIds)       : Promise.resolve({ data: [] }),
     eventIds.length ? supabaseAdmin.from("events").select("id, title").in("id", eventIds)     : Promise.resolve({ data: [] }),
+    votingIds.length ? supabaseAdmin.from("voting_events").select("id, title").in("id", votingIds) : Promise.resolve({ data: [] }),
     catIds.length   ? supabaseAdmin.from("contact_categories").select("id, name").in("id", catIds) : Promise.resolve({ data: [] }),
     supabaseAdmin.from("question_replies").select("question_id, created_at").in("question_id", qIds),
   ])
@@ -43,6 +45,7 @@ async function enrich(rows, viewer) {
   ]))
   const clubName  = Object.fromEntries((clubs  || []).map(c => [c.id, c.name]))
   const eventName = Object.fromEntries((events || []).map(e => [e.id, e.title]))
+  const votingEventName = Object.fromEntries((votingEvents || []).map(e => [e.id, e.title]))
   const catName   = Object.fromEntries((cats   || []).map(c => [String(c.id), c.name]))
   const replyAgg  = {}
   for (const r of replies || []) {
@@ -57,6 +60,7 @@ async function enrich(rows, viewer) {
     r.context_type === "hub"     ? (HUB_LABELS[r.context_key] || "a hub") :
     r.context_type === "club"    ? (clubName[r.context_key] || "a group/club") :
     r.context_type === "event"   ? (eventName[r.context_key] || "an event") :
+    r.context_type === "voting_event" ? (votingEventName[r.context_key] || "a vote") :
     r.context_type === "category"? (catName[r.context_key] || "a contact group") : "the Hive"
 
   return rows.map(r => ({
@@ -102,7 +106,7 @@ export async function POST(req) {
   if (!member) return NextResponse.json({ error: "Unauthorised" }, { status: 401 })
 
   const { context_type, context_key, subject, body } = await req.json()
-  if (!["general", "hub", "club", "event", "category"].includes(context_type))
+  if (!["general", "hub", "club", "event", "category", "voting_event"].includes(context_type))
     return NextResponse.json({ error: "Invalid context" }, { status: 400 })
   if (context_type !== "general" && !context_key)
     return NextResponse.json({ error: "Missing context" }, { status: 400 })
