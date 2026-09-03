@@ -61,15 +61,23 @@ function fmtClosesAt(iso) {
 // action -- it adds no new server-side data, doesn't touch the anonymous
 // ballot table, and doesn't survive a different browser/device (same as
 // nothing else in this app does either).
-function myChoiceKey(eventId) { return `voting_myChoice_${eventId}` }
-function loadMyChoice(eventId) {
+// Scoped by BOTH event id and member id -- a shared device/browser (e.g.
+// a couple sharing one tablet) must never show one resident's "you voted"
+// confirmation to another resident who hasn't voted. Bug found live-fire
+// 2026-09-03: keying by event id alone let a second account signed into
+// the same browser see the first account's confirmation and choice
+// labels. memberId is required; callers must have a logged-in member.
+function myChoiceKey(eventId, memberId) { return `voting_myChoice_${eventId}_${memberId}` }
+function loadMyChoice(eventId, memberId) {
+  if (!memberId) return null
   try {
-    const raw = localStorage.getItem(myChoiceKey(eventId))
+    const raw = localStorage.getItem(myChoiceKey(eventId, memberId))
     return raw ? JSON.parse(raw) : null
   } catch { return null }
 }
-function saveMyChoice(eventId, labels) {
-  try { localStorage.setItem(myChoiceKey(eventId), JSON.stringify(labels)) } catch { /* ignore */ }
+function saveMyChoice(eventId, memberId, labels) {
+  if (!memberId) return
+  try { localStorage.setItem(myChoiceKey(eventId, memberId), JSON.stringify(labels)) } catch { /* ignore */ }
 }
 
 // Iain, 2026-09-03 round-4 review: "There is no obvious way to close the
@@ -547,7 +555,7 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
   // session echo of the choices just picked, never something re-fetched
   // after a reload. Set once, right after a successful cast; stays sticky
   // for the rest of this page view.
-  const [justVoted, setJustVoted] = useState(() => loadMyChoice(event.id))
+  const [justVoted, setJustVoted] = useState(() => loadMyChoice(event.id, member?.id))
 
   async function loadDetail() {
     const res = await authedFetch(`/api/voting/${event.id}`)
@@ -646,7 +654,7 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
     // voted for instead of a generic "recorded".
     const labels = (detail?.choices || []).filter(c => selected.includes(c.id)).map(c => c.label)
     setJustVoted(labels)
-    saveMyChoice(event.id, labels)
+    saveMyChoice(event.id, member?.id, labels)
     loadDetail(); onChanged()
   }
 
