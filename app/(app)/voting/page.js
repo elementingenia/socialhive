@@ -720,44 +720,66 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
         <div style={{ cursor: "pointer", flex: "1 1 auto", minWidth: 0 }} onClick={() => setExpanded(v => !v)}>
           <div style={{ fontWeight: 700, fontSize: "1rem", lineHeight: 1.2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{event.title}</div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.35rem" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            {/* Status pill -- deliberately neutral-bordered Edit next to a
-                colour-bordered status pill (round-5 item 3: the two used to
-                share the same hub-coloured outline style, so "Open" read as
-                a second, dead-looking button rather than plain status text.
-                Matches Social's Edit convention -- neutral surface/border,
-                not hub-coloured -- so the coloured pill is unambiguously
-                status, never an action). */}
-            {canManageThis && (event.status === "draft" || event.status === "open") && (
-              <button
-                style={{
-                  background: "var(--surface2)", border: "1px solid var(--border)",
-                  borderRadius: "8px", padding: "0.2rem 0.6rem", fontSize: "0.72rem", fontWeight: 700,
-                  cursor: "pointer", color: "var(--text-dim)", fontFamily: "inherit",
-                }}
-                onClick={e => { e.stopPropagation(); setExpanded(true); setEditing(v => !v) }}
-              >
-                {editing ? "Cancel edit" : "Edit"}
-              </button>
-            )}
-            <span style={{ cursor: "pointer" }} onClick={() => setExpanded(v => !v)}>
-              <span style={{ fontSize: "0.75rem", fontWeight: 700, color: STATUS_COLOUR[event.status], border: `1px solid ${STATUS_COLOUR[event.status]}`, borderRadius: "999px", padding: "0.15rem 0.6rem" }}>
-                {STATUS_LABEL[event.status]}
-              </span>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+          {/* Status pill -- deliberately neutral-bordered Edit next to a
+              colour-bordered status pill (round-5 item 3: the two used to
+              share the same hub-coloured outline style, so "Open" read as
+              a second, dead-looking button rather than plain status text.
+              Matches Social's Edit convention -- neutral surface/border,
+              not hub-coloured -- so the coloured pill is unambiguously
+              status, never an action). */}
+          {canManageThis && (event.status === "draft" || event.status === "open") && (
+            <button
+              style={{
+                background: "var(--surface2)", border: "1px solid var(--border)",
+                borderRadius: "8px", padding: "0.2rem 0.6rem", fontSize: "0.72rem", fontWeight: 700,
+                cursor: "pointer", color: "var(--text-dim)", fontFamily: "inherit",
+              }}
+              onClick={e => { e.stopPropagation(); setExpanded(true); setEditing(v => !v) }}
+            >
+              {editing ? "Cancel edit" : "Edit"}
+            </button>
+          )}
+          <span style={{ cursor: "pointer" }} onClick={() => setExpanded(v => !v)}>
+            <span style={{ fontSize: "0.75rem", fontWeight: 700, color: STATUS_COLOUR[event.status], border: `1px solid ${STATUS_COLOUR[event.status]}`, borderRadius: "999px", padding: "0.15rem 0.6rem" }}>
+              {STATUS_LABEL[event.status]}
             </span>
+          </span>
+        </div>
+      </div>
+
+      {/* Coordinator + "Close this vote now" -- Iain, round-8: "Coordinator
+          on same line as Close this vote pill." Both are optional and
+          independent (a Draft event has no Close button; an event with no
+          coordinator assigned has no coordinator line), so this row only
+          renders when at least one of them applies, and each side is free
+          to be absent without breaking the row's spacing. Coordinator name
+          is bold/hub-coloured/clickable-to-ask via the same EventCoordinators
+          component every other hub/club tile uses, but with
+          contextType="voting_event" (migration 093 + lib/questionRouting.js)
+          rather than the default "event" -- a voting event lives in its own
+          voting_events table, never the shared events table, so reusing
+          "event" would silently misroute the question to every admin
+          instead of this event's real coordinator/Voting hub Owner. See
+          migration 093's own comment for the full reasoning. */}
+      {(event.coordinatorName || (event.status === "open" && canManageThis)) && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.2rem" }}>
+          <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+            {event.coordinatorName && (
+              <EventCoordinators
+                contextType="voting_event"
+                eventId={event.id}
+                eventTitle={event.title}
+                names={[event.coordinatorName]}
+                colour="var(--voting)"
+              />
+            )}
           </div>
-          {/* Iain, 2026-09-03 round-7: "Close this vote should go Under
-              Edit and Open Pills" -- hoisted out of the expanded-detail
-              block below (it never actually needed `detail` -- canManageThis
-              already falls back to the canManageEvent prop and doClose()
-              doesn't read `detail` either) so it sits directly under the
-              Edit/status row regardless of expand state. */}
           {event.status === "open" && canManageThis && (
             !confirmClose ? (
-              <button style={{ ...BTN_GHOST, padding: "0.2rem 0.6rem", fontSize: "0.72rem" }} disabled={busy} onClick={e => { e.stopPropagation(); setConfirmClose(true) }}>Close this vote now</button>
+              <button style={{ ...BTN_GHOST, padding: "0.2rem 0.6rem", fontSize: "0.72rem", flex: "0 0 auto" }} disabled={busy} onClick={e => { e.stopPropagation(); setConfirmClose(true) }}>Close this vote now</button>
             ) : (
-              <div style={{ background: "var(--amber-light)", borderLeft: "3px solid var(--amber)", borderRadius: "8px", padding: "0.5rem", fontSize: "0.78rem", maxWidth: 220 }} onClick={e => e.stopPropagation()}>
+              <div style={{ background: "var(--amber-light)", borderLeft: "3px solid var(--amber)", borderRadius: "8px", padding: "0.5rem", fontSize: "0.78rem", maxWidth: 220, flex: "0 0 auto" }} onClick={e => e.stopPropagation()}>
                 <div style={{ marginBottom: "0.4rem" }}>Close voting now, ahead of its scheduled closing time? This can't be undone.</div>
                 <div style={{ display: "flex", gap: "0.4rem" }}>
                   <button style={{ ...BTN_PRIMARY, background: "var(--terracotta)", width: "auto", padding: "0.35rem 0.7rem", fontSize: "0.75rem" }} disabled={busy} onClick={doClose}>Yes, close it</button>
@@ -767,29 +789,6 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
             )
           )}
         </div>
-      </div>
-
-      {/* Coordinator -- Iain, round-7: "Coordinator name is supposed to be
-          in BOLD and in the colour of the HUB. It is clickable so users can
-          ask a question of the coordinator/s." Reuses the same
-          EventCoordinators component every other hub/club tile already
-          uses for this exact bold+hub-colour+clickable-ask pattern, but
-          with contextType="voting_event" (migration 093 + lib/
-          questionRouting.js) rather than the default "event" -- a voting
-          event lives in its own voting_events table, never the shared
-          events table, so reusing "event" would silently misroute the
-          question to every admin instead of this event's real
-          coordinator/Voting hub Owner. See migration 093's own comment for
-          the full reasoning. */}
-      {event.coordinatorName && (
-        <EventCoordinators
-          contextType="voting_event"
-          eventId={event.id}
-          eventTitle={event.title}
-          names={[event.coordinatorName]}
-          colour="var(--voting)"
-          style={{ marginTop: "0.2rem" }}
-        />
       )}
 
       {/* Description -- shown once, here, regardless of expand/collapse
@@ -804,48 +803,38 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
         </div>
       )}
 
-      {/* Votes cast + "You have voted" -- round-5 item 6 (always-visible
-          count) combined with round-6's request to match the reference
-          mockup, which shows both on one row rather than the confirmation
-          living only in the expanded detail view. justVoted comes from
-          localStorage (see its declaration below) so this needs no expand/
-          detail fetch to show -- same reasoning as item 1's original fix,
-          just moved up onto the collapsed tile itself. event.votesCast is
+      {/* Votes cast + closing date (left, stacked) paired with "You have
+          voted" + chosen option labels (right, stacked) -- Iain, round-8:
+          merged what round-5/round-7 had as two separate rows into one
+          two-column block per his screenshot, and moved the chosen-option
+          labels from green to grey (var(--text-dim), the same secondary-
+          text colour used for the count/date on the left) since only the
+          "✓ You have voted" line itself should carry the green
+          confirmation colour, not the labels underneath it. justVoted
+          comes from localStorage (member-scoped, see BUG-042's fix) so
+          this needs no expand/detail fetch to show. event.votesCast is
           null when the viewer isn't permitted to see it or the event is
-          still Draft -- render just the "You have voted" side in that case
-          rather than a misleading "0 votes cast". */}
-      {(event.votesCast !== null && event.votesCast !== undefined) || justVoted ? (
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.4rem", fontSize: "0.78rem", marginTop: "0.15rem" }}>
-          <span style={{ color: "var(--text-dim)" }}>
-            {event.votesCast !== null && event.votesCast !== undefined ? `${event.votesCast} vote${event.votesCast === 1 ? "" : "s"} cast` : ""}
-          </span>
-          {justVoted && <span style={{ color: "#16a34a", fontWeight: 700 }}>✓ You have voted</span>}
-        </div>
-      ) : null}
-
-      {/* Closing date -- round-5 item 7: "should also display when in
-          closed state," not just while the vote is still open. Worded
-          past/future tense to match. Round-7: paired with the voter's own
-          chosen option labels on the right (stacked, per Iain's screenshot)
-          when known -- justVoted only holds a value for the account that
-          actually cast the vote, this session or a later reload via the
-          member-scoped localStorage key (see BUG-042's fix above), never
-          anyone else's, since ballots are structurally anonymous
-          server-side. This replaces the separate "You voted for: X, Y."
-          sentence that used to live only in the expanded detail view --
-          consolidated here so it isn't shown twice. */}
-      {(closesLabel || (justVoted && justVoted.length > 0)) && (
+          still Draft; closesLabel covers both "should also display when
+          in closed state" (round-5 item 7, worded past/future tense) and
+          the open case. */}
+      {(event.votesCast !== null && event.votesCast !== undefined) || closesLabel || justVoted ? (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.4rem", fontSize: "0.78rem", marginTop: "0.15rem" }}>
-          <span style={{ color: "var(--text-dim)" }}>
-            {closesLabel ? (isClosedOrPublished ? `Closed ${closesLabel}` : `Closes ${closesLabel}`) : ""}
-          </span>
-          {justVoted && justVoted.length > 0 && (
-            <div style={{ textAlign: "right", color: "#16a34a", fontWeight: 600 }}>
-              {justVoted.map((label, i) => <div key={i}>{label}</div>)}
+          <div style={{ color: "var(--text-dim)" }}>
+            {event.votesCast !== null && event.votesCast !== undefined && (
+              <div>{event.votesCast} vote{event.votesCast === 1 ? "" : "s"} cast</div>
+            )}
+            {closesLabel && (
+              <div>{isClosedOrPublished ? `Closed ${closesLabel}` : `Closes ${closesLabel}`}</div>
+            )}
+          </div>
+          {justVoted && (
+            <div style={{ textAlign: "right" }}>
+              <div style={{ color: "#16a34a", fontWeight: 700 }}>✓ You have voted</div>
+              {justVoted.length > 0 && justVoted.map((label, i) => <div key={i} style={{ color: "var(--text-dim)" }}>{label}</div>)}
             </div>
           )}
         </div>
-      )}
+      ) : null}
 
       {expanded && detail && editing && (
         <EditEventForm
