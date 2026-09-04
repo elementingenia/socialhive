@@ -2495,8 +2495,13 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
                 style={{ height: 160, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }} />
             </div>
           )}
-          {/* Social event image */}
-          {(event.hub_type === "social" || event.club) && event.image_url && (
+          {/* Social/Special event image -- 'special' added 2026-09-04: this
+              picker was cloned from Social's event form but the display side
+              was never widened to match (same class of gap as canCarryImage
+              in app/api/events/image/route.js), so an uploaded image saved
+              fine but never rendered in the booking view -- Iain, 2026-09-04:
+              "the image for the Event is not showing in the booking form". */}
+          {(event.hub_type === "social" || event.hub_type === "special" || event.club) && event.image_url && (
             <img src={event.image_url} alt={event.title}
               style={{
                 width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 12, marginBottom: 14,
@@ -2584,8 +2589,13 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
                 </div>
               )}
 
-              {/* Social */}
-              {event.hub_type === "social" && (
+              {/* Social/Special -- 'special' added 2026-09-04, same gap as the
+                  image above: Menu/View Details was never shown for Special
+                  Events even though has_dining/menu_type/menu_url all work
+                  identically -- Iain: "I should see the uploaded document in
+                  the same way I see that in the Social page - the option is
+                  not appearing". */}
+              {(event.hub_type === "social" || event.hub_type === "special") && (
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                     <div style={{ display: "inline-block", padding: "4px 12px",

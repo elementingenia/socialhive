@@ -23,12 +23,25 @@ async function getAdminOrEC(token, eventId) {
   if (!member) return { forbidden: true, reason: "No resident account is linked to this login." }
   if (member.is_admin) return member
 
+  // event_coordinators is a HISTORY table -- a coordinator swap doesn't
+  // delete the old row, it stamps replaced_at on it and inserts a new one
+  // (see event_coordinators.replaced_at/.replaced_by). This query used to
+  // have no replaced_at filter and used .single(), which requires EXACTLY
+  // one matching row -- so any event with more than one past coordinator
+  // (a swap, a re-assignment) had multiple (event_id, member_id) rows and
+  // .single() errored, silently turning a real, CURRENT coordinator into a
+  // false "forbidden". Confirmed 2026-09-04: Scampi is Test Event's actual
+  // active coordinator but had 5 historical event_coordinators rows, only
+  // the most recent with replaced_at IS NULL -- admin worked (it never
+  // reaches this query) while Scampi, the real EC, was blocked. Matches the
+  // canonical pattern in lib/areaAuth.js's requireEventManage().
   const { data: ec } = await supa
     .from("event_coordinators")
     .select("id")
     .eq("event_id", eventId)
     .eq("member_id", member.id)
-    .single()
+    .is("replaced_at", null)
+    .maybeSingle()
   return ec ? member : { forbidden: true, reason: "You're not an admin or coordinator for this event." }
 }
 
