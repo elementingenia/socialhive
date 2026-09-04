@@ -254,6 +254,28 @@ export function SpecialEventsIcon({ size = 26 }) {
   )
 }
 
+// Calendar with a star badge -- Occasional Activities (2026-09-04). Admin's
+// single discovery entry point for hidden-by-default, occasional-use hubs
+// (Voting, Special Events, and any future one of the same shape) -- Iain,
+// 2026-09-04: "change the Voting option in Admin to Occasional Activities
+// and have voting and special events housed together." A genuinely new
+// concept (a meta-hub of toggleable features, not a hub itself), so a new
+// icon is correct per the "reuse the canonical asset" rule -- not a reuse
+// of VotingIcon or SpecialEventsIcon, since this represents neither hub on
+// its own.
+export function OccasionalActivitiesIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 10 12 C 10 9.8 11.8 8 14 8 L 56 8 C 58.2 8 60 9.8 60 12 L 60 58 C 60 60.2 58.2 62 56 62 L 14 62 C 11.8 62 10 60.2 10 58 Z
+           M 16 24 L 54 24 L 54 56 L 16 56 Z
+           M 22 2 L 22 14 L 28 14 L 28 2 Z
+           M 42 2 L 42 14 L 48 14 L 48 2 Z
+           M 35 29 L 38.5 38 L 48 38.5 L 40.5 44.5 L 43 54 L 35 48.5 L 27 54 L 29.5 44.5 L 22 38.5 L 31.5 38 Z"/>
+    </svg>
+  )
+}
+
 // ── Useful Information hub icons ─────────────────────────────────────────────
 
 // Info circle with "i" — hub nav icon
