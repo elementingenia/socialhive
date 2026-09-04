@@ -834,6 +834,13 @@ export default function HelpGuidePage() {
                 resident who's followed Show Time, A–Z — collapse it again the same way. Nobody else
                 sees this count or list.
               </Step>
+              <Step>
+                Adding a walk-up booking or using <strong>Modify Seats</strong> on someone's booking
+                here is not held to the resident-facing per-booking seat limit — as the event's
+                admin/Owner/coordinator, you can bring in as many seats as you need, up to the
+                event's Total Seats. Residents self-booking through the app still get the normal
+                per-booking cap.
+              </Step>
             </Subsection>
           </Section>
 
@@ -957,6 +964,13 @@ export default function HelpGuidePage() {
                 <strong>✓ Refunds Issued</strong> below. An overpayment refund (from the amount
                 recorded above) appears in the same Refunds Due list, whether or not the booking was
                 ever cancelled.
+              </Step>
+              <Step>
+                Adding a walk-up booking or using <strong>Modify Seats</strong> on someone's booking
+                here is not held to the resident-facing per-booking seat limit — as the event's
+                admin/Owner/coordinator, you can bring in as many seats as you need, up to the
+                event's Total Seats. Residents self-booking through the app still get the normal
+                per-booking cap.
               </Step>
             </Subsection>
           </Section>
@@ -1088,6 +1102,13 @@ export default function HelpGuidePage() {
               <Step>
                 On a bus-enabled event, a 🚌 marker and running seat count show exactly who's riding —
                 the same passenger-list view Social's Coordinator panel has.
+              </Step>
+              <Step>
+                Adding a walk-up booking or using <strong>Modify Seats</strong> on someone's booking
+                here is not held to the resident-facing per-booking seat limit — as the event's
+                admin/Owner/coordinator, you can bring in as many seats as you need, up to the
+                event's Total Seats. Residents self-booking through the app still get the normal
+                per-booking cap.
               </Step>
             </Subsection>
           </Section>
@@ -1372,6 +1393,12 @@ export default function HelpGuidePage() {
                 automatically once that date/time passes; nobody needs to do anything for that part.
               </Step>
               <Step>
+                Tapping <strong>Open this vote</strong> sends every active resident a notification
+                (and a phone alert, if they've enabled those) letting them know voting is open and
+                when it closes — there's no separate "announce this" step. Nothing is sent while
+                the vote is still a Draft.
+              </Step>
+              <Step>
                 Once closed, review the vote before publishing — for a per-household vote, the app
                 flags any household that recorded more than one vote so you can check it before
                 results go out. Tap <strong>Publish results</strong> once you're satisfied.
@@ -1422,6 +1449,13 @@ export default function HelpGuidePage() {
                 event's edit form; it counts against the event's Total Seats the same as any named
                 booking does, but doesn't appear anywhere in the attendee list since it isn't tied
                 to a resident or contact.
+              </Step>
+              <Step>
+                Adding a walk-up booking or using <strong>Modify Seats</strong> on someone's booking
+                here is not held to the resident-facing per-booking seat limit — as the event's
+                admin/Owner/coordinator, you can bring in as many seats as you need, up to the
+                event's Total Seats. Residents self-booking through the app still get the normal
+                per-booking cap.
               </Step>
             </Subsection>
           </Section>

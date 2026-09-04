@@ -6,7 +6,7 @@ import { validateParty } from "@/lib/attendees"
 import { bookingsClosed } from "@/lib/booking"
 import { fetchTakenResidentIds } from "@/lib/takenResidents"
 import { syncAttendees } from "@/lib/syncAttendees"
-import { maxSeatsPerBooking, planSeatModification } from "@/lib/modifyBooking"
+import { effectiveSeatCap, planSeatModification } from "@/lib/modifyBooking"
 import { requireEventManage } from "@/lib/areaAuth"
 import { amountOwing, derivePaymentStatus, paymentReminderPhrase } from "@/lib/payments"
 
@@ -432,8 +432,13 @@ export async function PATCH(req) {
     if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
 
     // Cap reads the event's own max_seats_per_booking instead of a
-    // hardcoded 4 (2026-08-08) -- see lib/modifyBooking.js.
-    const seats = Math.min(maxSeatsPerBooking(ev), Math.max(1, parseInt(rawSeats) || 1))
+    // hardcoded 4 (2026-08-08) -- see lib/modifyBooking.js. Widened
+    // 2026-09-04 to the event's Total Seats (not the per-booking cap) --
+    // this whole action is only reachable by admin/Owner/EC (resolveEC
+    // above), and an EC bringing a walk-up party is exactly the case
+    // Iain asked to exempt from the per-booking limit, capped only by
+    // how many seats the event actually has.
+    const seats = Math.min(effectiveSeatCap(ev, { unlimitedCap: true }), Math.max(1, parseInt(rawSeats) || 1))
 
     // Named party for this walk-up booking (2026-07-23), same identity rules
     // as self-service naming -- a resident (member or contact) or, only if
@@ -600,10 +605,12 @@ export async function PATCH(req) {
       .eq("event_id", event_id).eq("status", "confirmed").neq("id", myConfirmed.id)
     const othersConfirmed = (confirmedRows || []).reduce((s, b) => s + (b.seats || 1), 0)
 
+    // unlimitedCap: true -- same reasoning as add_booking above, this
+    // action is admin/Owner/EC only.
     const plan = planSeatModification({
       event: ev, requestedSeats: rawSeats,
       oldConfirmed: myConfirmed.seats || 1, oldWaitlisted: myWaitlist?.seats || 0,
-      othersConfirmed, closed: bookingsClosed(ev),
+      othersConfirmed, closed: bookingsClosed(ev), unlimitedCap: true,
     })
     if (!plan.ok) {
       return NextResponse.json({ error: plan.error, ...(plan.code === "bookings_closed" ? { bookings_closed: true } : {}) }, { status: 409 })
