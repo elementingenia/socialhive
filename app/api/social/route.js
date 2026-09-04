@@ -142,7 +142,7 @@ export async function POST(req) {
   // (Iain 2026-07-18). Amendments still notify only attendees (see PATCH).
   const when = body.event_date ? new Date(body.event_date + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" }) : ""
   await notifyAllActiveMembers(supabaseAdmin, event.id, "event_added",
-    `New Social event: ${body.title.trim()}${when ? ` — ${when}` : ""}`, { excludeMemberId: member.id })
+    `New Social Hive event: ${body.title.trim()}${when ? ` — ${when}` : ""}`, { excludeMemberId: member.id })
 
   return NextResponse.json({ ok: true, id: event.id })
 }
@@ -172,7 +172,7 @@ export async function PATCH(req) {
     const { error } = await supabaseAdmin.from('events').update({ archived: true }).eq('id', body.id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     await notifyEventAttendees(supabaseAdmin, body.id, 'event_cancelled',
-      `${ev.title || 'A Social event you booked'} has been cancelled.`)
+      `${ev.title || 'A Social Hive event you booked'} has been cancelled.`)
     return NextResponse.json({ ok: true })
   }
 

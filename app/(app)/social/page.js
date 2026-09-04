@@ -109,7 +109,7 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
         boxShadow: "var(--shadow)", marginBottom: "1.25rem",
       }}>
         <div style={{ background: COLOUR, padding: "0.6rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.85rem" }}>Next Social Event</span>
+          <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.85rem" }}>Next Social Hive Event</span>
         </div>
         <div style={{ padding: "1.25rem 1rem", textAlign: "center" }}>
           <div style={{ fontSize: "1.8rem", marginBottom: "0.4rem" }}>🎉</div>
@@ -146,7 +146,7 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
         background: COLOUR, padding: "0.6rem 1rem",
         display: "flex", justifyContent: "space-between", alignItems: "center",
       }}>
-        <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.85rem" }}>Next Social Event</span>
+        <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.85rem" }}>Next Social Hive Event</span>
         <span style={{ color: "rgba(255,255,255,0.9)", fontSize: "0.78rem", fontWeight: 600 }}>{daysLabel} ›</span>
       </div>
 
@@ -453,7 +453,7 @@ export default function SocialHome() {
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
       <WelcomeBanner text={welcomeText} />
 
-      <ContactBar contextType="hub" contextKey="social" contextLabel="Social" colour="var(--terracotta)" style={{ margin: "-2px 0 12px" }} />
+      <ContactBar contextType="hub" contextKey="social" contextLabel="Social Hive" colour="var(--terracotta)" style={{ margin: "-2px 0 12px" }} />
 
       {canManage && <ManageLink href="/social/manage" label="Manage Social" colour="var(--terracotta)" />}
 

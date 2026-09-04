@@ -33,7 +33,7 @@ const HUB_CONFIG = {
   social: {
     colour: "var(--terracotta)",
     items: [
-      { path: "/social",        label: "Social",    Icon: SocialIcon },
+      { path: "/social",        label: "Social Hive",    Icon: SocialIcon },
       { path: "/social/events", label: "Scheduled", Icon: CalendarIcon },
     ],
   },

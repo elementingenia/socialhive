@@ -18,7 +18,7 @@ const HUB_COLOURS = {
 }
 
 const HUB_LABELS = {
-  movie: "Show Time", bookclub: "Book Club", social: "Social",
+  movie: "Show Time", bookclub: "Book Club", social: "Social Hive",
 }
 
 // Same shape Calendar filters on (components/CalendarView.js's hubKeyOf) --
@@ -38,7 +38,7 @@ function hubKeyOf(ev) {
 // the underlying multi-toggle + dropdown interaction model has to match too).
 const HUB_TOGGLES = [
   { key: "movie",  label: "Show Time", Icon: MoviesIcon, colour: "var(--teal)" },
-  { key: "social", label: "Social",    Icon: SocialIcon, colour: "var(--terracotta)" },
+  { key: "social", label: "Social Hive",    Icon: SocialIcon, colour: "var(--terracotta)" },
 ]
 
 function fmtDate(str) {

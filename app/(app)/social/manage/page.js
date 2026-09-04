@@ -7,7 +7,7 @@ import HubTextSection from "@/components/HubTextSection"
 export default function SocialManagePage() {
   return (
     <ManageAreaScreen contextType="hub" contextKey="social" backHref="/social"
-      backLabel="Social" title="Manage Social" colour="var(--terracotta)">
+      backLabel="Social Hive" title="Manage Social Hive" colour="var(--terracotta)">
       <HubTextSection sectionKey="social" />
     </ManageAreaScreen>
   )

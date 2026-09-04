@@ -22,7 +22,7 @@ import LocationImagePicker from '@/components/LocationImagePicker'
 // ── Constants ────────────────────────────────────────────────────────────────
 const HUB_TYPES = [
   { value: 'movie',    label: 'Cinema',    icon: '🎬' },
-  { value: 'social',   label: 'Social',    icon: '🎉' },
+  { value: 'social',   label: 'Social Hive',    icon: '🎉' },
   { value: 'bookclub', label: 'Book Club', icon: '📚' },
 ]
 const HUB_COLOUR = { movie:'var(--teal)', social:'var(--terracotta)', bookclub:'var(--purple)' }
@@ -1651,7 +1651,7 @@ function ClubsTab() {
 // project's existing "one source of truth per field" lesson).
 const EVENT_HUB_META = {
   movie:    { label: 'Show Time',      colour: 'var(--teal)',       Icon: MoviesIcon },
-  social:   { label: 'Social',         colour: 'var(--terracotta)', Icon: SocialIcon },
+  social:   { label: 'Social Hive',         colour: 'var(--terracotta)', Icon: SocialIcon },
   bookclub: { label: 'Book Club',      colour: 'var(--purple)',     Icon: BookClubIcon },
   club:     { label: 'Groups & Clubs', colour: 'var(--purple)',     Icon: ClubsIcon },
 }
@@ -1917,7 +1917,7 @@ function SpaceBookingsTab() {
   return (
     <div>
       <div style={{ fontSize: '0.85rem', color: 'var(--text-dim)', marginBottom: '1rem' }}>
-        Every room booking across the app — Show Time, Social, and Groups &amp; Clubs events, plus
+        Every room booking across the app — Show Time, Social Hive, and Groups &amp; Clubs events, plus
         resident personal space bookings — in one place. Event bookings are managed from their own
         hub; cancelling a personal booking here notifies the resident.
       </div>

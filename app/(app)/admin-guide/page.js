@@ -48,7 +48,7 @@ const RAW_SECTIONS = [
     id: "pagetexts", num: 2, title: "Page Texts — Wording Across the App",
     subs: [
       { title: "Happenings Home — the Main & Sub Notices", id: "sub-pt-home" },
-      { title: "Show Time, Social & Library wording", id: "sub-pt-other" },
+      { title: "Show Time, Social Hive & Library wording", id: "sub-pt-other" },
       { title: "Loan caps — what happens at the limit", id: "sub-pt-loancap" },
     ],
   },
@@ -428,11 +428,11 @@ export default function AdminGuidePage() {
                 orange fill) for better readability without losing the Happenings Home colour identity.
               </Step>
             </Subsection>
-            <Subsection id="sub-pt-other" title="Show Time, Social & Library wording">
+            <Subsection id="sub-pt-other" title="Show Time, Social Hive & Library wording">
               <Step>
                 The same Page Texts screen has a section for every other editable area of wording:{" "}
                 <strong>Show Time Home</strong> (welcome message), <strong>Show Time — Suggestions</strong>,{" "}
-                <strong>Show Time — DVD Library</strong>, <strong>Social Events</strong>, <strong>Library
+                <strong>Show Time — DVD Library</strong>, <strong>Social Hive</strong>, <strong>Library
                 Home</strong>, and <strong>Library — Books</strong>. Each is an independent block with its
                 own Save button — editing and saving one has zero effect on the others.
               </Step>
@@ -613,7 +613,7 @@ export default function AdminGuidePage() {
                 ⚠ There is no "post a club notice" control inside this Admin panel. Each club's{" "}
                 <strong>📣 Post notice</strong> button is on that club's own page (Groups & Clubs → the
                 club → Post notice), usable by that club's assigned Owner or an app admin. Posting there
-                fires a notification to everyone who has joined that specific club — nobody else. Social
+                fires a notification to everyone who has joined that specific club — nobody else. Social Hive
                 has no equivalent — this is Groups/Clubs only. See Section 11 for how this differs from the
                 Home banner in Section 2.
               </WarnBox>
@@ -623,7 +623,7 @@ export default function AdminGuidePage() {
           <Section id="owners" num={6} title="Owners — Who Gets Each Hub's Questions">
             <Subsection id="sub-owners-how" title="What assigning an Owner actually routes">
               <Step>
-                This screen assigns Owners separately for <strong>Show Time</strong>, <strong>Social</strong>,
+                This screen assigns Owners separately for <strong>Show Time</strong>, <strong>Social Hive</strong>,
                 and <strong>Library</strong> (Groups & Clubs owners are assigned per-club on each club's own
                 edit form instead, in Section 5). Every resident listed as an Owner for a hub receives{" "}
                 <strong>every question asked on that hub's page</strong>, and is shown as its contact. You
@@ -697,7 +697,7 @@ export default function AdminGuidePage() {
                 not a request sent anywhere for someone else to act on.
               </Step>
               <Step>
-                <strong>An admin, EC, or club Owner creating a community event</strong> (Show Time, Social,
+                <strong>An admin, EC, or club Owner creating a community event</strong> (Show Time, Social Hive,
                 or a club) in a Request Only venue — no checkbox, no block. The event is created
                 immediately, and the creator gets a reminder notification afterward to go confirm with
                 Ingenia. They're trusted to have already sorted it or to sort it promptly.
@@ -903,7 +903,7 @@ export default function AdminGuidePage() {
               <Step>
                 <strong>2. Group/Club notices</strong> — scoped to one Group/Club, posted from{" "}
                 <strong>that club's own page</strong> (not from Admin), notifying everyone who's joined
-                it. Usable by that club's Owner or an app admin. No equivalent exists for Social.
+                it. Usable by that club's Owner or an app admin. No equivalent exists for Social Hive.
               </Step>
               <InfoBox>
                 💡 There is no third, general-purpose "notices" screen anywhere in Admin — if you spot one

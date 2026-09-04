@@ -78,9 +78,9 @@ const RAW_SECTIONS = [
     ],
   },
   {
-    id: "social", num: 4, title: "Social Events — Community Activities & Trips",
+    id: "social", num: 4, title: "Social Hive — Community Activities & Trips",
     subs: [
-      { title: "Social hub home",              id: "sub-social-home" },
+      { title: "Social Hive hub home",         id: "sub-social-home" },
       { title: "Viewing and booking events",   id: "sub-social-events" },
       { title: "Event detail & booking",       id: "sub-social-detail" },
       { title: "Riding the Community Bus",     id: "sub-social-bus" },
@@ -570,7 +570,7 @@ export default function HelpGuidePage() {
               </Step>
               <Step>
                 <strong>Centre — Current page name.</strong> This tells you which section of the app you
-                are in — for example "Show Time", "Social Events", "Calendar", or "My Bookings". It updates
+                are in — for example "Show Time", "Social Hive", "Calendar", or "My Bookings". It updates
                 automatically as you move around the app.
               </Step>
               <Step>
@@ -845,16 +845,16 @@ export default function HelpGuidePage() {
           </Section>
 
           {/* ── 4. SOCIAL ── */}
-          <Section id="social" num={secNum("social")} title="Social Events — Community Activities & Trips">
-            <Subsection id="sub-social-home" title="Social hub home">
+          <Section id="social" num={secNum("social")} title="Social Hive — Community Activities & Trips">
+            <Subsection id="sub-social-home" title="Social Hive hub home">
               <Step img={IMG("11-social.png")} alt="Social hub home">
-                The Social hub is your home for community activities — dinners, day trips, outings,
+                The Social Hive hub is your home for community activities — dinners, day trips, outings,
                 themed evenings, and more. The layout mirrors the Show Time Home: a <strong>Next Social
-                Event</strong> card at the top (terracotta header) with the nearest upcoming event,
+                Hive Event</strong> card at the top (terracotta header) with the nearest upcoming event,
                 followed by a <strong>My Bookings</strong> card for your social reservations.
               </Step>
               <Step>
-                The Next Social Event card shows title, date, time, location, description, coordinator
+                The Next Social Hive Event card shows title, date, time, location, description, coordinator
                 name, seat availability, and a cost chip if the event has a per-person price. A bus
                 icon and driver name appear if transport is available. <strong>Tap the card</strong> to
                 open the full booking panel.
@@ -863,7 +863,7 @@ export default function HelpGuidePage() {
 
             <Subsection id="sub-social-events" title="Viewing and booking events">
               <Step img={IMG("12-social-events.png")} alt="Social events list">
-                Tap <strong>Scheduled</strong> from the Social hub to see all upcoming social events.
+                Tap <strong>Scheduled</strong> from the Social Hive hub to see all upcoming social events.
                 Each card shows the event title, date and time, location, cost, and seat availability.
                 Tap any card to open the event detail panel.
               </Step>
@@ -915,7 +915,7 @@ export default function HelpGuidePage() {
                 left of their name.
               </Step>
               <InfoBox>
-                💡 If Social has an assigned <strong>Owner</strong>, they get this same Coordinator
+                💡 If Social Hive has an assigned <strong>Owner</strong>, they get this same Coordinator
                 view on every social event — not just the ones they're personally listed as
                 coordinator for.
               </InfoBox>
@@ -1001,14 +1001,14 @@ export default function HelpGuidePage() {
                 Below that, upcoming meetings or activities are listed as cards — the next date first,
                 with any further dates for a recurring club (like weekly Cards) tucked into an{" "}
                 <strong>Upcoming dates</strong> accordion beneath. Tap a card to open the full event
-                panel and book your place, exactly like Show Time or Social.
+                panel and book your place, exactly like Show Time or Social Hive.
               </Step>
             </Subsection>
 
             <Subsection id="sub-clubs-signup" title="Signing up for a meeting or activity">
               <Step>
                 Tap a club's event card to open the booking panel, choose your seats, and confirm —
-                the same booking flow as Social. After booking, you'll see{" "}
+                the same booking flow as Social Hive. After booking, you'll see{" "}
                 <strong>Modify Seats</strong> and <strong>Cancel Booking</strong> options.
               </Step>
             </Subsection>
@@ -1027,7 +1027,7 @@ export default function HelpGuidePage() {
             <Subsection id="sub-clubs-bus" title="Riding the Community Bus">
               <Step>
                 Offsite club activities can also offer the <strong>Community Bus</strong>, the same way
-                Social does. Tick <strong>I need a seat on the bus</strong> on the booking panel to
+                Social Hive does. Tick <strong>I need a seat on the bus</strong> on the booking panel to
                 reserve one — independent of your event booking — and, for a multi-seat booking, tick
                 the box for each named attendee who needs a seat.
               </Step>
@@ -1091,7 +1091,7 @@ export default function HelpGuidePage() {
               <InfoBox>
                 💡 An Owner doesn't need to be individually added as coordinator on every event to get
                 this access — it applies automatically to everything in their club, or their hub if
-                they own Show Time or Social instead.
+                they own Show Time or Social Hive instead.
               </InfoBox>
               <Step>
                 Next to the club's own <strong>Join</strong> button (which lets any resident opt in to
@@ -1101,7 +1101,7 @@ export default function HelpGuidePage() {
               </Step>
               <Step>
                 On a bus-enabled event, a 🚌 marker and running seat count show exactly who's riding —
-                the same passenger-list view Social's Coordinator panel has.
+                the same passenger-list view Social Hive's Coordinator panel has.
               </Step>
               <Step>
                 Adding a walk-up booking or using <strong>Modify Seats</strong> on someone's booking
@@ -1209,7 +1209,7 @@ export default function HelpGuidePage() {
           <Section id="calendar" num={secNum("calendar")} title="Community Calendar & Booking a Space">
             <Step img={IMG("17-calendar.png")} alt="Community calendar">
               The Calendar brings every upcoming community event together in one view — Show Time,
-              Social Events, and every Group & Club (including Book Club) all appear here without
+              Social Hive, and every Group & Club (including Book Club) all appear here without
               switching between sections.
             </Step>
             <Step>
@@ -1247,7 +1247,7 @@ export default function HelpGuidePage() {
             <Subsection id="sub-calendar-spacehub" title="The Space Bookings hub">
               <Step>
                 Every space booking you make — from the Calendar or from Home — also lives in its own
-                dedicated <strong>Space Bookings</strong> hub, the same way Show Time and Social have
+                dedicated <strong>Space Bookings</strong> hub, the same way Show Time and Social Hive have
                 their own Home and Scheduled pages. Reach it via the <strong>Book a Space</strong> pill
                 near the top of your Home page, which also shows your soonest upcoming shared space
                 booking (<em>"Next: [event] — [date]"</em>) once you have one.
@@ -1279,7 +1279,7 @@ export default function HelpGuidePage() {
               <Step>
                 Once shared, it behaves just like any other Hive event: it appears on the Calendar and
                 in <strong>Scheduled</strong> for everyone, and residents book a seat the same way they
-                would for a Show Time screening or Social event.
+                would for a Show Time screening or Social Hive event.
               </Step>
             </Subsection>
           </Section>
@@ -1288,7 +1288,7 @@ export default function HelpGuidePage() {
           <Section id="bookings" num={secNum("bookings")} title="My Bookings">
             <Step img={IMG("18-bookings.png")} alt="My Bookings screen">
               My Bookings shows all your current reservations across every section of the app —
-              Show Time, Social Events, and Book Club — in one place. Use the filter tabs at the top
+              Show Time, Social Hive, and Book Club — in one place. Use the filter tabs at the top
               to narrow the list. Tap any card to open the event detail panel and manage your seat.
             </Step>
 
@@ -1419,7 +1419,7 @@ export default function HelpGuidePage() {
 
             <Subsection id="sub-special-home" title="Special Events hub home">
               <Step>
-                Works the same way as Social's Home page: the next upcoming Special Event shows at
+                Works the same way as Social Hive's Home page: the next upcoming Special Event shows at
                 the top with its date, time, location and coordinator, along with a seats-remaining
                 bar. Tap it to see the full event and book your spot. Your own upcoming bookings
                 across every Special Event appear below that.
@@ -1429,7 +1429,7 @@ export default function HelpGuidePage() {
             <Subsection id="sub-special-events" title="Viewing and booking events">
               <Step>
                 Tap <strong>Scheduled</strong> from the hub home to see every upcoming Special
-                Event. Booking works exactly like Social — pick your seats, add anyone else coming
+                Event. Booking works exactly like Social Hive — pick your seats, add anyone else coming
                 with you if the event allows it, and confirm. If an event is full, you'll be offered
                 a spot on the waitlist instead.
               </Step>
@@ -1438,7 +1438,7 @@ export default function HelpGuidePage() {
             <Subsection id="sub-special-ec" title="Coordinator panel" ecOnly>
               <Step>
                 An admin, or the Event Coordinator(s) assigned to a Special Event, can create and
-                edit that event and see who's booked — the same panel Social uses. There's no
+                edit that event and see who's booked — the same panel Social Hive uses. There's no
                 separate Owner role for this hub: only admins and that event's own coordinators can
                 manage it.
               </Step>

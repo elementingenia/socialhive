@@ -106,7 +106,7 @@ function endDisabledSlotsFor(startTime, busySlots, busyIntervals) {
 // Same hub-label convention Admin's room-usage view uses (EVENT_HUB_META in
 // app/(app)/admin/page.js) — kept as its own small copy here rather than a
 // shared import, since this file only needs the label text, not the icon.
-const HUB_LABEL = { movie: "Show Time", social: "Social", bookclub: "Book Club", club: "Groups & Clubs" }
+const HUB_LABEL = { movie: "Show Time", social: "Social Hive", bookclub: "Book Club", club: "Groups & Clubs" }
 
 // Turns the precheck response's two independent lists (events, personal
 // bookings) into one flat list of same-day clashes for display — each item
@@ -575,7 +575,7 @@ export default function SpaceBookingForm({
           <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: "1.25rem", lineHeight: 1.5 }}>
             {isEdit
               ? "Change the date, time, or space for this booking. It's re-checked for clashes the same way as a new booking."
-              : "Book a common-area space for your own use — a family gathering, a hobby group, anything that isn't already covered by Show Time, Social, or Groups & Clubs."}
+              : "Book a common-area space for your own use — a family gathering, a hobby group, anything that isn't already covered by Show Time, Social Hive, or Groups & Clubs."}
           </div>
 
           <div style={FIELD}>

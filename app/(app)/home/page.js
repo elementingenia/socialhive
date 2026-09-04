@@ -16,7 +16,7 @@ import AskQuestion from "@/components/AskQuestion"
 // dropped in favour of the Library hub taking this grid slot.
 const HUBS = [
   { key: "movies", label: "Show Time", Icon: MoviesIcon, path: "/movies",      colour: "var(--teal)",       span: 2 },
-  { key: "social", label: "Social", Icon: SocialIcon, path: "/social",        colour: "var(--terracotta)", span: 2 },
+  { key: "social", label: "Social Hive", Icon: SocialIcon, path: "/social",        colour: "var(--terracotta)", span: 2 },
   { key: "library", label: "Library", Icon: BookClubIcon, path: "/booklibrary", colour: "var(--purple)",   span: 2 },
   { key: "clubs",  label: "Groups & Clubs",  Icon: ClubsIcon,  path: "/clubs",         colour: "var(--purple)",     span: 2 },
   { key: "info",   label: "Info",   Icon: InfoIcon,   path: "/info/contacts", colour: "#4e7aab",           span: 2 },

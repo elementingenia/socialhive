@@ -94,7 +94,7 @@ export async function POST(req) {
     // never widened to match, so any attempt 400'd (surfaced via setError,
     // unlike Event Image's silent version of the same class of bug).
     if (event.hub_type !== "social" && event.hub_type !== "special") {
-      return NextResponse.json({ error: "Menu upload only supported for Social and Special Events" }, { status: 400 })
+      return NextResponse.json({ error: "Menu upload only supported for Social Hive and Special Events" }, { status: 400 })
     }
 
     if (action === "sign") {
@@ -152,7 +152,7 @@ export async function POST(req) {
   const { data: event } = await supa.from("events").select("hub_type, menu_url").eq("id", eventId).single()
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 })
   if (event.hub_type !== "social" && event.hub_type !== "special") {
-    return NextResponse.json({ error: "Menu upload only supported for Social and Special Events" }, { status: 400 })
+    return NextResponse.json({ error: "Menu upload only supported for Social Hive and Special Events" }, { status: 400 })
   }
 
   await removeExistingMenuFile(event)
