@@ -1,0 +1,32 @@
+-- Migration 096: raise/replace the undocumented bookings_seats_check constraint
+--
+-- Found 2026-09-04 while live-fire verifying the new EC-unlimited-seats feature
+-- (lib/modifyBooking.js's effectiveSeatCap): a coordinator add_booking call for
+-- 5 seats on a FRESH, ample-capacity throwaway event failed with
+--   "new row for relation \"bookings\" violates check constraint \"bookings_seats_check\""
+-- -- confirmed by bisection (seats=4 succeeds, seats=5 fails on a brand new
+-- event with no other bookings, so this is not a capacity/availability
+-- rejection, it's a hard schema-level cap).
+--
+-- This constraint does NOT exist in any tracked migration file (grepped every
+-- supabase/migrations/*.sql for "bookings_seats_check", "CHECK (seats", "seats
+-- BETWEEN" -- zero matches) -- it was applied directly to the live database
+-- outside the migration history, the same class of drift already seen once
+-- before with migration 058 (see the "A migration applied to prod MUST reach
+-- main" standing rule in this project's CLAUDE.md).
+--
+-- It is ALREADY live-breaking two real events today, confirmed via direct
+-- REST query: "Dementia Awareness Seminar" and "Melbourne Cup Craft Day" both
+-- have max_seats_per_booking = 20 (an EC/admin explicitly configured them to
+-- allow up to 20 seats per booking), but any booking attempt above 4 seats on
+-- either one silently 500s with a raw Postgres error instead of the app's own
+-- validation message -- this has nothing to do with the new EC-unlimited-seats
+-- feature, it would have broken a plain 5-seat SELF-SERVICE booking on either
+-- event too, before this feature was ever built.
+--
+-- Fix: drop the old 4-seat ceiling and replace it with a generous sanity
+-- check only (reject zero/negative/absurd values), leaving the REAL ceiling
+-- to the app's own max_seats_per_booking / max_seats logic, exactly as every
+-- other seat-count rule in this app already works.
+ALTER TABLE bookings DROP CONSTRAINT IF EXISTS bookings_seats_check;
+ALTER TABLE bookings ADD CONSTRAINT bookings_seats_check CHECK (seats > 0 AND seats <= 100);
