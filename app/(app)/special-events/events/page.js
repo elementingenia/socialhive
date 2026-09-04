@@ -925,11 +925,17 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
             </div>
           )}
 
-          {/* Unassigned seats (Iain, 2026-09-04): a raw headcount an EC/admin
-              can bump without associating it to any resident or contact --
-              no booking row at all, purely a number subtracted from
-              capacity. Distinct from the naming picker above, which is
-              about whether a real booking's seats are individually named. */}
+          {/* Unassigned seats (Iain, 2026-09-04, revised same day): a
+              headcount an EC/admin can add to this event without tying it
+              to a resident or contact -- no booking row at all, purely
+              subtracted from capacity. Originally a raw number typed here;
+              Iain's follow-up feedback ("I cannot see an option for this
+              anywhere... additive, so they do not need to keep increasing
+              a count") moved the actual adding/naming into the event's own
+              Attendees panel (+ Add Unassigned Seats, admin/EC only, see
+              components/EventSlideOut.js) -- this toggle now only turns
+              the feature on for the event; the count itself is read-only
+              here, managed from that panel once the event exists. */}
           <div style={FIELD}>
             <Toggle value={form.allow_unassigned_seats}
               onChange={v => set("allow_unassigned_seats", v)}
@@ -937,17 +943,17 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
             <p style={{ color: "var(--text-dim)", fontSize: "0.78rem", margin: "0.3rem 0 0" }}>
               Lets an Event Coordinator or admin add seats to this event&apos;s headcount
               without tying them to a resident or contact — e.g. walk-ins who never book.
+              {activeId
+                ? " Add and name them from the Attendees panel once this event is saved."
+                : " You'll be able to add them from the Attendees panel once you've created the event."}
             </p>
           </div>
-          {form.allow_unassigned_seats && (
+          {form.allow_unassigned_seats && activeId && (
             <div style={FIELD}>
-              <label style={LABEL}>Unassigned seats</label>
-              <input type="number" min={0} max={500} value={form.unassigned_seats_count}
-                onChange={e => set("unassigned_seats_count", e.target.value)}
-                onWheel={e => e.currentTarget.blur()} style={INPUT} />
-              <p style={{ color: "var(--text-dim)", fontSize: "0.78rem", margin: "0.3rem 0 0" }}>
-                Counted against Total Seats above, same as any named booking.
-              </p>
+              <label style={LABEL}>Unassigned seats so far</label>
+              <div style={{ ...INPUT, display: "flex", alignItems: "center", color: "var(--text-dim)" }}>
+                {form.unassigned_seats_count || 0} — manage from the Attendees panel
+              </div>
             </div>
           )}
 
@@ -1841,7 +1847,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_unassigned_seats, unassigned_seats_count, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, bus_max_seats, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, contact_id, bus_passenger, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
+      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_unassigned_seats, unassigned_seats_count, unassigned_seat_names, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, bus_max_seats, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, contact_id, bus_passenger, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
       .eq("hub_type", "special")
       .eq("archived", false)
       .order("event_date", { ascending: true })

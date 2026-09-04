@@ -17,6 +17,7 @@ export default function EventImagePicker({
   onSaveFocal,
 }) {
   const [uploading,     setUploading]     = useState(false)
+  const [error,         setError]         = useState("")
   const [localImageUrl, setLocalImageUrl] = useState(imageUrl || null)
   const [localFocalX,   setLocalFocalX]   = useState(focalX ?? 50)
   const [localFocalY,   setLocalFocalY]   = useState(focalY ?? 50)
@@ -60,34 +61,51 @@ export default function EventImagePicker({
     saveFocal(x, y)
   }
 
+  // 2026-09-04: this used to have no failure path at all -- a rejected
+  // upload (e.g. Special Events' 400 before canCarryImage() was widened to
+  // include hub_type='special') left `uploading` cleared and nothing else,
+  // so it looked exactly like clicking Upload Image had done nothing.
+  // Every other upload surface in this app (menu, documents, avatars)
+  // already shows a real error message on failure -- this was the one gap.
   async function uploadImage(file) {
     setUploading(true)
-    const fd = new FormData()
-    fd.append(idField, eventId)
-    fd.append("file", file)
-    const res = await authedFetch(uploadUrl, {
-      method: "POST",
-      body: fd,
-    })
-    const d = await res.json()
-    setUploading(false)
-    if (res.ok) {
+    setError("")
+    try {
+      const fd = new FormData()
+      fd.append(idField, eventId)
+      fd.append("file", file)
+      const res = await authedFetch(uploadUrl, {
+        method: "POST",
+        body: fd,
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || "Could not upload that image")
       setLocalImageUrl(d.image_url)
       onUpdated?.()
+    } catch (err) {
+      setError(err.message || "Could not upload that image")
+    } finally {
+      setUploading(false)
     }
   }
 
   async function removeImage() {
     setUploading(true)
-    const res = await authedFetch(deleteUrl, {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [idField]: eventId }),
-    })
-    setUploading(false)
-    if (res.ok) {
+    setError("")
+    try {
+      const res = await authedFetch(deleteUrl, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [idField]: eventId }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || "Could not remove that image")
       setLocalImageUrl(null)
       onUpdated?.()
+    } catch (err) {
+      setError(err.message || "Could not remove that image")
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -152,6 +170,7 @@ export default function EventImagePicker({
             }}>Remove</button>
         )}
       </div>
+      {error && <div style={{ color: "var(--terracotta)", fontSize: 12, marginTop: 6 }}>{error}</div>}
     </div>
   )
 }

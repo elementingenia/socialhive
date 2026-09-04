@@ -12,7 +12,14 @@ import { resizeImage, MAX_AGE_SECONDS } from "@/lib/imageResize"
 // the two could have drifted.
 function canCarryImage(event) {
   if (!event) return false
-  if (event.hub_type === "social") return true
+  // 'special' added 2026-09-04 -- Special Events (hub_type='special') was
+  // cloned from Social's event form, including its own Event Image picker,
+  // but this allowlist was never widened to match: every upload silently
+  // 400'd ("Image upload isn't supported for this event type") with the
+  // client swallowing the error (see EventImagePicker.js's uploadImage()),
+  // so it looked like nothing happened at all -- Iain, 2026-09-04: "Event
+  // Image does not upload after selecting from local files."
+  if (event.hub_type === "social" || event.hub_type === "special") return true
   if (event.club_id) return true
   return event.hub_type === "movie" && !event.movie_id
 }
