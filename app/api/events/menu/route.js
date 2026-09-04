@@ -12,7 +12,15 @@ async function getAdminOrEC(token, eventId) {
   const { data: { user }, error } = await supa.auth.getUser(token)
   if (error || !user) return { unauthenticated: true }
   const { data: member } = await supa.from("members").select("id, is_admin").eq("auth_id", user.id).single()
-  if (!member) return { forbidden: true }
+  // A valid, real Supabase Auth session with NO matching members row is a
+  // distinct failure from "you're a resident but not this event's admin/EC"
+  // -- added 2026-09-04 after "Forbidden" kept recurring for Iain even after
+  // the 401/403 split fix below, on an account that should have been admin.
+  // Both used to say the same bare "Forbidden", which made it impossible to
+  // tell from the error message alone whether the account itself had lost
+  // its members-table link (the same class of drift as the StuartG
+  // auth_email bug) or was just correctly not this event's coordinator.
+  if (!member) return { forbidden: true, reason: "No resident account is linked to this login." }
   if (member.is_admin) return member
 
   const { data: ec } = await supa
@@ -21,12 +29,12 @@ async function getAdminOrEC(token, eventId) {
     .eq("event_id", eventId)
     .eq("member_id", member.id)
     .single()
-  return ec ? member : { forbidden: true }
+  return ec ? member : { forbidden: true, reason: "You're not an admin or coordinator for this event." }
 }
 
 function authErrorResponse(result) {
   if (result?.unauthenticated) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 })
-  return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  return NextResponse.json({ error: result?.reason || "Forbidden" }, { status: 403 })
 }
 
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"]

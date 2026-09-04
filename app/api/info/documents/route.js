@@ -33,10 +33,14 @@ export async function POST(req) {
   // Resize/re-encode images only -- PDFs and other document types pass
   // through untouched. See lib/imageResize.js for why this exists.
   if (file.type?.startsWith('image/')) {
-    const resized = await resizeImage(buffer)
-    buffer = resized.buffer
-    contentType = resized.contentType
-    ext = resized.ext
+    try {
+      const resized = await resizeImage(buffer)
+      buffer = resized.buffer
+      contentType = resized.contentType
+      ext = resized.ext
+    } catch (err) {
+      return NextResponse.json({ error: err.message || 'Could not process that image' }, { status: 400 })
+    }
   }
 
   const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
