@@ -4,6 +4,7 @@ import { HUB_COLOURS } from "@/lib/navUtils"
 import { useMyClubs } from "@/lib/useMyClubs"
 import { MoviesIcon, SocialIcon, SpaceIcon, SpecialEventsIcon } from "@/components/NavIcons"
 import ClubScopeDropdown from "@/components/ClubScopeDropdown"
+import { SPACE_BOOKINGS_ENABLED } from "@/lib/features"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -475,7 +476,18 @@ function MonthView({ events, onEventTap }) {
 // ── CalendarView (main export) ────────────────────────────────────────────────
 export default function CalendarView({ events = [], onEventTap, defaultView = "week" }) {
   const [view, setView] = useState(defaultView)
-  const [activeHubs, setActiveHubs] = useState(["movie", "club", "social", "space", "special"])
+  // "space" only joins the default set while Book a Space is actually live
+  // (Iain, 2026-09-05: "remove spaces from calendar - unless I am missing
+  // something, it should at least be hidden as part of the Spaces function
+  // that is not active"). SPACE_BOOKINGS_ENABLED=false since 2026-08-25 --
+  // the Home tile was already gated on it, but the 2026-08-23 Calendar pill
+  // (BUG-011) was deliberately left untouched at the time; this closes that
+  // gap so Calendar matches Home. Flip SPACE_BOOKINGS_ENABLED back to `true`
+  // to restore both together.
+  const [activeHubs, setActiveHubs] = useState(
+    SPACE_BOOKINGS_ENABLED ? ["movie", "club", "social", "space", "special"]
+                            : ["movie", "club", "social", "special"]
+  )
   // Club filter: 'all' | 'mine' | a specific club id (Iain 2026-07-18).
   const [clubScope, setClubScope] = useState("all")
   const { myClubIds } = useMyClubs()
@@ -496,6 +508,7 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
 
   const filteredEvents = useMemo(() => events.filter(ev => {
     const key = hubKeyOf(ev)
+    if (key === "space" && !SPACE_BOOKINGS_ENABLED) return false
     if (!activeHubs.includes(key)) return false
     if (key === "club") {
       if (clubScope === "hide") return false
@@ -558,7 +571,7 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
         {[
           { key: "movie",    label: "Show Time", Icon: MoviesIcon },
           { key: "social",   label: "Social Hive", Icon: SocialIcon },
-          { key: "space",    label: "Spaces", Icon: SpaceIcon },
+          ...(SPACE_BOOKINGS_ENABLED ? [{ key: "space", label: "Spaces", Icon: SpaceIcon }] : []),
           { key: "special",  label: "Special Events", Icon: SpecialEventsIcon },
         ].map(({ key, label, Icon }) => {
           const on = activeHubs.includes(key)
@@ -595,13 +608,19 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
             font size overriding CSS. A styled button reusing this exact pill's style object
             guarantees pixel-identical text with Movies/Social, and brings this control in
             line with the project's own "no native browser form controls" standard.) */}
-        {(clubsInView.length > 0 || myClubIds.size > 0) && (
-          <ClubScopeDropdown
-            clubScope={clubScope}
-            setClubScope={setClubScope}
-            clubsInView={clubsInView}
-          />
-        )}
+        {/* Always rendered, not gated on clubsInView/myClubIds.size (Iain,
+            2026-09-05: "there should be an option in Groups/Clubs to select
+            NONE" -- the "Hide Groups & Clubs" option already exists inside
+            this dropdown, but the dropdown itself only rendered when the
+            current view already contained a club event or the viewer had
+            joined one, so on a week with no club activity (or for an admin
+            who isn't a club member) the control -- and therefore Hide --
+            was completely unreachable, not just hard to find). */}
+        <ClubScopeDropdown
+          clubScope={clubScope}
+          setClubScope={setClubScope}
+          clubsInView={clubsInView}
+        />
       </div>
       </div>
 

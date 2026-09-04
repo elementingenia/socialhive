@@ -337,13 +337,15 @@ export default function BookingsPage() {
             )
           })}
 
-          {(clubsInView.length > 0 || myClubIds.size > 0) && (
-            <ClubScopeDropdown
-              clubScope={clubScope}
-              setClubScope={setClubScope}
-              clubsInView={clubsInView}
-            />
-          )}
+          {/* Always rendered -- matches Calendar's identical fix, 2026-09-05:
+              this dropdown's "Hide Groups & Clubs" option was unreachable
+              whenever the current filtered set had no club event and the
+              viewer wasn't a club member. */}
+          <ClubScopeDropdown
+            clubScope={clubScope}
+            setClubScope={setClubScope}
+            clubsInView={clubsInView}
+          />
         </div>
 
         {/* Upcoming */}
