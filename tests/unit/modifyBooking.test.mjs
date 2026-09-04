@@ -4,7 +4,7 @@
 //
 //   npm run test:unit
 
-import { maxSeatsPerBooking, planSeatModification } from '../../lib/modifyBooking.js'
+import { maxSeatsPerBooking, effectiveSeatCap, planSeatModification } from '../../lib/modifyBooking.js'
 
 let pass = 0, fail = 0
 const ok = (cond, msg) => { cond ? pass++ : (fail++, console.log('  ✗', msg)) }
@@ -52,6 +52,25 @@ p = planSeatModification({ event: { max_seats: 20, max_seats_per_booking: 4 }, r
 ok(p.ok === true, 'shrinking is still allowed once bookings have closed')
 p = planSeatModification({ event: { max_seats: 20, max_seats_per_booking: 4 }, requestedSeats: 2, oldConfirmed: 2, oldWaitlisted: 0, othersConfirmed: 0, closed: true })
 ok(p.ok === true, 'an unchanged seat count is not "growing" even when closed')
+
+// effectiveSeatCap / unlimitedCap — EC/admin walk-up + Modify Booking can
+// exceed max_seats_per_booking, but never the event's actual Total Seats
+// (Iain, 2026-09-04, backlog item raised 2026-09-03b: "EC's can invite as
+// many as they like, its THEIR event... cannot be greater than Total Seats
+// though"). Self-service (unlimitedCap omitted/false) is completely
+// unaffected -- same defaults as before.
+ok(effectiveSeatCap({ max_seats: 20, max_seats_per_booking: 4 }) === 4, 'unlimitedCap defaults to false -- same as maxSeatsPerBooking')
+ok(effectiveSeatCap({ max_seats: 20, max_seats_per_booking: 4 }, { unlimitedCap: true }) === 20, 'unlimitedCap: true reads Total Seats, not the per-booking cap')
+ok(effectiveSeatCap({ max_seats: 0, max_seats_per_booking: 4 }, { unlimitedCap: true }) === 4, 'unlimitedCap with no/zero Total Seats falls back to the per-booking cap, not Infinity')
+ok(effectiveSeatCap(null, { unlimitedCap: true }) === 4, 'unlimitedCap with a null event falls back to the default cap, no crash')
+
+const unlimitedEvent = { max_seats: 30, max_seats_per_booking: 4 }
+p = planSeatModification({ event: unlimitedEvent, requestedSeats: 12, oldConfirmed: 1, oldWaitlisted: 0, othersConfirmed: 0, unlimitedCap: true })
+ok(p.ok && p.seats === 12, 'unlimitedCap: true lets an EC/admin request well past the per-booking cap of 4')
+p = planSeatModification({ event: unlimitedEvent, requestedSeats: 50, oldConfirmed: 1, oldWaitlisted: 0, othersConfirmed: 0, unlimitedCap: true })
+ok(p.ok && p.seats === 30, 'unlimitedCap: true still clamps to the event\'s actual Total Seats (30), never unlimited')
+p = planSeatModification({ event: unlimitedEvent, requestedSeats: 12, oldConfirmed: 1, oldWaitlisted: 0, othersConfirmed: 0 })
+ok(p.ok && p.seats === 4, 'omitting unlimitedCap (self-service path) is unchanged -- still clamped to max_seats_per_booking')
 
 console.log(`\nlib/modifyBooking.js: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

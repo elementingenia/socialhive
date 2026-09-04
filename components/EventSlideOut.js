@@ -14,7 +14,7 @@ import { resolveMemberName } from "@/lib/memberName"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
 import { clubCaps, clubColour } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
-import { maxSeatsPerBooking } from "@/lib/modifyBooking"
+import { maxSeatsPerBooking, effectiveSeatCap } from "@/lib/modifyBooking"
 import { busSeatsUsed } from "@/lib/busSeats"
 import { useOwners } from "@/lib/useOwners"
 
@@ -781,7 +781,14 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   )
 
   const bookings     = data?.bookings || []
-  const maxPerBooking = maxSeatsPerBooking(event)
+  // Uncapped by max_seats_per_booking here (2026-09-04) -- this whole panel
+  // only renders for admin/Owner/EC (see showCoordinatorPanel), and the
+  // per-booking limit exists to stop one resident hogging seats via
+  // self-service, not to constrain the EC managing walk-ups/modifications
+  // for their own event. Still can't exceed the event's actual Total
+  // Seats (effectiveSeatCap's unlimitedCap branch), per Iain's explicit
+  // ceiling. See lib/modifyBooking.js for the full reasoning.
+  const maxPerBooking = effectiveSeatCap(event, { unlimitedCap: true })
   const bookedMemberIds  = new Set(bookings.map(b => b.members?.id).filter(Boolean))
   const bookedContactIds = new Set(bookings.map(b => b.contacts?.id).filter(Boolean))
   const refundPending = data?.refund_pending || []

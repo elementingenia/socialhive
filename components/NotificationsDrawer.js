@@ -38,6 +38,7 @@ function typeIcon(type) {
     case "question_unanswered":  return "⏳"
     case "space_booking_cancelled": return "🚪"
     case "space_request_validate":  return "📋"
+    case "voting_opened":            return "🗳️"
     default:                  return "🔔"
   }
 }
@@ -65,6 +66,7 @@ function typeColour(type) {
     case "question_unanswered":  return "var(--danger)"
     case "space_booking_cancelled": return "#e53e3e"
     case "space_request_validate":  return "var(--amber-dark)"
+    case "voting_opened":            return "var(--voting)"
     default:                  return "var(--text-dim)"
   }
 }
@@ -78,6 +80,7 @@ function typeColour(type) {
 // have no navigable target and stay tick-only.
 function targetForNotif(n) {
   if (n.type?.startsWith("question_")) return "/questions"
+  if (n.type === "voting_opened") return "/voting"
   switch (n.events?.hub_type) {
     case "movie":    return "/screenings"
     case "social":   return "/social"
