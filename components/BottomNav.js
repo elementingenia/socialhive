@@ -10,7 +10,7 @@ import { BAR_ENABLED } from "@/lib/features"
 import {
   HomeIcon, MoviesIcon, CalendarIcon, SuggestionsIcon, DVDIcon,
   BookClubIcon, SocialIcon, AdminIcon, BookingsIcon, BarIcon,
-  InfoIcon, DocumentsIcon, ContactsIcon, ClubsIcon, SpaceIcon,
+  InfoIcon, DocumentsIcon, ContactsIcon, ClubsIcon, SpaceIcon, SpecialEventsIcon,
 } from "@/components/NavIcons"
 
 const HUB_CONFIG = {
@@ -56,6 +56,22 @@ const HUB_CONFIG = {
     items: [
       { path: "/spaces",           label: "Space Bookings", Icon: SpaceIcon },
       { path: "/spaces/scheduled", label: "Scheduled",      Icon: CalendarIcon },
+    ],
+  },
+  // Special Events cloned Social's two-page shape (Home + a separate
+  // Scheduled/events list carrying the admin-only "+ Add Event" button), so
+  // -- unlike Voting, which is a single page with its own inline "+ New
+  // Vote" -- it genuinely needs a sub-nav tab to reach that second page.
+  // Missing here since the hub was built (2026-09-04): the only routes into
+  // /special-events/events were the non-obvious "My Bookings -> View all"
+  // tap on Home, or typing the URL directly -- Iain reported this as "no
+  // Add Event option", and the button was in fact present and correctly
+  // admin-gated the whole time, just unreachable through normal nav.
+  special: {
+    colour: "var(--special)",
+    items: [
+      { path: "/special-events",        label: "Special Events", Icon: SpecialEventsIcon },
+      { path: "/special-events/events", label: "Scheduled",      Icon: CalendarIcon },
     ],
   },
 }

@@ -1,6 +1,7 @@
 "use client"
 import { useEffect, useState } from "react"
 import { useUser } from "@/lib/UserContext"
+import Link from "next/link"
 import ManageAreaScreen from "@/components/ManageAreaScreen"
 import { authedFetch } from "@/lib/getAuthToken"
 
@@ -17,6 +18,21 @@ export default function SpecialEventsManagePage() {
     <ManageAreaScreen contextType="hub" contextKey="special" backHref="/special-events"
       backLabel="Special Events" title="Manage Special Events" colour="var(--special)">
       <SpecialEventsEnabledToggle />
+      {/* Iain, 2026-09-04 (round after the toggle build): "There is no Add
+          Event option" -- the button was always present and correctly
+          admin-only on /special-events/events, but an admin arriving here
+          via Admin > Occasional Activities > Special Events had no direct
+          route to it (only Home > My Bookings > View all, or a BottomNav
+          tab that didn't exist -- see components/BottomNav.js). Direct
+          shortcut closes that gap from this side too. */}
+      <Link href="/special-events/events" style={{
+        display: "inline-flex", alignItems: "center", gap: 6, padding: "0.6rem 1.1rem",
+        borderRadius: 20, border: "1px solid var(--special)", background: "transparent",
+        color: "var(--special)", fontWeight: 700, fontFamily: "inherit", fontSize: "0.85rem",
+        textDecoration: "none", marginTop: "0.75rem",
+      }}>
+        📅 View &amp; Add Events
+      </Link>
     </ManageAreaScreen>
   )
 }
