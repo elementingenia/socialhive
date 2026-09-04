@@ -24,11 +24,28 @@ function canCarryImage(event) {
   return event.hub_type === "movie" && !event.movie_id
 }
 
+// Split into two failure shapes rather than one collapsed "return null" --
+// added 2026-09-04 after Iain reported a bare "Forbidden" on Event Image
+// upload. An EXPIRED/invalid token (auth.getUser() failing) and a VALID,
+// correctly-identified member who just isn't admin/EC on this event are two
+// completely different situations, but this used to return the same `null`
+// for both, which the caller turned into a flat 403. The client's
+// authedFetch wrapper (lib/getAuthToken.js) already knows how to recover
+// from a stale/expired token -- but only on a 401, since 403 means "you are
+// who you say you are, and that's not enough" and retrying with a fresh
+// token of the SAME identity would never help. Collapsing both into 403
+// silently disabled that recovery path for the one case it's actually meant
+// for -- exactly the "stale-token race" bug class already fixed multiple
+// times elsewhere in this app (Coordinator View 2026-07-14, Profile
+// 2026-08-20). Returns { unauthenticated: true } for a bad/expired token,
+// { forbidden: true } for a real member with no standing on this event, or
+// the member row on success.
 async function getAdminOrEC(token, eventId) {
+  if (!token) return { unauthenticated: true }
   const { data: { user }, error } = await supa.auth.getUser(token)
-  if (error || !user) return null
+  if (error || !user) return { unauthenticated: true }
   const { data: member } = await supa.from("members").select("id, is_admin").eq("auth_id", user.id).single()
-  if (!member) return null
+  if (!member) return { forbidden: true }
   if (member.is_admin) return member
 
   // Check if EC for this event
@@ -38,7 +55,12 @@ async function getAdminOrEC(token, eventId) {
     .eq("event_id", eventId)
     .eq("member_id", member.id)
     .single()
-  return ec ? member : null
+  return ec ? member : { forbidden: true }
+}
+
+function authErrorResponse(result) {
+  if (result?.unauthenticated) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 })
+  return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 }
 
 // POST — upload image for an event
@@ -51,7 +73,7 @@ export async function POST(req) {
   if (!eventId || !file) return NextResponse.json({ error: "event_id and file required" }, { status: 400 })
 
   const member = await getAdminOrEC(token, eventId)
-  if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!member || member.unauthenticated || member.forbidden) return authErrorResponse(member)
 
   // Social events and club events both carry an image (a club event's picture
   // is its theme cue — Iain 2026-07-18).
@@ -108,7 +130,7 @@ export async function DELETE(req) {
   if (!event_id) return NextResponse.json({ error: "event_id required" }, { status: 400 })
 
   const member = await getAdminOrEC(token, event_id)
-  if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!member || member.unauthenticated || member.forbidden) return authErrorResponse(member)
 
   const { data: event } = await supa.from("events").select("image_url").eq("id", event_id).single()
   if (event?.image_url) {

@@ -2,11 +2,17 @@ import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 
 
+// Same auth/authz split as app/api/events/image/route.js (added
+// 2026-09-04) -- an expired token and a valid-but-unauthorised member used
+// to both collapse into a flat 403 "Forbidden", which silently disabled
+// authedFetch's stale-token retry (it only fires on 401). See that file's
+// comment for the full history.
 async function getAdminOrEC(token, eventId) {
+  if (!token) return { unauthenticated: true }
   const { data: { user }, error } = await supa.auth.getUser(token)
-  if (error || !user) return null
+  if (error || !user) return { unauthenticated: true }
   const { data: member } = await supa.from("members").select("id, is_admin").eq("auth_id", user.id).single()
-  if (!member) return null
+  if (!member) return { forbidden: true }
   if (member.is_admin) return member
 
   const { data: ec } = await supa
@@ -15,7 +21,12 @@ async function getAdminOrEC(token, eventId) {
     .eq("event_id", eventId)
     .eq("member_id", member.id)
     .single()
-  return ec ? member : null
+  return ec ? member : { forbidden: true }
+}
+
+function authErrorResponse(result) {
+  if (result?.unauthenticated) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 })
+  return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 }
 
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"]
@@ -53,7 +64,7 @@ export async function POST(req) {
     if (!eventId || !action) return NextResponse.json({ error: "event_id and action required" }, { status: 400 })
 
     const member = await getAdminOrEC(token, eventId)
-    if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (!member || member.unauthenticated || member.forbidden) return authErrorResponse(member)
 
     const { data: event } = await supa.from("events").select("hub_type, menu_url").eq("id", eventId).single()
     if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 })
@@ -115,7 +126,7 @@ export async function POST(req) {
   }
 
   const member = await getAdminOrEC(token, eventId)
-  if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!member || member.unauthenticated || member.forbidden) return authErrorResponse(member)
 
   const { data: event } = await supa.from("events").select("hub_type, menu_url").eq("id", eventId).single()
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 })
@@ -154,7 +165,7 @@ export async function DELETE(req) {
   if (!event_id) return NextResponse.json({ error: "event_id required" }, { status: 400 })
 
   const member = await getAdminOrEC(token, event_id)
-  if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!member || member.unauthenticated || member.forbidden) return authErrorResponse(member)
 
   const { data: event } = await supa.from("events").select("menu_url").eq("id", event_id).single()
   await removeExistingMenuFile(event)

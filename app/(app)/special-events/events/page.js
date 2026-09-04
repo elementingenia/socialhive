@@ -2,7 +2,7 @@
 import EventCoordinators from "@/components/EventCoordinators"
 import { useEffect, useState, useCallback, useRef } from "react"
 import { supabase } from "@/lib/supabase"
-import { getAuthToken } from "@/lib/getAuthToken"
+import { getAuthToken, authedFetch } from "@/lib/getAuthToken"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import { BusIcon } from "@/components/NavIcons"
@@ -739,11 +739,16 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
   async function uploadMenuFile(file) {
     setUploadingMenu(true)
     setError(null)
+    set("menu_type", "file")
     try {
-      const token = await getAuthToken()
-      const signRes = await fetch("/api/events/menu", {
+      // authedFetch (not a raw fetch+getAuthToken pair) -- 2026-09-04: this
+      // used to hand-roll its own token exactly once per call, so a session
+      // whose token had gone stale mid-edit had no way to recover; every
+      // other upload surface in this app (Event Image, avatars) already
+      // goes through authedFetch's refresh-and-retry-once-on-401 pattern.
+      const signRes = await authedFetch("/api/events/menu", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ event_id: activeId, action: "sign", file_name: file.name, content_type: file.type }),
       })
       const signData = await signRes.json().catch(() => ({}))
@@ -754,9 +759,9 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
         .uploadToSignedUrl(signData.path, signData.token, file, { contentType: file.type })
       if (upErr) throw new Error(upErr.message || "Upload failed")
 
-      const completeRes = await fetch("/api/events/menu", {
+      const completeRes = await authedFetch("/api/events/menu", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ event_id: activeId, action: "complete", path: signData.path, file_name: file.name }),
       })
       const d = await completeRes.json().catch(() => ({}))
@@ -774,9 +779,9 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
     setUploadingMenu(true)
     setError(null)
     try {
-      const res = await fetch("/api/events/menu", {
+      const res = await authedFetch("/api/events/menu", {
         method: "DELETE",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + (await getAuthToken()) },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ event_id: activeId }),
       })
       const d = await res.json().catch(() => ({}))
@@ -989,6 +994,12 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
           </div>
           {form.has_dining && (
             <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
+              {/* Exactly two options, per Iain 2026-09-04: "leave Type it in and
+                  Upload Document as the only two options" -- a third "Attach
+                  a File" mode-toggle used to sit between these two and just
+                  switched a view, with the REAL upload control appearing
+                  only after that click; collapsed here so "Upload Document"
+                  IS the file picker, one click, no intermediate step. */}
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                 <button type="button" onClick={() => set("menu_type", "text")} style={{
                   flex: 1, padding: "8px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
@@ -996,12 +1007,31 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
                   background: form.menu_type === "text" ? "var(--special)15" : "var(--surface)",
                   color: form.menu_type === "text" ? "var(--special)" : "var(--text)",
                 }}>Type it in</button>
-                <button type="button" onClick={() => set("menu_type", "file")} style={{
-                  flex: 1, padding: "8px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                  border: `1px solid ${form.menu_type === "file" ? "var(--special)" : "var(--border)"}`,
-                  background: form.menu_type === "file" ? "var(--special)15" : "var(--surface)",
-                  color: form.menu_type === "file" ? "var(--special)" : "var(--text)",
-                }}>Attach a File</button>
+                {activeId ? (
+                  <label style={{
+                    flex: 1, padding: "8px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: "inherit",
+                    textAlign: "center", cursor: uploadingMenu ? "not-allowed" : "pointer", opacity: uploadingMenu ? 0.6 : 1,
+                    border: `1px solid ${form.menu_type === "file" ? "var(--special)" : "var(--border)"}`,
+                    background: form.menu_type === "file" ? "var(--special)15" : "var(--surface)",
+                    color: form.menu_type === "file" ? "var(--special)" : "var(--text)",
+                  }}>
+                    {uploadingMenu ? "Uploading…" : "Upload Document"}
+                    <input
+                      type="file"
+                      accept="application/pdf,image/jpeg,image/png,image/webp"
+                      style={{ display: "none" }}
+                      disabled={uploadingMenu}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadMenuFile(f) }}
+                    />
+                  </label>
+                ) : (
+                  <button type="button" onClick={() => set("menu_type", "file")} style={{
+                    flex: 1, padding: "8px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                    border: `1px solid ${form.menu_type === "file" ? "var(--special)" : "var(--border)"}`,
+                    background: form.menu_type === "file" ? "var(--special)15" : "var(--surface)",
+                    color: form.menu_type === "file" ? "var(--special)" : "var(--text)",
+                  }}>Upload Document</button>
+                )}
               </div>
 
               {form.menu_type === "text" && (
@@ -1016,42 +1046,28 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
 
               {form.menu_type === "file" && (
                 activeId ? (
-                  <div>
-                    {localMenuUrl && (
+                  localMenuUrl ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{
-                        display: "flex", alignItems: "center", background: "var(--surface2)",
-                        borderRadius: 8, padding: "8px 10px", marginBottom: 8, fontSize: 13,
+                        flex: 1, display: "flex", alignItems: "center", background: "var(--surface2)",
+                        borderRadius: 8, padding: "8px 10px", fontSize: 13,
                       }}>
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📄 {localMenuFileName || "Menu"}</span>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📄 {localMenuFileName || "Document"}</span>
                       </div>
-                    )}
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <label style={{
-                        flex: 1, padding: "8px", borderRadius: 8, border: "1px solid var(--special)",
-                        color: "var(--special)", fontWeight: 700, fontSize: 13, cursor: uploadingMenu ? "not-allowed" : "pointer",
-                        textAlign: "center", opacity: uploadingMenu ? 0.6 : 1, fontFamily: "inherit",
-                      }}>
-                        {uploadingMenu ? "Uploading…" : localMenuUrl ? "Replace" : "Upload Menu/Additional Info"}
-                        <input
-                          type="file"
-                          accept="application/pdf,image/jpeg,image/png,image/webp"
-                          style={{ display: "none" }}
-                          disabled={uploadingMenu}
-                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadMenuFile(f) }}
-                        />
-                      </label>
-                      {localMenuUrl && (
-                        <button type="button" onClick={removeMenuFile} disabled={uploadingMenu} style={{
-                          padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border)",
-                          background: "var(--surface2)", color: "var(--danger)", fontWeight: 700,
-                          fontSize: 13, cursor: uploadingMenu ? "not-allowed" : "pointer", fontFamily: "inherit",
-                        }}>Remove</button>
-                      )}
+                      <button type="button" onClick={removeMenuFile} disabled={uploadingMenu} style={{
+                        padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border)",
+                        background: "var(--surface2)", color: "var(--danger)", fontWeight: 700,
+                        fontSize: 13, cursor: uploadingMenu ? "not-allowed" : "pointer", fontFamily: "inherit",
+                      }}>Remove</button>
                     </div>
-                  </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>
+                      Tap "Upload Document" above to choose a PDF, JPEG, PNG or WEBP file.
+                    </div>
+                  )
                 ) : (
                   <div style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>
-                    Tap "{editing ? "Save Changes" : "Create Event"}" below first — you'll be able to upload the menu document right after.
+                    Tap "{editing ? "Save Changes" : "Create Event"}" below first — you'll be able to upload the document right after.
                   </div>
                 )
               )}
