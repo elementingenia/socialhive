@@ -968,7 +968,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
                   border: `1px solid ${form.menu_type === "file" ? "var(--terracotta)" : "var(--border)"}`,
                   background: form.menu_type === "file" ? "var(--terracotta)15" : "var(--surface)",
                   color: form.menu_type === "file" ? "var(--terracotta)" : "var(--text)",
-                }}>Upload a document</button>
+                }}>Attach a File</button>
               </div>
 
               {form.menu_type === "text" && (
@@ -998,7 +998,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
                         color: "var(--terracotta)", fontWeight: 700, fontSize: 13, cursor: uploadingMenu ? "not-allowed" : "pointer",
                         textAlign: "center", opacity: uploadingMenu ? 0.6 : 1, fontFamily: "inherit",
                       }}>
-                        {uploadingMenu ? "Uploading…" : localMenuUrl ? "Replace" : "Upload Menu"}
+                        {uploadingMenu ? "Uploading…" : localMenuUrl ? "Replace" : "Upload Menu/Additional Info"}
                         <input
                           type="file"
                           accept="application/pdf,image/jpeg,image/png,image/webp"
