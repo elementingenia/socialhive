@@ -19,7 +19,6 @@ import { useRequestOnlyAcknowledge } from "@/components/RequestOnlyAcknowledge"
 import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName } from "@/lib/sortNames"
-import { useOwners } from "@/lib/useOwners"
 import { resolveMemberName } from "@/lib/memberName"
 import { busSeatsUsed } from "@/lib/busSeats"
 
@@ -168,8 +167,8 @@ function BookingStrip({ myBooking, event, isFull, closed, blocked }) {
   }
   return (
     <div style={{ ...base, background: "rgba(176,84,64,0.06)", borderTop: "1px solid rgba(176,84,64,0.15)" }}>
-      <span style={{ color: "var(--terracotta)" }}>Book your spot</span>
-      <span style={{ color: "var(--terracotta)", fontSize: "0.75rem" }}>Tap to book →</span>
+      <span style={{ color: "var(--special)" }}>Book your spot</span>
+      <span style={{ color: "var(--special)", fontSize: "0.75rem" }}>Tap to book →</span>
     </div>
   )
 }
@@ -202,7 +201,7 @@ function MemberPicker({ members = [], value, onChange, placeholder = "Select mem
         onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); setQuery("") } }}
         style={{
         ...INPUT, display: "flex", alignItems: "center", justifyContent: "space-between",
-        cursor: "pointer", borderColor: open ? "var(--terracotta)" : "var(--border)",
+        cursor: "pointer", borderColor: open ? "var(--special)" : "var(--border)",
       }}>
         <span style={{ color: value ? "var(--text)" : "var(--text-dim)" }}>
           {value ? (value.name || value.username) : placeholder}
@@ -234,9 +233,9 @@ function MemberPicker({ members = [], value, onChange, placeholder = "Select mem
             {filtered.map(m => (
               <div key={m.id} onClick={() => pick(m)} style={{
                 padding: "0.65rem 1rem", cursor: "pointer", borderBottom: "1px solid var(--border)",
-                background: value?.id === m.id ? "var(--terracotta)12" : "transparent",
+                background: value?.id === m.id ? "var(--special)12" : "transparent",
                 fontWeight: value?.id === m.id ? 700 : 400, fontSize: "0.88rem",
-                color: value?.id === m.id ? "var(--terracotta)" : "var(--text)",
+                color: value?.id === m.id ? "var(--special)" : "var(--text)",
               }}>
                 {m.name || m.username}
                 {m.name && m.username !== m.name && (
@@ -286,7 +285,7 @@ function ECPicker({ members = [], value, onChange, valid, invalid = false }) {
   // otherwise this trigger's own opaque background would hide a wash
   // applied only to a wrapping div.
   const triggerBorder = open
-    ? "var(--terracotta)"
+    ? "var(--special)"
     : valid ? "var(--green)" : "var(--danger)"
 
   return (
@@ -297,14 +296,14 @@ function ECPicker({ members = [], value, onChange, valid, invalid = false }) {
           {value.map(m => (
             <span key={m.id} style={{
               display: "inline-flex", alignItems: "center", gap: "0.3rem",
-              background: "var(--terracotta)20", color: "var(--terracotta)",
-              border: "1px solid var(--terracotta)60",
+              background: "var(--special)20", color: "var(--special)",
+              border: "1px solid var(--special)60",
               borderRadius: "20px", padding: "0.2rem 0.6rem 0.2rem 0.75rem",
               fontSize: "0.82rem", fontWeight: 600,
             }}>
               {m.name || m.username}
               <button onClick={() => remove(m.id)}
-                style={{ background: "none", border: "none", color: "var(--terracotta)", cursor: "pointer", fontSize: "1rem", lineHeight: 1, padding: 0 }}>×</button>
+                style={{ background: "none", border: "none", color: "var(--special)", cursor: "pointer", fontSize: "1rem", lineHeight: 1, padding: 0 }}>×</button>
             </span>
           ))}
         </div>
@@ -378,7 +377,7 @@ function Toggle({ value, onChange, label }) {
       <span style={{ fontSize: "0.92rem", fontWeight: 600, color: "var(--text)" }}>{label}</span>
       <div style={{
         width: 44, height: 24, borderRadius: 12,
-        background: value ? "var(--terracotta)" : "var(--border)",
+        background: value ? "var(--special)" : "var(--border)",
         position: "relative", transition: "background 0.2s", flexShrink: 0,
       }}>
         <div style={{
@@ -413,7 +412,7 @@ function FixedListPicker({ value, onChange, options, placeholder = "Select…", 
         style={{
           ...INPUT, display: "flex", alignItems: "center", justifyContent: "space-between",
           cursor: "pointer", textAlign: "left",
-          borderColor: open ? "var(--terracotta)" : "var(--border)",
+          borderColor: open ? "var(--special)" : "var(--border)",
           ...(invalid ? { border: "2px solid #dc2626", background: "rgba(220, 38, 38, 0.10)" } : {}),
         }}
       >
@@ -446,10 +445,10 @@ function FixedListPicker({ value, onChange, options, placeholder = "Select…", 
               onClick={() => { onChange(opt.id || opt); setOpen(false) }}
               style={{
                 width: "100%", padding: "0.75rem 1rem", textAlign: "left",
-                background: value === (opt.id || opt) ? "var(--terracotta)12" : "transparent",
+                background: value === (opt.id || opt) ? "var(--special)12" : "transparent",
                 border: "none", borderTop: i > 0 ? "1px solid var(--border)" : "none",
                 cursor: "pointer", fontFamily: "inherit", fontSize: "0.92rem",
-                color: value === (opt.id || opt) ? "var(--terracotta)" : "var(--text)",
+                color: value === (opt.id || opt) ? "var(--special)" : "var(--text)",
                 fontWeight: value === (opt.id || opt) ? 700 : 400,
                 display: "flex", alignItems: "center", justifyContent: "space-between",
               }}
@@ -458,7 +457,7 @@ function FixedListPicker({ value, onChange, options, placeholder = "Select…", 
               {opt.request_only && (
                 <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--amber-dark)", marginRight: "0.4rem" }}>Request Only</span>
               )}
-              {value === (opt.id || opt) && <span style={{ color: "var(--terracotta)", fontSize: "0.85rem" }}>✓</span>}
+              {value === (opt.id || opt) && <span style={{ color: "var(--special)", fontSize: "0.85rem" }}>✓</span>}
             </button>
           ))}
         </div>
@@ -484,9 +483,9 @@ function LocationField({ locationType, location, locationId, onTypeChange, onLoc
             style={{
               flex: 1, padding: "0.55rem", borderRadius: "10px", fontFamily: "inherit",
               fontSize: "0.88rem", fontWeight: 700, cursor: "pointer", border: "2px solid",
-              borderColor: locationType === t ? "var(--terracotta)" : "var(--border)",
-              background: locationType === t ? "var(--terracotta)18" : "var(--surface)",
-              color: locationType === t ? "var(--terracotta)" : "var(--text-dim)",
+              borderColor: locationType === t ? "var(--special)" : "var(--border)",
+              background: locationType === t ? "var(--special)18" : "var(--surface)",
+              color: locationType === t ? "var(--special)" : "var(--text-dim)",
             }}>
             {t === "onsite" ? "On-site" : "Off-site"}
           </button>
@@ -514,8 +513,8 @@ function LocationField({ locationType, location, locationId, onTypeChange, onLoc
   )
 }
 
-// ── Social Event Form (slide-over) ────────────────────────────────────────────
-function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
+// ── Special Event Form (slide-over) ────────────────────────────────────────────
+function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
   const editing = !!event
   const allLocations = useLocations()
   const [form, setForm] = useState({
@@ -543,6 +542,8 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     payment_due_by:        event?.payment_due_by || "",
     allow_nonresident_guests: event ? !!event.allow_nonresident_guests : true, // new events default to "Anyone" (2026-07-25)
     require_attendee_names: !!event?.require_attendee_names,
+    allow_unassigned_seats: !!event?.allow_unassigned_seats,
+    unassigned_seats_count: event?.unassigned_seats_count ?? 0,
   })
 
   // The chosen room's own record. `bookable` decides whether an end time is
@@ -669,7 +670,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     }
     if (activeId) payload.id = activeId
 
-    const res = await fetch("/api/social", {
+    const res = await fetch("/api/special-events", {
       method:  activeId ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (await getAuthToken()) },
       body: JSON.stringify(payload),
@@ -706,7 +707,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     if (!confirm("Cancel this event? Anyone booked will be notified. This can't be undone.")) return
     setCancelling(true)
     try {
-      const res = await fetch("/api/social", {
+      const res = await fetch("/api/special-events", {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + (await getAuthToken()) },
         body: JSON.stringify({ id: activeId, action: "cancel" }),
@@ -805,14 +806,14 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
         zIndex: 401, overflowY: "auto", paddingBottom: 32,
         boxShadow: "-8px 0 32px rgba(0,0,0,0.15)",
       }}>
-        <div style={{ height: 5, background: "var(--terracotta)" }} />
+        <div style={{ height: 5, background: "var(--special)" }} />
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "1rem 1.25rem", borderBottom: "1px solid var(--border)",
           position: "sticky", top: 0, background: "var(--surface)", zIndex: 1,
         }}>
-          <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--terracotta)" }}>
-            {editing ? "Edit Event" : "New Social Event"}
+          <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--special)" }}>
+            {editing ? "Edit Event" : "New Special Event"}
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "1.4rem", cursor: "pointer", color: "var(--text-dim)" }}>×</button>
         </div>
@@ -841,7 +842,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
                 onClick={e => e.currentTarget.showPicker?.()}
                 style={{ ...INPUT, ...(invalidFields.includes("event_date") ? INVALID_FIELD_STYLE : { border: "1.5px solid var(--green)" }) }} />
               {form.event_date && (
-                <div style={{ fontSize: "0.75rem", color: "var(--terracotta)", fontWeight: 600, marginTop: "0.3rem" }}>
+                <div style={{ fontSize: "0.75rem", color: "var(--special)", fontWeight: 600, marginTop: "0.3rem" }}>
                   {localDate(form.event_date)?.toLocaleDateString("en-AU", { weekday: "long" })}
                 </div>
               )}
@@ -924,8 +925,40 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
                 onAllowGuestsChange={v => set("allow_nonresident_guests", v)}
                 required={form.require_attendee_names}
                 onRequiredChange={v => set("require_attendee_names", v)}
-                colour="var(--terracotta, #c2410c)"
+                colour="var(--special, #db2777)"
               />
+            </div>
+          )}
+
+          {/* Unassigned seats (Iain, 2026-09-04, revised same day): a
+              headcount an EC/admin can add to this event without tying it
+              to a resident or contact -- no booking row at all, purely
+              subtracted from capacity. Originally a raw number typed here;
+              Iain's follow-up feedback ("I cannot see an option for this
+              anywhere... additive, so they do not need to keep increasing
+              a count") moved the actual adding/naming into the event's own
+              Attendees panel (+ Add Unassigned Seats, admin/EC only, see
+              components/EventSlideOut.js) -- this toggle now only turns
+              the feature on for the event; the count itself is read-only
+              here, managed from that panel once the event exists. */}
+          <div style={FIELD}>
+            <Toggle value={form.allow_unassigned_seats}
+              onChange={v => set("allow_unassigned_seats", v)}
+              label="Allow unassigned seats" />
+            <p style={{ color: "var(--text-dim)", fontSize: "0.78rem", margin: "0.3rem 0 0" }}>
+              Lets an Event Coordinator or admin add seats to this event&apos;s headcount
+              without tying them to a resident or contact — e.g. walk-ins who never book.
+              {activeId
+                ? " Add and name them from the Attendees panel once this event is saved."
+                : " You'll be able to add them from the Attendees panel once you've created the event."}
+            </p>
+          </div>
+          {form.allow_unassigned_seats && activeId && (
+            <div style={FIELD}>
+              <label style={LABEL}>Unassigned seats so far</label>
+              <div style={{ ...INPUT, display: "flex", alignItems: "center", color: "var(--text-dim)" }}>
+                {form.unassigned_seats_count || 0} — manage from the Attendees panel
+              </div>
             </div>
           )}
 
@@ -970,17 +1003,17 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
               <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
                 <button type="button" onClick={() => set("menu_type", "text")} style={{
                   flex: 1, padding: "8px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                  border: `1px solid ${form.menu_type === "text" ? "var(--terracotta)" : "var(--border)"}`,
-                  background: form.menu_type === "text" ? "var(--terracotta)15" : "var(--surface)",
-                  color: form.menu_type === "text" ? "var(--terracotta)" : "var(--text)",
+                  border: `1px solid ${form.menu_type === "text" ? "var(--special)" : "var(--border)"}`,
+                  background: form.menu_type === "text" ? "var(--special)15" : "var(--surface)",
+                  color: form.menu_type === "text" ? "var(--special)" : "var(--text)",
                 }}>Type it in</button>
                 {activeId ? (
                   <label style={{
                     flex: 1, padding: "8px", borderRadius: 8, fontSize: 13, fontWeight: 700, fontFamily: "inherit",
                     textAlign: "center", cursor: uploadingMenu ? "not-allowed" : "pointer", opacity: uploadingMenu ? 0.6 : 1,
-                    border: `1px solid ${form.menu_type === "file" ? "var(--terracotta)" : "var(--border)"}`,
-                    background: form.menu_type === "file" ? "var(--terracotta)15" : "var(--surface)",
-                    color: form.menu_type === "file" ? "var(--terracotta)" : "var(--text)",
+                    border: `1px solid ${form.menu_type === "file" ? "var(--special)" : "var(--border)"}`,
+                    background: form.menu_type === "file" ? "var(--special)15" : "var(--surface)",
+                    color: form.menu_type === "file" ? "var(--special)" : "var(--text)",
                   }}>
                     {uploadingMenu ? "Uploading…" : "Upload Document"}
                     <input
@@ -994,9 +1027,9 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
                 ) : (
                   <button type="button" onClick={() => set("menu_type", "file")} style={{
                     flex: 1, padding: "8px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                    border: `1px solid ${form.menu_type === "file" ? "var(--terracotta)" : "var(--border)"}`,
-                    background: form.menu_type === "file" ? "var(--terracotta)15" : "var(--surface)",
-                    color: form.menu_type === "file" ? "var(--terracotta)" : "var(--text)",
+                    border: `1px solid ${form.menu_type === "file" ? "var(--special)" : "var(--border)"}`,
+                    background: form.menu_type === "file" ? "var(--special)15" : "var(--surface)",
+                    color: form.menu_type === "file" ? "var(--special)" : "var(--text)",
                   }}>Upload Document</button>
                 )}
               </div>
@@ -1004,7 +1037,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
               {form.menu_type === "text" && (
                 <RichEditor
                   initialValue={form.menu_text}
-                  hubColour="var(--terracotta)"
+                  hubColour="var(--special)"
                   bg="card"
                   onChange={html => set("menu_text", html)}
                   placeholder="Type the menu shown to residents…"
@@ -1098,7 +1131,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
                 imageUrl={event?.image_url}
                 focalX={event?.image_focal_x}
                 focalY={event?.image_focal_y}
-                colour="var(--terracotta)"
+                colour="var(--special)"
                 getToken={getToken}
               />
             ) : (
@@ -1139,7 +1172,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
           )}
 
           <button onClick={save} disabled={saving} style={{
-            width: "100%", padding: "0.9rem", background: "var(--terracotta)",
+            width: "100%", padding: "0.9rem", background: "var(--special)",
             color: "#fff", border: "none", borderRadius: "12px",
             fontSize: "1rem", fontWeight: 700, cursor: saving ? "not-allowed" : "pointer",
             opacity: saving ? 0.6 : 1, fontFamily: "inherit",
@@ -1207,7 +1240,13 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
   // compatibility with rows written before this ledger existed.
   const refundPendingBookings = (event.bookings?.filter(isRefundPending) || []).sort(bySelfFirst)
   const refundIssuedBookings  = (event.bookings?.filter(b => b.status === "cancelled" && isRefundIssued(b)) || []).sort(bySelfFirst)
-  const booked  = confirmedBookings.reduce((s, b) => s + (b.seats || 1), 0)
+  // Unassigned seats (2026-09-04) count toward "booked" for capacity/
+  // display purposes exactly like a named booking's seats do -- they're
+  // just not tied to a booking row. See buildEventPayload in
+  // app/api/special-events/route.js and the shared server-side subtraction
+  // in lib/modifyBooking.js / lib/promoteWaitlist.js / app/api/bookings and
+  // app/api/coordinator for the matching capacity-math side of this.
+  const booked  = confirmedBookings.reduce((s, b) => s + (b.seats || 1), 0) + (event.unassigned_seats_count || 0)
   const waiting = waitlistBookings.length
   const showNames = event.show_attendee_names !== false
   // Named additional attendees (workstream A), grouped by the booker.
@@ -1281,7 +1320,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
               <span style={{ background: "#f1f5f9", color: "#64748b", borderRadius: "20px", padding: "0.2rem 0.55rem", fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap" }}>Waitlisted</span>
             )}
             {daysLabel && !isConfirmed && !isWaitlist && (
-              <span style={{ background: "var(--terracotta)18", color: "var(--terracotta)", borderRadius: "20px", padding: "0.2rem 0.55rem", fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap" }}>{daysLabel}</span>
+              <span style={{ background: "var(--special)18", color: "var(--special)", borderRadius: "20px", padding: "0.2rem 0.55rem", fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap" }}>{daysLabel}</span>
             )}
             {(isAdmin || isEC) && (
               <button onClick={e => { e.stopPropagation(); onEdit() }} style={{
@@ -1308,7 +1347,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
 
         {/* EC names — the names are the ask-a-question trigger for this event */}
         <EventCoordinators eventId={event.id} eventTitle={event.title} names={ecNames}
-          colour="var(--terracotta)" style={{ marginBottom: "0.2rem" }} />
+          colour="var(--special)" style={{ marginBottom: "0.2rem" }} />
 
         {/* Bus driver */}
         {event.has_bus && event.bus_driver && (
@@ -1327,16 +1366,28 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
           }}>${Number(event.cost).toFixed(0)} per person</div>
         )}
 
+        {/* Unassigned seats note -- EC/admin visibility only, since it's
+            their own headcount to manage, not something a resident booking
+            a seat needs to see. */}
+        {canManagePayments && event.allow_unassigned_seats && event.unassigned_seats_count > 0 && (
+          <div style={{
+            display: "inline-block", marginLeft: "0.4rem", marginBottom: "0.4rem",
+            fontSize: "0.72rem", fontWeight: 700,
+            color: "var(--special)", borderRadius: "20px",
+            padding: "0.15rem 0.55rem", border: "1px solid var(--special)",
+          }}>{event.unassigned_seats_count} unassigned seat{event.unassigned_seats_count === 1 ? "" : "s"}</div>
+        )}
+
         {/* Description */}
         {event.description && (
           <div style={{ marginBottom: "0.5rem" }}>
             <ExpandableText
-              text={bbToHtml(event.description, "var(--terracotta)")}
+              text={bbToHtml(event.description, "var(--special)")}
               html
               fontSize={13}
               lineHeight={1.5}
               maxLines={2}
-              colour="var(--terracotta)"
+              colour="var(--special)"
             />
           </div>
         )}
@@ -1463,7 +1514,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                     return (
                       <div key={i} style={{ padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
                         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", gap: "0.5rem" }}>
-                        <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--terracotta)" : "var(--text)", minWidth: 0, flex: "1 1 auto", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--special)" : "var(--text)", minWidth: 0, flex: "1 1 auto", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {label}
                           {isPrivate && isAdmin && !isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
                           {b.bus_passenger && <BusIcon style={{ width: 12, height: 12, marginLeft: 4, verticalAlign: "-1px", opacity: 0.75 }} />}
@@ -1618,7 +1669,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                                   if (saveBlocked) return
                                   onTogglePayment(event.id, b, recordAmount, recordNote); setRecordingId(null)
                                 }}
-                                style={{ flex: 1, padding: "0.35rem", borderRadius: 8, border: "none", background: saveDisabled ? "var(--surface2)" : "var(--terracotta)", color: saveDisabled ? "var(--text-dim)" : "#fff", cursor: saveDisabled ? "not-allowed" : "pointer", opacity: saveDisabled ? 0.6 : 1, fontSize: "0.75rem", fontWeight: 700, fontFamily: "inherit" }}>Save</button>
+                                style={{ flex: 1, padding: "0.35rem", borderRadius: 8, border: "none", background: saveDisabled ? "var(--surface2)" : "var(--special)", color: saveDisabled ? "var(--text-dim)" : "#fff", cursor: saveDisabled ? "not-allowed" : "pointer", opacity: saveDisabled ? 0.6 : 1, fontSize: "0.75rem", fontWeight: 700, fontFamily: "inherit" }}>Save</button>
                             </div>
                             {/* Reset to unpaid -- explicit, confirmed, separate from Save
                                 (2026-08-11 hotfix). This is the only path that wipes
@@ -1687,7 +1738,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                     const label = isOwn ? "You" : (b.member?.name || b.member?.username || "Member")
                     return (
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
-                        <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--terracotta)" : "var(--text)" }}>
+                        <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--special)" : "var(--text)" }}>
                           {label}
                           {isPrivate && !isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
                         </span>
@@ -1775,11 +1826,10 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function SocialEvents() {
   const { member }        = useUser()
-  // Owner of the Social hub gets the same create/edit/manage options an
-  // admin has, scoped to this hub only (Iain, 2026-08-10).
-  const { owners: socialOwners } = useOwners('hub', 'social')
-  const isOwner   = !!member?.id && socialOwners.some(o => o.id === member.id)
-  const canManage = !!(member?.is_admin || isOwner)
+  // No Owner tier for Special Events (Iain, 2026-09-04: "No Owner is
+  // needed") -- admin only for the hub-wide New Event button; per-event
+  // EC visibility is computed inside EventCard itself.
+  const canManage = !!member?.is_admin
   const [events,          setEvents]        = useState([])
   const [coordinatorMap,  setCoordinatorMap] = useState({})
   const [bookings,        setBookings]       = useState({})
@@ -1813,8 +1863,8 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, bus_max_seats, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, contact_id, bus_passenger, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
-      .eq("hub_type", "social")
+      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_unassigned_seats, unassigned_seats_count, unassigned_seat_names, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, bus_max_seats, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, contact_id, bus_passenger, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
+      .eq("hub_type", "special")
       .eq("archived", false)
       .order("event_date", { ascending: true })
       .order("event_time", { ascending: true })
@@ -2037,7 +2087,7 @@ export default function SocialEvents() {
       {canManage && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "1rem" }}>
           <button onClick={() => { setEditEvent(null); setShowForm(true) }} style={{
-            background: "var(--terracotta)", color: "#fff", border: "none",
+            background: "var(--special)", color: "#fff", border: "none",
             borderRadius: "20px", padding: "0.5rem 1.25rem",
             fontSize: "0.88rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
           }}>+ Add Event</button>
@@ -2106,7 +2156,7 @@ export default function SocialEvents() {
       )}
 
       {showForm && session && (
-        <SocialEventForm event={editEvent} session={session} members={allMembers}
+        <SpecialEventForm event={editEvent} session={session} members={allMembers}
           onClose={() => { setShowForm(false); setEditEvent(null) }}
           onSaved={() => load()} />
       )}

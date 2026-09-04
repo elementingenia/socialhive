@@ -1,0 +1,477 @@
+"use client"
+import EventCoordinators from "@/components/EventCoordinators"
+import { useEffect, useState, useCallback, useRef } from "react"
+import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase"
+import { useUser } from "@/lib/UserContext"
+import EventSlideOut from "@/components/EventSlideOut"
+import { bbToHtml } from "@/components/RichEditor"
+import { BusIcon } from "@/components/NavIcons"
+import { ContactBar } from "@/components/OwnersManager"
+import ManageLink from "@/components/ManageLink"
+import { FormattedText } from "@/lib/textFormatter"
+import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted, balancePhrase } from "@/lib/payments"
+import { sydneyTodayStr, isEventPast } from "@/lib/date"
+import { bookingsClosed } from "@/lib/booking"
+
+const COLOUR = "var(--special)"
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function localDate(str) {
+  if (!str) return null
+  const [y, m, d] = str.split("-").map(Number)
+  return new Date(y, m - 1, d)
+}
+function fmtDate(str) {
+  if (!str) return ""
+  return localDate(str).toLocaleDateString("en-AU", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+  })
+}
+function fmtTime(str) {
+  if (!str) return ""
+  const [h, m] = str.split(":").map(Number)
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")}${h >= 12 ? "pm" : "am"}`
+}
+
+// ── Welcome Banner (matches Movies pattern exactly) ───────────────────────────
+const WELCOME_KEY = "special_events_welcome_dismissed"
+
+function WelcomeBanner({ text }) {
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem(WELCOME_KEY) === "1" } catch { return false }
+  })
+  if (!text) return null
+  if (dismissed) {
+    return (
+      <button onClick={() => setDismissed(false)} style={{
+        display: "flex", alignItems: "center", gap: 6,
+        background: "none", border: "none", color: COLOUR,
+        fontSize: "0.78rem", fontWeight: 600, cursor: "pointer",
+        padding: "0 0 0.75rem", fontFamily: "inherit",
+      }}>
+        <span style={{ fontSize: "1rem" }}>ℹ</span> Show welcome message
+      </button>
+    )
+  }
+  return (
+    <div style={{
+      background: COLOUR, borderRadius: 14,
+      padding: "0.9rem 1rem", marginBottom: "1rem",
+      position: "relative",
+    }}>
+      <div style={{ fontSize: "0.88rem", lineHeight: 1.55, color: "#fff", paddingRight: "1.5rem" }}>
+        {/<[a-z][\s\S]*>/i.test(text)
+          ? <span dangerouslySetInnerHTML={{ __html: text }} />
+          : <FormattedText text={text} c1Colour="var(--special)" c2Colour="rgba(255,255,255,0.85)" />
+        }
+      </div>
+      <button onClick={() => {
+        setDismissed(true)
+        try { localStorage.setItem(WELCOME_KEY, "1") } catch {}
+      }} style={{
+        position: "absolute", top: 8, right: 10, background: "none", border: "none",
+        color: "rgba(255,255,255,0.7)", fontSize: "1rem", cursor: "pointer", lineHeight: 1, padding: 4,
+      }}>×</button>
+    </div>
+  )
+}
+
+// ── Capacity Bar ──────────────────────────────────────────────────────────────
+function CapacityBar({ booked, max, waitlist }) {
+  if (!max || max <= 0) return null
+  const pct    = Math.min(100, (booked / max) * 100)
+  const left   = Math.max(0, max - booked)
+  const colour = pct >= 85 ? "var(--danger)" : pct >= 55 ? "var(--amber)" : "var(--green)"
+  return (
+    <div style={{ marginTop: "0.5rem" }}>
+      <div style={{ height: 5, background: "var(--surface2)", borderRadius: 4, overflow: "hidden", marginBottom: 4 }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: colour, borderRadius: 4, minWidth: pct > 0 ? 4 : 0 }} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "var(--text-dim)" }}>
+        <span>{booked}/{max} seats{waitlist > 0 && ` · ${waitlist} waiting`}</span>
+        <span style={{ color: left === 0 ? "var(--danger)" : colour, fontWeight: 600 }}>
+          {left === 0 ? "Full" : `${left} left`}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ── Next Event tile — surface card + terracotta header strip (matches Movies) ─
+function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCount, waitlistPosition, onOpen, canBypassClosed = false }) {
+  if (!event) {
+    return (
+      <div style={{
+        background: "var(--surface)", borderRadius: "16px",
+        border: "1px solid var(--border)", overflow: "hidden",
+        boxShadow: "var(--shadow)", marginBottom: "1.25rem",
+      }}>
+        <div style={{ background: COLOUR, padding: "0.6rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.85rem" }}>Next Event</span>
+        </div>
+        <div style={{ padding: "1.25rem 1rem", textAlign: "center" }}>
+          <div style={{ fontSize: "1.8rem", marginBottom: "0.4rem" }}>🎉</div>
+          <div style={{ color: "var(--text-dim)", fontSize: "0.9rem" }}>No upcoming events — check back soon</div>
+        </div>
+      </div>
+    )
+  }
+
+  const today     = new Date(); today.setHours(0, 0, 0, 0)
+  const evDate    = localDate(event.event_date)
+  const daysUntil = Math.round((evDate - today) / 86400000)
+  const daysLabel = daysUntil === 0 ? "Today!" : daysUntil === 1 ? "Tomorrow" : `In ${daysUntil} days`
+
+  const isConfirmed = myBooking?.status === "confirmed"
+  const isWaitlist  = myBooking?.status === "waitlist"
+  const ecNames     = coordinators.map(c => c.name || c.username).filter(Boolean)
+  // Bug fixed 2026-08-21 (Iain): the CTA pill always said "Tap to book"
+  // regardless of the reservation cut-off having passed -- Special Events' tile
+  // never even distinguished "full" from "not full", so this was the ONLY
+  // signal on the tile and it was unconditionally wrong once bookings
+  // closed. Same fix shape as Movies -- see lib/booking.js's bookingsClosed().
+  const closed  = bookingsClosed(event)
+  const blocked = closed && !isConfirmed && !isWaitlist && !canBypassClosed
+
+  return (
+    <div onClick={blocked ? undefined : onOpen} style={{
+      background: "var(--surface)", borderRadius: "16px",
+      border: "1px solid var(--border)", overflow: "hidden",
+      boxShadow: "var(--shadow)", marginBottom: "1.25rem", cursor: blocked ? "default" : "pointer",
+    }}>
+      {/* Coloured header strip */}
+      <div style={{
+        background: COLOUR, padding: "0.6rem 1rem",
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+      }}>
+        <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.85rem" }}>Next Event</span>
+        <span style={{ color: "rgba(255,255,255,0.9)", fontSize: "0.78rem", fontWeight: 600 }}>{daysLabel} ›</span>
+      </div>
+
+      {/* Content — white/surface background */}
+      <div style={{ padding: "0.9rem 1rem" }}>
+        <div style={{ fontWeight: 800, fontSize: "1.05rem", lineHeight: 1.2, marginBottom: "0.3rem" }}>
+          {event.title}
+        </div>
+
+        <div style={{ fontSize: "0.8rem", color: COLOUR, fontWeight: 600, marginBottom: "0.2rem" }}>
+          {fmtDate(event.event_date)}{event.event_time ? ` · ${fmtTime(event.event_time)}` : ""}
+        </div>
+
+        {event.location && (
+          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.2rem" }}>
+            📍 {event.location_type === "offsite" ? event.location.split("\n")[0] : event.location}
+          </div>
+        )}
+
+        <EventCoordinators eventId={event.id} eventTitle={event.title} names={ecNames}
+          colour="var(--special)" style={{ marginBottom: "0.2rem" }} />
+
+        {event.has_bus && event.bus_driver && (
+          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 5 }}>
+            <BusIcon size={14} /> <span>{event.bus_driver.name || event.bus_driver.username}</span>
+          </div>
+        )}
+
+        {event.payment_required && event.cost > 0 && (
+          <div style={{
+            display: "inline-block", marginBottom: "0.35rem",
+            background: "rgba(180,120,0,0.1)", color: "var(--amber-dark)",
+            borderRadius: "20px", padding: "0.15rem 0.55rem",
+            fontSize: "0.72rem", fontWeight: 700,
+          }}>${Number(event.cost).toFixed(0)} per person</div>
+        )}
+
+        {event.description && (
+          <div style={{
+            fontSize: "0.78rem", color: "var(--text-dim)", lineHeight: 1.45,
+            marginBottom: "0.4rem",
+            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
+          }} dangerouslySetInnerHTML={{ __html: bbToHtml(event.description, "var(--special)") }} />
+        )}
+
+        <CapacityBar booked={bookedCount} max={event.max_seats} waitlist={waitlistCount} />
+
+        {/* Booking status or CTA */}
+        <div style={{ marginTop: "0.6rem" }}>
+          {isConfirmed ? (() => {
+            const seats = myBooking?.seats || 1
+            const total = seatsCost(event, seats)
+            const badge = bookingStatusBadge(myBooking, event)
+            const statusWord = badge.label.toLowerCase() // "booked" or "confirmed" — never re-worded per screen
+            // Partial (2026-08-11 follow-up) -- same balance-based fix as
+            // the Scheduled tab's card strip, see social/events/page.js.
+            const isPartialBooking = badge.label === "Partial"
+            const balance = isPartialBooking ? balancePhrase(myBooking, event, seats) : null
+            const submitted = badge.label !== "Confirmed" && !isPartialBooking && computeIsSubmitted(myBooking)
+            const label = badge.label === "Confirmed"
+              ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Paid " + total : ""}`
+              : isPartialBooking
+                ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid ${balance}`
+                : submitted
+                  ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${total ? " " + total : ""}`
+                  : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Unpaid " + total : ""}`
+            const pillBg = submitted ? "#f0fdfa" : badge.bg
+            const pillColor = submitted ? "#0f766e" : badge.color
+            return (
+              <div style={{
+                display: "inline-flex", alignItems: "center",
+                background: pillBg, color: pillColor,
+                borderRadius: "20px", padding: "0.25rem 0.75rem",
+                fontSize: "0.78rem", fontWeight: 700,
+              }}>{label}</div>
+            )
+          })() : isWaitlist ? (
+            <div style={{
+              display: "inline-flex", alignItems: "center",
+              background: "var(--surface2)", color: "var(--text-dim)",
+              borderRadius: "20px", padding: "0.25rem 0.75rem",
+              fontSize: "0.78rem", fontWeight: 700,
+            }}>{`⏳ You're on the waitlist${waitlistPosition ? ` (#${waitlistPosition})` : ''}`}</div>
+          ) : (
+            <div style={{
+              display: "inline-flex", alignItems: "center",
+              background: closed ? "#fee2e2" : COLOUR + "18", color: closed ? "#991b1b" : COLOUR,
+              borderRadius: "20px", padding: "0.25rem 0.75rem",
+              fontSize: "0.78rem", fontWeight: 700,
+            }}>{closed ? "Bookings Closed" : "Tap to book →"}</div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── My Special Event Bookings tile — amber header (matches Movies pattern) ──────────
+function MyBookingsCard({ bookings, onViewAll }) {
+  // isEventPast (not a date-only >= today check) -- same fix as Movies'
+  // MyBookingsCard (2026-09-02): a same-day booking whose event has already
+  // started must drop out of "active" the moment it starts, not just at
+  // the next midnight.
+  const upcoming = bookings.filter(b =>
+    b.status !== "cancelled" &&
+    b.events?.hub_type === "special" &&
+    !isEventPast(b.events)
+  )
+
+  const sorted = [...upcoming].sort((a, b) =>
+    localDate(a.events?.event_date) - localDate(b.events?.event_date)
+  )
+
+  return (
+    <div onClick={onViewAll} style={{
+      background: "var(--surface)", borderRadius: "16px",
+      border: "1px solid var(--border)", overflow: "hidden",
+      boxShadow: "var(--shadow)", marginBottom: "1.25rem", cursor: "pointer",
+    }}>
+      <div style={{
+        background: "var(--amber)", padding: "0.6rem 1rem",
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+      }}>
+        <span style={{ color: "#fff", fontWeight: 700, fontSize: "0.85rem" }}>My Bookings</span>
+        <span style={{ color: "rgba(255,255,255,0.9)", fontSize: "0.78rem", fontWeight: 600 }}>View all ›</span>
+      </div>
+      {sorted.length === 0 ? (
+        <div style={{ padding: "1.25rem 1rem", textAlign: "center", color: "var(--text-dim)", fontSize: "0.88rem" }}>
+          You have no upcoming bookings.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {sorted.slice(0, 3).map(({ events: ev, status, seats, payment_status, amount_paid }, i) => {
+            const isWait = status === "waitlist"
+            const n      = seats || 1
+            // amount_paid passed through (2026-08-12) so a partial booking with an
+            // unconfirmed claim on top still badges "Partial" here too, not just on
+            // the full Scheduled card -- see lib/payments.js's isPartial() comment.
+            const badge  = bookingStatusBadge({ status, payment_status, seats, amount_paid }, ev)
+            return (
+              <div key={ev?.id} style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                gap: "0.75rem", padding: "0.75rem 1rem",
+                borderTop: i > 0 ? "1px solid var(--border)" : "none",
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.88rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {ev?.title || "Event"}
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: COLOUR, fontWeight: 600, marginTop: "0.1rem" }}>
+                    {fmtDate(ev?.event_date)}{ev?.event_time ? ` · ${fmtTime(ev.event_time)}` : ""}
+                  </div>
+                </div>
+                <div style={{ flexShrink: 0 }}>
+                  {isWait ? (
+                    <span style={{ background: badge.bg, color: badge.color, borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
+                      ⏳ {badge.label}
+                    </span>
+                  ) : (() => {
+                    // Same submitted-aware wording/colour as the Next Special
+                    // Event tile above (Iain, 2026-07-25: the two pills for
+                    // the same booking were showing different things —
+                    // "Payment submitted" up top, plain "Booked" down here).
+                    const total     = seatsCost(ev, n)
+                    const submitted = badge.label !== "Confirmed" && computeIsSubmitted({ payment_status })
+                    const label = badge.label === "Confirmed"
+                      ? `✓ ${n} seat${n !== 1 ? "s" : ""} · ${badge.label}${total ? ` ${total}` : ""}`
+                      : submitted
+                        ? `${n} seat${n !== 1 ? "s" : ""} · ${badge.label} · Payment submitted${total ? ` ${total}` : ""}`
+                        : `${n} seat${n !== 1 ? "s" : ""} · ${badge.label}${total ? ` ${total}` : ""}`
+                    const pillBg    = submitted ? "#f0fdfa" : badge.bg
+                    const pillColor = submitted ? "#0f766e" : badge.color
+                    return (
+                      <span style={{ background: pillBg, color: pillColor, borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>
+                        {label}
+                      </span>
+                    )
+                  })()}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+export default function SpecialEventsHome() {
+  const { member, isAdmin } = useUser()
+  const router              = useRouter()
+  // No Owner tier for Special Events (Iain, 2026-09-04) -- the "Manage
+  // Special Events" link/toggle screen is admin-only.
+  const canManage = isAdmin
+  const [nextEvent,         setNextEvent]         = useState(undefined) // undefined = loading, null = none
+  const [nextCoordinators,  setNextCoordinators]  = useState([])
+  const [nextEventIsEC,     setNextEventIsEC]     = useState(false)
+  const [myBooking,         setMyBooking]         = useState(null)
+  const [bookedCount,       setBookedCount]       = useState(0)
+  const [waitlistCount,     setWaitlistCount]     = useState(0)
+  const [waitlistPosition,  setWaitlistPosition]  = useState(null)
+  const [myAllBookings,     setMyAllBookings]     = useState([])
+  const [welcomeText,       setWelcomeText]       = useState("")
+  const [fullEvent,         setFullEvent]         = useState(null)
+  const [loading,           setLoading]           = useState(true)
+
+  const load = useCallback(async () => {
+    if (!member?.id) return
+    // Was: local-midnight Date -> toISOString().slice(0,10), which converts
+    // Sydney local midnight to UTC and always truncates to the PREVIOUS UTC
+    // calendar day for a positive-offset timezone -- todayStr here was wrong
+    // by a full day, every single day, not just at certain hours. See
+    // lib/date.js's header comment. Also fetch a few candidates, not just 1:
+    // a same-day event whose start time has already passed still satisfies
+    // event_date >= today by date alone, isEventPast() below retires it.
+    const todayStr = sydneyTodayStr()
+
+    const [eventsRes, myBookingsRes, hubRes] = await Promise.all([
+      supabase
+        .from("events")
+        .select("id, title, event_date, event_time, description, max_seats, unassigned_seats_count, cost, payment_required, has_bus, location_type, location, reservation_cutoff, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, booked_at)")
+        .eq("hub_type", "special").eq("archived", false)
+        .gte("event_date", todayStr)
+        .order("event_date", { ascending: true })
+        .order("event_time", { ascending: true })
+        .limit(5),
+      supabase
+        .from("bookings")
+        .select("id, event_id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, events(id, title, event_date, event_time, hub_type, payment_required, location_type, location)")
+        .eq("member_id", member.id)
+        .neq("status", "cancelled"),
+      supabase.from("hub_settings").select("welcome_text").eq("hub_type", "special").single(),
+    ])
+
+    const ev = (eventsRes.data || []).find(e => !isEventPast(e)) || null
+    setNextEvent(ev)
+
+    if (ev) {
+      const confirmed = ev.bookings?.filter(b => b.status === "confirmed") || []
+      setBookedCount(confirmed.reduce((s, b) => s + (b.seats || 1), 0) + (ev.unassigned_seats_count || 0))
+      setWaitlistCount(ev.bookings?.filter(b => b.status === "waitlist").length || 0)
+      const myBk = ev.bookings?.find(b => b.member_id === member.id && b.status !== "cancelled") || null
+      setMyBooking(myBk)
+      if (myBk?.status === "waitlist" && myBk?.booked_at) {
+        supabase
+          .from("bookings")
+          .select("id", { count: "exact", head: true })
+          .eq("event_id", ev.id)
+          .eq("status", "waitlist")
+          .lt("booked_at", myBk.booked_at)
+          .then(({ count }) => setWaitlistPosition((count ?? 0) + 1))
+      } else {
+        setWaitlistPosition(null)
+      }
+
+      const { data: ecs } = await supabase
+        .from("event_coordinators")
+        .select("member_id, members!event_coordinators_member_id_fkey(name, username)")
+        .eq("event_id", ev.id).is("replaced_at", null).order("assigned_at")
+      setNextCoordinators((ecs || []).map(ec => ec.members))
+      setNextEventIsEC((ecs || []).some(ec => ec.member_id === member.id))
+    } else {
+      setNextCoordinators([])
+      setNextEventIsEC(false)
+    }
+
+    setMyAllBookings((myBookingsRes.data || []).filter(b => b.events))
+    setWelcomeText(hubRes.data?.welcome_text || "")
+    setLoading(false)
+  }, [member?.id])
+
+  useEffect(() => { load() }, [load])
+
+  async function openEventSlideOut(event) {
+    const { data } = await supabase
+      .from("events")
+      .select("*, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, bus_passenger, members(name, username)), booking_attendees(owner_id, owner_contact_id, is_bus_passenger)")
+      .eq("id", event.id).single()
+    if (!data) return
+    // Bug fixed 2026-07-08: this query never derived my_bookings, so
+    // EventSlideOut always fell back to its "no booking yet" view here —
+    // Book Now + seat selector — even when the viewer already had a
+    // confirmed booking, because it only ever checks event.my_bookings.
+    // social/events/page.js, bookclub/page.js and movies/page.js already
+    // derive this correctly; this entry point (Home's Next Social Event
+    // tile) never did.
+    const my_bookings = (data.bookings || []).filter(b => b.member_id === member?.id)
+    setFullEvent({ ...data, my_bookings })
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: "1.25rem 1rem" }}>
+        {[1, 2].map(i => (
+          <div key={i} style={{ height: 140, borderRadius: "16px", background: "var(--surface2)", marginBottom: "1rem" }} />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: "1.25rem 1rem 6rem" }}>
+      <WelcomeBanner text={welcomeText} />
+
+      <ContactBar contextType="hub" contextKey="special" contextLabel="Special Events" colour="var(--special)" style={{ margin: "-2px 0 12px" }} />
+
+      {canManage && <ManageLink href="/special-events/manage" label="Manage Special Events" colour="var(--special)" />}
+
+      <NextEventTile
+        event={nextEvent}
+        coordinators={nextCoordinators}
+        myBooking={myBooking}
+        bookedCount={bookedCount}
+        waitlistCount={waitlistCount}
+        waitlistPosition={waitlistPosition}
+        onOpen={() => nextEvent && openEventSlideOut(nextEvent)}
+        canBypassClosed={canManage || nextEventIsEC}
+      />
+
+      <MyBookingsCard bookings={myAllBookings} onViewAll={() => router.push("/special-events/events")} />
+
+      {fullEvent && (
+        <EventSlideOut event={fullEvent} onClose={() => setFullEvent(null)}
+          onRefresh={() => { setFullEvent(null); load() }} />
+      )}
+    </div>
+  )
+}

@@ -376,6 +376,13 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   // (pre-existing behaviour) without naming who they're for.
   const [addNameParty,        setAddNameParty]        = useState(false)
   const [addParty,            setAddParty]            = useState([])
+  // Unassigned seats (2026-09-04) -- additive named entries, admin/EC only,
+  // for headcount that never gets a real booking row (walk-ins who won't be
+  // tracked as a resident/contact at all). See migration 095.
+  const [showAddUnassigned,   setShowAddUnassigned]   = useState(false)
+  const [unassignedInput,     setUnassignedInput]     = useState("")
+  const [addingUnassigned,    setAddingUnassigned]    = useState(false)
+  const [removingUnassignedIdx, setRemovingUnassignedIdx] = useState(null)
   const allowGuests = !!event.allow_nonresident_guests
   const isMovie  = event.hub_type === "movie"
   const isBook   = clubCaps(event.club).hasBooks
@@ -410,6 +417,42 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       load()
     } finally {
       setClosingOut(false)
+    }
+  }
+
+  async function submitAddUnassignedSeats() {
+    const names = unassignedInput.split("\n").map(n => n.trim()).filter(Boolean)
+    if (names.length === 0) return
+    setAddingUnassigned(true)
+    try {
+      const res = await authedFetch("/api/coordinator", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: event.id, action: "add_unassigned_seats", names }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { showToast(d.error || "Could not add unassigned seats", "error"); return }
+      showToast(`Added ${names.length} unassigned seat${names.length !== 1 ? "s" : ""}`)
+      setUnassignedInput(""); setShowAddUnassigned(false)
+      load(); onRefresh()
+    } finally {
+      setAddingUnassigned(false)
+    }
+  }
+
+  async function removeUnassignedSeat(index) {
+    setRemovingUnassignedIdx(index)
+    try {
+      const res = await authedFetch("/api/coordinator", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: event.id, action: "remove_unassigned_seat", index }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { showToast(d.error || "Could not remove that seat", "error"); return }
+      load(); onRefresh()
+    } finally {
+      setRemovingUnassignedIdx(null)
     }
   }
 
@@ -1075,6 +1118,60 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           </div>
         )}
       </div>
+
+      {/* Unassigned seats (2026-09-04) -- additive, admin/EC only, no
+          booking row/resident association at all. Only shown when this
+          event has the feature turned on in its own Edit form. */}
+      {event.allow_unassigned_seats && (
+        <div style={{ marginBottom: 12 }}>
+          {(data?.unassigned_seat_names?.length > 0) && (
+            <div style={{ marginBottom: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+              {data.unassigned_seat_names.map((name, i) => (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  background: colour + "0d", border: `1px solid ${colour}30`, borderRadius: 8,
+                  padding: "6px 10px", fontSize: 13,
+                }}>
+                  <span>👤 {name} <span style={{ color: "var(--text-dim)", fontSize: 11 }}>(unassigned seat)</span></span>
+                  <button onClick={() => removeUnassignedSeat(i)} disabled={removingUnassignedIdx === i}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--text-dim)" }}>
+                    {removingUnassignedIdx === i ? "…" : "✕"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {!showAddUnassigned ? (
+            <button onClick={() => setShowAddUnassigned(true)}
+              style={{ fontSize: 13, fontWeight: 600, color: clubInk(colour), background: "none", border: `1px dashed ${colour}`,
+                borderRadius: 10, padding: "8px 12px", cursor: "pointer", width: "100%" }}>
+              + Add Unassigned Seats
+            </button>
+          ) : (
+            <div style={{ background: colour + "0d", border: `1px solid ${colour}40`, borderRadius: 10, padding: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: clubInk(colour), textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                  Add Unassigned Seats
+                </div>
+                <button onClick={() => { setShowAddUnassigned(false); setUnassignedInput("") }}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--text-dim)" }}>✕</button>
+              </div>
+              <p style={{ fontSize: 12, color: "var(--text-dim)", margin: "0 0 8px" }}>
+                One name per line — each line adds one seat to this event&apos;s headcount, no booking or login needed.
+              </p>
+              <textarea value={unassignedInput} onChange={e => setUnassignedInput(e.target.value)}
+                placeholder={"e.g.\nJohn Smith\nMary Smith"} rows={3}
+                style={{ ...inputStyle, resize: "vertical", marginBottom: 8 }} />
+              <button onClick={submitAddUnassignedSeats} disabled={addingUnassigned || !unassignedInput.trim()}
+                style={{ width: "100%", padding: "10px 0", background: colour, color: clubTextOn(colour), border: "none", borderRadius: 8,
+                  fontSize: 14, fontWeight: 700, cursor: (addingUnassigned || !unassignedInput.trim()) ? "not-allowed" : "pointer",
+                  opacity: (addingUnassigned || !unassignedInput.trim()) ? 0.7 : 1 }}>
+                {addingUnassigned ? "Adding…" : "Add"}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {bookings.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--text-dim)", fontStyle: "italic", marginBottom: 12 }}>No bookings yet</div>
@@ -2398,8 +2495,13 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
                 style={{ height: 160, borderRadius: 8, boxShadow: "0 4px 16px rgba(0,0,0,0.2)" }} />
             </div>
           )}
-          {/* Social event image */}
-          {(event.hub_type === "social" || event.club) && event.image_url && (
+          {/* Social/Special event image -- 'special' added 2026-09-04: this
+              picker was cloned from Social's event form but the display side
+              was never widened to match (same class of gap as canCarryImage
+              in app/api/events/image/route.js), so an uploaded image saved
+              fine but never rendered in the booking view -- Iain, 2026-09-04:
+              "the image for the Event is not showing in the booking form". */}
+          {(event.hub_type === "social" || event.hub_type === "special" || event.club) && event.image_url && (
             <img src={event.image_url} alt={event.title}
               style={{
                 width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 12, marginBottom: 14,
@@ -2487,8 +2589,13 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
                 </div>
               )}
 
-              {/* Social */}
-              {event.hub_type === "social" && (
+              {/* Social/Special -- 'special' added 2026-09-04, same gap as the
+                  image above: Menu/View Details was never shown for Special
+                  Events even though has_dining/menu_type/menu_url all work
+                  identically -- Iain: "I should see the uploaded document in
+                  the same way I see that in the Social page - the option is
+                  not appearing". */}
+              {(event.hub_type === "social" || event.hub_type === "special") && (
                 <div style={{ marginBottom: 14 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                     <div style={{ display: "inline-block", padding: "4px 12px",

@@ -80,7 +80,7 @@ export async function GET(req) {
   // Fetch EC notes for the event
   const { data: event } = await supa
     .from("events")
-    .select("coordinator_notes, description, welcome_message, payment_required, cost, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), has_dining, menu_type, menu_text, menu_url, menu_file_name, image_focal_x, image_focal_y")
+    .select("coordinator_notes, description, welcome_message, payment_required, cost, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), has_dining, menu_type, menu_text, menu_url, menu_file_name, image_focal_x, image_focal_y, allow_unassigned_seats, unassigned_seats_count, unassigned_seat_names, max_seats")
     .eq("id", eventId)
     .maybeSingle()
 
@@ -104,6 +104,10 @@ export async function GET(req) {
     menu_file_name: event?.menu_file_name || null,
     image_focal_x: event?.image_focal_x ?? 50,
     image_focal_y: event?.image_focal_y ?? 50,
+    allow_unassigned_seats: event?.allow_unassigned_seats || false,
+    unassigned_seats_count: event?.unassigned_seats_count || 0,
+    unassigned_seat_names: event?.unassigned_seat_names || [],
+    max_seats: event?.max_seats || 0,
   })
 }
 
@@ -423,7 +427,7 @@ export async function PATCH(req) {
     }
 
     const { data: ev } = await supa
-      .from("events").select("id, max_seats, max_seats_per_booking, hub_type, book_id, payment_required, title, allow_nonresident_guests, require_attendee_names")
+      .from("events").select("id, max_seats, max_seats_per_booking, unassigned_seats_count, hub_type, book_id, payment_required, title, allow_nonresident_guests, require_attendee_names")
       .eq("id", event_id).single()
     if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
 
@@ -483,7 +487,7 @@ export async function PATCH(req) {
       .from("bookings").select("seats, status").eq("event_id", event_id).neq("status", "cancelled")
     const confirmedSeats = (allBookings || [])
       .filter(b => b.status === "confirmed").reduce((s, b) => s + (b.seats || 1), 0)
-    const available = Math.max(0, (ev.max_seats || 0) - confirmedSeats)
+    const available = Math.max(0, (ev.max_seats || 0) - (ev.unassigned_seats_count || 0) - confirmedSeats)
 
     let bookingStatus
     if (force_status === "waitlist") bookingStatus = "waitlist"
@@ -579,7 +583,7 @@ export async function PATCH(req) {
     }
 
     const { data: ev } = await supa
-      .from("events").select("id, title, max_seats, max_seats_per_booking, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names")
+      .from("events").select("id, title, max_seats, max_seats_per_booking, unassigned_seats_count, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names")
       .eq("id", event_id).single()
     if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
 
@@ -679,6 +683,69 @@ export async function PATCH(req) {
     const { error: ue } = await supa.from("events").update(patch).eq("id", event_id)
     if (ue) return NextResponse.json({ error: ue.message }, { status: 500 })
     return NextResponse.json({ ok: true })
+  }
+
+  // ── Add unassigned seat(s) -- additive, admin/EC only ─────────────────────
+  // Iain, 2026-09-04: the raw-count field in the Edit Event form ("keep
+  // increasing a count of seats") wasn't what he wanted -- an additive
+  // action from the attendee panel that names each seat as it's added,
+  // enforced against the event's own Total Seats the same way a real
+  // booking is (confirmed seats + already-unassigned seats can't exceed
+  // max_seats). Uses jsonb_array_length via a plain array read/write
+  // rather than a DB function -- these arrays are small (a handful of
+  // names per event), no need for anything fancier.
+  if (action === "add_unassigned_seats") {
+    const { names: rawNames } = body
+    const names = (Array.isArray(rawNames) ? rawNames : [])
+      .map(n => String(n || "").trim()).filter(Boolean)
+    if (names.length === 0) return NextResponse.json({ error: "Enter at least one name" }, { status: 400 })
+
+    const { data: ev } = await supa.from("events")
+      .select("max_seats, allow_unassigned_seats, unassigned_seat_names").eq("id", event_id).single()
+    if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
+    if (!ev.allow_unassigned_seats) {
+      return NextResponse.json({ error: "This event doesn't allow unassigned seats" }, { status: 400 })
+    }
+
+    const { data: allBookings } = await supa
+      .from("bookings").select("seats, status").eq("event_id", event_id).neq("status", "cancelled")
+    const confirmedSeats = (allBookings || [])
+      .filter(b => b.status === "confirmed").reduce((s, b) => s + (b.seats || 1), 0)
+
+    const existingNames = Array.isArray(ev.unassigned_seat_names) ? ev.unassigned_seat_names : []
+    const newNames = [...existingNames, ...names]
+    const available = Math.max(0, (ev.max_seats || 0) - confirmedSeats - existingNames.length)
+    if (names.length > available) {
+      return NextResponse.json({
+        error: available === 0
+          ? "No seats available to mark as unassigned"
+          : `Only ${available} seat${available === 1 ? "" : "s"} available`,
+      }, { status: 400 })
+    }
+
+    const { error: ue } = await supa.from("events")
+      .update({ unassigned_seat_names: newNames, unassigned_seats_count: newNames.length })
+      .eq("id", event_id)
+    if (ue) return NextResponse.json({ error: ue.message }, { status: 500 })
+    return NextResponse.json({ ok: true, unassigned_seat_names: newNames, unassigned_seats_count: newNames.length })
+  }
+
+  // ── Remove a single unassigned seat (undo a mistaken add) ─────────────────
+  if (action === "remove_unassigned_seat") {
+    const { index } = body
+    const { data: ev } = await supa.from("events")
+      .select("unassigned_seat_names").eq("id", event_id).single()
+    if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
+    const existingNames = Array.isArray(ev.unassigned_seat_names) ? ev.unassigned_seat_names : []
+    if (!(index >= 0 && index < existingNames.length)) {
+      return NextResponse.json({ error: "Invalid seat" }, { status: 400 })
+    }
+    const newNames = existingNames.filter((_, i) => i !== index)
+    const { error: ue } = await supa.from("events")
+      .update({ unassigned_seat_names: newNames, unassigned_seats_count: newNames.length })
+      .eq("id", event_id)
+    if (ue) return NextResponse.json({ error: ue.message }, { status: 500 })
+    return NextResponse.json({ ok: true, unassigned_seat_names: newNames, unassigned_seats_count: newNames.length })
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 })

@@ -117,7 +117,14 @@ const RAW_SECTIONS = [
     ],
   },
   {
-    id: "notices-ref", num: 11, title: "Quick Reference — the Two Real Notice Systems",
+    id: "occasional", num: 11, title: "Occasional Activities — Voting & Special Events",
+    subs: [
+      { title: "Why this tile exists", id: "sub-occ-why" },
+      { title: "Turning a hub on or off", id: "sub-occ-toggle" },
+    ],
+  },
+  {
+    id: "notices-ref", num: 12, title: "Quick Reference — the Two Real Notice Systems",
     subs: [
       { title: "Home banner vs. Club notices", id: "sub-notices-ref" },
     ],
@@ -846,7 +853,43 @@ export default function AdminGuidePage() {
             </Subsection>
           </Section>
 
-          <Section id="notices-ref" num={11} title="Quick Reference — the Two Real Notice Systems">
+          <Section id="occasional" num={11} title="Occasional Activities — Voting & Special Events">
+            <Subsection id="sub-occ-why" title="Why this tile exists">
+              <Step>
+                Voting and Special Events are both designed to sit off Home <strong>most of the
+                time</strong> — an election or vote isn't a routine tile, and a one-off gathering
+                doesn't fit an existing hub. Each has its own on/off switch
+                (<code>hub_settings.&lt;hub&gt;.enabled</code>), hidden by default.
+              </Step>
+              <Step>
+                Because both start hidden with no other link anywhere in the app, this one Admin
+                tile is the only way to find either of them the first time — it can't itself be
+                gated behind the flags it exists to control. It replaces what used to be a
+                standalone "Voting" tile; Special Events was folded in alongside it rather than
+                getting a second cluttering tile of its own, and any future feature of the same
+                shape belongs here too.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-occ-toggle" title="Turning a hub on or off">
+              <Step>
+                <strong>Admin → Occasional Activities</strong> shows both areas with their current
+                on/off state at a glance. Tap either one to open its own Manage screen and flip the
+                switch — the toggle itself lives there, not on this landing page.
+              </Step>
+              <Step>
+                Voting's Manage screen also has its own Welcome Text editor (used to introduce a
+                vote to residents); Special Events' does not — by design, per the standing rule
+                that no hub gets a Page Texts editor unless it actually needs one.
+              </Step>
+              <InfoBox>
+                💡 Turning a hub off doesn't touch its data — any votes already cast, or Special
+                Events already created, are untouched. It only controls whether the Home tile and
+                hub pages are reachable by residents right now.
+              </InfoBox>
+            </Subsection>
+          </Section>
+
+          <Section id="notices-ref" num={12} title="Quick Reference — the Two Real Notice Systems">
             <Subsection id="sub-notices-ref" title="Home banner vs. Club notices">
               <Step>
                 Element Happenings has exactly two working ways to post a notice — if a resident asks

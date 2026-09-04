@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { authedFetch } from "@/lib/getAuthToken"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import { useUser } from "@/lib/UserContext"
-import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon } from "@/components/NavIcons"
+import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon, SpecialEventsIcon } from "@/components/NavIcons"
 import { BAR_ENABLED, SPACE_BOOKINGS_ENABLED } from "@/lib/features"
 import AskQuestion from "@/components/AskQuestion"
 
@@ -212,6 +212,69 @@ function VotingTile() {
   )
 }
 
+// Same shape as VotingTile above -- Special Events is occasional (Iain,
+// 2026-09-04: "needs to be a toggle to activate this so it can be off MOST
+// of the time and not clutter the UI"). Gated entirely on
+// hub_settings.special.enabled, so this renders nothing at all until an
+// admin turns Special Events on via /special-events/manage.
+function SpecialEventsTile() {
+  const router = useRouter()
+  const [enabled, setEnabled] = useState(false)
+  const [nextEvent, setNextEvent] = useState(undefined) // undefined = loading
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const hs = await fetch("/api/hub-settings").then(r => r.json()).catch(() => ({}))
+      if (cancelled) return
+      const isEnabled = !!hs?.special?.enabled
+      setEnabled(isEnabled)
+      if (!isEnabled) { setNextEvent(null); return }
+
+      const todayStr = sydneyTodayStr()
+      const { data } = await supabase
+        .from("events")
+        .select("id, title, event_date, event_time")
+        .eq("hub_type", "special").eq("archived", false)
+        .gte("event_date", todayStr)
+        .order("event_date", { ascending: true })
+        .order("event_time", { ascending: true })
+        .limit(5)
+      if (cancelled) return
+      setNextEvent((data || []).find(e => !isEventPast(e)) || null)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  if (!enabled) return null
+
+  function label() {
+    if (nextEvent === undefined) return "Loading…"
+    if (!nextEvent) return "No upcoming Special Event"
+    const d = new Date(nextEvent.event_date + "T00:00:00")
+    const dateStr = isNaN(d.getTime()) ? "" : ` — ${d.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}`
+    return `${nextEvent.title}${dateStr}`
+  }
+
+  return (
+    <div onClick={() => router.push("/special-events")} style={{
+      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px",
+      padding: "1rem 1.25rem", cursor: "pointer", display: "flex",
+      alignItems: "center", justifyContent: "space-between", marginTop: "0.5rem", marginBottom: "0.75rem",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <span style={{ color: "var(--special)", lineHeight: 0, display: "flex", alignItems: "center" }}><SpecialEventsIcon size={40} /></span>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>Special Events</div>
+          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{label()}</div>
+        </div>
+      </div>
+      <span style={{ color: "var(--text-dim)", fontSize: "1.1rem" }}>›</span>
+    </div>
+  )
+}
+
 function BarTabCard({ memberId }) {
   const router = useRouter()
   const [openTotal,    setOpenTotal]    = useState(null)
@@ -330,6 +393,7 @@ export default function HomePage() {
           {/* Book a Space — full-width pill, not part of the two-row grid (feature parked, see lib/features.js) */}
           {SPACE_BOOKINGS_ENABLED && <SpaceBookingTile />}
           <VotingTile />
+          <SpecialEventsTile />
 
           {/* Sub notices */}
           {subTexts.map((t, i) => <SubNoticeCard key={i} text={t} />)}

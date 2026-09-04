@@ -2,20 +2,52 @@ import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 
 
+// Same auth/authz split as app/api/events/image/route.js (added
+// 2026-09-04) -- an expired token and a valid-but-unauthorised member used
+// to both collapse into a flat 403 "Forbidden", which silently disabled
+// authedFetch's stale-token retry (it only fires on 401). See that file's
+// comment for the full history.
 async function getAdminOrEC(token, eventId) {
+  if (!token) return { unauthenticated: true }
   const { data: { user }, error } = await supa.auth.getUser(token)
-  if (error || !user) return null
+  if (error || !user) return { unauthenticated: true }
   const { data: member } = await supa.from("members").select("id, is_admin").eq("auth_id", user.id).single()
-  if (!member) return null
+  // A valid, real Supabase Auth session with NO matching members row is a
+  // distinct failure from "you're a resident but not this event's admin/EC"
+  // -- added 2026-09-04 after "Forbidden" kept recurring for Iain even after
+  // the 401/403 split fix below, on an account that should have been admin.
+  // Both used to say the same bare "Forbidden", which made it impossible to
+  // tell from the error message alone whether the account itself had lost
+  // its members-table link (the same class of drift as the StuartG
+  // auth_email bug) or was just correctly not this event's coordinator.
+  if (!member) return { forbidden: true, reason: "No resident account is linked to this login." }
   if (member.is_admin) return member
 
+  // event_coordinators is a HISTORY table -- a coordinator swap doesn't
+  // delete the old row, it stamps replaced_at on it and inserts a new one
+  // (see event_coordinators.replaced_at/.replaced_by). This query used to
+  // have no replaced_at filter and used .single(), which requires EXACTLY
+  // one matching row -- so any event with more than one past coordinator
+  // (a swap, a re-assignment) had multiple (event_id, member_id) rows and
+  // .single() errored, silently turning a real, CURRENT coordinator into a
+  // false "forbidden". Confirmed 2026-09-04: Scampi is Test Event's actual
+  // active coordinator but had 5 historical event_coordinators rows, only
+  // the most recent with replaced_at IS NULL -- admin worked (it never
+  // reaches this query) while Scampi, the real EC, was blocked. Matches the
+  // canonical pattern in lib/areaAuth.js's requireEventManage().
   const { data: ec } = await supa
     .from("event_coordinators")
     .select("id")
     .eq("event_id", eventId)
     .eq("member_id", member.id)
-    .single()
-  return ec ? member : null
+    .is("replaced_at", null)
+    .maybeSingle()
+  return ec ? member : { forbidden: true, reason: "You're not an admin or coordinator for this event." }
+}
+
+function authErrorResponse(result) {
+  if (result?.unauthenticated) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 })
+  return NextResponse.json({ error: result?.reason || "Forbidden" }, { status: 403 })
 }
 
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"]
@@ -53,12 +85,16 @@ export async function POST(req) {
     if (!eventId || !action) return NextResponse.json({ error: "event_id and action required" }, { status: 400 })
 
     const member = await getAdminOrEC(token, eventId)
-    if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    if (!member || member.unauthenticated || member.forbidden) return authErrorResponse(member)
 
     const { data: event } = await supa.from("events").select("hub_type, menu_url").eq("id", eventId).single()
     if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 })
-    if (event.hub_type !== "social") {
-      return NextResponse.json({ error: "Menu upload only supported for social events" }, { status: 400 })
+    // 'special' added 2026-09-04 -- Special Events cloned this same Menu/
+    // Additional Info UI from Social's event form, but this allowlist was
+    // never widened to match, so any attempt 400'd (surfaced via setError,
+    // unlike Event Image's silent version of the same class of bug).
+    if (event.hub_type !== "social" && event.hub_type !== "special") {
+      return NextResponse.json({ error: "Menu upload only supported for Social and Special Events" }, { status: 400 })
     }
 
     if (action === "sign") {
@@ -111,12 +147,12 @@ export async function POST(req) {
   }
 
   const member = await getAdminOrEC(token, eventId)
-  if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!member || member.unauthenticated || member.forbidden) return authErrorResponse(member)
 
   const { data: event } = await supa.from("events").select("hub_type, menu_url").eq("id", eventId).single()
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 })
-  if (event.hub_type !== "social") {
-    return NextResponse.json({ error: "Menu upload only supported for social events" }, { status: 400 })
+  if (event.hub_type !== "social" && event.hub_type !== "special") {
+    return NextResponse.json({ error: "Menu upload only supported for Social and Special Events" }, { status: 400 })
   }
 
   await removeExistingMenuFile(event)
@@ -150,7 +186,7 @@ export async function DELETE(req) {
   if (!event_id) return NextResponse.json({ error: "event_id required" }, { status: 400 })
 
   const member = await getAdminOrEC(token, event_id)
-  if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  if (!member || member.unauthenticated || member.forbidden) return authErrorResponse(member)
 
   const { data: event } = await supa.from("events").select("menu_url").eq("id", event_id).single()
   await removeExistingMenuFile(event)

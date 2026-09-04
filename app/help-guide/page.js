@@ -145,6 +145,14 @@ const RAW_SECTIONS = [
       { title: "Running a vote (Owner/admin only)",  id: "sub-voting-ec" },
     ],
   },
+  {
+    id: "special", num: 12, title: "Special Events",
+    subs: [
+      { title: "Special Events hub home",       id: "sub-special-home" },
+      { title: "Viewing and booking events",    id: "sub-special-events" },
+      { title: "Coordinator panel (EC only)",   id: "sub-special-ec" },
+    ],
+  },
 ]
 
 // Bar section parked (feature not in scope) — see lib/features.js. Filtered
@@ -1375,6 +1383,49 @@ export default function HelpGuidePage() {
               </InfoBox>
             </Subsection>
           </Section>
+          <Section id="special" num={secNum("special")} title="Special Events">
+            <Step>
+              Special Events is used for one-off occasions outside the usual hubs — like a fete or
+              a fundraiser — and only appears on Home while an admin has it switched on. If you
+              don't see a Special Events tile, there's nothing currently active.
+            </Step>
+
+            <Subsection id="sub-special-home" title="Special Events hub home">
+              <Step>
+                Works the same way as Social's Home page: the next upcoming Special Event shows at
+                the top with its date, time, location and coordinator, along with a seats-remaining
+                bar. Tap it to see the full event and book your spot. Your own upcoming bookings
+                across every Special Event appear below that.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-special-events" title="Viewing and booking events">
+              <Step>
+                Tap <strong>Scheduled</strong> from the hub home to see every upcoming Special
+                Event. Booking works exactly like Social — pick your seats, add anyone else coming
+                with you if the event allows it, and confirm. If an event is full, you'll be offered
+                a spot on the waitlist instead.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-special-ec" title="Coordinator panel" ecOnly>
+              <Step>
+                An admin, or the Event Coordinator(s) assigned to a Special Event, can create and
+                edit that event and see who's booked — the same panel Social uses. There's no
+                separate Owner role for this hub: only admins and that event's own coordinators can
+                manage it.
+              </Step>
+              <Step>
+                A Special Event can be set up to allow <strong>unassigned seats</strong> — a plain
+                headcount an admin or coordinator adds for people who turned up without booking
+                (walk-ins), rather than a named booking. Turn this on and set the number in the
+                event's edit form; it counts against the event's Total Seats the same as any named
+                booking does, but doesn't appear anywhere in the attendee list since it isn't tied
+                to a resident or contact.
+              </Step>
+            </Subsection>
+          </Section>
+
 
           {/* Footer */}
           <div style={{

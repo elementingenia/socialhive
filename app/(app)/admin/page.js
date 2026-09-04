@@ -6,7 +6,7 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon } from '@/components/NavIcons'
 import OwnersManager from '@/components/OwnersManager'
 import ResidentEditForm, { Sheet, labelStyle } from '@/components/ResidentEditPanel'
 import { CLUB_COLOURS, nextClubColour } from '@/lib/clubColours'
@@ -36,13 +36,20 @@ const SECTIONS = [
   ...(BAR_ENABLED ? [{ key: 'Bar', label: 'Bar', Icon: BarIcon }] : []),
   { key: 'Locations', label: 'Locations',  Icon: InfoIcon },
   { key: 'Tools',     label: 'Tools',      Icon: ToolsIcon },
-  // Voting hub -- always visible in Admin (unlike Show Time/Social/Library,
-  // which are reached via a "Manage" link on their own live page) because
-  // Voting starts hidden-by-default (hub_settings.voting.enabled = false)
-  // with no other discoverable link anywhere until an admin turns it on --
-  // this tile IS that discovery path, so it can't itself be gated behind
-  // the flag it exists to control. Routes straight to /voting/manage.
-  { key: 'Voting',    label: 'Voting',     Icon: VotingIcon, href: '/voting/manage' },
+  // Occasional Activities -- always visible in Admin (unlike Show Time/
+  // Social/Library, which are reached via a "Manage" link on their own live
+  // page) because Voting and Special Events both start hidden-by-default
+  // (hub_settings.<hub>.enabled = false) with no other discoverable link
+  // anywhere until an admin turns them on -- this tile IS that discovery
+  // path, so it can't itself be gated behind the flags it exists to control.
+  // Replaces the old standalone "Voting" tile (Iain, 2026-09-04: "change
+  // the Voting option in Admin to Occasional Activities and have voting and
+  // special events housed together") -- one shared entry point for any
+  // future hidden/occasional-use feature of the same shape, rather than one
+  // cluttering Admin tile per hub. Routes to /occasional-activities, a
+  // landing page listing each area's current on/off state with a link
+  // through to that hub's own existing manage page.
+  { key: 'Occasional', label: 'Occasional Activities', Icon: OccasionalActivitiesIcon, href: '/occasional-activities' },
 ]
 
 // ── Shared helpers ────────────────────────────────────────────────────────────

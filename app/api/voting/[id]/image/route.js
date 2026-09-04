@@ -36,7 +36,12 @@ export async function POST(req, { params }) {
   }
 
   const rawBytes = Buffer.from(await file.arrayBuffer())
-  const { buffer: bytes, contentType, ext } = await resizeImage(rawBytes)
+  let bytes, contentType, ext
+  try {
+    ({ buffer: bytes, contentType, ext } = await resizeImage(rawBytes))
+  } catch (err) {
+    return NextResponse.json({ error: err.message || "Could not process that image" }, { status: 400 })
+  }
   const path = `voting/${params.id}/cover.${ext}`
 
   const { error: upErr } = await supa.storage
