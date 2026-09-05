@@ -26,8 +26,8 @@ export async function POST(req) {
   const body = await req.json()
   const { event_id, member_ids } = body
   if (!event_id) return NextResponse.json({ error: "event_id required" }, { status: 400 })
-  if (!Array.isArray(member_ids) || member_ids.length > 3) {
-    return NextResponse.json({ error: "member_ids must be array of max 3" }, { status: 400 })
+  if (!Array.isArray(member_ids)) {
+    return NextResponse.json({ error: "member_ids must be an array" }, { status: 400 })
   }
 
   const now = new Date().toISOString()

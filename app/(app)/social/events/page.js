@@ -1110,7 +1110,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 
           {/* EC — mandatory */}
           <div ref={el => (fieldRefs.current.coordinators = el)} style={FIELD}>
-            <label style={LABEL}>Event Coordinator(s) <span style={{ color: "var(--danger)" }}>*</span> — max 3
+            <label style={LABEL}>Event Coordinator(s) <span style={{ color: "var(--danger)" }}>*</span>
               {invalidFields.includes("coordinators") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
             </label>
             <ECPicker members={members} value={coordinators} onChange={v => { setCoordinators(v); setEcError(null) }} valid={coordinators.length > 0} invalid={invalidFields.includes("coordinators")} />
