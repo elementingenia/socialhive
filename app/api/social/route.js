@@ -18,7 +18,7 @@ async function writeCoordinators(eventId, coordinatorIds, actorId) {
     .is('replaced_at', null)
 
   if (coordinatorIds?.length) {
-    const rows = coordinatorIds.slice(0, 3).map(mid => ({
+    const rows = coordinatorIds.map(mid => ({
       event_id: eventId,
       member_id: mid,
       assigned_by: actorId,
