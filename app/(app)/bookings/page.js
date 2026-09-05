@@ -8,6 +8,7 @@ import { authedFetch } from "@/lib/getAuthToken"
 import { MoviesIcon, SocialIcon } from "@/components/NavIcons"
 import ClubScopeDropdown from "@/components/ClubScopeDropdown"
 import { useMyClubs } from "@/lib/useMyClubs"
+import { loadFilterPrefs, saveFilterPrefs, sortByOnState } from "@/lib/calendarFilterPrefs"
 import MySpaceBookings from "@/components/MySpaceBookings"
 import { isEventPast } from "@/lib/date"
 
@@ -164,9 +165,21 @@ export default function BookingsPage() {
   const [bookings,    setBookings]    = useState([])
   const [loading,     setLoading]     = useState(true)
   // Same default and shape as Calendar's activeHubs -- independent
-  // multi-toggle, not a single-select filter (Iain, 2026-08-04).
-  const [activeHubs,  setActiveHubs]  = useState(["movie", "club", "social"])
-  const [clubScope,   setClubScope]   = useState("all")
+  // multi-toggle, not a single-select filter (Iain, 2026-08-04). Persisted
+  // across visits, same as Calendar (Iain, 2026-09-05: "those filters
+  // should be preserved until user changes them") -- own storage key,
+  // not shared with Calendar's, since this page's hub set is narrower
+  // (no Special Events, no Spaces) -- see lib/calendarFilterPrefs.js.
+  const BOOKINGS_FILTER_KEY = "bookingsFilters"
+  const [activeHubs,  setActiveHubs]  = useState(() =>
+    loadFilterPrefs(BOOKINGS_FILTER_KEY)?.activeHubs || ["movie", "club", "social"]
+  )
+  const [clubScope,   setClubScope]   = useState(() =>
+    loadFilterPrefs(BOOKINGS_FILTER_KEY)?.clubScope || "all"
+  )
+  useEffect(() => {
+    saveFilterPrefs(BOOKINGS_FILTER_KEY, { activeHubs, clubScope })
+  }, [activeHubs, clubScope])
   const { myClubIds } = useMyClubs()
   const [pastOpen,    setPastOpen]    = useState(false)
   const [selectedEvent,    setSelectedEvent]    = useState(null)
@@ -307,7 +320,29 @@ export default function BookingsPage() {
           marginBottom: "1.25rem",
           overflowX: "auto", paddingBottom: 2,
         }}>
-          {HUB_TOGGLES.map(({ key, label, Icon, colour }) => {
+          {/* Reordered so anything switched OFF slides to the right of
+              anything still ON (Iain, 2026-09-05), matching Calendar's
+              identical fix -- see components/CalendarView.js and
+              lib/calendarFilterPrefs.js's sortByOnState. Groups & Clubs
+              only counts as "off" once fully hidden (clubScope === "hide"). */}
+          {sortByOnState(
+            [
+              ...HUB_TOGGLES.map(t => ({ ...t, type: "hub" })),
+              { key: "club", type: "club" },
+            ],
+            def => def.type === "club" ? clubScope !== "hide" : activeHubs.includes(def.key)
+          ).map(def => {
+            if (def.type === "club") {
+              return (
+                <ClubScopeDropdown
+                  key="club"
+                  clubScope={clubScope}
+                  setClubScope={setClubScope}
+                  clubsInView={clubsInView}
+                />
+              )
+            }
+            const { key, label, Icon, colour } = def
             const on = activeHubs.includes(key)
             return (
               <button
@@ -336,16 +371,6 @@ export default function BookingsPage() {
               </button>
             )
           })}
-
-          {/* Always rendered -- matches Calendar's identical fix, 2026-09-05:
-              this dropdown's "Hide Groups & Clubs" option was unreachable
-              whenever the current filtered set had no club event and the
-              viewer wasn't a club member. */}
-          <ClubScopeDropdown
-            clubScope={clubScope}
-            setClubScope={setClubScope}
-            clubsInView={clubsInView}
-          />
         </div>
 
         {/* Upcoming */}

@@ -5,6 +5,9 @@ import { useMyClubs } from "@/lib/useMyClubs"
 import { MoviesIcon, SocialIcon, SpaceIcon, SpecialEventsIcon } from "@/components/NavIcons"
 import ClubScopeDropdown from "@/components/ClubScopeDropdown"
 import { SPACE_BOOKINGS_ENABLED } from "@/lib/features"
+import { loadFilterPrefs, saveFilterPrefs, sortByOnState } from "@/lib/calendarFilterPrefs"
+
+const FILTER_STORAGE_KEY = "calendarFilters"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -484,12 +487,23 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
   // (BUG-011) was deliberately left untouched at the time; this closes that
   // gap so Calendar matches Home. Flip SPACE_BOOKINGS_ENABLED back to `true`
   // to restore both together.
-  const [activeHubs, setActiveHubs] = useState(
-    SPACE_BOOKINGS_ENABLED ? ["movie", "club", "social", "space", "special"]
-                            : ["movie", "club", "social", "special"]
+  const defaultActiveHubs = SPACE_BOOKINGS_ENABLED
+    ? ["movie", "club", "social", "space", "special"]
+    : ["movie", "club", "social", "special"]
+  // Persisted across visits (Iain, 2026-09-05: "when user applies filters,
+  // those filters should be preserved until user changes them") -- lazy
+  // initializers so the very first render already reflects a saved choice
+  // instead of flashing the defaults for one frame. See lib/calendarFilterPrefs.js.
+  const [activeHubs, setActiveHubs] = useState(() =>
+    loadFilterPrefs(FILTER_STORAGE_KEY)?.activeHubs || defaultActiveHubs
   )
-  // Club filter: 'all' | 'mine' | a specific club id (Iain 2026-07-18).
-  const [clubScope, setClubScope] = useState("all")
+  // Club filter: 'all' | 'mine' | 'hide' | a specific club id (Iain 2026-07-18).
+  const [clubScope, setClubScope] = useState(() =>
+    loadFilterPrefs(FILTER_STORAGE_KEY)?.clubScope || "all"
+  )
+  useEffect(() => {
+    saveFilterPrefs(FILTER_STORAGE_KEY, { activeHubs, clubScope })
+  }, [activeHubs, clubScope])
   const { myClubIds } = useMyClubs()
   const clubsInView = useMemo(() => {
     const seen = new Map()
@@ -566,14 +580,52 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
         ))}
       </div>
 
-      {/* Hub filters — tap to toggle */}
+      {/* Hub filters — tap to toggle. Reordered so anything switched OFF
+          slides to the right of anything still ON (Iain, 2026-09-05: "A
+          filter that is turned off ... should slide to the right of
+          filters left ON"); Array.sort is stable, so ties keep their
+          original left-to-right order -- see lib/calendarFilterPrefs.js's
+          sortByOnState. Groups & Clubs only counts as "off" once fully
+          hidden (clubScope === "hide") -- scoping to My Groups & Clubs or
+          one specific club still filters, it doesn't exclude the area, so
+          it stays put among the ON pills. */}
       <div style={{ display: "flex", gap: 8, padding: "8px 16px", overflowX: "auto", borderBottom: "1px solid var(--border)" }}>
-        {[
-          { key: "movie",    label: "Show Time", Icon: MoviesIcon },
-          { key: "social",   label: "Social Hive", Icon: SocialIcon },
-          ...(SPACE_BOOKINGS_ENABLED ? [{ key: "space", label: "Spaces", Icon: SpaceIcon }] : []),
-          { key: "special",  label: "Special Events", Icon: SpecialEventsIcon },
-        ].map(({ key, label, Icon }) => {
+        {sortByOnState(
+          [
+            { key: "movie",    type: "hub", label: "Show Time", Icon: MoviesIcon },
+            { key: "social",   type: "hub", label: "Social Hive", Icon: SocialIcon },
+            ...(SPACE_BOOKINGS_ENABLED ? [{ key: "space", type: "hub", label: "Spaces", Icon: SpaceIcon }] : []),
+            { key: "special",  type: "hub", label: "Special Events", Icon: SpecialEventsIcon },
+            { key: "club",     type: "club" },
+          ],
+          def => def.type === "club" ? clubScope !== "hide" : activeHubs.includes(def.key)
+        ).map(def => {
+          if (def.type === "club") {
+            // Club scope IS the clubs filter: All / My clubs / a specific
+            // club / Hide (Iain 2026-07-19). Always purple; the standalone
+            // "Clubs" toggle pill was removed as redundant. Custom button +
+            // popover menu, NOT a native <select> (Iain 2026-07-27: a
+            // native select's text rendered visibly larger than the
+            // Movies/Social pills on iOS Safari no matter what inline
+            // fontSize was set -- platform-enforced minimum form-control
+            // font size overriding CSS). Always rendered, not gated on
+            // clubsInView/myClubIds.size (Iain, 2026-09-05: "there should
+            // be an option in Groups/Clubs to select NONE" -- the "Hide
+            // Groups & Clubs" option already existed inside this dropdown,
+            // but the dropdown itself only rendered when the current view
+            // already had a club event or the viewer had joined one, so on
+            // a quiet week the control -- Hide included -- was completely
+            // unreachable, not just hard to find).
+            return (
+              <ClubScopeDropdown
+                key="club"
+                clubScope={clubScope}
+                setClubScope={setClubScope}
+                clubsInView={clubsInView}
+              />
+            )
+          }
+          const { key, label, Icon } = def
           const on = activeHubs.includes(key)
           const colour = HUB_COLOURS[key] || "var(--amber)"
           return (
@@ -599,28 +651,6 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
             </button>
           )
         })}
-
-        {/* Club scope IS the clubs filter: All / My clubs / a specific club (Iain 2026-07-19).
-            Always purple; the standalone "Clubs" toggle pill was removed as redundant.
-            Custom button + popover menu, NOT a native <select> (Iain 2026-07-27: a native
-            select's text rendered visibly larger than the Movies/Social pills on iOS Safari
-            no matter what inline fontSize was set -- platform-enforced minimum form-control
-            font size overriding CSS. A styled button reusing this exact pill's style object
-            guarantees pixel-identical text with Movies/Social, and brings this control in
-            line with the project's own "no native browser form controls" standard.) */}
-        {/* Always rendered, not gated on clubsInView/myClubIds.size (Iain,
-            2026-09-05: "there should be an option in Groups/Clubs to select
-            NONE" -- the "Hide Groups & Clubs" option already exists inside
-            this dropdown, but the dropdown itself only rendered when the
-            current view already contained a club event or the viewer had
-            joined one, so on a week with no club activity (or for an admin
-            who isn't a club member) the control -- and therefore Hide --
-            was completely unreachable, not just hard to find). */}
-        <ClubScopeDropdown
-          clubScope={clubScope}
-          setClubScope={setClubScope}
-          clubsInView={clubsInView}
-        />
       </div>
       </div>
 
