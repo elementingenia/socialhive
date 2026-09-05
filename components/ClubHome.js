@@ -875,7 +875,7 @@ function BringCategoryPicker({ clubId, colour, value, onChange }) {
 }
 
 // ── Admin Inline Event Form ───────────────────────────────────────────────────
-function CoordMultiPicker({ members, value = [], onChange, colour = "var(--purple)", max = 3, invalid = false }) {
+function CoordMultiPicker({ members, value = [], onChange, colour = "var(--purple)", max = Infinity, invalid = false }) {
   const chosen = value.map(id => members.find(m => m.id === id)).filter(Boolean)
   const available = members.filter(m => !value.includes(m.id))
   return (
@@ -891,12 +891,8 @@ function CoordMultiPicker({ members, value = [], onChange, colour = "var(--purpl
           ))}
         </div>
       )}
-      {value.length < max ? (
-        <CoordPicker members={available} value="" valid={value.length > 0} colour={colour} invalid={invalid}
-          onChange={id => { if (id) onChange([...value, id]) }} />
-      ) : (
-        <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Maximum {max} coordinators reached.</div>
-      )}
+      <CoordPicker members={available} value="" valid={value.length > 0} colour={colour} invalid={invalid}
+        onChange={id => { if (id) onChange([...value, id]) }} />
     </div>
   )
 }
@@ -1575,7 +1571,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       )}
 
       <div ref={el => (fieldRefs.current.coordinators = el)} style={{ marginBottom: 12 }}>
-        <label style={labelStyle}>Event Coordinator{form.coordinator_ids.length !== 1 ? "s" : ""} <span style={{ color: "var(--danger)" }}>*</span> <span style={{ textTransform: "none", fontWeight: 500, color: "var(--text-dim)" }}>(up to 3)</span>
+        <label style={labelStyle}>Event Coordinator{form.coordinator_ids.length !== 1 ? "s" : ""} <span style={{ color: "var(--danger)" }}>*</span> 
           {invalidFields.includes("coordinators") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
         </label>
         <CoordMultiPicker

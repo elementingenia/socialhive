@@ -275,7 +275,6 @@ function ECPicker({ members = [], value, onChange, valid, invalid = false }) {
   )
 
   function pick(m) {
-    if (value.length >= 3) return
     onChange([...value, m]); setOpen(false); setQuery("")
   }
   function remove(id) { onChange(value.filter(m => m.id !== id)) }
@@ -310,7 +309,7 @@ function ECPicker({ members = [], value, onChange, valid, invalid = false }) {
         </div>
       )}
 
-      {value.length < 3 && (
+      {(
         <div style={{ position: "relative" }}>
           <div onClick={() => { setOpen(o => !o); setQuery("") }}
             role="button" tabIndex={0} aria-haspopup="listbox" aria-expanded={open}
