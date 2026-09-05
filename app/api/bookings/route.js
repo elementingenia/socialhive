@@ -9,6 +9,7 @@ import { syncAttendees } from '@/lib/syncAttendees'
 import { maxSeatsPerBooking, planSeatModification } from '@/lib/modifyBooking'
 import { amountOwing } from '@/lib/payments'
 import { busSeatsUsed, validateBusRequest, requestedBusSeats } from '@/lib/busSeats'
+import { eventNotifyRecipients } from '@/lib/questionRouting'
 
 
 async function getMember(token) {
@@ -294,13 +295,16 @@ export async function PATCH(req) {
     const { error: markErr } = await supabaseAdmin.from('bookings').update(patch).eq('id', booking.id)
     if (markErr) return NextResponse.json({ error: markErr.message }, { status: 500 })
 
-    // Notify this event's active coordinators + all admins so someone
-    // knows to check and confirm -- mirrors resolveEC's authority set in
-    // app/api/coordinator/route.js.
-    const { data: ecRows } = await supabaseAdmin
-      .from('event_coordinators').select('member_id').eq('event_id', event_id).is('replaced_at', null)
-    const { data: admins } = await supabaseAdmin.from('members').select('id').eq('is_admin', true)
-    const notifyIds = new Set([...(ecRows || []).map(r => r.member_id), ...(admins || []).map(a => a.id)])
+    // Who should be told to check and confirm this claim: this event's own
+    // EC(s) if it has any; otherwise the Owner(s) of its hub/club; only if
+    // BOTH are empty does it fall back to every admin. Shared with In-App
+    // Questions routing (lib/questionRouting.js) so the hierarchy can't drift
+    // between the two -- this call site used to notify the EC UNION every
+    // admin unconditionally, so an admin with no relationship to the event
+    // got a "please confirm" alert even when the event already had an EC.
+    // Fixed per Iain, 2026-09-06: "admins only get direct notifications
+    // pertinent to them ... unless there is an absence of Owner/EC."
+    const notifyIds = new Set(await eventNotifyRecipients(event_id))
 
     const owedStr = `$${owed.toFixed(2)}`
     const paidStr = `$${claimedTotal.toFixed(2)}`
