@@ -692,6 +692,35 @@ export default function LibraryPage() {
     if (mv.length>0) acc[m.id] = { avg: mv.reduce((s,v)=>s+v.score,0)/mv.length, count:mv.length }
     return acc
   }, {})
+  // Community score: a Bayesian-shrunk weighted rating (the same shape IMDb's
+  // classic "true Bayesian estimate" uses), not a raw average. A movie's own
+  // average is pulled toward the whole community's average in proportion to
+  // how few votes it has, so a single extreme vote on a lightly-voted movie
+  // can't dominate its ranking, and vote count is baked into the score itself
+  // rather than only breaking ties on an exact average match. Both the
+  // shrinkage threshold (m) and the community average (C) are computed live
+  // from current data every render, so this self-scales as more residents
+  // vote over time instead of needing a hand-tuned constant revisited later.
+  // Agreed with Iain, 2026-09-05, replacing the old average->count->IMDb
+  // lexicographic tiebreak (2026-08-31 fix, now superseded).
+  const votedStats = Object.values(avgVotes)
+  const communityMean = (() => {
+    if (votedStats.length === 0) return 0
+    const avgs = votedStats.map(v=>v.avg).sort((a,b)=>a-b)
+    const mid = Math.floor(avgs.length/2)
+    return avgs.length % 2 === 1 ? avgs[mid] : (avgs[mid-1]+avgs[mid])/2
+  })()
+  const shrinkM = (() => {
+    if (votedStats.length === 0) return 2
+    const counts = votedStats.map(v=>v.count).sort((a,b)=>a-b)
+    const p25 = counts[Math.floor(0.25*(counts.length-1))]
+    return Math.max(2, p25)
+  })()
+  const weightedScore = (id) => {
+    const s = avgVotes[id]
+    if (!s) return 0
+    return (s.count/(s.count+shrinkM))*s.avg + (shrinkM/(s.count+shrinkM))*communityMean
+  }
   const allGenres = [...new Set(movies.flatMap(m=>parseGenres(m.genre)))].sort()
 
   const filtered = movies.filter(m => {
@@ -704,14 +733,12 @@ export default function LibraryPage() {
   })
   const sorted = [...filtered].sort((a,b) => {
     if (sortBy==='community') {
-      // Highest average vote first; a tie on average is broken by whichever
-      // score is backed by more votes (Iain, 2026-08-31: "two movies scoring
-      // 9 but one has got that from 2 user votes and the other from 5, the
-      // one with 5 user votes has a higher overall ranking"), not IMDb rating.
-      const avgDiff = (avgVotes[b.id]?.avg||0)-(avgVotes[a.id]?.avg||0)
-      if (avgDiff !== 0) return avgDiff
-      const countDiff = (avgVotes[b.id]?.count||0)-(avgVotes[a.id]?.count||0)
-      if (countDiff !== 0) return countDiff
+      // Highest Bayesian-weighted score first (see weightedScore above) --
+      // vote count is already part of the score, not a separate tiebreak.
+      // A genuine tie (rare with a continuous score) falls back to IMDb
+      // rating, same as before.
+      const scoreDiff = weightedScore(b.id) - weightedScore(a.id)
+      if (scoreDiff !== 0) return scoreDiff
       return (parseFloat(b.rating_imdb)||0)-(parseFloat(a.rating_imdb)||0)
     }
     if (sortBy==='imdb') return (parseFloat(b.rating_imdb)||0)-(parseFloat(a.rating_imdb)||0)
