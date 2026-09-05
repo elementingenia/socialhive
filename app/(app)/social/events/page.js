@@ -1468,9 +1468,24 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                           {b.bus_passenger && <BusIcon style={{ width: 12, height: 12, marginLeft: 4, verticalAlign: "-1px", opacity: 0.75 }} />}
                         </span>
                         <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
-                          {canManagePayments && submitted && (
-                            <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#0f766e", background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 8, padding: "0.05rem 0.35rem" }}>🧾 Submitted</span>
-                          )}
+                          {/* "🧾 Submitted" moved OUT of this inline group and onto its
+                              own line below (2026-09-06, Iain -- real screenshot,
+                              Oktoberfest/Alison Colley): at real phone width, adding
+                              this badge's text into the same flexShrink:0 cluster as
+                              seats/reminder-bell/toggle was just enough to tip the row
+                              over the available width, and since the wrap happens on
+                              the OUTER row (name vs. this whole cluster), the entire
+                              cluster dropped to a second line flush against the row's
+                              LEFT edge -- not right-aligned under where seats/toggle
+                              sit on every other row -- breaking the column down the
+                              page. Confirmed by forcing this row to the real ~326px
+                              content width a phone gets (390px screen minus this app's
+                              page + card padding) and reading back getBoundingClientRect
+                              on Alison's row vs. a same-length row with no badge: hers
+                              wrapped, the other didn't. Removing the badge's width from
+                              this cluster is what keeps seats/bell/toggle themselves
+                              always on one line, matching every other row regardless of
+                              submitted state -- see the badge's own line just below. */}
                           {/* "Partial" $-amount pill removed (2026-08-12, Iain --
                               Spring Ball 2 live review): on a row that's ALSO showing
                               the "Submitted" pill, the two together pushed the
@@ -1561,6 +1576,11 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                           })()}
                         </span>
                         </div>
+                        {canManagePayments && submitted && (
+                          <div style={{ marginTop: "0.15rem" }}>
+                            <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#0f766e", background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 8, padding: "0.05rem 0.35rem" }}>🧾 Submitted</span>
+                          </div>
+                        )}
                         {/* Inline record-payment form (2026-08-11) -- amount
                             pre-filled with the full amount owed (editable down for
                             a short payment or up for an overpayment), comment
