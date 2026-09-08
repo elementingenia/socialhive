@@ -114,12 +114,18 @@ ok(anomalies.length === 1 && anomalies[0].normalizedHouseNumber === '12' && anom
   'per_household mode flags exactly the one house with 2+ voters, matched after normalization')
 
 // ── canSeeResults ──
-ok(canSeeResults({ results_visibility_outcome: 'admin_only' }, { field: 'results_visibility_outcome', isAdmin: false }) === false,
-  'admin_only + non-admin viewer => cannot see')
-ok(canSeeResults({ results_visibility_outcome: 'admin_only' }, { field: 'results_visibility_outcome', isAdmin: true }) === true,
-  'admin_only + admin viewer => can always see')
-ok(canSeeResults({ results_visibility_outcome: 'residents' }, { field: 'results_visibility_outcome', isAdmin: false }) === true,
+// Change Request #3 (2026-09-08): results are coordinator-only, not a
+// blanket admin/owner bypass. "isAdmin" was retired from this function's
+// contract in favour of "isCoordinator", computed per-event by the caller
+// (event.coordinator_id === viewing member.id) -- see lib/voting.js.
+ok(canSeeResults({ results_visibility_outcome: 'admin_only' }, { field: 'results_visibility_outcome', isCoordinator: false }) === false,
+  'admin_only + non-coordinator viewer => cannot see')
+ok(canSeeResults({ results_visibility_outcome: 'admin_only' }, { field: 'results_visibility_outcome', isCoordinator: true }) === true,
+  'admin_only + this event\'s own coordinator => can always see')
+ok(canSeeResults({ results_visibility_outcome: 'residents' }, { field: 'results_visibility_outcome', isCoordinator: false }) === true,
   'residents visibility => any viewer can see')
+ok(canSeeResults({ results_visibility_outcome: 'admin_only' }, { field: 'results_visibility_outcome' }) === false,
+  'admin_only + no isCoordinator passed at all (e.g. a plain admin/owner who is not this event\'s coordinator) => cannot see')
 
 console.log(`\nvoting.test.mjs: ${pass} passed, ${fail} failed`)
 if (fail > 0) process.exit(1)

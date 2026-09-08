@@ -40,8 +40,12 @@ export async function GET(req) {
   // (canSeeResults), same as the detail route. Draft events never show a
   // count (nothing to count yet, and Draft isn't in scope for turnout
   // visibility anywhere else in this hub).
+  //
+  // Change Request #3, 2026-09-08: results visibility is coordinator-only,
+  // computed per event -- no blanket admin/owner bypass. See lib/voting.js's
+  // canSeeResults() for the full rationale.
   const turnoutEligibleIds = data
-    .filter(e => computeVotingStatus(e) !== 'draft' && canSeeResults(e, { field: 'results_visibility_turnout', isAdmin: member.is_admin }))
+    .filter(e => computeVotingStatus(e) !== 'draft' && canSeeResults(e, { field: 'results_visibility_turnout', isCoordinator: !!e.coordinator_id && e.coordinator_id === member.id }))
     .map(e => e.id)
   const votesCastById = {}
   if (turnoutEligibleIds.length > 0) {
