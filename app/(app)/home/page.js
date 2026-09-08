@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { authedFetch } from "@/lib/getAuthToken"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import { useUser } from "@/lib/UserContext"
-import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon, SpecialEventsIcon, CommitteeIcon } from "@/components/NavIcons"
+import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon, SpecialEventsIcon, CommitteeIcon, SurveysIcon } from "@/components/NavIcons"
 import { BAR_ENABLED, SPACE_BOOKINGS_ENABLED } from "@/lib/features"
 import AskQuestion from "@/components/AskQuestion"
 
@@ -329,6 +329,62 @@ function CommitteeTile() {
   )
 }
 
+// Same shape as VotingTile/SpecialEventsTile/CommitteeTile above -- Surveys
+// (Social_Hive_Surveys_Scope_Answered.md, Iain 2026-09-08) is also
+// occasional, hidden until an admin turns it on via hub_settings.surveys.
+// Shows the currently-open survey (if any), same "no live event = plain
+// fallback line" convention as VotingTile.
+function SurveysTile() {
+  const router = useRouter()
+  const [enabled, setEnabled] = useState(false)
+  const [openSurvey, setOpenSurvey] = useState(undefined) // undefined = loading
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const hs = await fetch("/api/hub-settings").then(r => r.json()).catch(() => ({}))
+      if (cancelled) return
+      const isEnabled = !!hs?.surveys?.enabled
+      setEnabled(isEnabled)
+      if (!isEnabled) { setOpenSurvey(null); return }
+
+      const res = await authedFetch("/api/surveys").catch(() => null)
+      const json = res ? await res.json().catch(() => ({})) : {}
+      if (cancelled) return
+      setOpenSurvey((json.surveys || []).find(s => s.status === "open") || null)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  if (!enabled) return null
+
+  function label() {
+    if (openSurvey === undefined) return "Loading…"
+    if (!openSurvey) return "No survey is currently open"
+    const closes = new Date(openSurvey.closes_at)
+    const closesStr = isNaN(closes.getTime()) ? "" : ` — closes ${closes.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}`
+    return `${openSurvey.title}${closesStr}`
+  }
+
+  return (
+    <div onClick={() => router.push("/surveys")} style={{
+      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px",
+      padding: "1rem 1.25rem", cursor: "pointer", display: "flex",
+      alignItems: "center", justifyContent: "space-between", marginTop: "0.5rem", marginBottom: "0.75rem",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <span style={{ color: "var(--surveys)", lineHeight: 0, display: "flex", alignItems: "center" }}><SurveysIcon size={40} /></span>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>Surveys</div>
+          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{label()}</div>
+        </div>
+      </div>
+      <span style={{ color: "var(--text-dim)", fontSize: "1.1rem" }}>›</span>
+    </div>
+  )
+}
+
 function BarTabCard({ memberId }) {
   const router = useRouter()
   const [openTotal,    setOpenTotal]    = useState(null)
@@ -449,6 +505,7 @@ export default function HomePage() {
           <VotingTile />
           <SpecialEventsTile />
           <CommitteeTile />
+          <SurveysTile />
 
           {/* Sub notices */}
           {subTexts.map((t, i) => <SubNoticeCard key={i} text={t} />)}

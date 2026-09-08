@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
-import { VotingIcon, SpecialEventsIcon } from "@/components/NavIcons"
+import { VotingIcon, SpecialEventsIcon, SurveysIcon } from "@/components/NavIcons"
 
 // Admin's single discovery entry point for hidden-by-default, occasional-use
 // hubs -- Iain, 2026-09-04: "change the Voting option in Admin to Occasional
@@ -34,6 +34,11 @@ const AREAS = [
     key: "special", label: "Special Events", Icon: SpecialEventsIcon, colour: "var(--special)",
     manageHref: "/special-events/manage",
     blurb: "One-off gatherings that don't fit an existing hub.",
+  },
+  {
+    key: "surveys", label: "Surveys", Icon: SurveysIcon, colour: "var(--surveys)",
+    manageHref: "/surveys/manage",
+    blurb: "Question bank, and the show/hide toggle for the Surveys hub.",
   },
 ]
 
