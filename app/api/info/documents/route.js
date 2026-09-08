@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { resizeImage, MAX_AGE_SECONDS } from '@/lib/imageResize'
+import { resolveContentType } from '@/lib/mimeFallback'
 import { isAreaOwner } from '@/lib/areaAuth'
 async function getAdminMember(token) {
   if (!token) return null
@@ -55,7 +56,13 @@ export async function POST(req) {
   const bytes = await file.arrayBuffer()
   let buffer      = Buffer.from(bytes)
   let ext         = file.name.split('.').pop()
-  let contentType = file.type
+  // file.type is frequently an EMPTY STRING for .doc/.docx on mobile
+  // Safari -- see lib/mimeFallback.js's header comment for the exact
+  // failure this caused (an empty Content-Type header rejected by
+  // undici, surfaced to the resident as "The string did not match the
+  // expected pattern."). Derive a real MIME from the extension whenever
+  // the browser didn't give us one, instead of passing it through blind.
+  let contentType = resolveContentType(file.type, file.name)
 
   // Resize/re-encode images only -- PDFs and other document types pass
   // through untouched. See lib/imageResize.js for why this exists.
