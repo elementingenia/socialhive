@@ -39,6 +39,8 @@ function typeIcon(type) {
     case "space_booking_cancelled": return "🚪"
     case "space_request_validate":  return "📋"
     case "voting_opened":            return "🗳️"
+    case "survey_opened":            return "📝"
+    case "survey_results_published": return "📊"
     default:                  return "🔔"
   }
 }
@@ -67,6 +69,8 @@ function typeColour(type) {
     case "space_booking_cancelled": return "#e53e3e"
     case "space_request_validate":  return "var(--amber-dark)"
     case "voting_opened":            return "var(--voting)"
+    case "survey_opened":            return "var(--voting)"
+    case "survey_results_published": return "var(--voting)"
     default:                  return "var(--text-dim)"
   }
 }
@@ -81,6 +85,7 @@ function typeColour(type) {
 function targetForNotif(n) {
   if (n.type?.startsWith("question_")) return "/questions"
   if (n.type === "voting_opened") return "/voting"
+  if (n.type === "survey_opened" || n.type === "survey_results_published") return "/surveys"
   switch (n.events?.hub_type) {
     case "movie":    return "/screenings"
     case "social":   return "/social"
