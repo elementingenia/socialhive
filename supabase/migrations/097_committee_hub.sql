@@ -94,21 +94,25 @@ INSERT INTO hub_settings (hub_type, enabled) VALUES ('committee', false)
   ON CONFLICT (hub_type) DO NOTHING;
 
 -- ── Owners seeding (one-time) ───────────────────────────────────────────────
--- Every member currently tagged "Committee" in Contacts (contact_categories/
--- member_categories) is seeded as a Committee hub Owner (Iain, 2026-09-07:
--- "just make all committee members Owner of the Hub. This is just to kick
--- things off and is easily managed manually once the build is done.") --
--- deliberately includes members who are already app Admins (belt-and-braces
--- for them; the assignment is what actually matters for the two who aren't
--- Admins today). Only catches Committee contacts who are also linked member
--- accounts, per space_owners.member_id's FK -- matches the real Contacts ->
--- Committee filter confirmed 2026-09-07 (6 people, all with house numbers).
+-- Every member currently tagged "Committee" in Contacts is seeded as a
+-- Committee hub Owner (Iain, 2026-09-07: "just make all committee members
+-- Owner of the Hub. This is just to kick things off and is easily managed
+-- manually once the build is done.") -- deliberately includes members who
+-- are already app Admins (belt-and-braces for them; the assignment is what
+-- actually matters for the two who aren't Admins today). Category tagging
+-- lives on each resident's own linked `contacts` row (migration 030 --
+-- contacts.member_id -> contact_category_members -> contact_categories;
+-- the earlier member_categories table from migration 029 was dropped by
+-- migration 030 and never used in production). Only catches Committee
+-- contacts who are also linked member accounts, per space_owners.member_id's
+-- FK -- matches the real Contacts -> Committee filter confirmed 2026-09-07
+-- (6 people, all with house numbers).
 INSERT INTO space_owners (context_type, context_key, member_id)
-SELECT 'hub', 'committee', m.id
-FROM members m
-JOIN member_categories mc  ON mc.member_id = m.id
-JOIN contact_categories cc ON cc.id = mc.category_id
-WHERE lower(cc.name) = 'committee'
+SELECT 'hub', 'committee', c.member_id
+FROM contacts c
+JOIN contact_category_members ccm ON ccm.contact_id = c.id
+JOIN contact_categories cc ON cc.id = ccm.category_id
+WHERE lower(cc.name) = 'committee' AND c.member_id IS NOT NULL
 ON CONFLICT (context_type, context_key, member_id) DO NOTHING;
 
 -- ─── VERIFY ──────────────────────────────────────────────────────────────
@@ -121,7 +125,7 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM space_owners WHERE context_type = 'hub' AND context_key = 'committee'
   ) THEN
-    RAISE WARNING 'No Committee Owners were seeded -- either the Committee contacts category is empty, or none of its members are linked member accounts. Check manually.';
+    RAISE WARNING 'No Committee Owners were seeded -- either the Committee contacts category is empty, or none of its tagged contacts are linked to a member account. Check manually.';
   END IF;
 
   RAISE NOTICE 'OK: committee_posts and committee_notification_optouts created, hub_settings seeded disabled, Committee Owners seeded from Contacts.';
