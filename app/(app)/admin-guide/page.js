@@ -558,14 +558,15 @@ export default function AdminGuidePage() {
                 on a future edit.
               </FlagCard>
 
-              <FlagCard name="Paid events (cost)">
-                ON: event creation gets a "Requires payment" toggle and a cost field. Turn that per-event
-                toggle on and a booking for that event starts life as <strong>payment pending</strong>{" "}
-                instead of not-required — which is what switches on the whole payment-tracking flow
-                (Booked → Confirmed wording, self-report, EC mark-as-paid, refund ledger). OFF at the club
-                level: no payment fields appear on any event for this club at all, regardless of what an
-                individual event might otherwise need.
-              </FlagCard>
+              <p style={{ margin: "0 0 0.75rem", fontSize: "0.85rem", color: "var(--text-dim)" }}>
+                "Paid event" is <strong>not</strong> a club-level flag (removed 2026-09-08) — every club
+                event's create/edit form always has a "Paid event" toggle and cost field, exactly like
+                Social Hive and Special Events. The event creator/editor decides per event; no admin
+                setup step is needed first. Turn that per-event toggle on and a booking for that event
+                starts life as <strong>payment pending</strong> instead of not-required — which is what
+                switches on the whole payment-tracking flow (Booked → Confirmed wording, self-report,
+                EC mark-as-paid, refund ledger).
+              </p>
 
               <FlagCard name="Attendees bring something (bring_enabled)">
                 ON: event creation gets a "bring categories" picker (e.g. Mains / Sides / Dessert) and a

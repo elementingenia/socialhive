@@ -1058,8 +1058,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
             allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
             require_attendee_names: Number(form.max_seats_per_booking) > 1 ? !!form.require_attendee_names : false,
-            payment_required: caps.hasCost ? !!form.payment_required : false,
-            cost: caps.hasCost && form.payment_required ? (Number(form.cost) || 0) : 0,
+            payment_required: !!form.payment_required,
+            cost: form.payment_required ? (Number(form.cost) || 0) : 0,
             bring_category_ids: caps.bringEnabled ? (form.bring_category_ids || []) : [],
             bring_required: caps.bringEnabled ? !!form.bring_required : false,
             theme_name: caps.hasTheme ? (form.theme_name.trim() || null) : null,
@@ -1136,9 +1136,9 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
       allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
       require_attendee_names: Number(form.max_seats_per_booking) > 1 ? !!form.require_attendee_names : false,
-      payment_required: caps.hasCost ? !!form.payment_required : false,
-      cost:            caps.hasCost && form.payment_required ? (Number(form.cost) || 0) : 0,
-      payment_due_by:  caps.hasCost && form.payment_required ? (form.payment_due_by || null) : null,
+      payment_required: !!form.payment_required,
+      cost:            form.payment_required ? (Number(form.cost) || 0) : 0,
+      payment_due_by:  form.payment_required ? (form.payment_due_by || null) : null,
       bring_category_ids: caps.bringEnabled ? (form.bring_category_ids || []) : [],
       bring_required:  caps.bringEnabled ? !!form.bring_required : false,
       theme_name:      caps.hasTheme ? (form.theme_name.trim() || null) : null,
@@ -1462,8 +1462,10 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       )}
 
       {/* Payment -- a different kind of decision (money, not who's coming),
-          kept out of Attendees on purpose. */}
-      {caps.hasCost && (
+          kept out of Attendees on purpose. Always available to the event
+          creator/editor, same as Social Hive and Special Events -- no
+          club-level admin setup step required (Iain, 2026-09-08: "the
+          event creator/editor should be able to turn this on"). */}
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Paid event</label>
         <div style={{ display: "flex", gap: 8, marginBottom: form.payment_required ? 10 : 0 }}>
@@ -1487,7 +1489,6 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
           </>
         )}
       </div>
-      )}
 
       {/* Lending -- what's being lent out for this event and when it's due
           back, grouped with the Book picker rather than left near Capacity
