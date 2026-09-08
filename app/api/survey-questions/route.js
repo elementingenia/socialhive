@@ -28,21 +28,30 @@ export async function GET(req) {
 
   const ids = (questions || []).map(q => q.id)
   let choicesByQuestion = {}
+  // `inUse` (2026-09-08 addition) -- lets the bank UI decide UP FRONT
+  // whether to render the full edit form or the locked helper-text-only
+  // one, instead of the resident guessing and getting a 400 back from
+  // PATCH after filling everything in. Mirrors the exact "any survey_items
+  // row referencing it" check [id]/route.js's PATCH already enforces
+  // server-side -- this is purely a client-side UX shortcut, the real gate
+  // stays on PATCH.
+  let inUseIds = new Set()
   if (ids.length > 0) {
-    const { data: choices, error: cErr } = await supabaseAdmin
-      .from('survey_question_choices')
-      .select('id, question_id, label, sort_order')
-      .in('question_id', ids)
-      .order('sort_order')
+    const [{ data: choices, error: cErr }, { data: usedItems, error: uErr }] = await Promise.all([
+      supabaseAdmin.from('survey_question_choices').select('id, question_id, label, sort_order').in('question_id', ids).order('sort_order'),
+      supabaseAdmin.from('survey_items').select('question_id').in('question_id', ids),
+    ])
     if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
+    if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 })
     for (const c of choices || []) {
       if (!choicesByQuestion[c.question_id]) choicesByQuestion[c.question_id] = []
       choicesByQuestion[c.question_id].push(c)
     }
+    inUseIds = new Set((usedItems || []).map(i => i.question_id))
   }
 
   return NextResponse.json({
-    questions: (questions || []).map(q => ({ ...q, choices: choicesByQuestion[q.id] || [] })),
+    questions: (questions || []).map(q => ({ ...q, choices: choicesByQuestion[q.id] || [], inUse: inUseIds.has(q.id) })),
   })
 }
 

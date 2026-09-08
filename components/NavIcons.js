@@ -295,6 +295,28 @@ export function OccasionalActivitiesIcon({ size = 26 }) {
   )
 }
 
+// Clipboard with a checklist -- Surveys hub icon (2026-09-08). Distinct from
+// CommitteeIcon (a pinned notice on a clipboard) and VotingIcon (a ballot
+// box) -- this reads as "answer a form" (checkboxes + lines), matching what
+// a survey actually is, rather than reusing either existing clipboard-family
+// glyph.
+export function SurveysIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 16 10 C 16 7.8 17.8 6 20 6 L 50 6 C 52.2 6 54 7.8 54 10 L 54 60 C 54 62.2 52.2 64 50 64 L 20 64 C 17.8 64 16 62.2 16 60 Z
+           M 22 16 L 48 16 L 48 54 L 22 54 Z
+           M 27 2 L 43 2 L 43 12 L 27 12 Z
+           M 25 24 L 30 24 L 30 29 L 25 29 Z
+           M 34 25 L 44 25 L 44 28 L 34 28 Z
+           M 25 34 L 30 34 L 30 39 L 25 39 Z
+           M 34 35 L 44 35 L 44 38 L 34 38 Z
+           M 25 44 L 30 44 L 30 49 L 25 49 Z
+           M 34 45 L 44 45 L 44 48 L 34 48 Z"/>
+    </svg>
+  )
+}
+
 // ── Useful Information hub icons ─────────────────────────────────────────────
 
 // Info circle with "i" — hub nav icon
