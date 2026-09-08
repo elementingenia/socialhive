@@ -7,12 +7,62 @@ import { authedFetch, getAuthToken } from "@/lib/getAuthToken"
 import RichEditor from "@/components/RichEditor"
 import { ContactBar } from "@/components/OwnersManager"
 import CommitteeNotifyToggle from "@/components/CommitteeNotifyToggle"
-import { CommitteeIcon } from "@/components/NavIcons"
+import { FormattedText } from "@/lib/textFormatter"
 
 const COLOUR = "var(--committee)"
 
 function fmt(iso) {
   return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
+}
+
+// ── Welcome Banner (matches Movies/Social/Special Events pattern exactly —
+// admin-editable via Page Texts, hub_settings.welcome_text). Committee's
+// page previously never fetched or rendered this at all -- the hardcoded
+// icon+title+description block below stood in its place, which is both
+// the wrong content (not admin-editable, doesn't match what Page Texts'
+// "Committee" row actually controls) and the wrong layout (every other
+// hub starts with WelcomeBanner, not a static header). Iain, 2026-09-08:
+// same class of gap as Special Events had. ──────────────────────────────
+const WELCOME_KEY = "committee_welcome_dismissed"
+
+function WelcomeBanner({ text }) {
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem(WELCOME_KEY) === "1" } catch { return false }
+  })
+  if (!text) return null
+  if (dismissed) {
+    return (
+      <button onClick={() => setDismissed(false)} style={{
+        display: "flex", alignItems: "center", gap: 6,
+        background: "none", border: "none", color: COLOUR,
+        fontSize: "0.78rem", fontWeight: 600, cursor: "pointer",
+        padding: "0 0 0.75rem", fontFamily: "inherit",
+      }}>
+        <span style={{ fontSize: "1rem" }}>ℹ</span> Show welcome message
+      </button>
+    )
+  }
+  return (
+    <div style={{
+      background: COLOUR, borderRadius: 14,
+      padding: "0.9rem 1rem", marginBottom: "1rem",
+      position: "relative",
+    }}>
+      <div style={{ fontSize: "0.88rem", lineHeight: 1.55, color: "#fff", paddingRight: "1.5rem" }}>
+        {/<[a-z][\s\S]*>/i.test(text)
+          ? <span dangerouslySetInnerHTML={{ __html: text }} />
+          : <FormattedText text={text} c1Colour="var(--committee)" c2Colour="rgba(255,255,255,0.85)" />
+        }
+      </div>
+      <button onClick={() => {
+        setDismissed(true)
+        try { localStorage.setItem(WELCOME_KEY, "1") } catch {}
+      }} style={{
+        position: "absolute", top: 8, right: 10, background: "none", border: "none",
+        color: "rgba(255,255,255,0.7)", fontSize: "1rem", cursor: "pointer", lineHeight: 1, padding: 4,
+      }}>×</button>
+    </div>
+  )
 }
 
 // ── One post ─────────────────────────────────────────────────────────────
@@ -158,13 +208,18 @@ export default function CommitteePage() {
   const canManage = isAdmin || isOwner
 
   const [posts, setPosts] = useState([])
+  const [welcomeText, setWelcomeText] = useState("")
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState(null)
 
   const load = useCallback(async () => {
-    const res = await authedFetch("/api/committee").catch(() => null)
-    const data = res ? await res.json().catch(() => ({})) : {}
+    const [postsRes, hubRes] = await Promise.all([
+      authedFetch("/api/committee").catch(() => null),
+      supabase.from("hub_settings").select("welcome_text").eq("hub_type", "committee").single(),
+    ])
+    const data = postsRes ? await postsRes.json().catch(() => ({})) : {}
     setPosts(data.posts || [])
+    setWelcomeText(hubRes.data?.welcome_text || "")
     setLoading(false)
   }, [])
 
@@ -203,17 +258,11 @@ export default function CommitteePage() {
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
       {toast && <div style={{ position: "fixed", top: 70, left: "50%", transform: "translateX(-50%)", zIndex: 200, background: "var(--text)", color: "var(--bg)", padding: "0.5rem 1rem", borderRadius: 8, fontSize: "0.85rem", fontWeight: 600 }}>{toast}</div>}
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-        <span style={{ color: COLOUR, lineHeight: 0 }}><CommitteeIcon size={34} /></span>
-        <div>
-          <div style={{ fontWeight: 800, fontSize: "1.1rem", color: "var(--text)" }}>Committee</div>
-          <div style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Notices, updates, and meeting minutes from your Committee</div>
-        </div>
-      </div>
+      <WelcomeBanner text={welcomeText} />
 
-      <div style={{ marginBottom: 12 }}>
-        <CommitteeNotifyToggle colour={COLOUR} />
-      </div>
+      <ContactBar contextType="hub" contextKey="committee" contextLabel="Committee" colour={COLOUR}
+        style={{ margin: "-2px 0 12px" }}
+        right={<CommitteeNotifyToggle colour={COLOUR} />} />
 
       {canManage && <Composer onPosted={load} />}
 
@@ -229,9 +278,6 @@ export default function CommitteePage() {
       )}
 
       <MeetingMinutes />
-
-      <ContactBar contextType="hub" contextKey="committee" contextLabel="Committee" colour={COLOUR}
-        style={{ marginTop: 16 }} />
     </div>
   )
 }
