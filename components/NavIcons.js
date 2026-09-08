@@ -239,6 +239,25 @@ export function VotingIcon({ size = 26 }) {
   )
 }
 
+// Noticeboard / pinned notice -- Committee hub icon (2026-09-07). A clipboard
+// with a pinned notice, distinct from every other hub glyph in this file --
+// reads as "official/administrative" (matching the slate colour, decision 6
+// of Social_Hive_Committee_Notice_Board_Scope_v3_FINAL) rather than a ballot
+// (VotingIcon, already in use for the separate Voting hub).
+export function CommitteeIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 16 10 C 16 7.8 17.8 6 20 6 L 50 6 C 52.2 6 54 7.8 54 10 L 54 60 C 54 62.2 52.2 64 50 64 L 20 64 C 17.8 64 16 62.2 16 60 Z
+           M 22 16 L 48 16 L 48 54 L 22 54 Z
+           M 27 2 L 43 2 L 43 12 L 27 12 Z
+           M 26 24 L 44 24 L 44 28 L 26 28 Z
+           M 26 34 L 44 34 L 44 38 L 26 38 Z
+           M 26 44 L 38 44 L 38 48 L 26 48 Z"/>
+    </svg>
+  )
+}
+
 // Star burst / sparkle -- Special Events hub icon (2026-09-04). A one-off
 // occasional-event hub, same design family as Social -- kept visually
 // distinct (a starburst, not a party/calendar glyph already used elsewhere)

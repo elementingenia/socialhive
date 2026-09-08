@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { resizeImage, MAX_AGE_SECONDS } from '@/lib/imageResize'
+import { isAreaOwner } from '@/lib/areaAuth'
 async function getAdminMember(token) {
   if (!token) return null
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
@@ -10,17 +11,43 @@ async function getAdminMember(token) {
   return data?.is_admin ? data : null
 }
 
+// Resolves a member for the upload path only: admin (any category), OR a
+// Committee hub Owner uploading specifically to "Committee Meetings"
+// (Social_Hive_Committee_Notice_Board_Scope_v3_FINAL decision 5, 2026-09-07).
+// Everywhere else in this route (PATCH/DELETE, and every other category)
+// stays admin-only, unchanged -- a Committee Owner does not thereby gain
+// upload rights to General Documents or Policy Documents.
+async function getUploadMember(token, categoryId) {
+  if (!token) return null
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
+  if (error || !user) return null
+  const { data: member } = await supabaseAdmin
+    .from('members').select('id, is_admin').eq('auth_id', user.id).single()
+  if (!member) return null
+  if (member.is_admin) return member
+
+  if (categoryId) {
+    const { data: category } = await supabaseAdmin
+      .from('document_categories').select('name').eq('id', categoryId).maybeSingle()
+    if (category && category.name.toLowerCase() === 'committee meetings' && await isAreaOwner(member.id, 'hub', 'committee')) {
+      return member
+    }
+  }
+  return null
+}
+
 // POST — upload file + insert document record
 export async function POST(req) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
-  const member = await getAdminMember(token)
-  if (!member) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
   const formData = await req.formData()
   const file        = formData.get('file')
   const title       = formData.get('title')?.trim()
   const description = formData.get('description')?.trim() || null
   const categoryId  = formData.get('category_id') || null
+
+  const member = await getUploadMember(token, categoryId)
+  if (!member) return NextResponse.json({ error: 'Admins, or Committee Owners uploading to Committee Meetings, only' }, { status: 403 })
 
   if (!title) return NextResponse.json({ error: 'Title required' }, { status: 400 })
   if (!file)  return NextResponse.json({ error: 'File required' }, { status: 400 })
