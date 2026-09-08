@@ -1,0 +1,97 @@
+:root {
+  /* Core */
+  --bg: #fdf8f0;
+  --surface: #ffffff;
+  --surface2: #f5efe4;
+  --border: rgba(0,0,0,0.1);
+
+  /* Text */
+  --text: #1c1917;
+  --text-dim: #78716c;
+
+  /* Amber / Hive (primary) */
+  --amber: #f59e0b;
+  --amber-dark: #d97706;
+  --amber-light: #fde68a;
+
+  /* Module colours */
+  --teal: #0d9488;       /* Movies */
+  --purple: #7c3aed;     /* Book Club */
+  --terracotta: #c2410c; /* Social Events */
+  --green: #15803d;      /* Outings */
+  --green-light: #dcfce7;
+  --wine: #7f2561;       /* Bar */
+  --wine-dark: #661d4d;
+  --wine-light: #f3e0ea;
+  --space: #f97316;      /* Book a Space */
+  --voting: #1d4ed8;     /* Voting Hub */
+  --special: #db2777;    /* Special Events (2026-09-04) -- a rose/magenta,
+                             visually distinct from every other hub colour
+                             already in use (checked against the whole list
+                             above before picking it). */
+  --committee: #475569;  /* Committee Notice Board (2026-09-07) -- Iain:
+                             "Slate is the colour of choice -- neutral and
+                             administrative." A muted slate, distinct from
+                             every hue above (not another blue like Voting,
+                             not another warm tone like Social/Special/
+                             Space) -- reads as official/institutional
+                             rather than festive, fitting a governance
+                             hub. */
+  --surveys: #0891b2;    /* Surveys hub (2026-09-08) -- confirmed by Iain
+                             2026-09-08 ("Cyan is good"). Distinct from
+                             every hue above. */
+
+  /* External contacts -- a muted sage for people outside the community
+     (tradespeople, suppliers, the Community Manager). Deliberately NOT grey:
+     grey reads as "disabled/broken" and these contacts are perfectly usable,
+     you just can't message them in-app. Warm enough to sit inside the cream
+     palette rather than fight it. Paired text #5f6544 gives 4.85-5.54:1 on
+     --surface / --bg / --surface2 (WCAG AA). See Contacts, scope §7. */
+  --external: #8a8f6b;
+  --external-ink: #5f6544;
+
+  /* Utility */
+  --danger: #dc2626;
+  --shadow: 0 2px 16px rgba(0,0,0,0.08);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Prevent iOS Safari auto-zoom on input focus (requires font-size >= 16px) */
+input, textarea, select {
+  font-size: 16px !important;
+}
+
+html {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--border);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* Prevent iOS Safari auto-zoom on input focus (triggers when font-size < 16px) */
+input, textarea, select {
+  font-size: 16px;
+}
