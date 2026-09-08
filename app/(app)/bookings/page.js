@@ -5,7 +5,7 @@ import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import { bookingStatusBadge } from "@/lib/payments"
 import { authedFetch } from "@/lib/getAuthToken"
-import { MoviesIcon, SocialIcon } from "@/components/NavIcons"
+import { MoviesIcon, SocialIcon, SpecialEventsIcon } from "@/components/NavIcons"
 import ClubScopeDropdown from "@/components/ClubScopeDropdown"
 import { useMyClubs } from "@/lib/useMyClubs"
 import { loadFilterPrefs, saveFilterPrefs, sortByOnState } from "@/lib/calendarFilterPrefs"
@@ -16,10 +16,11 @@ const HUB_COLOURS = {
   movie:    "var(--teal)",
   bookclub: "var(--purple)",
   social:   "var(--terracotta)",
+  special:  "var(--special)",
 }
 
 const HUB_LABELS = {
-  movie: "Show Time", bookclub: "Book Club", social: "Social Hive",
+  movie: "Show Time", bookclub: "Book Club", social: "Social Hive", special: "Special Events",
 }
 
 // Same shape Calendar filters on (components/CalendarView.js's hubKeyOf) --
@@ -38,8 +39,9 @@ function hubKeyOf(ev) {
 // identical in UI and function" -- matching the visual style wasn't enough,
 // the underlying multi-toggle + dropdown interaction model has to match too).
 const HUB_TOGGLES = [
-  { key: "movie",  label: "Show Time", Icon: MoviesIcon, colour: "var(--teal)" },
-  { key: "social", label: "Social Hive",    Icon: SocialIcon, colour: "var(--terracotta)" },
+  { key: "movie",   label: "Show Time",      Icon: MoviesIcon,        colour: "var(--teal)" },
+  { key: "social",  label: "Social Hive",    Icon: SocialIcon,        colour: "var(--terracotta)" },
+  { key: "special", label: "Special Events", Icon: SpecialEventsIcon, colour: "var(--special)" },
 ]
 
 function fmtDate(str) {
@@ -169,10 +171,14 @@ export default function BookingsPage() {
   // across visits, same as Calendar (Iain, 2026-09-05: "those filters
   // should be preserved until user changes them") -- own storage key,
   // not shared with Calendar's, since this page's hub set is narrower
-  // (no Special Events, no Spaces) -- see lib/calendarFilterPrefs.js.
+  // (no Spaces -- MySpaceBookings above already covers that surface
+  // separately; Special Events was missing here too until BUG-045,
+  // 2026-09-08, silently hid a resident's own Special Events bookings
+  // from this page with no way to switch it back on) -- see
+  // lib/calendarFilterPrefs.js.
   const BOOKINGS_FILTER_KEY = "bookingsFilters"
   const [activeHubs,  setActiveHubs]  = useState(() =>
-    loadFilterPrefs(BOOKINGS_FILTER_KEY)?.activeHubs || ["movie", "club", "social"]
+    loadFilterPrefs(BOOKINGS_FILTER_KEY)?.activeHubs || ["movie", "club", "social", "special"]
   )
   const [clubScope,   setClubScope]   = useState(() =>
     loadFilterPrefs(BOOKINGS_FILTER_KEY)?.clubScope || "all"
