@@ -110,11 +110,34 @@ function PostCard({ post, canManage, onTogglePin, onArchive }) {
 }
 
 // ── Compose a new post (Owner/admin only) ──────────────────────────────────
+//
+// "Also file this in Documents" (Iain, 2026-09-08): when an attachment is
+// selected, a second, clearly-optional block appears offering to also save
+// it into Info > Documents under a chosen category -- one upload, two
+// places to find it, instead of the poster having to attach it here AND
+// separately re-upload it on the Documents screen. Left blank (no category
+// chosen), behaviour is exactly as before: the file is only a post
+// attachment. See app/api/committee/route.js POST for the server side.
 function Composer({ onPosted }) {
   const [content, setContent] = useState("")
   const [file, setFile] = useState(null)
   const [posting, setPosting] = useState(false)
   const [error, setError] = useState("")
+
+  const [docCategories, setDocCategories] = useState([])
+  const [docCategoryId, setDocCategoryId] = useState("")
+  const [docTitle, setDocTitle] = useState("")
+
+  useEffect(() => {
+    supabase.from("document_categories").select("id, name").eq("active", true)
+      .order("display_order").then(({ data }) => setDocCategories(data || []))
+  }, [])
+
+  function pickFile(f) {
+    setFile(f)
+    if (f && !docTitle) setDocTitle(f.name.replace(/\.[^.]+$/, ""))
+    if (!f) { setDocCategoryId(""); setDocTitle("") }
+  }
 
   async function submit() {
     if (!content.trim() || posting) return
@@ -127,6 +150,10 @@ function Composer({ onPosted }) {
         const fd = new FormData()
         fd.append("content", content)
         fd.append("file", file)
+        if (docCategoryId) {
+          fd.append("doc_category_id", docCategoryId)
+          fd.append("doc_title", docTitle.trim())
+        }
         res = await fetch("/api/committee", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd })
       } else {
         res = await fetch("/api/committee", {
@@ -137,7 +164,7 @@ function Composer({ onPosted }) {
       }
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Could not post")
-      setContent(""); setFile(null)
+      setContent(""); setFile(null); setDocCategoryId(""); setDocTitle("")
       onPosted()
     } catch (e) {
       setError(e.message)
@@ -151,10 +178,33 @@ function Composer({ onPosted }) {
         onChange={setContent} placeholder="Write a Committee update, notice, or share this month's minutes…" />
       <div style={{ marginTop: 8 }}>
         <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Attachment (optional)</label>
-        <input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp"
-          onChange={e => setFile(e.target.files[0] || null)}
+        <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp"
+          onChange={e => pickFile(e.target.files[0] || null)}
           style={{ display: "block", marginTop: 4, fontSize: "0.85rem" }} />
       </div>
+
+      {file && (
+        <div style={{ marginTop: 10, padding: "0.6rem 0.7rem", background: "var(--surface2)", borderRadius: 10 }}>
+          <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: 4 }}>
+            Also save this attachment in Documents (optional)
+          </label>
+          <select value={docCategoryId} onChange={e => setDocCategoryId(e.target.value)} style={{
+            width: "100%", padding: "0.5rem", borderRadius: 8, border: "1px solid var(--border)",
+            fontSize: "0.85rem", fontFamily: "inherit", background: "var(--surface)", color: "var(--text)",
+          }}>
+            <option value="">Don't add to Documents</option>
+            {docCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          {docCategoryId && (
+            <input value={docTitle} onChange={e => setDocTitle(e.target.value)} placeholder="Document title"
+              style={{
+                width: "100%", marginTop: 6, padding: "0.5rem", borderRadius: 8, border: "1px solid var(--border)",
+                fontSize: "0.85rem", fontFamily: "inherit", background: "var(--surface)", color: "var(--text)",
+              }} />
+          )}
+        </div>
+      )}
+
       {error && <div style={{ color: "#b91c1c", fontSize: "0.82rem", marginTop: 6 }}>{error}</div>}
       <button onClick={submit} disabled={posting || !content.trim()} style={{
         marginTop: 10, width: "100%", padding: "0.65rem", borderRadius: 10, border: "none",
@@ -162,41 +212,6 @@ function Composer({ onPosted }) {
         cursor: (posting || !content.trim()) ? "not-allowed" : "pointer",
         opacity: (posting || !content.trim()) ? 0.6 : 1,
       }}>{posting ? "Posting…" : "Post update"}</button>
-    </div>
-  )
-}
-
-// ── Committee Meeting Minutes — read-only inline pull of the Documents
-// "Committee Meetings" category (per decision 5: the upload UI stays on the
-// Documents screen with widened permissions, not duplicated here). ────────
-function MeetingMinutes() {
-  const [docs, setDocs] = useState(null)
-
-  useEffect(() => {
-    supabase.from("documents")
-      .select("id, title, file_url, file_name, active, category:document_categories!inner(name)")
-      .eq("active", true).eq("document_categories.name", "Committee Meetings")
-      .order("created_at", { ascending: false })
-      .then(({ data }) => setDocs(data || []))
-  }, [])
-
-  if (!docs || docs.length === 0) return null
-  return (
-    <div style={{ marginTop: 18, marginBottom: 14 }}>
-      <div style={{ fontWeight: 800, fontSize: "0.9rem", color: "var(--text)", marginBottom: 8 }}>
-        Committee Meeting Minutes
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        {docs.map(d => (
-          <a key={d.id} href={d.file_url} target="_blank" rel="noreferrer" style={{
-            display: "block", background: "var(--surface)", border: "1px solid var(--border)",
-            borderRadius: 10, padding: "0.6rem 0.85rem", fontSize: "0.85rem", fontWeight: 600,
-            color: "var(--text)", textDecoration: "none",
-          }}>
-            📄 {d.title}
-          </a>
-        ))}
-      </div>
     </div>
   )
 }
@@ -276,8 +291,6 @@ export default function CommitteePage() {
             onTogglePin={togglePin} onArchive={archive} />
         ))
       )}
-
-      <MeetingMinutes />
     </div>
   )
 }

@@ -11,6 +11,7 @@ import {
   HomeIcon, MoviesIcon, CalendarIcon, SuggestionsIcon, DVDIcon,
   BookClubIcon, SocialIcon, AdminIcon, BookingsIcon, BarIcon,
   InfoIcon, DocumentsIcon, ContactsIcon, ClubsIcon, SpaceIcon, SpecialEventsIcon,
+  CommitteeIcon,
 } from "@/components/NavIcons"
 
 const HUB_CONFIG = {
@@ -72,6 +73,21 @@ const HUB_CONFIG = {
     items: [
       { path: "/special-events",        label: "Special Events", Icon: SpecialEventsIcon },
       { path: "/special-events/events", label: "Scheduled",      Icon: CalendarIcon },
+    ],
+  },
+  // Committee previously had no HUB_CONFIG entry at all -- getActiveHub
+  // didn't recognise "/committee" either, so BottomNav fell all the way
+  // through to the generic default nav (Home/Calendar/Bookings/Admin) any
+  // time a resident was actually inside the Committee hub (Iain, 2026-09-08:
+  // "does not have its own Home page"). Second tab is the new Committee >
+  // Documents page (app/(app)/committee/documents/page.js) -- same
+  // Home + Scheduled-slot shape every other two-page hub above uses, just
+  // named "Documents" since that's what it actually is here.
+  committee: {
+    colour: "var(--committee)",
+    items: [
+      { path: "/committee",           label: "Committee", Icon: CommitteeIcon },
+      { path: "/committee/documents", label: "Documents", Icon: DocumentsIcon },
     ],
   },
 }
