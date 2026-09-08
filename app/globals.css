@@ -29,6 +29,14 @@
                              visually distinct from every other hub colour
                              already in use (checked against the whole list
                              above before picking it). */
+  --committee: #475569;  /* Committee Notice Board (2026-09-07) -- Iain:
+                             "Slate is the colour of choice -- neutral and
+                             administrative." A muted slate, distinct from
+                             every hue above (not another blue like Voting,
+                             not another warm tone like Social/Special/
+                             Space) -- reads as official/institutional
+                             rather than festive, fitting a governance
+                             hub. */
 
   /* External contacts -- a muted sage for people outside the community
      (tradespeople, suppliers, the Community Manager). Deliberately NOT grey:

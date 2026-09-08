@@ -6,7 +6,7 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon, CommitteeIcon } from '@/components/NavIcons'
 import OwnersManager from '@/components/OwnersManager'
 import ResidentEditForm, { Sheet, labelStyle } from '@/components/ResidentEditPanel'
 import { CLUB_COLOURS, nextClubColour } from '@/lib/clubColours'
@@ -1563,6 +1563,12 @@ function HubOwnersTab() {
           <VotingIcon size={18} /> Voting
         </div>
         <OwnersManager contextType="hub" contextKey="voting" />
+      </div>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: 'var(--committee)', marginBottom: '0.5rem' }}>
+          <CommitteeIcon size={18} /> Committee
+        </div>
+        <OwnersManager contextType="hub" contextKey="committee" />
       </div>
     </div>
   )

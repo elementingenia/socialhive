@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
+import { useOwners } from "@/lib/useOwners"
 import { Sheet, COLOUR, inputStyle, labelStyle, getToken } from "@/components/ResidentEditPanel"
 
 const secondaryButtonStyle = {
@@ -258,7 +259,14 @@ function DocCategoryManager({ categories, setCategories, onSaved }) {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function DocumentsPage() {
-  const { isAdmin } = useUser()
+  const { isAdmin, member } = useUser()
+  // Committee Owners can also upload here, scoped to the Committee Meetings
+  // category only (decision 5, Social_Hive_Committee_Notice_Board_Scope_v3_
+  // FINAL) -- the API (app/api/info/documents/route.js) is what actually
+  // enforces the category restriction; this just decides whether the
+  // upload UI shows at all for a non-admin Committee Owner.
+  const { owners: committeeOwners } = useOwners("hub", "committee")
+  const isCommitteeOwner = !!member?.id && committeeOwners.some(o => o.id === member.id)
   const [categories, setCategories] = useState([])
   const [documents, setDocuments]   = useState([])
   const [activeFilter, setFilter]   = useState("all")
@@ -326,10 +334,10 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      {isAdmin && (
+      {(isAdmin || isCommitteeOwner) && (
         <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
           <button onClick={() => setSheet("add")} style={secondaryButtonStyle}>+ Add Document</button>
-          <button onClick={() => setSheet("categories")} style={secondaryButtonStyle}>Manage Categories</button>
+          {isAdmin && <button onClick={() => setSheet("categories")} style={secondaryButtonStyle}>Manage Categories</button>}
         </div>
       )}
 
