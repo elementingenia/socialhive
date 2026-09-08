@@ -30,7 +30,9 @@ const CLUB_FLAGS = [
   { key: 'has_book_return', label: 'Book return dates' },
   { key: 'has_kit_return',  label: 'Kit return dates' },
   { key: 'has_theme',       label: 'Theme name on events' },
-  { key: 'has_cost',        label: 'Paid events (cost)' },
+  // 'has_cost' removed (2026-09-08): Paid event is now always available to
+  // the event creator/editor per event, same as Social Hive/Special Events --
+  // no club-level admin setup step. See lib/clubs.js clubCaps().
   { key: 'bring_enabled',   label: 'Attendees bring something' },
   { key: 'single_signup',   label: 'Sign-up only (one seat per person)' },
   { key: 'one_event_at_a_time', label: 'One event at a time (block scheduling ahead)' },
