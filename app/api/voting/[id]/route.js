@@ -49,8 +49,14 @@ export async function GET(req, { params }) {
   // vote has ended. Outcome stays Closed/Published only -- showing partial
   // results mid-vote could sway later voters, a real concern Iain never
   // raised changing, so that gate is untouched.
-  const showTurnout = votingStatus !== 'draft' && canSeeResults(event, { field: 'results_visibility_turnout', isAdmin: member.is_admin })
-  const showOutcome = ['closed', 'published'].includes(votingStatus) && canSeeResults(event, { field: 'results_visibility_outcome', isAdmin: member.is_admin })
+  //
+  // Change Request #3, 2026-09-08: results visibility is coordinator-only
+  // (Iain: "Only the assigned event coordinator/s should see results. NOT
+  // Admins/Owners.") -- no blanket admin/owner bypass. See lib/voting.js's
+  // canSeeResults() for the full rationale.
+  const isCoordinator = !!event.coordinator_id && event.coordinator_id === member.id
+  const showTurnout = votingStatus !== 'draft' && canSeeResults(event, { field: 'results_visibility_turnout', isCoordinator })
+  const showOutcome = ['closed', 'published'].includes(votingStatus) && canSeeResults(event, { field: 'results_visibility_outcome', isCoordinator })
 
   if (showTurnout) {
     const { count } = await supabaseAdmin
