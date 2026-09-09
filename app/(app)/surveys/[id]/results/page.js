@@ -30,7 +30,7 @@ export default function SurveyResultsPage() {
 
   return (
     <div style={{ padding: "1rem", maxWidth: "640px", margin: "0 auto" }}>
-      <button onClick={() => router.push("/surveys")} style={{
+      <button className="no-print" onClick={() => router.push("/surveys")} style={{
         background: "none", border: "none", color: "var(--text-dim)", fontSize: "0.9rem",
         padding: 0, marginBottom: "0.75rem", cursor: "pointer",
       }}>
@@ -48,6 +48,21 @@ export default function SurveyResultsPage() {
             {data.mode === "aggregate" && " · anonymised summary"}
           </div>
 
+          {/* Export -- coordinator's detailed view only (Iain, 2026-09-09).
+              CSV is built client-side from the same `data` already on the
+              page, no extra API call. "Print / Save as PDF" uses the
+              browser's own print dialog (every browser offers "Save as
+              PDF" as a print destination) rather than a PDF-generation
+              library -- same page content, print.css just hides the chrome
+              (back link, these two buttons) so what prints is a clean
+              report. */}
+          {data.mode === "coordinator" && (
+            <div className="no-print" style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+              <button onClick={() => exportResultsCsv(data)} style={EXPORT_BTN}>Export CSV</button>
+              <button onClick={() => window.print()} style={EXPORT_BTN}>Print / Save as PDF</button>
+            </div>
+          )}
+
           {data.mode === "aggregate" ? (
             <AggregateResults items={data.items} tally={data.tally} comments={data.comments} />
           ) : (
@@ -55,8 +70,65 @@ export default function SurveyResultsPage() {
           )}
         </>
       )}
+
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+        }
+      `}</style>
     </div>
   )
+}
+
+const EXPORT_BTN = {
+  background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "8px",
+  padding: "0.4rem 0.8rem", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer",
+}
+
+// One row per response, one column per question (plain-text answer), plus
+// a "<question> — Comment" column for any item with allow_comment -- same
+// data CoordinatorResults renders, just flattened for a spreadsheet.
+function exportResultsCsv(data) {
+  const { survey, items, responses } = data
+  const headers = ["Name", "House Number", "Submitted"]
+  for (const item of items) {
+    headers.push(item.question.prompt)
+    if (item.allow_comment) headers.push(`${item.question.prompt} — Comment`)
+  }
+
+  const rows = responses.map(r => {
+    const row = [
+      r.member.name,
+      r.member.house_number || "",
+      new Date(r.submittedAt).toLocaleString("en-AU"),
+    ]
+    for (const item of items) {
+      const q = item.question
+      const a = r.answers[q.id]
+      row.push(formatAnswerText(q, a))
+      if (item.allow_comment) row.push(a?.comment || "")
+    }
+    return row
+  })
+
+  const csv = [headers, ...rows]
+    .map(row => row.map(csvEscape).join(","))
+    .join("\r\n")
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = `${survey.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-results.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+function csvEscape(value) {
+  const s = String(value ?? "")
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
 }
 
 function questionLabel(q, number) {
@@ -167,4 +239,19 @@ function formatAnswer(q, a) {
   if (q.type === "yes_no") return a.yes_no ? "Yes" : "No"
   if (q.type === "free_text") return a.free_text
   return "—"
+}
+
+// Plain-string twin of formatAnswer() -- same rules, but CSV cells can't
+// hold JSX, and "No answer" and a missing rating_value of 0 both need to
+// come out as ordinary text rather than an empty cell.
+function formatAnswerText(q, a) {
+  if (!a || (a.choice_id == null && a.choice_ids == null && a.rating_value == null && a.yes_no == null && a.free_text == null)) {
+    return "No answer"
+  }
+  if (q.type === "single_choice") return (q.choices || []).find(c => c.id === a.choice_id)?.label || ""
+  if (q.type === "multi_choice") return (a.choice_ids || []).map(id => (q.choices || []).find(c => c.id === id)?.label).filter(Boolean).join(", ")
+  if (q.type === "rating") return String(a.rating_value)
+  if (q.type === "yes_no") return a.yes_no ? "Yes" : "No"
+  if (q.type === "free_text") return a.free_text || ""
+  return ""
 }
