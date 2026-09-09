@@ -62,9 +62,9 @@ export async function GET(req) {
       .in('survey_id', surveyIds)
       .is('replaced_at', null)
     for (const ec of ecRows || []) {
-      ;(coordIdsBySurvey[ec.survey_id] = coordIdsBySurvey[ec.survey_id] || []).push(ec.member_id)
+      (coordIdsBySurvey[ec.survey_id] = coordIdsBySurvey[ec.survey_id] || []).push(ec.member_id)
       if (ec.members?.name) {
-        ;(coordNamesBySurvey[ec.survey_id] = coordNamesBySurvey[ec.survey_id] || []).push(ec.members.name)
+        (coordNamesBySurvey[ec.survey_id] = coordNamesBySurvey[ec.survey_id] || []).push(ec.members.name)
       }
     }
   }
