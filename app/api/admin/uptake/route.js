@@ -45,6 +45,20 @@ export async function GET(req) {
   const activeSince = (days) =>
     members.filter(m => m.last_active_at && new Date(m.last_active_at).getTime() >= cutoff(days)).length
 
+  // Iain, 2026-09-11: "would be good to have an active household statistic
+  // as well as active users. Any user in the house that is active means the
+  // house is active." Same last_active_at data, grouped by house_number
+  // instead of counted per member -- a household with e.g. two registered
+  // members only needs one of them to have opened the app in the window.
+  const activeHouseholdsSince = (days) => {
+    const c = cutoff(days)
+    return new Set(
+      members
+        .filter(m => m.house_number && m.last_active_at && new Date(m.last_active_at).getTime() >= c)
+        .map(m => m.house_number)
+    ).size
+  }
+
   const { data: setting } = await supabaseAdmin
     .from("settings").select("value").eq("key", "total_occupied_households").maybeSingle()
   const totalOccupiedHouseholds = setting?.value ? Number(setting.value) : null
@@ -56,6 +70,9 @@ export async function GET(req) {
     active7d: activeSince(7),
     active30d: activeSince(30),
     active90d: activeSince(90),
+    activeHouseholds7d: activeHouseholdsSince(7),
+    activeHouseholds30d: activeHouseholdsSince(30),
+    activeHouseholds90d: activeHouseholdsSince(90),
     // How many registered members even have an activity timestamp yet --
     // caveat surfaced in the UI, not hidden: migration 009 backfilled
     // last_active_at = NOW() for pre-existing rows on the day it ran, so a
