@@ -3,6 +3,8 @@ import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
 import { useOwners } from "@/lib/useOwners"
 import AskQuestion from "@/components/AskQuestion"
+import { QuestionIcon } from "@/components/NavIcons"
+import { clubInk } from "@/lib/clubColours"
 
 const inputStyle = {
   width: "100%", padding: "0.75rem 1rem", borderRadius: "10px",
@@ -105,25 +107,61 @@ export function OwnersContact({ contextType, contextKey, style }) {
 }
 
 
-// One-row contact bar for hub/club landings (Iain 2026-07-20): the owner
-// name(s) ARE the "ask a question" trigger (bold + underlined = clickable),
-// with an optional control (e.g. the hub Join button) on the right — saves a
-// row vs. stacking contact + ask + join separately. If a space has no owner
-// yet, the trigger falls back to a plain "Ask a question" link (routes to
-// admins).
+// One-row contact bar for hub/club landings (Iain 2026-07-20): the whole
+// icon + label + owner-name(s) block IS the "ask a question" trigger, with
+// an optional control (e.g. the hub Join button) on the right — saves a row
+// vs. stacking contact + ask + join separately. If a space has no owner yet,
+// the same row falls back to a plain "Ask a question" label (routes to
+// admins) — still the same icon, still the whole row clickable.
+//
+// Icon + tap-target rebuilt 2026-09-09 (Iain, mockup review): the same
+// QuestionIcon used on the top-nav Questions button, sitting beside the
+// label rather than stacked above the names; the whole row responds to a
+// tap, not just the underlined names; names are left-aligned and each one
+// wraps as a whole (never split mid-word).
 export function ContactBar({ contextType, contextKey, contextLabel, colour = "var(--amber-dark)", right = null, style }) {
   const { owners } = useOwners(contextType, contextKey)
-  const names = owners.map(o => o.name).join(", ")
-  const link = { background: "none", border: "none", padding: 0, margin: 0, fontFamily: "inherit", fontSize: "0.82rem", fontWeight: 800, textDecoration: "underline", color: colour, cursor: "pointer" }
+  const names = owners.map(o => o.name).filter(Boolean)
+  const ink = clubInk(colour) // readable on the light card/page background (no-op for dark colours)
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.6rem", flexWrap: "wrap", ...style }}>
       <AskQuestion contextType={contextType} contextKey={contextKey} contextLabel={contextLabel} colour={colour}
         trigger={(open) => (
-          <div style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>
-            {owners.length > 0
-              ? <>Contact: <button onClick={open} style={link}>{names}</button></>
-              : <button onClick={open} style={link}>💬 Ask a question</button>}
-          </div>
+          <button
+            type="button"
+            onClick={open}
+            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface2)" }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = "none" }}
+            style={{
+              display: "flex", alignItems: "flex-start", gap: "0.5rem",
+              textAlign: "left", background: "none", border: "none",
+              padding: "0.3rem", margin: "-0.3rem", borderRadius: 10,
+              fontFamily: "inherit", cursor: "pointer", minWidth: 0,
+            }}>
+            <span aria-hidden style={{
+              flex: "none", width: 22, height: 22, borderRadius: "50%", marginTop: 1,
+              background: colour, color: "#fff",
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <QuestionIcon size={12} />
+            </span>
+            {names.length > 0 ? (
+              <span style={{ display: "flex", flexDirection: "column", gap: "0.05rem", minWidth: 0 }}>
+                <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-dim)" }}>
+                  Contact{names.length > 1 ? "s" : ""}
+                </span>
+                <span style={{ display: "flex", flexWrap: "wrap", columnGap: "0.3rem", rowGap: "0.05rem" }}>
+                  {names.map((name, i) => (
+                    <span key={name} style={{ whiteSpace: "nowrap", fontWeight: 700, fontSize: "0.85rem", color: ink }}>
+                      {name}{i < names.length - 1 ? "," : ""}
+                    </span>
+                  ))}
+                </span>
+              </span>
+            ) : (
+              <span style={{ fontSize: "0.85rem", fontWeight: 700, color: ink, marginTop: 1 }}>Ask a question</span>
+            )}
+          </button>
         )} />
       {right}
     </div>
