@@ -346,6 +346,19 @@ export function DocumentsIcon({ size = 26 }) {
   )
 }
 
+// Simple ascending bar chart — Admin > Uptake stats panel
+export function UptakeIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 8 44 L 20 44 L 20 62 L 8 62 Z
+           M 26 30 L 38 30 L 38 62 L 26 62 Z
+           M 44 14 L 56 14 L 56 62 L 44 62 Z
+           M 6 62 L 62 62 L 62 66 L 6 66 Z"/>
+    </svg>
+  )
+}
+
 // Address book — contacts sub-page icon
 export function ContactsIcon({ size = 26 }) {
   return (
