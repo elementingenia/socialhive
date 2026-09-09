@@ -56,12 +56,12 @@ async function enrich(rows, viewer) {
   }
 
   const label = (r) =>
-    r.context_type === "general" ? "the Hive" :
+    r.context_type === "general" ? "Admins" :
     r.context_type === "hub"     ? (HUB_LABELS[r.context_key] || "a hub") :
     r.context_type === "club"    ? (clubName[r.context_key] || "a group/club") :
     r.context_type === "event"   ? (eventName[r.context_key] || "an event") :
     r.context_type === "voting_event" ? (votingEventName[r.context_key] || "a vote") :
-    r.context_type === "category"? (catName[r.context_key] || "a contact group") : "the Hive"
+    r.context_type === "category"? (catName[r.context_key] || "a contact group") : "Admins"
 
   return rows.map(r => ({
     id: r.id, subject: r.subject, status: r.status,
