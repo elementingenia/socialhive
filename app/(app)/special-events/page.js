@@ -148,6 +148,17 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
         <span style={{ color: "rgba(255,255,255,0.9)", fontSize: "0.78rem", fontWeight: 600 }}>{daysLabel} ›</span>
       </div>
 
+      {/* Event image — horizontal strip, same crop/focal treatment as the
+          Scheduled list cards (special-events/events/page.js) but shorter,
+          since this tile is a summary, not a full card (Iain, 2026-09-09). */}
+      {event.image_url && (
+        <img
+          src={event.image_url}
+          alt={event.title}
+          style={{ width: "100%", height: 90, objectFit: "cover", display: "block", objectPosition: `${event.image_focal_x ?? 50}% ${event.image_focal_y ?? 50}%` }}
+        />
+      )}
+
       {/* Content — white/surface background */}
       <div style={{ padding: "0.9rem 1rem" }}>
         <div style={{ fontWeight: 800, fontSize: "1.05rem", lineHeight: 1.2, marginBottom: "0.3rem" }}>
@@ -366,7 +377,7 @@ export default function SpecialEventsHome() {
     const [eventsRes, myBookingsRes, hubRes] = await Promise.all([
       supabase
         .from("events")
-        .select("id, title, event_date, event_time, description, max_seats, unassigned_seats_count, cost, payment_required, has_bus, location_type, location, reservation_cutoff, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, booked_at)")
+        .select("id, title, event_date, event_time, description, max_seats, unassigned_seats_count, cost, payment_required, has_bus, location_type, location, reservation_cutoff, image_url, image_focal_x, image_focal_y, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, booked_at)")
         .eq("hub_type", "special").eq("archived", false)
         .gte("event_date", todayStr)
         .order("event_date", { ascending: true })
