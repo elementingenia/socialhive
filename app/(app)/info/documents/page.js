@@ -158,7 +158,7 @@ function AddDocumentForm({ categories, onUploaded, onClose }) {
 
       if (!file.type?.startsWith("image/")) {
         // PDF/Word -- signed-upload flow (see app/api/info/documents/
-        // route.js's header comment: this is what makes the "max 10MB"
+        // route.js's header comment: this is what makes the "max 4MB"
         // text above actually true, instead of a number nobody checked).
         const signRes = await fetch("/api/info/documents", {
           method: "POST",
@@ -227,7 +227,7 @@ function AddDocumentForm({ categories, onUploaded, onClose }) {
       <div>
         <label style={labelStyle}>File <span style={{ color: "var(--danger)" }}>*</span></label>
         <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.3rem" }}>
-          PDF, Word, or image — max 10MB
+          PDF, Word, or image — max 4MB
         </div>
         <input id="doc-file-input" type="file"
           accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"

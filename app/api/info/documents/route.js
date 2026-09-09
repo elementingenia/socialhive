@@ -46,12 +46,14 @@ async function getUploadMember(token, categoryId) {
 //   - IMAGE: multipart form-data straight through this function, resized/
 //     re-encoded server-side first (lib/imageResize.js), same as always.
 //   - Everything else (PDF/Word): JSON action:"sign"/"complete". This form
-//     already claimed "max 10MB" in its own UI text with NOTHING actually
+//     originally claimed "max 10MB" in its own UI text with NOTHING actually
 //     enforcing it anywhere -- and Vercel's hard, non-configurable 4.5MB
-//     function-body limit meant a direct multipart upload could never
-//     have honoured that promise for a 5-10MB file even if we wanted it
-//     to. The signed-upload flow is what makes 10MB a real, working limit
-//     instead of a number nobody checked.
+//     function-body limit meant a direct multipart upload could never have
+//     honoured that promise for a 5-10MB file even if we wanted it to. The
+//     signed-upload flow is what makes the limit a real, working one
+//     instead of a number nobody checked -- still needed even now the
+//     limit itself has been tightened to 4MB (below the old 4.5MB Vercel
+//     ceiling), since this same route also serves images resized in-band.
 //
 // MAX_ATTACHMENT_BYTES (lib/attachmentLimits.js) is enforced here too, not
 // just client-side -- never trust the browser alone for a hard reject.
