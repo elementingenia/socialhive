@@ -20,7 +20,7 @@ export async function GET(req, { params }) {
 
   const { data: items, error: iErr } = await supabaseAdmin
     .from('survey_items')
-    .select('id, sort_order, required, question:survey_questions(id, type, prompt, helper_text, archived, choices:survey_question_choices(id, label, sort_order))')
+    .select('id, sort_order, required, allow_comment, question:survey_questions(id, type, prompt, helper_text, archived, choices:survey_question_choices(id, label, sort_order))')
     .eq('survey_id', survey.id)
     .order('sort_order')
   if (iErr) return NextResponse.json({ error: iErr.message }, { status: 500 })
@@ -130,7 +130,7 @@ export async function PATCH(req, { params }) {
       }
       if (questionIds.length === 0) return NextResponse.json({ error: 'At least one question is required' }, { status: 400 })
       const { data: questions, error: qErr } = await supabaseAdmin
-        .from('survey_questions').select('id, archived').in('id', questionIds)
+        .from('survey_questions').select('id, type, archived').in('id', questionIds)
       if (qErr) return NextResponse.json({ error: qErr.message }, { status: 500 })
       const foundIds = new Set((questions || []).map(q => q.id))
       const missing = questionIds.filter(id => !foundIds.has(id))
@@ -139,12 +139,19 @@ export async function PATCH(req, { params }) {
       if (archivedUsed.length > 0) {
         return NextResponse.json({ error: 'One or more selected questions are archived and can\'t be added to a survey' }, { status: 400 })
       }
+      // allow_comment only makes sense for a type that isn't already a
+      // freeform field itself -- see lib/surveys.js's canQuestionHaveComment.
+      const typeById = Object.fromEntries((questions || []).map(q => [q.id, q.type]))
+      const commentOnFreeText = body.items.filter(it => it.allow_comment && typeById[it.question_id] === 'free_text')
+      if (commentOnFreeText.length > 0) {
+        return NextResponse.json({ error: 'Free text questions already are a comment field — they can\'t also allow a separate comment' }, { status: 400 })
+      }
       // Draft only, so no survey_answers rows can reference the old
       // survey_items ids yet — safe to replace wholesale.
       const { error: delErr } = await supabaseAdmin.from('survey_items').delete().eq('survey_id', survey.id)
       if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
       const { error: insErr } = await supabaseAdmin.from('survey_items').insert(
-        body.items.map((it, i) => ({ survey_id: survey.id, question_id: it.question_id, sort_order: i, required: !!it.required }))
+        body.items.map((it, i) => ({ survey_id: survey.id, question_id: it.question_id, sort_order: i, required: !!it.required, allow_comment: !!it.allow_comment }))
       )
       if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
     }

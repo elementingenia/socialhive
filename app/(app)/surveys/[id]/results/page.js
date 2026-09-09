@@ -49,7 +49,7 @@ export default function SurveyResultsPage() {
           </div>
 
           {data.mode === "aggregate" ? (
-            <AggregateResults items={data.items} tally={data.tally} />
+            <AggregateResults items={data.items} tally={data.tally} comments={data.comments} />
           ) : (
             <CoordinatorResults items={data.items} responses={data.responses} />
           )}
@@ -59,19 +59,20 @@ export default function SurveyResultsPage() {
   )
 }
 
-function questionLabel(q) {
-  return `${q.prompt}${q.helper_text ? "" : ""}`
+function questionLabel(q, number) {
+  return `${number != null ? `${number}. ` : ""}${q.prompt}`
 }
 
-function AggregateResults({ items, tally }) {
+function AggregateResults({ items, tally, comments }) {
   return (
     <div>
-      {items.map(item => {
+      {items.map((item, i) => {
         const q = item.question
         const bucket = tally[q.id]
+        const itemComments = comments?.[q.id]
         return (
           <div key={item.id} style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "12px", padding: "0.9rem", marginBottom: "0.7rem" }}>
-            <div style={{ fontWeight: 700, marginBottom: "0.3rem" }}>{questionLabel(q)}</div>
+            <div style={{ fontWeight: 700, marginBottom: "0.3rem" }}>{questionLabel(q, i + 1)}</div>
             <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "0.5rem" }}>{TYPE_LABEL[q.type]}</div>
 
             {(q.type === "single_choice" || q.type === "multi_choice") && (q.choices || []).map(c => (
@@ -109,6 +110,15 @@ function AggregateResults({ items, tally }) {
                 <div style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>No responses yet.</div>
               )
             )}
+
+            {Array.isArray(itemComments) && itemComments.length > 0 && (
+              <div style={{ marginTop: "0.5rem" }}>
+                <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "0.3rem" }}>Comments</div>
+                {itemComments.map((t, i) => (
+                  <div key={i} style={{ padding: "0.4rem 0.6rem", background: "var(--surface2)", borderRadius: "8px", fontSize: "0.85rem", marginBottom: "0.3rem" }}>{t}</div>
+                ))}
+              </div>
+            )}
           </div>
         )
       })}
@@ -128,13 +138,16 @@ function CoordinatorResults({ items, responses }) {
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: "0.6rem" }}>
             Submitted {new Date(r.submittedAt).toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}
           </div>
-          {items.map(item => {
+          {items.map((item, i) => {
             const q = item.question
             const a = r.answers[q.id]
             return (
               <div key={item.id} style={{ padding: "0.3rem 0", borderTop: "1px solid var(--border)" }}>
-                <div style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>{questionLabel(q)}</div>
+                <div style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>{questionLabel(q, i + 1)}</div>
                 <div style={{ fontSize: "0.9rem", fontWeight: 600 }}>{formatAnswer(q, a)}</div>
+                {a?.comment && (
+                  <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", fontStyle: "italic", marginTop: "0.15rem" }}>"{a.comment}"</div>
+                )}
               </div>
             )
           })}
@@ -145,7 +158,9 @@ function CoordinatorResults({ items, responses }) {
 }
 
 function formatAnswer(q, a) {
-  if (!a) return <span style={{ color: "var(--text-dim)", fontWeight: 400, fontStyle: "italic" }}>No answer</span>
+  if (!a || (a.choice_id == null && a.choice_ids == null && a.rating_value == null && a.yes_no == null && a.free_text == null)) {
+    return <span style={{ color: "var(--text-dim)", fontWeight: 400, fontStyle: "italic" }}>No answer</span>
+  }
   if (q.type === "single_choice") return (q.choices || []).find(c => c.id === a.choice_id)?.label || "—"
   if (q.type === "multi_choice") return (a.choice_ids || []).map(id => (q.choices || []).find(c => c.id === id)?.label).filter(Boolean).join(", ") || "—"
   if (q.type === "rating") return a.rating_value

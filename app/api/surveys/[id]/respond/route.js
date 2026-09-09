@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { resolveMember } from '@/lib/areaAuth'
-import { computeSurveyStatus, isEligibleForSurvey, validateAnswerShape, isAnswerEmpty } from '@/lib/surveys'
+import { computeSurveyStatus, isEligibleForSurvey, validateAnswerShape, isAnswerEmpty, resolveCommentText } from '@/lib/surveys'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,30 +26,35 @@ export async function GET(req, { params }) {
   const answers = {}
   if (response) {
     const { data: rows } = await supabaseAdmin
-      .from('survey_answers').select('question_id, choice_id, rating_value, free_text, yes_no')
+      .from('survey_answers').select('question_id, choice_id, rating_value, free_text, yes_no, comment_text')
       .eq('response_id', response.id)
     for (const row of rows || []) {
       const existing = answers[row.question_id]
+      // A comment-only row (multi_choice's dedicated comment row, or any
+      // type's comment when the answer itself was left blank) has every
+      // value column NULL except comment_text -- merge its comment onto
+      // whatever's already in the bucket rather than treating it as a
+      // distinct answer value. See 102_survey_comments.sql's header note.
+      const isCommentOnlyRow = row.choice_id == null && row.rating_value == null && row.yes_no == null && row.free_text == null
+
       if (row.choice_id) {
         // multi_choice writes one row per selected choice — collect into
         // choice_ids; single_choice writes exactly one row, so choice_id
         // alone also covers that case.
         if (existing?.choice_ids) existing.choice_ids.push(row.choice_id)
-        else if (existing?.choice_id) answers[row.question_id] = { choice_id: existing.choice_id, choice_ids: [existing.choice_id, row.choice_id] }
-        else answers[row.question_id] = { choice_id: row.choice_id }
+        else if (existing?.choice_id) answers[row.question_id] = { ...existing, choice_id: existing.choice_id, choice_ids: [existing.choice_id, row.choice_id] }
+        else answers[row.question_id] = { ...existing, choice_id: row.choice_id }
       } else if (row.rating_value != null) {
-        answers[row.question_id] = { rating_value: row.rating_value }
+        answers[row.question_id] = { ...existing, rating_value: row.rating_value }
       } else if (row.yes_no != null) {
-        answers[row.question_id] = { yes_no: row.yes_no }
+        answers[row.question_id] = { ...existing, yes_no: row.yes_no }
       } else if (row.free_text != null) {
-        answers[row.question_id] = { free_text: row.free_text }
+        answers[row.question_id] = { ...existing, free_text: row.free_text }
+      } else if (isCommentOnlyRow && !existing) {
+        answers[row.question_id] = {}
       }
-    }
-    // normalize any multi_choice question that only ever got one row so far
-    for (const key of Object.keys(answers)) {
-      if (answers[key].choice_id && !answers[key].choice_ids) {
-        // leave as-is; the respond form itself knows from question.type
-        // whether to treat this as single_choice or a 1-item multi_choice
+      if (row.comment_text != null) {
+        answers[row.question_id] = { ...answers[row.question_id], comment: row.comment_text }
       }
     }
   }
@@ -88,7 +93,7 @@ export async function POST(req, { params }) {
 
   const { data: cleanItems, error: ciErr } = await supabaseAdmin
     .from('survey_items')
-    .select('question_id, required, question:survey_questions!inner(id, type, choices:survey_question_choices(id))')
+    .select('question_id, required, allow_comment, question:survey_questions!inner(id, type, choices:survey_question_choices(id))')
     .eq('survey_id', survey.id)
   if (ciErr) return NextResponse.json({ error: ciErr.message }, { status: 500 })
 
@@ -115,32 +120,47 @@ export async function POST(req, { params }) {
   const submit = !!body.submit
 
   // Validate every PROVIDED answer's shape, and (submit only) confirm every
-  // required item has a non-empty one.
+  // required item has a non-empty one. A comment (survey_items.allow_comment,
+  // 102_survey_comments.sql) is supplementary, never a substitute for the
+  // answer itself -- a required question with only a comment and no real
+  // answer still blocks submit, same as before this feature existed.
   const rows = []
   for (const item of cleanItems || []) {
     const q = item.question
     const answer = answers[item.question_id]
     const empty = !answer || isAnswerEmpty(q, answer)
+    const comment = resolveCommentText(item, answer)
 
     if (submit && item.required && empty) {
       return NextResponse.json({ error: `"${q.prompt || 'A required question'}" needs an answer before you can submit.` }, { status: 400 })
     }
-    if (empty) continue
+    if (empty && !comment) continue
 
-    const validChoiceIds = (q.choices || []).map(c => c.id)
-    const shapeCheck = validateAnswerShape(q, answer, validChoiceIds)
-    if (!shapeCheck.ok) return NextResponse.json({ error: shapeCheck.reason }, { status: 400 })
+    if (!empty) {
+      const validChoiceIds = (q.choices || []).map(c => c.id)
+      const shapeCheck = validateAnswerShape(q, answer, validChoiceIds)
+      if (!shapeCheck.ok) return NextResponse.json({ error: shapeCheck.reason }, { status: 400 })
+    }
 
     if (q.type === 'single_choice') {
-      rows.push({ question_id: item.question_id, choice_id: answer.choice_id })
+      if (!empty) rows.push({ question_id: item.question_id, choice_id: answer.choice_id, comment_text: comment })
+      else rows.push({ question_id: item.question_id, comment_text: comment }) // comment left, no choice picked
     } else if (q.type === 'multi_choice') {
-      for (const choice_id of answer.choice_ids) rows.push({ question_id: item.question_id, choice_id })
+      if (!empty) for (const choice_id of answer.choice_ids) rows.push({ question_id: item.question_id, choice_id })
+      // multi_choice's own rows (one per choice) never carry choice_id NULL,
+      // so a comment always gets its own dedicated row here regardless of
+      // whether any choice was also selected -- see 102_survey_comments.sql.
+      if (comment) rows.push({ question_id: item.question_id, comment_text: comment })
     } else if (q.type === 'rating') {
-      rows.push({ question_id: item.question_id, rating_value: Number(answer.rating_value) })
+      if (!empty) rows.push({ question_id: item.question_id, rating_value: Number(answer.rating_value), comment_text: comment })
+      else rows.push({ question_id: item.question_id, comment_text: comment })
     } else if (q.type === 'yes_no') {
-      rows.push({ question_id: item.question_id, yes_no: !!answer.yes_no })
+      if (!empty) rows.push({ question_id: item.question_id, yes_no: !!answer.yes_no, comment_text: comment })
+      else rows.push({ question_id: item.question_id, comment_text: comment })
     } else if (q.type === 'free_text') {
-      rows.push({ question_id: item.question_id, free_text: String(answer.free_text) })
+      // free_text can never carry a comment (canQuestionHaveComment) --
+      // comment is always null here, nothing extra to do.
+      if (!empty) rows.push({ question_id: item.question_id, free_text: String(answer.free_text) })
     }
   }
 

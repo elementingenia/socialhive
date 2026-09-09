@@ -124,6 +124,107 @@ export default function SurveysHubPage() {
   )
 }
 
+// Shared by CreateSurveyForm (new survey) and DraftQuestionsEditor (editing
+// an existing Draft's question set) -- the bank checklist to pick which
+// questions are attached, plus the ordered list that actually carries the
+// numbering shown to respondents (Iain: "Question numbering... with a
+// reorder UI so numbers can change after initial sequential entry — numbers
+// shown to survey respondents too"). Order IS array position -- no separate
+// sort_order input, the up/down buttons below are the only way to reorder,
+// same "position in the array is the truth" pattern PATCH /api/surveys/[id]
+// already expects (it writes sort_order from each item's index).
+function SurveyItemsEditor({ bank, selectedItems, setSelectedItems }) {
+  function toggleItem(question_id) {
+    setSelectedItems(items => {
+      const exists = items.find(i => i.question_id === question_id)
+      if (exists) return items.filter(i => i.question_id !== question_id)
+      return [...items, { question_id, required: false, allow_comment: false }]
+    })
+  }
+  function setItemRequired(question_id, required) {
+    setSelectedItems(items => items.map(i => i.question_id === question_id ? { ...i, required } : i))
+  }
+  function setItemComment(question_id, allow_comment) {
+    setSelectedItems(items => items.map(i => i.question_id === question_id ? { ...i, allow_comment } : i))
+  }
+  function moveItem(question_id, dir) {
+    setSelectedItems(items => {
+      const idx = items.findIndex(i => i.question_id === question_id)
+      const swapIdx = idx + dir
+      if (idx < 0 || swapIdx < 0 || swapIdx >= items.length) return items
+      const copy = [...items]
+      ;[copy[idx], copy[swapIdx]] = [copy[swapIdx], copy[idx]]
+      return copy
+    })
+  }
+  const bankById = Object.fromEntries((bank || []).map(q => [q.id, q]))
+
+  return (
+    <>
+      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Questions</label>
+      {bank === null && <div style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>Loading question bank…</div>}
+      {bank !== null && bank.length === 0 && (
+        <div style={{ color: "var(--text-dim)", fontSize: "0.85rem", marginBottom: "0.6rem" }}>
+          The question bank is empty — add questions from the Manage screen first.
+        </div>
+      )}
+      {(bank || []).map(q => {
+        const picked = selectedItems.find(i => i.question_id === q.id)
+        return (
+          <label key={q.id} style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", cursor: "pointer", border: "1px solid var(--border)", borderRadius: "10px", padding: "0.6rem", marginBottom: "0.4rem" }}>
+            <input type="checkbox" checked={!!picked} onChange={() => toggleItem(q.id)} style={{ marginTop: "0.2rem" }} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{q.prompt}</div>
+              <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{TYPE_LABEL[q.type]}</div>
+            </div>
+          </label>
+        )
+      })}
+
+      {selectedItems.length > 0 && (
+        <div style={{ marginTop: "0.7rem" }}>
+          <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>
+            Order — this is the number shown to respondents
+          </label>
+          {selectedItems.map((item, i) => {
+            const q = bankById[item.question_id]
+            if (!q) return null
+            return (
+              <div key={item.question_id} style={{ border: "1px solid var(--border)", borderRadius: "10px", padding: "0.6rem", marginBottom: "0.4rem" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                  <div style={{ fontWeight: 800, color: "var(--surveys)", minWidth: "1.4rem" }}>{i + 1}.</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{q.prompt}</div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{TYPE_LABEL[q.type]}</div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+                    <button type="button" disabled={i === 0} onClick={() => moveItem(item.question_id, -1)}
+                      style={{ ...BTN_GHOST, padding: "0.15rem 0.5rem", fontSize: "0.75rem", opacity: i === 0 ? 0.4 : 1 }}>▲</button>
+                    <button type="button" disabled={i === selectedItems.length - 1} onClick={() => moveItem(item.question_id, 1)}
+                      style={{ ...BTN_GHOST, padding: "0.15rem 0.5rem", fontSize: "0.75rem", opacity: i === selectedItems.length - 1 ? 0.4 : 1 }}>▼</button>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: "1rem", marginTop: "0.4rem", marginLeft: "1.9rem" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem" }}>
+                    <input type="checkbox" checked={item.required} onChange={e => setItemRequired(item.question_id, e.target.checked)} />
+                    Required
+                  </label>
+                  {q.type !== "free_text" && (
+                    <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.8rem" }}>
+                      <input type="checkbox" checked={item.allow_comment} onChange={e => setItemComment(item.question_id, e.target.checked)} />
+                      Allow a comment
+                    </label>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </>
+  )
+}
+
 function CreateSurveyForm({ onCreated }) {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
@@ -134,7 +235,7 @@ function CreateSurveyForm({ onCreated }) {
   const [coordinator, setCoordinator] = useState(null)
   const [members, setMembers] = useState([])
   const [bank, setBank] = useState(null)
-  const [selectedItems, setSelectedItems] = useState([]) // [{ question_id, required }]
+  const [selectedItems, setSelectedItems] = useState([]) // [{ question_id, required, allow_comment }], array order = respondent-facing numbering
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
 
@@ -142,17 +243,6 @@ function CreateSurveyForm({ onCreated }) {
     supabase.from("members").select("id, name").order("name").then(({ data }) => setMembers(data || []))
     authedFetch("/api/survey-questions").then(r => r.json()).then(json => setBank((json.questions || []).filter(q => !q.archived))).catch(() => setBank([]))
   }, [])
-
-  function toggleItem(question_id) {
-    setSelectedItems(items => {
-      const exists = items.find(i => i.question_id === question_id)
-      if (exists) return items.filter(i => i.question_id !== question_id)
-      return [...items, { question_id, required: false }]
-    })
-  }
-  function setItemRequired(question_id, required) {
-    setSelectedItems(items => items.map(i => i.question_id === question_id ? { ...i, required } : i))
-  }
 
   async function save() {
     setError("")
@@ -201,7 +291,7 @@ function CreateSurveyForm({ onCreated }) {
         Anonymous responses
       </label>
       <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.8rem" }}>
-        Hides who responded from residents. The assigned coordinator can always see who responded, so they can follow up directly if needed.
+        Hides who responded from EVERYONE, including the assigned coordinator — only an anonymised summary is ever visible. Leave this off if the coordinator should be able to see who responded, e.g. to follow up directly.
       </div>
 
       <div style={{ marginBottom: "0.9rem" }}>
@@ -228,33 +318,7 @@ function CreateSurveyForm({ onCreated }) {
         <CoordPicker members={members} value={coordinator} onChange={setCoordinator} />
       </div>
 
-      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Questions</label>
-      {bank === null && <div style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>Loading question bank…</div>}
-      {bank !== null && bank.length === 0 && (
-        <div style={{ color: "var(--text-dim)", fontSize: "0.85rem", marginBottom: "0.6rem" }}>
-          The question bank is empty — add questions from the Manage screen first.
-        </div>
-      )}
-      {(bank || []).map(q => {
-        const picked = selectedItems.find(i => i.question_id === q.id)
-        return (
-          <div key={q.id} style={{ border: "1px solid var(--border)", borderRadius: "10px", padding: "0.6rem", marginBottom: "0.4rem" }}>
-            <label style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem", cursor: "pointer" }}>
-              <input type="checkbox" checked={!!picked} onChange={() => toggleItem(q.id)} style={{ marginTop: "0.2rem" }} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: "0.88rem" }}>{q.prompt}</div>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{TYPE_LABEL[q.type]}</div>
-              </div>
-            </label>
-            {picked && (
-              <label style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.4rem", marginLeft: "1.7rem", fontSize: "0.8rem" }}>
-                <input type="checkbox" checked={picked.required} onChange={e => setItemRequired(q.id, e.target.checked)} />
-                Required
-              </label>
-            )}
-          </div>
-        )
-      })}
+      <SurveyItemsEditor bank={bank} selectedItems={selectedItems} setSelectedItems={setSelectedItems} />
 
       {error && <div style={{ color: "var(--terracotta)", margin: "0.6rem 0", fontSize: "0.85rem" }}>{error}</div>}
       <button style={{ ...BTN_PRIMARY, marginTop: "0.6rem" }} disabled={saving} onClick={save}>{saving ? "Saving…" : "Save as Draft"}</button>
@@ -310,6 +374,66 @@ function CoordPicker({ members, value, onChange }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Edit a Draft survey's attached questions -- order, required, allow_comment
+// -- after initial creation (Iain: numbers should be able to "change after
+// initial sequential entry", not just be fixed at creation time). PATCH
+// /api/surveys/[id] already accepted a full items replace while Draft;
+// there was simply no UI for it before this. Collapsed by default so a
+// Draft with nothing to change doesn't grow the card.
+function DraftQuestionsEditor({ survey, detail, onSaved }) {
+  const [open, setOpen] = useState(false)
+  const [bank, setBank] = useState(null)
+  const [selectedItems, setSelectedItems] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    if (!open || selectedItems !== null) return
+    authedFetch("/api/survey-questions").then(r => r.json()).then(json => setBank((json.questions || []).filter(q => !q.archived)))
+    setSelectedItems((detail.items || []).map(it => ({
+      question_id: it.question.id, required: !!it.required, allow_comment: !!it.allow_comment,
+    })))
+  }, [open, selectedItems, detail.items])
+
+  async function save() {
+    setError("")
+    if (!selectedItems || selectedItems.length === 0) return setError("Pick at least one question")
+    setSaving(true)
+    const res = await authedFetch(`/api/surveys/${survey.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: selectedItems }),
+    })
+    const json = await res.json().catch(() => ({}))
+    setSaving(false)
+    if (!res.ok) return setError(json.error || "Could not save these changes")
+    setOpen(false)
+    onSaved()
+  }
+
+  if (!open) {
+    return (
+      <div style={{ marginBottom: "0.6rem" }}>
+        <button style={{ ...BTN_GHOST, padding: "0.35rem 0.7rem", fontSize: "0.78rem" }} onClick={() => setOpen(true)}>Edit questions</button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: "12px", padding: "0.75rem", marginBottom: "0.6rem" }}>
+      {(bank === null || selectedItems === null) ? (
+        <div style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>Loading…</div>
+      ) : (
+        <SurveyItemsEditor bank={bank} selectedItems={selectedItems} setSelectedItems={setSelectedItems} />
+      )}
+      {error && <div style={{ color: "var(--terracotta)", fontSize: "0.82rem", margin: "0.5rem 0" }}>{error}</div>}
+      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+        <button style={{ ...BTN_PRIMARY, width: "auto", padding: "0.5rem 0.9rem" }} disabled={saving} onClick={save}>{saving ? "Saving…" : "Save questions"}</button>
+        <button style={{ ...BTN_GHOST, padding: "0.5rem 0.9rem" }} disabled={saving} onClick={() => setOpen(false)}>Cancel</button>
+      </div>
     </div>
   )
 }
@@ -429,6 +553,10 @@ function SurveyCard({ survey, isAdmin, canManage, canManageEvent, onChanged }) {
         {expanded && detail && (
           <div style={{ marginTop: "0.75rem" }}>
             {survey.status === "draft" && canManageThis && (
+              <DraftQuestionsEditor survey={survey} detail={detail} onSaved={() => { onChanged(); loadDetail() }} />
+            )}
+
+            {survey.status === "draft" && canManageThis && (
               <div style={{ marginBottom: "0.6rem" }}>
                 <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Closing date/time</label>
                 <div style={{ marginBottom: "0.5rem" }}>
@@ -547,8 +675,8 @@ function SurveyRespondSection({ survey, detail, onSubmitted }) {
           You have a response in progress — pick up where you left off below.
         </div>
       )}
-      {items.map(item => (
-        <QuestionField key={item.id} item={item} answer={answers[item.question_id]} onChange={patch => setAnswer(item.question_id, patch)} />
+      {items.map((item, i) => (
+        <QuestionField key={item.id} number={i + 1} item={item} answer={answers[item.question_id]} onChange={patch => setAnswer(item.question_id, patch)} />
       ))}
       {msg && <div style={{ color: "var(--terracotta)", fontSize: "0.85rem", margin: "0.5rem 0" }}>{msg}</div>}
       {savedAt && !msg && <div style={{ color: "#16a34a", fontSize: "0.8rem", margin: "0.4rem 0" }}>Saved — come back any time before the survey closes to finish.</div>}
@@ -560,11 +688,12 @@ function SurveyRespondSection({ survey, detail, onSubmitted }) {
   )
 }
 
-function QuestionField({ item, answer, onChange }) {
+function QuestionField({ number, item, answer, onChange }) {
   const q = item.question
   return (
     <div style={{ marginBottom: "0.9rem" }}>
       <div style={{ fontWeight: 600, fontSize: "0.9rem", marginBottom: "0.15rem" }}>
+        {number != null && <span style={{ color: "var(--surveys)" }}>{number}. </span>}
         {q.prompt}{item.required && <span style={{ color: "var(--terracotta)" }}> *</span>}
       </div>
       {q.helper_text && <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.4rem" }}>{q.helper_text}</div>}
@@ -612,6 +741,13 @@ function QuestionField({ item, answer, onChange }) {
 
       {q.type === "free_text" && (
         <textarea style={{ ...INPUT, minHeight: "70px" }} value={answer?.free_text || ""} onChange={e => onChange({ free_text: e.target.value })} />
+      )}
+
+      {item.allow_comment && q.type !== "free_text" && (
+        <div style={{ marginTop: "0.5rem" }}>
+          <label style={{ fontSize: "0.75rem", color: "var(--text-dim)", display: "block", marginBottom: "0.2rem" }}>Comment (optional)</label>
+          <textarea style={{ ...INPUT, minHeight: "50px" }} value={answer?.comment || ""} onChange={e => onChange({ comment: e.target.value })} placeholder="Add any context…" />
+        </div>
       )}
     </div>
   )
