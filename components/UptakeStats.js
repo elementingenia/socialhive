@@ -61,6 +61,7 @@ export default function UptakeStats() {
   }
 
   const pct = (n) => stats.registeredMembers ? Math.round((n / stats.registeredMembers) * 100) : 0
+  const householdPct = (n) => stats.households ? Math.round((n / stats.households) * 100) : 0
   const adoptionPct = stats.totalOccupiedHouseholds
     ? Math.round((stats.households / stats.totalOccupiedHouseholds) * 100)
     : null
@@ -86,6 +87,18 @@ export default function UptakeStats() {
           <StatCard label="Active, last 7 days" value={stats.active7d} colour="var(--terracotta)" sub={`${pct(stats.active7d)}% of registered`} />
           <StatCard label="Active, last 30 days" value={stats.active30d} colour="var(--terracotta)" sub={`${pct(stats.active30d)}% of registered`} />
           <StatCard label="Active, last 90 days" value={stats.active90d} colour="var(--terracotta)" sub={`${pct(stats.active90d)}% of registered`} />
+        </div>
+      </div>
+
+      {/* Iain, 2026-09-11: "any user in the house that is active means the
+          house is active" -- same last_active_at windows as Active use above,
+          grouped by house_number instead of counted per member. */}
+      <div>
+        <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text)', marginBottom: '0.5rem' }}>Active households</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.65rem' }}>
+          <StatCard label="Active, last 7 days" value={stats.activeHouseholds7d} colour="var(--purple)" sub={`${householdPct(stats.activeHouseholds7d)}% of households represented`} />
+          <StatCard label="Active, last 30 days" value={stats.activeHouseholds30d} colour="var(--purple)" sub={`${householdPct(stats.activeHouseholds30d)}% of households represented`} />
+          <StatCard label="Active, last 90 days" value={stats.activeHouseholds90d} colour="var(--purple)" sub={`${householdPct(stats.activeHouseholds90d)}% of households represented`} />
         </div>
       </div>
 
