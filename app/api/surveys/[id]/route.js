@@ -41,9 +41,24 @@ export async function GET(req, { params }) {
     .from('surveys').select('*').eq('id', params.id).single()
   if (sErr || !survey) return NextResponse.json({ error: 'Survey not found' }, { status: 404 })
 
+  // question_id (the raw FK, not just the nested question.id) MUST be
+  // selected here -- app/(app)/surveys/page.js's respond form keys every
+  // question's own slot in its `answers` state off `item.question_id`.
+  // Omitting it left `item.question_id` `undefined` for every item, so
+  // every question shared the exact same `answers[undefined]` bucket:
+  // typing a comment in one question clobbered that shared slot (looked
+  // like it "appeared" in every other comment-enabled question), and on
+  // submit the server looked up `answers[<real question_id>]` -- which was
+  // never populated -- so it wrote zero survey_answers rows for every
+  // question regardless of what was actually answered. Confirmed with
+  // evidence, not guessed: `answer_row_count` came back 0 in
+  // information_schema-adjacent SQL for a fully-answered submitted
+  // response, matching this exactly. results/route.js's own items query
+  // already selected `question_id` correctly -- this file's GET was the
+  // one missing it.
   const { data: items, error: iErr } = await supabaseAdmin
     .from('survey_items')
-    .select('id, sort_order, required, allow_comment, question:survey_questions(id, type, prompt, helper_text, archived, choices:survey_question_choices(id, label, sort_order))')
+    .select('id, question_id, sort_order, required, allow_comment, question:survey_questions(id, type, prompt, helper_text, archived, choices:survey_question_choices(id, label, sort_order))')
     .eq('survey_id', survey.id)
     .order('sort_order')
   if (iErr) return NextResponse.json({ error: iErr.message }, { status: 500 })
@@ -215,12 +230,15 @@ export async function PATCH(req, { params }) {
   return NextResponse.json({ survey: { ...updated, status: computeSurveyStatus(updated) } })
 }
 
-// DELETE /api/surveys/[id] — cancel/abandon a survey. Admin, this hub's
-// Owner, or the survey's own assigned Coordinator. Allowed while Draft, or
-// while Open PROVIDED zero residents have submitted a response so far
-// (checked directly against survey_responses, not the viewer's own
-// visibility-gated turnout figure — same reasoning as Voting's DELETE).
-// Soft-deletes via `archived`.
+// DELETE /api/surveys/[id] — cancel/archive a survey. Admin, this hub's
+// Owner, or the survey's own assigned Coordinator. Allowed at ANY status
+// (Draft/Open/Closed/Published), regardless of response count -- Iain,
+// 2026-09-09: "I cannot delete a published survey it seems... I do need to
+// be able to remove surveys even when published." This is a non-destructive
+// soft-delete (`archived` flag) -- the underlying survey_responses/
+// survey_answers rows are never touched, just hidden along with the
+// archived parent -- so there's no data-loss reason to gate it by status
+// or response count the way the old version did.
 export async function DELETE(req, { params }) {
   const { error, status } = await requireSurveyManage(req, params.id)
   if (error) return NextResponse.json({ error }, { status })
@@ -228,19 +246,6 @@ export async function DELETE(req, { params }) {
   const { data: survey, error: sErr } = await supabaseAdmin
     .from('surveys').select('*').eq('id', params.id).single()
   if (sErr || !survey) return NextResponse.json({ error: 'Survey not found' }, { status: 404 })
-
-  const surveyStatus = computeSurveyStatus(survey)
-  if (surveyStatus === 'closed' || surveyStatus === 'published') {
-    return NextResponse.json({ error: 'This survey has already closed and can no longer be cancelled' }, { status: 400 })
-  }
-
-  if (surveyStatus === 'open') {
-    const { count } = await supabaseAdmin
-      .from('survey_responses').select('id', { count: 'exact', head: true }).eq('survey_id', survey.id).not('submitted_at', 'is', null)
-    if ((count || 0) > 0) {
-      return NextResponse.json({ error: 'This survey already has responses and can no longer be cancelled' }, { status: 400 })
-    }
-  }
 
   const { error: updErr } = await supabaseAdmin.from('surveys').update({ archived: true }).eq('id', survey.id)
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })

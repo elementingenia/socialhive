@@ -657,25 +657,45 @@ function SurveyCard({ survey, isAdmin, canManage, canManageEvent, onChanged }) {
               </div>
             )}
 
-            {canManageThis && (survey.status === "draft" || (survey.status === "open" && (survey.responsesCount === 0 || survey.responsesCount == null))) && (
-              <div style={{ marginBottom: "0.6rem" }}>
-                {!confirmCancel ? (
-                  <button style={{ ...BTN_GHOST, color: "var(--terracotta)", borderColor: "var(--terracotta)" }} disabled={busy} onClick={() => setConfirmCancel(true)}>
-                    {survey.status === "draft" ? "Cancel this survey" : "Cancel this survey (abandon)"}
-                  </button>
-                ) : (
-                  <div style={{ background: "var(--amber-light)", borderLeft: "3px solid var(--amber)", borderRadius: "8px", padding: "0.6rem", fontSize: "0.85rem" }}>
-                    <div style={{ marginBottom: "0.5rem" }}>
-                      {survey.status === "draft" ? "Cancel this survey? It will be removed and this can't be undone." : "Abandon this survey before anyone has responded? It will be removed and this can't be undone."}
+            {canManageThis && (() => {
+              // Delete/archive is now allowed at ANY status -- Iain,
+              // 2026-09-09: "I do need to be able to remove surveys even
+              // when published." It's a non-destructive soft-delete
+              // (archived flag, backend never touches survey_responses/
+              // survey_answers), so there's no data-loss reason to gate
+              // this by status the way it used to be. The label and
+              // warning text still scale with how much is actually at
+              // stake, so a coordinator isn't casually one-clicking away a
+              // survey people have already answered.
+              let label, warning
+              if (survey.status === "draft") {
+                label = "Cancel this survey"
+                warning = "Cancel this survey? It will be removed and this can't be undone."
+              } else if (survey.status === "open" && (survey.responsesCount === 0 || survey.responsesCount == null)) {
+                label = "Cancel this survey (abandon)"
+                warning = "Abandon this survey before anyone has responded? It will be removed and this can't be undone."
+              } else {
+                label = "Remove this survey"
+                warning = "Remove this survey? Responses already collected won't be deleted from the database, but this survey and its results page will disappear for everyone, and this can't be undone from here."
+              }
+              return (
+                <div style={{ marginBottom: "0.6rem" }}>
+                  {!confirmCancel ? (
+                    <button style={{ ...BTN_GHOST, color: "var(--terracotta)", borderColor: "var(--terracotta)" }} disabled={busy} onClick={() => setConfirmCancel(true)}>
+                      {label}
+                    </button>
+                  ) : (
+                    <div style={{ background: "var(--amber-light)", borderLeft: "3px solid var(--amber)", borderRadius: "8px", padding: "0.6rem", fontSize: "0.85rem" }}>
+                      <div style={{ marginBottom: "0.5rem" }}>{warning}</div>
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button style={{ ...BTN_PRIMARY, background: "var(--terracotta)", width: "auto", padding: "0.5rem 0.9rem" }} disabled={busy} onClick={doCancel}>Yes, remove it</button>
+                        <button style={{ ...BTN_GHOST, padding: "0.5rem 0.9rem" }} disabled={busy} onClick={() => setConfirmCancel(false)}>Never mind</button>
+                      </div>
                     </div>
-                    <div style={{ display: "flex", gap: "0.5rem" }}>
-                      <button style={{ ...BTN_PRIMARY, background: "var(--terracotta)", width: "auto", padding: "0.5rem 0.9rem" }} disabled={busy} onClick={doCancel}>Yes, cancel it</button>
-                      <button style={{ ...BTN_GHOST, padding: "0.5rem 0.9rem" }} disabled={busy} onClick={() => setConfirmCancel(false)}>Never mind</button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+                  )}
+                </div>
+              )
+            })()}
 
             {survey.status === "open" && canManageThis && (
               <div style={{ marginBottom: "0.6rem" }}>
@@ -742,7 +762,20 @@ function SurveyRespondSection({ survey, detail, onSubmitted }) {
     const json = await res.json().catch(() => ({}))
     setSaving(false)
     if (!res.ok) return setMsg(json.error || "Could not save your response")
-    if (doSubmit) { onSubmitted(); return }
+    if (doSubmit) {
+      // Reflect the submission in THIS component's own local state right
+      // away -- response?.submittedAt is what gates showing "You've
+      // responded" vs. the form below, and this component isn't remounted
+      // by onSubmitted()'s parent refresh (same instance persists), so
+      // without this the form kept showing as if nothing had happened even
+      // though the POST above had already succeeded (confirmed: a
+      // follow-up "Save for later" click correctly got back "already
+      // submitted" from the server -- the submission itself was never the
+      // problem, only this screen not reflecting it).
+      setResponse(r => ({ ...(r || {}), submittedAt: new Date().toISOString() }))
+      onSubmitted()
+      return
+    }
     setSavedAt(new Date())
     setResponse(r => r || { submittedAt: null })
   }
