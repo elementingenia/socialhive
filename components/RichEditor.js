@@ -86,6 +86,23 @@ export default function RichEditor({
   const ref = useRef(null)
   const initDone = useRef(false)
   const [focused, setFocused] = useState(false)
+  // Whether the editor currently has any real content, tracked live from
+  // the actual contentEditable DOM rather than the `initialValue` prop.
+  //
+  // Bug (Iain, 2026-09-08, Committee's post composer): type something,
+  // click out of the box, and the placeholder re-appeared UNDER the
+  // just-typed text -- garbled overlapping text. Root cause: the
+  // placeholder's visibility used `isEmpty = !initialValue` (a PROP), but
+  // this component deliberately never re-syncs from that prop after mount
+  // (see the effect below -- "browser owns the content after mount"), so
+  // for any caller that starts with `initialValue=""` (Committee's
+  // composer, and Club notices -- same latent bug there, just not yet
+  // reported), `isEmpty` was permanently `true` for the component's whole
+  // lifetime regardless of what the person actually typed. The overlay was
+  // only ever suppressed by `!focused`, so it reliably reappeared on blur.
+  // Fixed by tracking emptiness as state, updated on every keystroke from
+  // the real DOM node, not a value frozen at mount.
+  const [empty, setEmpty] = useState(!initialValue)
   const hex = resolveColour(hubColour)
   const isTile = bg === 'tile'
   const isTint = bg === 'tint'
@@ -99,6 +116,7 @@ export default function RichEditor({
     if (ref.current && !initDone.current) {
       initDone.current = true
       ref.current.innerHTML = bbToHtml(initialValue, hex)
+      setEmpty(!ref.current.textContent?.trim())
     }
   }, []) // mount only — do not re-sync; browser owns the content after mount
 
@@ -138,8 +156,6 @@ export default function RichEditor({
     background: 'var(--surface2)', cursor: 'pointer', fontSize: '0.8rem',
     color: 'var(--text)', fontFamily: 'inherit', lineHeight: 1.4,
   }
-
-  const isEmpty = !initialValue
 
   return (
     <div>
@@ -183,7 +199,10 @@ export default function RichEditor({
           suppressContentEditableWarning
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          onInput={e => onChange(e.currentTarget.innerHTML)}
+          onInput={e => {
+            onChange(e.currentTarget.innerHTML)
+            setEmpty(!e.currentTarget.textContent?.trim())
+          }}
           style={{
             minHeight: focused ? expandedHeight : compactHeight,
             transition: 'min-height 0.15s ease',
@@ -195,7 +214,7 @@ export default function RichEditor({
             wordBreak: 'break-word',
           }}
         />
-        {isEmpty && !focused && placeholder && (
+        {empty && !focused && placeholder && (
           <div style={{
             position: 'absolute', top: '0.75rem', left: '1rem', pointerEvents: 'none',
             color: isTile ? defaultTextColour : 'var(--text-dim)', opacity: isTile ? 0.75 : 1,

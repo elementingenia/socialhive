@@ -8,6 +8,7 @@ import RichEditor from "@/components/RichEditor"
 import { ContactBar } from "@/components/OwnersManager"
 import CommitteeNotifyToggle from "@/components/CommitteeNotifyToggle"
 import { FormattedText } from "@/lib/textFormatter"
+import { MAX_ATTACHMENT_BYTES, tooLargeMessage } from "@/lib/attachmentLimits"
 
 const COLOUR = "var(--committee)"
 
@@ -134,9 +135,24 @@ function Composer({ onPosted }) {
   }, [])
 
   function pickFile(f) {
+    setError("")
+    if (f && f.size > MAX_ATTACHMENT_BYTES) { setError(tooLargeMessage(f)); return }
     setFile(f)
     if (f && !docTitle) setDocTitle(f.name.replace(/\.[^.]+$/, ""))
     if (!f) { setDocCategoryId(""); setDocTitle("") }
+  }
+
+  // Reads a JSON error body if there is one; falls back to a readable
+  // message when the response isn't JSON at all (e.g. a plain-text 413
+  // from Vercel's own request-size limit, which res.json() would otherwise
+  // choke on with a cryptic "Unexpected token" parse error instead of
+  // telling the person what actually happened).
+  async function readError(res, fallback) {
+    const text = await res.text()
+    try { return JSON.parse(text).error || fallback } catch {
+      if (res.status === 413) return "That file is too large to upload."
+      return fallback
+    }
   }
 
   async function submit() {
@@ -145,8 +161,40 @@ function Composer({ onPosted }) {
     setError("")
     try {
       const token = await getAuthToken()
-      let res
-      if (file) {
+
+      if (file && !file.type.startsWith("image/")) {
+        // PDF/Word attachment -- signed-upload flow (see
+        // app/api/committee/route.js's header comment for why this can't
+        // go through a plain multipart POST the way an image attachment
+        // does: a Word doc can't be shrunk server-side the way an image
+        // is, so it needs to skip our own function entirely and go
+        // straight to Storage).
+        const signRes = await fetch("/api/committee", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ action: "sign", file_name: file.name, content_type: file.type, file_size: file.size }),
+        })
+        if (!signRes.ok) throw new Error(await readError(signRes, "Could not prepare the upload"))
+        const signData = await signRes.json()
+
+        const { error: upErr } = await supabase.storage
+          .from("community-docs")
+          .uploadToSignedUrl(signData.path, signData.token, file, { contentType: signData.content_type })
+        if (upErr) throw new Error(upErr.message || "Upload failed")
+
+        const completeRes = await fetch("/api/committee", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            action: "complete", path: signData.path, file_name: file.name, content_type: signData.content_type,
+            content, pinned: false,
+            doc_category_id: docCategoryId || undefined, doc_title: docCategoryId ? docTitle.trim() : undefined,
+          }),
+        })
+        if (!completeRes.ok) throw new Error(await readError(completeRes, "Could not post"))
+      } else if (file) {
+        // Image attachment -- still resized server-side, small enough to
+        // go straight through the function.
         const fd = new FormData()
         fd.append("content", content)
         fd.append("file", file)
@@ -154,16 +202,17 @@ function Composer({ onPosted }) {
           fd.append("doc_category_id", docCategoryId)
           fd.append("doc_title", docTitle.trim())
         }
-        res = await fetch("/api/committee", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd })
+        const res = await fetch("/api/committee", { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd })
+        if (!res.ok) throw new Error(await readError(res, "Could not post"))
       } else {
-        res = await fetch("/api/committee", {
+        const res = await fetch("/api/committee", {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({ content }),
         })
+        if (!res.ok) throw new Error(await readError(res, "Could not post"))
       }
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Could not post")
+
       setContent(""); setFile(null); setDocCategoryId(""); setDocTitle("")
       onPosted()
     } catch (e) {
@@ -178,6 +227,9 @@ function Composer({ onPosted }) {
         onChange={setContent} placeholder="Write a Committee update, notice, or share this month's minutes…" />
       <div style={{ marginTop: 8 }}>
         <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Attachment (optional)</label>
+        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: 2 }}>
+          PDF, Word, or image — max 10MB
+        </div>
         <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp"
           onChange={e => pickFile(e.target.files[0] || null)}
           style={{ display: "block", marginTop: 4, fontSize: "0.85rem" }} />

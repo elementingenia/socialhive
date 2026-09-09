@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import { useOwners } from "@/lib/useOwners"
 import { Sheet, COLOUR, inputStyle, labelStyle, getToken } from "@/components/ResidentEditPanel"
+import { MAX_ATTACHMENT_BYTES, tooLargeMessage } from "@/lib/attachmentLimits"
 
 const secondaryButtonStyle = {
   padding: "0.5rem 0.9rem", borderRadius: 10, border: "1px solid var(--border)",
@@ -126,25 +127,79 @@ function AddDocumentForm({ categories, onUploaded, onClose }) {
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
+  function pickFile(f) {
+    setError("")
+    if (f && f.size > MAX_ATTACHMENT_BYTES) { setError(tooLargeMessage(f)); setFile(null); return }
+    setFile(f)
+  }
+
+  // Reads a JSON error body if there is one; falls back to a readable
+  // message when the response isn't JSON at all (a plain-text 413 from
+  // Vercel's own request-size limit would otherwise crash res.json() with
+  // a cryptic "Unexpected token" parse error instead of telling the person
+  // what actually happened -- see app/(app)/committee/page.js for the
+  // original diagnosis of this exact failure mode).
+  async function readError(res, fallback) {
+    const text = await res.text()
+    try { return JSON.parse(text).error || fallback } catch {
+      if (res.status === 413) return "That file is too large to upload."
+      return fallback
+    }
+  }
+
   async function handleUpload() {
     setError("")
     if (!form.title.trim()) { setError("Title is required"); return }
     if (!file) { setError("Please select a file"); return }
+    if (file.size > MAX_ATTACHMENT_BYTES) { setError(tooLargeMessage(file)); return }
     setUploading(true)
     try {
       const token = await getToken()
-      const fd = new FormData()
-      fd.append("file", file)
-      fd.append("title", form.title.trim())
-      fd.append("description", form.description.trim())
-      fd.append("category_id", form.category_id)
-      const res = await fetch("/api/info/documents", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${token}` },
-        body: fd,
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Upload failed")
+
+      if (!file.type?.startsWith("image/")) {
+        // PDF/Word -- signed-upload flow (see app/api/info/documents/
+        // route.js's header comment: this is what makes the "max 10MB"
+        // text above actually true, instead of a number nobody checked).
+        const signRes = await fetch("/api/info/documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            action: "sign", file_name: file.name, content_type: file.type,
+            file_size: file.size, category_id: form.category_id,
+          }),
+        })
+        if (!signRes.ok) throw new Error(await readError(signRes, "Could not prepare the upload"))
+        const signData = await signRes.json()
+
+        const { error: upErr } = await supabase.storage
+          .from("community-docs")
+          .uploadToSignedUrl(signData.path, signData.token, file, { contentType: signData.content_type })
+        if (upErr) throw new Error(upErr.message || "Upload failed")
+
+        const completeRes = await fetch("/api/info/documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            action: "complete", path: signData.path, file_name: file.name, content_type: signData.content_type,
+            title: form.title.trim(), description: form.description.trim(), category_id: form.category_id,
+            file_size: file.size,
+          }),
+        })
+        if (!completeRes.ok) throw new Error(await readError(completeRes, "Could not save the uploaded document"))
+      } else {
+        const fd = new FormData()
+        fd.append("file", file)
+        fd.append("title", form.title.trim())
+        fd.append("description", form.description.trim())
+        fd.append("category_id", form.category_id)
+        const res = await fetch("/api/info/documents", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}` },
+          body: fd,
+        })
+        if (!res.ok) throw new Error(await readError(res, "Upload failed"))
+      }
+
       onUploaded()
       onClose()
     } catch (e) {
@@ -176,7 +231,7 @@ function AddDocumentForm({ categories, onUploaded, onClose }) {
         </div>
         <input id="doc-file-input" type="file"
           accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-          onChange={e => setFile(e.target.files[0] || null)}
+          onChange={e => pickFile(e.target.files[0] || null)}
           style={{ fontSize: "0.88rem", color: "var(--text)" }} />
       </div>
       {error && <div style={{ color: "#b91c1c", fontSize: "0.83rem" }}>{error}</div>}
