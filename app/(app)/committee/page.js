@@ -228,7 +228,7 @@ function Composer({ onPosted }) {
       <div style={{ marginTop: 8 }}>
         <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Attachment (optional)</label>
         <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: 2 }}>
-          PDF, Word, or image — max 10MB
+          PDF, Word, or image — max 4MB
         </div>
         <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp"
           onChange={e => pickFile(e.target.files[0] || null)}
