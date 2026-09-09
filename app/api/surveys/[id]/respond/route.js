@@ -34,7 +34,7 @@ export async function GET(req, { params }) {
       // type's comment when the answer itself was left blank) has every
       // value column NULL except comment_text -- merge its comment onto
       // whatever's already in the bucket rather than treating it as a
-      // distinct answer value. See 102_survey_comments.sql's header note.
+      // distinct answer value. See 103_survey_comments.sql's header note.
       const isCommentOnlyRow = row.choice_id == null && row.rating_value == null && row.yes_no == null && row.free_text == null
 
       if (row.choice_id) {
@@ -121,7 +121,7 @@ export async function POST(req, { params }) {
 
   // Validate every PROVIDED answer's shape, and (submit only) confirm every
   // required item has a non-empty one. A comment (survey_items.allow_comment,
-  // 102_survey_comments.sql) is supplementary, never a substitute for the
+  // 103_survey_comments.sql) is supplementary, never a substitute for the
   // answer itself -- a required question with only a comment and no real
   // answer still blocks submit, same as before this feature existed.
   const rows = []
@@ -149,7 +149,7 @@ export async function POST(req, { params }) {
       if (!empty) for (const choice_id of answer.choice_ids) rows.push({ question_id: item.question_id, choice_id })
       // multi_choice's own rows (one per choice) never carry choice_id NULL,
       // so a comment always gets its own dedicated row here regardless of
-      // whether any choice was also selected -- see 102_survey_comments.sql.
+      // whether any choice was also selected -- see 103_survey_comments.sql.
       if (comment) rows.push({ question_id: item.question_id, comment_text: comment })
     } else if (q.type === 'rating') {
       if (!empty) rows.push({ question_id: item.question_id, rating_value: Number(answer.rating_value), comment_text: comment })
