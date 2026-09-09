@@ -7,7 +7,6 @@ import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import { bbToHtml } from "@/components/RichEditor"
 import { BusIcon } from "@/components/NavIcons"
-import { ContactBar } from "@/components/OwnersManager"
 import ManageLink from "@/components/ManageLink"
 import { FormattedText } from "@/lib/textFormatter"
 import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted, balancePhrase } from "@/lib/payments"
@@ -450,8 +449,6 @@ export default function SpecialEventsHome() {
   return (
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
       <WelcomeBanner text={welcomeText} />
-
-      <ContactBar contextType="hub" contextKey="special" contextLabel="Special Events" colour="var(--special)" style={{ margin: "-2px 0 12px" }} />
 
       {canManage && <ManageLink href="/special-events/manage" label="Manage Special Events" colour="var(--special)" />}
 
