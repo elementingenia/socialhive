@@ -5,6 +5,30 @@ import { computeSurveyStatus, canSeeResults } from '@/lib/surveys'
 
 export const dynamic = 'force-dynamic'
 
+// Replace a survey's whole coordinator set -- exact mirror of
+// app/api/social/route.js's writeCoordinators, scoped to survey_coordinators
+// instead of event_coordinators (104_survey_coordinators.sql). Soft-replaces
+// (never hard-deletes) the currently-active rows so history isn't lost, then
+// inserts one fresh row per id in the new set. Called on both create and
+// PATCH edit -- same "wholesale replace" semantics as this route already
+// uses for survey_items.
+async function writeCoordinators(surveyId, coordinatorIds, actorId) {
+  await supabaseAdmin
+    .from('survey_coordinators')
+    .update({ replaced_at: new Date().toISOString(), replaced_by: actorId })
+    .eq('survey_id', surveyId)
+    .is('replaced_at', null)
+
+  if (coordinatorIds?.length) {
+    const rows = coordinatorIds.map(mid => ({
+      survey_id: surveyId,
+      member_id: mid,
+      assigned_by: actorId,
+    }))
+    await supabaseAdmin.from('survey_coordinators').insert(rows)
+  }
+}
+
 // GET /api/surveys — list surveys, most recent first, status computed live
 // (never trust a stored column — see lib/surveys.js). Any authenticated
 // resident can list, same convention as app/api/voting/route.js -- Draft
@@ -18,18 +42,31 @@ export async function GET(req) {
 
   const { data, error: qErr } = await supabaseAdmin
     .from('surveys')
-    .select('id, title, description, eligibility_mode, anonymous, results_visibility_outcome, results_visibility_turnout, coordinator_id, opened_at, closes_at, published_at, created_at, archived')
+    .select('id, title, description, eligibility_mode, anonymous, results_visibility_outcome, results_visibility_turnout, opened_at, closes_at, published_at, created_at, archived')
     .eq('archived', false)
     .order('created_at', { ascending: false })
   if (qErr) return NextResponse.json({ error: qErr.message }, { status: 500 })
 
   const canManage = !!member.is_admin || await isAreaOwner(member.id, 'hub', 'surveys')
 
-  const coordinatorIds = [...new Set(data.map(s => s.coordinator_id).filter(Boolean))]
-  const coordinatorNames = {}
-  if (coordinatorIds.length > 0) {
-    const { data: coords } = await supabaseAdmin.from('members').select('id, name').in('id', coordinatorIds)
-    for (const c of coords || []) coordinatorNames[c.id] = c.name
+  const surveyIds = data.map(s => s.id)
+  // Multiple coordinators per survey (survey_coordinators,
+  // 104_survey_coordinators.sql -- replaces the old single coordinator_id
+  // column, same join-table pattern every event-based hub already uses).
+  const coordIdsBySurvey = {}
+  const coordNamesBySurvey = {}
+  if (surveyIds.length > 0) {
+    const { data: ecRows } = await supabaseAdmin
+      .from('survey_coordinators')
+      .select('survey_id, member_id, members!member_id(name)')
+      .in('survey_id', surveyIds)
+      .is('replaced_at', null)
+    for (const ec of ecRows || []) {
+      ;(coordIdsBySurvey[ec.survey_id] = coordIdsBySurvey[ec.survey_id] || []).push(ec.member_id)
+      if (ec.members?.name) {
+        ;(coordNamesBySurvey[ec.survey_id] = coordNamesBySurvey[ec.survey_id] || []).push(ec.members.name)
+      }
+    }
   }
 
   // Response-count ("turnout"), same shape as Voting's votesCast --
@@ -38,7 +75,7 @@ export async function GET(req) {
   // admin/owner bypass). Only SUBMITTED responses count -- an in-progress
   // draft isn't a completed response yet.
   const turnoutEligibleIds = data
-    .filter(s => computeSurveyStatus(s) !== 'draft' && canSeeResults(s, { field: 'results_visibility_turnout', isCoordinator: !!s.coordinator_id && s.coordinator_id === member.id }))
+    .filter(s => computeSurveyStatus(s) !== 'draft' && canSeeResults(s, { field: 'results_visibility_turnout', isCoordinator: (coordIdsBySurvey[s.id] || []).includes(member.id) }))
     .map(s => s.id)
   const responsesCountById = {}
   if (turnoutEligibleIds.length > 0) {
@@ -52,8 +89,8 @@ export async function GET(req) {
   const surveys = data.map(s => ({
     ...s,
     status: computeSurveyStatus(s),
-    canManageEvent: canManage || (!!s.coordinator_id && s.coordinator_id === member.id),
-    coordinatorName: s.coordinator_id ? (coordinatorNames[s.coordinator_id] || null) : null,
+    canManageEvent: canManage || (coordIdsBySurvey[s.id] || []).includes(member.id),
+    coordinatorNames: coordNamesBySurvey[s.id] || [],
     responsesCount: turnoutEligibleIds.includes(s.id) ? (responsesCountById[s.id] || 0) : null,
   }))
   return NextResponse.json({ surveys, isAdmin: !!member.is_admin, canManage })
@@ -70,10 +107,15 @@ export async function POST(req) {
   const {
     title, description, eligibility_mode, anonymous,
     results_visibility_outcome, results_visibility_turnout,
-    coordinator_id, closes_at, items,
+    coordinator_ids, closes_at, items,
   } = body
 
   if (!title || !String(title).trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 })
+  // At least one coordinator is required -- same rule as every event-based
+  // hub's coordinator_ids validation (e.g. app/api/social/route.js POST).
+  if (!Array.isArray(coordinator_ids) || coordinator_ids.length === 0) {
+    return NextResponse.json({ error: 'At least one coordinator is required' }, { status: 400 })
+  }
   if (!Array.isArray(items) || items.length === 0) {
     return NextResponse.json({ error: 'At least one question is required' }, { status: 400 })
   }
@@ -112,7 +154,6 @@ export async function POST(req) {
       anonymous: !!anonymous,
       results_visibility_outcome: results_visibility_outcome === 'admin_only' ? 'admin_only' : 'residents',
       results_visibility_turnout: results_visibility_turnout === 'admin_only' ? 'admin_only' : 'residents',
-      coordinator_id: coordinator_id || null,
       closes_at: closes_at || null,
       created_by: member.id,
     })
@@ -133,6 +174,8 @@ export async function POST(req) {
     await supabaseAdmin.from('surveys').delete().eq('id', survey.id)
     return NextResponse.json({ error: itemErr.message }, { status: 500 })
   }
+
+  await writeCoordinators(survey.id, coordinator_ids, member.id)
 
   return NextResponse.json({ survey: { ...survey, status: computeSurveyStatus(survey) } }, { status: 201 })
 }

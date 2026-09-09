@@ -48,7 +48,12 @@ export async function GET(req, { params }) {
     return NextResponse.json({ error: 'Results are only available once this survey has closed' }, { status: 400 })
   }
 
-  const isCoordinator = !!survey.coordinator_id && survey.coordinator_id === member.id
+  // Multiple coordinators per survey (survey_coordinators,
+  // 104_survey_coordinators.sql) -- any of them counts as THE coordinator
+  // for this gate, identical to how the old single coordinator_id worked.
+  const { data: ecRows } = await supabaseAdmin
+    .from('survey_coordinators').select('member_id').eq('survey_id', survey.id).is('replaced_at', null)
+  const isCoordinator = (ecRows || []).some(ec => ec.member_id === member.id)
   let identityAllowed = false
 
   if (isCoordinator) {
