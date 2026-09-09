@@ -4,7 +4,7 @@
 import {
   SURVEY_STATUS, computeSurveyStatus, isSurveyOpen, normalizeHouseNumber,
   householdAlreadySubmitted, isEligibleForSurvey, validateAnswerShape,
-  isAnswerEmpty, canSeeResults,
+  isAnswerEmpty, canSeeResults, canQuestionHaveComment, resolveCommentText,
 } from '../../lib/surveys.js'
 
 let pass = 0, fail = 0
@@ -118,6 +118,26 @@ ok(canSeeResults({ results_visibility_outcome: 'admin_only' }, { field: 'results
   'canSeeResults behaves identically here as in lib/voting.js (coordinator-only, Change Request #3)')
 ok(canSeeResults({ results_visibility_outcome: 'admin_only' }, { field: 'results_visibility_outcome', isCoordinator: false }) === false,
   'canSeeResults: no blanket admin bypass here either')
+
+// ── canQuestionHaveComment / resolveCommentText (102_survey_comments.sql) ──
+ok(canQuestionHaveComment({ type: 'single_choice' }) === true, 'canQuestionHaveComment: single_choice allowed')
+ok(canQuestionHaveComment({ type: 'multi_choice' }) === true, 'canQuestionHaveComment: multi_choice allowed')
+ok(canQuestionHaveComment({ type: 'rating' }) === true, 'canQuestionHaveComment: rating allowed')
+ok(canQuestionHaveComment({ type: 'yes_no' }) === true, 'canQuestionHaveComment: yes_no allowed')
+ok(canQuestionHaveComment({ type: 'free_text' }) === false, 'canQuestionHaveComment: free_text is NEVER allowed -- it is already a comment field')
+
+ok(resolveCommentText({ allow_comment: true, question: { type: 'rating' } }, { comment: '  Great BBQ  ' }) === 'Great BBQ',
+  'resolveCommentText: trims whitespace and returns the comment when allowed and provided')
+ok(resolveCommentText({ allow_comment: false, question: { type: 'rating' } }, { comment: 'x' }) === null,
+  'resolveCommentText: null when the survey_items toggle is off, regardless of type')
+ok(resolveCommentText({ allow_comment: true, question: { type: 'free_text' } }, { comment: 'x' }) === null,
+  'resolveCommentText: null for free_text even if allow_comment was somehow set (type-level rule always wins)')
+ok(resolveCommentText({ allow_comment: true, question: { type: 'rating' } }, { comment: '   ' }) === null,
+  'resolveCommentText: whitespace-only comment resolves to null, not an empty string')
+ok(resolveCommentText({ allow_comment: true, question: { type: 'rating' } }, {}) === null,
+  'resolveCommentText: no comment field at all => null')
+ok(resolveCommentText({ allow_comment: true, question: { type: 'rating' } }, { comment: 123 }) === null,
+  'resolveCommentText: a non-string comment value is ignored, not coerced')
 
 console.log(`\nsurveys.test.mjs: ${pass} passed, ${fail} failed`)
 if (fail > 0) process.exit(1)

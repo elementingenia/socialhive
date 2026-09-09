@@ -86,7 +86,7 @@ export async function POST(req) {
   // an archived question shouldn't be attachable to a NEW survey, though it
   // stays readable on any survey it was already attached to before archiving).
   const { data: questions, error: qErr } = await supabaseAdmin
-    .from('survey_questions').select('id, archived').in('id', questionIds)
+    .from('survey_questions').select('id, type, archived').in('id', questionIds)
   if (qErr) return NextResponse.json({ error: qErr.message }, { status: 500 })
   const foundIds = new Set((questions || []).map(q => q.id))
   const missing = questionIds.filter(id => !foundIds.has(id))
@@ -94,6 +94,13 @@ export async function POST(req) {
   const archivedUsed = (questions || []).filter(q => q.archived).map(q => q.id)
   if (archivedUsed.length > 0) {
     return NextResponse.json({ error: 'One or more selected questions are archived and can\'t be added to a new survey' }, { status: 400 })
+  }
+  // allow_comment only makes sense for a type that isn't already a freeform
+  // field itself -- see lib/surveys.js's canQuestionHaveComment.
+  const typeById = Object.fromEntries((questions || []).map(q => [q.id, q.type]))
+  const commentOnFreeText = items.filter(it => it.allow_comment && typeById[it.question_id] === 'free_text')
+  if (commentOnFreeText.length > 0) {
+    return NextResponse.json({ error: 'Free text questions already are a comment field — they can\'t also allow a separate comment' }, { status: 400 })
   }
 
   const { data: survey, error: insErr } = await supabaseAdmin
@@ -118,6 +125,7 @@ export async function POST(req) {
     question_id: it.question_id,
     sort_order: i,
     required: !!it.required,
+    allow_comment: !!it.allow_comment,
   }))
   const { error: itemErr } = await supabaseAdmin.from('survey_items').insert(itemRows)
   if (itemErr) {
