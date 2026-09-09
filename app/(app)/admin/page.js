@@ -6,8 +6,9 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon, CommitteeIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon, CommitteeIcon, UptakeIcon } from '@/components/NavIcons'
 import OwnersManager from '@/components/OwnersManager'
+import UptakeStats from '@/components/UptakeStats'
 import ResidentEditForm, { Sheet, labelStyle } from '@/components/ResidentEditPanel'
 import { CLUB_COLOURS, nextClubColour } from '@/lib/clubColours'
 import ClubForm from '@/components/ClubForm'
@@ -50,6 +51,12 @@ const SECTIONS = [
   // landing page listing each area's current on/off state with a link
   // through to that hub's own existing manage page.
   { key: 'Occasional', label: 'Occasional Activities', Icon: OccasionalActivitiesIcon, href: '/occasional-activities' },
+  // Resident uptake at a glance (2026-09-09) -- registered accounts vs.
+  // genuine active use (members.last_active_at, live since migration 009),
+  // plus a manually-entered total-occupied-households figure since this app
+  // has no live source of truth for that. See components/UptakeStats.js and
+  // app/api/admin/uptake/route.js for the full evidence trail.
+  { key: 'Uptake', label: 'Uptake', Icon: UptakeIcon },
 ]
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -1499,6 +1506,7 @@ export default function AdminPage() {
         {BAR_ENABLED && tab === 'Bar' && <BarTab />}
         {tab === 'Locations' && <LocationsTab />}
         {tab === 'Tools'     && <ToolsTab />}
+        {tab === 'Uptake'    && <UptakeStats />}
       </div>
     )
   }
