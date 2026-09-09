@@ -232,7 +232,7 @@ function CreateSurveyForm({ onCreated }) {
   const [anonymous, setAnonymous] = useState(false)
   const [visOutcome, setVisOutcome] = useState("residents")
   const [visTurnout, setVisTurnout] = useState("residents")
-  const [coordinator, setCoordinator] = useState(null)
+  const [coordinators, setCoordinators] = useState([]) // [{id, name}, ...] -- any number, no primary (104_survey_coordinators.sql)
   const [members, setMembers] = useState([])
   const [bank, setBank] = useState(null)
   const [selectedItems, setSelectedItems] = useState([]) // [{ question_id, required, allow_comment }], array order = respondent-facing numbering
@@ -247,6 +247,7 @@ function CreateSurveyForm({ onCreated }) {
   async function save() {
     setError("")
     if (!title.trim()) return setError("Title is required")
+    if (coordinators.length === 0) return setError("At least one coordinator is required")
     if (selectedItems.length === 0) return setError("Pick at least one question from the bank")
     setSaving(true)
     const res = await authedFetch("/api/surveys", {
@@ -258,7 +259,7 @@ function CreateSurveyForm({ onCreated }) {
         anonymous,
         results_visibility_outcome: visOutcome,
         results_visibility_turnout: visTurnout,
-        coordinator_id: coordinator || null,
+        coordinator_ids: coordinators.map(m => m.id),
         items: selectedItems,
       }),
     })
@@ -313,9 +314,9 @@ function CreateSurveyForm({ onCreated }) {
         </div>
       </div>
 
-      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Coordinator (optional)</label>
+      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Coordinators</label>
       <div style={{ marginBottom: "0.9rem" }}>
-        <CoordPicker members={members} value={coordinator} onChange={setCoordinator} />
+        <CoordinatorsPicker members={members} value={coordinators} onChange={setCoordinators} />
       </div>
 
       <SurveyItemsEditor bank={bank} selectedItems={selectedItems} setSelectedItems={setSelectedItems} />
@@ -326,54 +327,82 @@ function CreateSurveyForm({ onCreated }) {
   )
 }
 
-// Same dropdown-with-search coordinator picker as Voting's CoordPicker
-// (app/(app)/voting/page.js) -- kept local for the same reason (each hub's
-// copy already carries its own colour token).
-function CoordPicker({ members, value, onChange }) {
-  const chosen = members.find(m => m.id === value) || null
-  const [query, setQuery] = useState("")
+// Multi-select coordinator picker -- chips + add-another dropdown, exact
+// same pattern as every event-based hub's EC picker (e.g.
+// app/(app)/social/events/page.js's ECPicker), just this hub's colour token.
+// Replaces the old single-select CoordPicker per Iain (2026-09-09, "Need to
+// be able to add more than one coordinator" -> "follow same pattern as
+// other hubs / Groups and clubs"): any number of coordinators, all with
+// identical permissions, no "primary".
+function CoordinatorsPicker({ members = [], value, onChange }) {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
   const containerRef = useRef(null)
-  const filtered = members.filter(m => !query || (m.name || "").toLowerCase().includes(query.toLowerCase()))
 
   useEffect(() => {
-    function handleClick(e) { if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false) }
-    document.addEventListener("mousedown", handleClick)
-    return () => document.removeEventListener("mousedown", handleClick)
+    function handler(e) { if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
   }, [])
 
+  const excluded = value.map(m => m.id)
+  const pool = members.filter(m => !excluded.includes(m.id))
+  const filtered = pool.filter(m => !query || (m.name || "").toLowerCase().includes(query.toLowerCase()))
+
+  function pick(m) { onChange([...value, m]); setOpen(false); setQuery("") }
+  function remove(id) { onChange(value.filter(m => m.id !== id)) }
+
   return (
-    <div ref={containerRef} style={{ position: "relative" }}>
-      <div onClick={() => { setOpen(o => !o); setQuery("") }}
-        role="button" tabIndex={0} aria-haspopup="listbox" aria-expanded={open}
-        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); setQuery("") } }}
-        style={{ ...INPUT, color: chosen ? "var(--text)" : "var(--text-dim)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", border: `1.5px solid ${open ? "var(--surveys)" : "var(--border)"}` }}>
-        <span>{chosen ? chosen.name : "— No coordinator —"}</span>
-        <span style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>▾</span>
-      </div>
-      {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "0 4px 20px rgba(0,0,0,0.12)", zIndex: 60, overflow: "hidden" }}>
-          <div style={{ padding: "0.5rem 0.75rem", borderBottom: "1px solid var(--border)" }}>
-            <input autoFocus type="text" placeholder="Search name…" value={query} onChange={e => setQuery(e.target.value)}
-              style={{ width: "100%", border: "none", background: "transparent", color: "var(--text)", fontSize: "0.9rem", outline: "none", fontFamily: "inherit" }} />
-          </div>
-          <div style={{ maxHeight: 300, overflowY: "auto" }}>
-            {value && (
-              <div onClick={() => { onChange(null); setOpen(false) }}
-                style={{ padding: "0.65rem 1rem", cursor: "pointer", fontSize: "0.85rem", color: "var(--text-dim)", borderBottom: "1px solid var(--border)" }}>
-                — Clear selection —
-              </div>
-            )}
-            {filtered.map(m => (
-              <div key={m.id} onClick={() => { onChange(m.id); setOpen(false) }}
-                style={{ padding: "0.65rem 1rem", cursor: "pointer", background: m.id === value ? "rgba(8,145,178,0.08)" : "transparent", borderBottom: "1px solid var(--border)", fontWeight: m.id === value ? 700 : 400, fontSize: "0.88rem", color: m.id === value ? "var(--surveys)" : "var(--text)" }}>
-                {m.name}
-              </div>
-            ))}
-            {filtered.length === 0 && <div style={{ padding: "0.9rem 1rem", fontSize: "0.85rem", color: "var(--text-dim)" }}>No match</div>}
-          </div>
+    <div ref={containerRef}>
+      {value.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginBottom: "0.5rem" }}>
+          {value.map(m => (
+            <span key={m.id} style={{
+              display: "inline-flex", alignItems: "center", gap: "0.3rem",
+              background: "rgba(8,145,178,0.12)", color: "var(--surveys)",
+              border: "1px solid rgba(8,145,178,0.4)",
+              borderRadius: "20px", padding: "0.2rem 0.6rem 0.2rem 0.75rem",
+              fontSize: "0.82rem", fontWeight: 600,
+            }}>
+              {m.name}
+              <button type="button" onClick={() => remove(m.id)}
+                style={{ background: "none", border: "none", color: "var(--surveys)", cursor: "pointer", fontSize: "1rem", lineHeight: 1, padding: 0 }}>×</button>
+            </span>
+          ))}
         </div>
       )}
+
+      <div style={{ position: "relative" }}>
+        <div onClick={() => { setOpen(o => !o); setQuery("") }}
+          role="button" tabIndex={0} aria-haspopup="listbox" aria-expanded={open}
+          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); setQuery("") } }}
+          style={{ ...INPUT, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", border: `1.5px solid ${open ? "var(--surveys)" : "var(--border)"}` }}>
+          <span style={{ color: "var(--text-dim)" }}>{value.length === 0 ? "Select coordinator…" : "Add another coordinator…"}</span>
+          <span style={{ color: "var(--text-dim)", fontSize: "0.75rem", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>▾</span>
+        </div>
+
+        {open && (
+          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 60, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", overflow: "hidden" }}>
+            <div style={{ padding: "0.5rem 0.75rem", borderBottom: "1px solid var(--border)" }}>
+              <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name…"
+                style={{ width: "100%", border: "none", background: "transparent", color: "var(--text)", fontSize: "0.9rem", outline: "none", fontFamily: "inherit" }} />
+            </div>
+            <div style={{ maxHeight: 220, overflowY: "auto" }}>
+              {filtered.map(m => (
+                <div key={m.id} onClick={() => pick(m)} style={{ padding: "0.65rem 1rem", cursor: "pointer", borderBottom: "1px solid var(--border)", fontSize: "0.88rem", color: "var(--text)" }}>
+                  {m.name}
+                </div>
+              ))}
+              {filtered.length === 0 && query && (
+                <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>No match for "{query}"</div>
+              )}
+              {filtered.length === 0 && !query && pool.length === 0 && members.length > 0 && (
+                <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>All coordinators already added</div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -432,6 +461,64 @@ function DraftQuestionsEditor({ survey, detail, onSaved }) {
       {error && <div style={{ color: "var(--terracotta)", fontSize: "0.82rem", margin: "0.5rem 0" }}>{error}</div>}
       <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
         <button style={{ ...BTN_PRIMARY, width: "auto", padding: "0.5rem 0.9rem" }} disabled={saving} onClick={save}>{saving ? "Saving…" : "Save questions"}</button>
+        <button style={{ ...BTN_GHOST, padding: "0.5rem 0.9rem" }} disabled={saving} onClick={() => setOpen(false)}>Cancel</button>
+      </div>
+    </div>
+  )
+}
+
+// Edit an existing survey's coordinator set -- coordinator_ids is an
+// "always editable, non-published" field (same tier as title/description/
+// closes_at/visibility in PATCH /api/surveys/[id]), not locked to Draft the
+// way items/eligibility/anonymity are, since changing WHO manages a survey
+// doesn't invalidate anything already answered. Collapsed by default, same
+// UX as DraftQuestionsEditor above.
+function SurveyCoordinatorsEditor({ survey, detail, onSaved }) {
+  const [open, setOpen] = useState(false)
+  const [members, setMembers] = useState([])
+  const [selected, setSelected] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    if (!open || selected !== null) return
+    supabase.from("members").select("id, name").order("name").then(({ data }) => setMembers(data || []))
+    setSelected((detail.coordinatorIds || []).map((id, i) => ({ id, name: detail.coordinatorNames?.[i] })))
+  }, [open, selected, detail.coordinatorIds, detail.coordinatorNames])
+
+  async function save() {
+    setError("")
+    if (!selected || selected.length === 0) return setError("At least one coordinator is required")
+    setSaving(true)
+    const res = await authedFetch(`/api/surveys/${survey.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ coordinator_ids: selected.map(m => m.id) }),
+    })
+    const json = await res.json().catch(() => ({}))
+    setSaving(false)
+    if (!res.ok) return setError(json.error || "Could not save these changes")
+    setOpen(false)
+    onSaved()
+  }
+
+  if (!open) {
+    return (
+      <div style={{ marginBottom: "0.6rem" }}>
+        <button style={{ ...BTN_GHOST, padding: "0.35rem 0.7rem", fontSize: "0.78rem" }} onClick={() => setOpen(true)}>Edit coordinators</button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: "12px", padding: "0.75rem", marginBottom: "0.6rem" }}>
+      {selected === null ? (
+        <div style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>Loading…</div>
+      ) : (
+        <CoordinatorsPicker members={members} value={selected} onChange={setSelected} />
+      )}
+      {error && <div style={{ color: "var(--terracotta)", fontSize: "0.82rem", margin: "0.5rem 0" }}>{error}</div>}
+      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+        <button style={{ ...BTN_PRIMARY, width: "auto", padding: "0.5rem 0.9rem" }} disabled={saving} onClick={save}>{saving ? "Saving…" : "Save coordinators"}</button>
         <button style={{ ...BTN_GHOST, padding: "0.5rem 0.9rem" }} disabled={saving} onClick={() => setOpen(false)}>Cancel</button>
       </div>
     </div>
@@ -521,9 +608,9 @@ function SurveyCard({ survey, isAdmin, canManage, canManageEvent, onChanged }) {
           </span>
         </div>
 
-        {survey.coordinatorName && (
+        {survey.coordinatorNames?.length > 0 && (
           <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.2rem" }}>
-            Coordinator: <span style={{ fontWeight: 600, color: "var(--surveys)" }}>{survey.coordinatorName}</span>
+            Coordinator{survey.coordinatorNames.length > 1 ? "s" : ""}: <span style={{ fontWeight: 600, color: "var(--surveys)" }}>{survey.coordinatorNames.join(", ")}</span>
           </div>
         )}
 
@@ -552,6 +639,10 @@ function SurveyCard({ survey, isAdmin, canManage, canManageEvent, onChanged }) {
 
         {expanded && detail && (
           <div style={{ marginTop: "0.75rem" }}>
+            {survey.status !== "published" && canManageThis && (
+              <SurveyCoordinatorsEditor survey={survey} detail={detail} onSaved={() => { onChanged(); loadDetail() }} />
+            )}
+
             {survey.status === "draft" && canManageThis && (
               <DraftQuestionsEditor survey={survey} detail={detail} onSaved={() => { onChanged(); loadDetail() }} />
             )}

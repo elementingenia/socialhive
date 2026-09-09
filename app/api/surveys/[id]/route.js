@@ -5,6 +5,29 @@ import { computeSurveyStatus, canSeeResults, isEligibleForSurvey } from '@/lib/s
 
 export const dynamic = 'force-dynamic'
 
+// Replace a survey's whole coordinator set -- exact mirror of
+// app/api/surveys/route.js's writeCoordinators (which mirrors
+// app/api/social/route.js's own copy in turn) -- duplicated per-route rather
+// than shared, same convention this file already follows elsewhere (e.g.
+// lib/surveys.js's normalizeHouseNumber comment on why small
+// dependency-free helpers get their own copy instead of an import).
+async function writeCoordinators(surveyId, coordinatorIds, actorId) {
+  await supabaseAdmin
+    .from('survey_coordinators')
+    .update({ replaced_at: new Date().toISOString(), replaced_by: actorId })
+    .eq('survey_id', surveyId)
+    .is('replaced_at', null)
+
+  if (coordinatorIds?.length) {
+    const rows = coordinatorIds.map(mid => ({
+      survey_id: surveyId,
+      member_id: mid,
+      assigned_by: actorId,
+    }))
+    await supabaseAdmin.from('survey_coordinators').insert(rows)
+  }
+}
+
 // GET /api/surveys/[id] — survey + its questions/choices (in item order) +
 // the viewer's own eligibility/participation state. Never returns any
 // other resident's response — that's what /respond (my own draft) and
@@ -41,7 +64,18 @@ export async function GET(req, { params }) {
     eligibility = isEligibleForSurvey(survey, member, flat)
   }
 
-  const isCoordinator = !!survey.coordinator_id && survey.coordinator_id === member.id
+  // Multiple coordinators per survey (survey_coordinators,
+  // 104_survey_coordinators.sql -- replaces the old single coordinator_id
+  // column, same join-table pattern every event-based hub already uses).
+  const { data: ecRows } = await supabaseAdmin
+    .from('survey_coordinators')
+    .select('member_id, members!member_id(id, name)')
+    .eq('survey_id', survey.id)
+    .is('replaced_at', null)
+  const coordinatorIds = (ecRows || []).map(ec => ec.member_id)
+  const coordinatorNames = (ecRows || []).map(ec => ec.members?.name).filter(Boolean)
+  const isCoordinator = coordinatorIds.includes(member.id)
+
   let turnout = null
   if (surveyStatus !== 'draft' && canSeeResults(survey, { field: 'results_visibility_turnout', isCoordinator })) {
     const { count } = await supabaseAdmin
@@ -52,19 +86,14 @@ export async function GET(req, { params }) {
   const canManage = !!member.is_admin || await isAreaOwner(member.id, 'hub', 'surveys')
   const canManageEvent = canManage || isCoordinator
 
-  let coordinatorName = null
-  if (survey.coordinator_id) {
-    const { data: coord } = await supabaseAdmin.from('members').select('name').eq('id', survey.coordinator_id).maybeSingle()
-    coordinatorName = coord?.name || null
-  }
-
   return NextResponse.json({
     survey: { ...survey, status: surveyStatus },
     items,
     isAdmin: !!member.is_admin,
     canManage,
     canManageEvent,
-    coordinatorName,
+    coordinatorIds,
+    coordinatorNames,
     myResponse: myResponse ? { id: myResponse.id, startedAt: myResponse.started_at, submittedAt: myResponse.submitted_at } : null,
     eligibility,
     turnout,
@@ -83,7 +112,7 @@ export async function GET(req, { params }) {
 // Voting's Draft-only field locking.
 // Published: no edits at all.
 export async function PATCH(req, { params }) {
-  const { error, status } = await requireSurveyManage(req, params.id)
+  const { error, status, member } = await requireSurveyManage(req, params.id)
   if (error) return NextResponse.json({ error }, { status })
 
   const { data: survey, error: sErr } = await supabaseAdmin
@@ -103,7 +132,12 @@ export async function PATCH(req, { params }) {
     patch.title = String(body.title).trim()
   }
   if (body.description !== undefined) patch.description = body.description ? String(body.description).trim() : null
-  if (body.coordinator_id !== undefined) patch.coordinator_id = body.coordinator_id || null
+  if (body.coordinator_ids !== undefined && !Array.isArray(body.coordinator_ids)) {
+    return NextResponse.json({ error: 'coordinator_ids must be an array' }, { status: 400 })
+  }
+  if (Array.isArray(body.coordinator_ids) && body.coordinator_ids.length === 0) {
+    return NextResponse.json({ error: 'At least one coordinator is required' }, { status: 400 })
+  }
   if (body.results_visibility_outcome !== undefined) {
     patch.results_visibility_outcome = body.results_visibility_outcome === 'admin_only' ? 'admin_only' : 'residents'
   }
@@ -159,7 +193,20 @@ export async function PATCH(req, { params }) {
     return NextResponse.json({ error: 'Eligibility, anonymity, and questions can only be changed while this survey is still a Draft' }, { status: 400 })
   }
 
-  if (Object.keys(patch).length === 0) return NextResponse.json({ survey: { ...survey, status: surveyStatus } })
+  // coordinator_ids lives in survey_coordinators, not a surveys column, so
+  // it's written separately from `patch` -- but it's still an "always
+  // editable, non-published" field, same tier as title/description/
+  // closes_at/visibility above (not gated to Draft like items/eligibility).
+  if (Array.isArray(body.coordinator_ids)) {
+    await writeCoordinators(survey.id, body.coordinator_ids, member.id)
+  }
+
+  if (Object.keys(patch).length === 0) {
+    const surveyOut = Array.isArray(body.coordinator_ids)
+      ? await supabaseAdmin.from('surveys').select('*').eq('id', survey.id).single().then(r => r.data)
+      : survey
+    return NextResponse.json({ survey: { ...surveyOut, status: computeSurveyStatus(surveyOut) } })
+  }
 
   const { data: updated, error: updErr } = await supabaseAdmin
     .from('surveys').update(patch).eq('id', survey.id).select().single()
