@@ -152,7 +152,7 @@ export default function AskQuestion({
               {activeNames.length ? (
                 <>Goes to <strong>{recipientSummary(activeNames)}</strong> — privately, not a public post.</>
               ) : (
-                <>About <strong>{activeLabel || "the Hive"}</strong>. It goes privately to the right contact — not a public post.</>
+                <>About <strong>{activeLabel || "the team"}</strong>. It goes privately to the right contact — not a public post.</>
               )}
             </div>
             <input value={subject} onChange={e => setSubject(e.target.value)} maxLength={200}
