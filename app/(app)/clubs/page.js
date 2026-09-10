@@ -11,7 +11,7 @@ import { useMyClubs } from "@/lib/useMyClubs"
 export default function ClubsHome() {
   const router = useRouter()
   const [clubs, setClubs] = useState(null)
-  const { myClubIds, loaded: myLoaded } = useMyClubs()
+  const { myClubIds } = useMyClubs()
   const [scope, setScope] = useState("mine") // "mine" | "all"
 
   useEffect(() => {
@@ -20,14 +20,21 @@ export default function ClubsHome() {
       .then(({ data }) => setClubs(data || []))
   }, [])
 
-  const joinedCount = useMemo(() => (clubs || []).filter(c => myClubIds.has(c.id)).length, [clubs, myClubIds])
-  // If the member hasn't joined anything yet, don't strand them on an empty
-  // "My clubs" — show All so there's something to see and join.
-  const effectiveScope = (scope === "mine" && myLoaded && joinedCount === 0) ? "all" : scope
+  // BUG-049 (2026-09-10): this used to silently swap "My Groups & Clubs" for
+  // "All" the moment joinedCount was 0, while the "My Groups & Clubs" pill
+  // stayed visually selected — so a member with zero joins saw every club
+  // listed under a pill that claimed to be scoped to their own. Reported by
+  // Iain: "The My Groups and Clubs and All are not working as they should.
+  // The view in My Groups and Clubs included clubs I have not joined."
+  // Confirmed via a direct query against production club_members: Iain
+  // genuinely has 0 rows there, so the data was correct — the fallback was
+  // the bug. Removed per Iain's explicit choice (option 1): "mine" now
+  // always means "mine", even when that's empty; the existing empty state
+  // below already offers a "See all groups & clubs →" link for that case.
   const shown = useMemo(() => {
     if (!clubs) return null
-    return effectiveScope === "mine" ? clubs.filter(c => myClubIds.has(c.id)) : clubs
-  }, [clubs, effectiveScope, myClubIds])
+    return scope === "mine" ? clubs.filter(c => myClubIds.has(c.id)) : clubs
+  }, [clubs, scope, myClubIds])
 
   const pill = (key, label) => {
     const on = scope === key
@@ -57,7 +64,7 @@ export default function ClubsHome() {
       ) : shown.length === 0 ? (
         <div style={{ textAlign: "center", padding: "3rem 1rem", color: "var(--text-dim)" }}>
           <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>🐝</div>
-          {effectiveScope === "mine"
+          {scope === "mine"
             ? <>You haven&apos;t joined any groups or clubs yet. <button onClick={() => setScope("all")} style={{ background: "none", border: "none", color: "var(--purple)", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>See all groups &amp; clubs →</button></>
             : "No groups or clubs yet. An admin can add one from Admin > Groups & Clubs."}
         </div>
