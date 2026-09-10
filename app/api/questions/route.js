@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { notify } from "@/lib/notify"
 import {
   primaryAnswererIds, contextLabel, answeringBoxQuestions, HUB_LABELS,
-  askableCategories,
+  askableCategories, sortQuestionsForDisplay,
 } from "@/lib/questionRouting"
 import { resolveMemberName } from "@/lib/memberName"
 
@@ -93,12 +93,12 @@ export async function GET(req) {
   const box = searchParams.get("box") || "mine"
   if (box === "answering") {
     const rows = await answeringBoxQuestions(member)
-    return NextResponse.json(await enrich(rows, member))
+    return NextResponse.json(await enrich(sortQuestionsForDisplay(rows), member))
   }
   // mine
   const { data: rows } = await supabaseAdmin.from("questions")
-    .select("*").eq("asker_member_id", member.id).order("updated_at", { ascending: false })
-  return NextResponse.json(await enrich(rows || [], member))
+    .select("*").eq("asker_member_id", member.id)
+  return NextResponse.json(await enrich(sortQuestionsForDisplay(rows || []), member))
 }
 
 export async function POST(req) {
