@@ -2,6 +2,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useOwners } from '@/lib/useOwners'
+import { ContactBar } from '@/components/OwnersManager'
+import ManageLink from '@/components/ManageLink'
 import ExpandableText from '@/components/ExpandableText'
 import { useAdaptiveClamp } from '@/lib/useAdaptiveClamp'
 import { resolveMemberName } from '@/lib/memberName'
@@ -10,6 +12,38 @@ import BarcodeScannerModal from '@/components/BarcodeScannerModal'
 function parseGenres(g) {
   if (!g) return []
   return g.split(/[,|\/]/).map(x => x.trim()).filter(Boolean)
+}
+
+// ── Welcome banner -- same dismiss/expand pattern as Show Time/Social Home,
+// and the same component Library Home used to render before it was merged
+// into this page (2026-09-10, single-landing-page rework).
+function WelcomeBanner({ text, colour = 'var(--purple)' }) {
+  const STORAGE_KEY = 'library_welcome_dismissed'
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem(STORAGE_KEY) === '1' } catch { return false }
+  })
+
+  if (!text) return null
+  if (dismissed) {
+    return (
+      <button onClick={() => setDismissed(false)}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none',
+          color: colour, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer',
+          padding: '0 0 0.75rem', fontFamily: 'inherit' }}>
+        <span style={{ fontSize: '1rem' }}>ℹ</span> Show welcome message
+      </button>
+    )
+  }
+  return (
+    <div style={{ background: colour, borderRadius: 14, padding: '0.9rem 1rem', marginBottom: '1rem', color: '#fff' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem' }}>
+        <div style={{ fontSize: '0.9rem', lineHeight: 1.55 }} dangerouslySetInnerHTML={{ __html: text }} />
+        <button onClick={() => { setDismissed(true); try { localStorage.setItem(STORAGE_KEY, '1') } catch {} }}
+          style={{ flexShrink: 0, background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '50%',
+            width: 24, height: 24, color: '#fff', fontSize: '0.85rem', cursor: 'pointer', lineHeight: 1 }}>✕</button>
+      </div>
+    </div>
+  )
 }
 
 function GenreChips({ genres, max = 4 }) {
@@ -694,7 +728,7 @@ export default function BookLibraryPage() {
   const [member,        setMember]        = useState(null)
   const [session,       setSession]       = useState(null)
   const [loanCap,       setLoanCap]       = useState(3)
-  const [infoText,      setInfoText]      = useState('Books available for residents to borrow. Tap a title to borrow or return.')
+  const [welcomeText,   setWelcomeText]   = useState('')
   const [loading,       setLoading]       = useState(true)
   const [search,        setSearch]        = useState('')
   const [sortBy,        setSortBy]        = useState('az')
@@ -731,7 +765,10 @@ export default function BookLibraryPage() {
       const res = await fetch('/api/hub-settings')
       const data = await res.json()
       setLoanCap(data?.library_books?.loanCap ?? 3)
-      if (data?.library_books?.text) setInfoText(data.library_books.text)
+      // 2026-09-10: the "Library Home" welcome banner (hub_settings.library)
+      // now renders here too, since the standalone Library Home page it used
+      // to live on was removed -- this page is the only Library landing page.
+      setWelcomeText(data?.library?.text || '')
     } catch { /* keep defaults */ }
   }, [])
 
@@ -775,6 +812,8 @@ export default function BookLibraryPage() {
       <Toast toasts={toasts} />
       <div style={{ padding:'1rem 1rem 6rem' }}>
 
+        <WelcomeBanner text={welcomeText} colour="var(--purple)" />
+
         {myLoanCount > 0 && (
           <button onClick={() => setShowMyLoans(true)}
             style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', background:'var(--purple)', color:'#fff', border:'none', borderRadius:'14px', padding:'0.85rem 1.1rem', marginBottom:'1rem', cursor:'pointer', boxShadow:'0 2px 8px rgba(124,58,237,0.25)' }}>
@@ -789,15 +828,14 @@ export default function BookLibraryPage() {
           </button>
         )}
 
-        <div style={{ background:'var(--surface)', borderRadius:'14px', padding:'1rem', marginBottom:'1rem', border:'1px solid var(--border)', borderLeft:'4px solid var(--purple)', fontSize:'0.88rem', lineHeight:1.6 }}>
-          <div style={{ display:'flex', alignItems:'flex-start', gap:'0.6rem' }}>
-            <span style={{ fontSize:'1.4rem', flexShrink:0 }}>📚</span>
-            <div>
-              <div style={{ fontWeight:700, color:'var(--purple)', fontSize:'0.8rem', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'0.2rem' }}>Book Library</div>
-              <span dangerouslySetInnerHTML={{ __html: infoText }} />
-            </div>
-          </div>
-        </div>
+        {/* Contacts + Manage Library -- moved here 2026-09-10 from the now-
+            removed Library Home page, which merged into this page as the
+            single Library landing page (replaces the old "Book Library"
+            info tile). */}
+        <ContactBar contextType="hub" contextKey="library" contextLabel="Library" colour="var(--purple)"
+          style={{ margin: '0 0 12px' }} />
+
+        {canManage && <ManageLink href="/booklibrary/manage" label="Manage Library" colour="var(--purple)" />}
 
         <div style={{ marginBottom:'0.75rem' }}>
           <input placeholder="Search by title or author..." value={search} onChange={e=>setSearch(e.target.value)}

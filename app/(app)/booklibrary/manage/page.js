@@ -6,7 +6,7 @@ import HubTextSection from "@/components/HubTextSection"
 // Library_Hub_Scope_v1, Part A.3).
 export default function LibraryManagePage() {
   return (
-    <ManageAreaScreen contextType="hub" contextKey="library" backHref="/booklibrary"
+    <ManageAreaScreen contextType="hub" contextKey="library" backHref="/booklibrary/books"
       backLabel="Library" title="Manage Library" colour="var(--purple)">
       <HubTextSection sectionKey="library" />
       <HubTextSection sectionKey="library_books" />
