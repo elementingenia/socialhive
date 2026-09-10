@@ -1,0 +1,96 @@
+// lib/navUtils.js
+export function getActiveHub(pathname) {
+  if (!pathname) return null
+  if (
+    pathname === "/movies"     || pathname.startsWith("/movies/") ||
+    pathname === "/screenings" || pathname.startsWith("/screenings/") ||
+    pathname === "/library"    || pathname.startsWith("/library/") ||
+    pathname === "/dvd"        || pathname.startsWith("/dvd/")
+  ) return "movies"
+  if (pathname === "/bookclub" || pathname.startsWith("/bookclub/")) return "bookclub"
+  if (pathname === "/booklibrary" || pathname.startsWith("/booklibrary/")) return "library"
+  if (pathname === "/clubs"    || pathname.startsWith("/clubs/"))    return "clubs"
+  if (pathname === "/shed"     || pathname.startsWith("/shed/"))     return "shed"
+  if (pathname === "/social"   || pathname.startsWith("/social/"))   return "social"
+  if (pathname === "/info"     || pathname.startsWith("/info/"))     return "info"
+  if (pathname === "/bar")                                            return "bar"
+  if (pathname === "/spaces"   || pathname.startsWith("/spaces/"))   return "space"
+  if (pathname === "/voting"   || pathname.startsWith("/voting/"))   return "voting"
+  if (pathname === "/special-events" || pathname.startsWith("/special-events/")) return "special"
+  if (pathname === "/committee" || pathname.startsWith("/committee/")) return "committee"
+  return null
+}
+
+export const HUB_COLOURS = {
+  movie:    "var(--teal)",
+  bookclub: "var(--purple)",
+  clubs:    "var(--purple)",
+  club:     "var(--purple)",
+  shed:     "var(--wine)",
+  social:   "var(--terracotta)",
+  movies:   "var(--teal)",
+  info:     "#4e7aab",
+  bar:      "var(--wine)",
+  library:  "var(--purple)",
+  space:    "var(--space)",
+  voting:   "var(--voting)",
+  special:  "var(--special)",
+  committee:"var(--committee)",
+}
+
+export function getModuleColour(pathname) {
+  const hub = getActiveHub(pathname)
+  return hub ? HUB_COLOURS[hub] : "var(--amber)"
+}
+
+export const PAGE_TITLES = {
+  "/home":                    "Home",
+  "/calendar":                "Calendar",
+  "/bookings":                "My Bookings",
+  "/admin":                   "Admin",
+  "/admin-guide":             "Administration Manual",
+  "/profile":                 "My Profile",
+  "/bar":                     "Community Bar",
+  "/movies":                  "Show Time Home",
+  "/screenings":              "Scheduled",
+  "/library":                 "Suggestions",
+  "/dvd":                     "DVD Library",
+  "/clubs":                   "Groups & Clubs",
+  "/clubs/book-club":         "Book Club Home",
+  "/clubs/book-club/suggestions": "Suggestions",
+  "/bookclub/suggestions":    "Suggestions",
+  "/social":                  "Social Home",
+  "/social/events":           "Scheduled",
+  "/special-events":           "Special Events Home",
+  "/special-events/events":    "Scheduled",
+  "/occasional-activities":    "Occasional Activities",
+  "/spaces":                  "Space Bookings Home",
+  "/spaces/scheduled":        "Scheduled",
+  "/info":                    "Useful Information",
+  "/info/documents":          "Documents",
+  "/info/contacts":           "Contacts",
+  "/help":                     "Help Guide",
+  "/booklibrary/books":        "Library",
+  "/committee":                "Committee",
+  "/committee/documents":      "Committee Documents",
+}
+
+export function getPageTitle(pathname) {
+  return PAGE_TITLES[pathname] || ""
+}
+
+export const BACK_ROUTES = {
+  "/bar":                  { to: "/home",     label: "Home" },
+  "/bookings":             { to: "/home",     label: "Home" },
+  "/admin":                { to: "/home",     label: "Home" },
+  "/profile":              { to: "/home",     label: "Home" },
+  "/screenings":           { to: "/movies",   label: "Movies" },
+  "/library":              { to: "/movies",   label: "Movies" },
+  "/dvd":                  { to: "/movies",   label: "Movies" },
+  "/clubs/book-club/suggestions": { to: "/clubs/book-club", label: "Book Club" },
+  "/social/events":        { to: "/social",   label: "Social" },
+  "/special-events/events": { to: "/special-events", label: "Special Events" },
+  "/occasional-activities": { to: "/admin", label: "Admin" },
+  "/clubs":                { to: "/home",     label: "Home" },
+  "/committee/documents":  { to: "/committee", label: "Committee" },
+}
