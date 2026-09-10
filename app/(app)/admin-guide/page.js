@@ -436,6 +436,14 @@ export default function AdminGuidePage() {
                 Home</strong>, and <strong>Library — Books</strong>. Each is an independent block with its
                 own Save button — editing and saving one has zero effect on the others.
               </Step>
+              <Step>
+                The standalone Library Home page was removed 2026-09-10 — <strong>Library — Books</strong>
+                (the search/browse screen) is now the only Library page. The <strong>Library Home</strong>
+                welcome text still shows there, as a dismissible banner at the top of the page (same pattern
+                as Show Time/Social Home). <strong>Library — Books</strong>' own text field no longer
+                displays anywhere on that page — only its loan cap (below) is still live — since the info
+                box it used to fill was removed at the same time.
+              </Step>
             </Subsection>
             <Subsection id="sub-pt-loancap" title="Loan caps — what happens at the limit">
               <Step>

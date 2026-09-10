@@ -17,7 +17,7 @@ import AskQuestion from "@/components/AskQuestion"
 const HUBS = [
   { key: "movies", label: "Show Time", Icon: MoviesIcon, path: "/movies",      colour: "var(--teal)",       span: 2 },
   { key: "social", label: "Social Hive", Icon: SocialIcon, path: "/social",        colour: "var(--terracotta)", span: 2 },
-  { key: "library", label: "Library", Icon: BookClubIcon, path: "/booklibrary", colour: "var(--purple)",   span: 2 },
+  { key: "library", label: "Library", Icon: BookClubIcon, path: "/booklibrary/books", colour: "var(--purple)",   span: 2 },
   { key: "clubs",  label: "Groups & Clubs",  Icon: ClubsIcon,  path: "/clubs",         colour: "var(--purple)",     span: 2 },
   { key: "info",   label: "Info",   Icon: InfoIcon,   path: "/info/contacts", colour: "#4e7aab",           span: 2 },
   { key: "ask",    label: "Ask a question", emoji: "💬", path: null,           colour: "var(--amber-dark)", span: 2, ask: true },

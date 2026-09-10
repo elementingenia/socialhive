@@ -45,11 +45,13 @@ const HUB_CONFIG = {
       { path: "/info/documents", label: "Documents", Icon: DocumentsIcon },
     ],
   },
+  // Library Home was removed 2026-09-10 -- /booklibrary/books is now the
+  // single Library landing page (Contacts + Manage Library folded onto it),
+  // so this hub only ever needs the one tab alongside Home.
   library: {
     colour: "var(--purple)",
     items: [
-      { path: "/booklibrary",       label: "Library Home", Icon: BookClubIcon },
-      { path: "/booklibrary/books", label: "Library",      Icon: BookClubIcon },
+      { path: "/booklibrary/books", label: "Library", Icon: BookClubIcon },
     ],
   },
   space: {
