@@ -1011,6 +1011,10 @@ export default function HelpGuidePage() {
                 the same booking flow as Social Hive. After booking, you'll see{" "}
                 <strong>Modify Seats</strong> and <strong>Cancel Booking</strong> options.
               </Step>
+              <InfoBox>
+                💡 Some club events are marked <strong>Open — All Welcome</strong> instead. These don't
+                need a booking at all — just come along, no sign-up or seat count required.
+              </InfoBox>
             </Subsection>
 
             <Subsection id="sub-clubs-bring" title="Bringing something">
@@ -1055,6 +1059,13 @@ export default function HelpGuidePage() {
                 bringing what. They can modify a resident's seat count, cancel bookings, and
                 create or edit the club's events and activities — the same options an admin has, just
                 restricted to their own club.
+              </Step>
+              <Step>
+                When creating or editing an event, a <strong>Booking</strong> choice at the top decides
+                whether any of this applies at all: <strong>Requires booking</strong> is the normal
+                flow above, while <strong>Open — All Welcome</strong> turns it off entirely — no seat
+                count, no payment, no attendee list to manage, just an event residents can turn up to.
+                Use it for a drop-in activity that doesn't need a headcount.
               </Step>
               <Step>
                 On a paid event, each attendee has an <strong>Unpaid / Paid / Partial</strong> badge —

@@ -38,8 +38,16 @@ export async function POST(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('id, max_seats, max_seats_per_booking, unassigned_seats_count, hub_type, book_id, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('id, max_seats, max_seats_per_booking, unassigned_seats_count, hub_type, book_id, booking_required, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+
+  // "Open, all welcome" events (Groups & Clubs dry run, 2026-09-11) have no
+  // booking/RSVP at all -- never reachable from the UI (BookingSection short-
+  // circuits before rendering a seat picker), but enforced here too in case
+  // of a stale client or a direct API call.
+  if (event.booking_required === false) {
+    return NextResponse.json({ error: "This event doesn't require a booking — everyone's welcome, no need to sign up." }, { status: 400 })
+  }
 
   // Cap reads the event's own max_seats_per_booking (falls back to 4) --
   // previously hardcoded, see lib/modifyBooking.js (2026-08-08).
