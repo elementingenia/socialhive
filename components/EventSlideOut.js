@@ -17,6 +17,7 @@ import { clubTextOn, clubInk } from "@/lib/clubColours"
 import { maxSeatsPerBooking, effectiveSeatCap } from "@/lib/modifyBooking"
 import { busSeatsUsed } from "@/lib/busSeats"
 import { useOwners } from "@/lib/useOwners"
+import { exportAttendeeListPdf } from "@/lib/attendeeExport"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -394,6 +395,58 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   function showToast(msg, type = "success") {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3000)
+  }
+
+  // Export attendee list as PDF (2026-09-11) -- Iain: admin/Owner/EC should
+  // be able to export the attendee list for any event, wherever an export
+  // option doesn't already exist. This panel is shared by Movies/Show Time,
+  // Groups & Clubs, Book Club and Special Events' full-detail view, so one
+  // handler here covers all of them; Social's own separate inline panel
+  // (app/(app)/social/events/page.js) and Special Events' own inline
+  // accordion (app/(app)/special-events/events/page.js) get their own
+  // matching handler since they don't render through this shared component.
+  function handleExportAttendees() {
+    const grouped = {}
+    for (const b of bookings) {
+      const key = b.members?.id ? `m:${b.members.id}` : b.contacts?.id ? `c:${b.contacts.id}` : "unknown"
+      if (!grouped[key]) grouped[key] = { member: b.members || null, contact: b.contacts || null, confirmed: [], waitlist: [] }
+      if (b.status === "waitlist") grouped[key].waitlist.push(b)
+      else grouped[key].confirmed.push(b)
+    }
+    const confirmedRows = [], waitlistRows = []
+    Object.values(grouped).forEach(g => {
+      const name = g.member
+        ? resolveMemberName(g.member, { canManage: true, fallback: g.member?.username || g.contact?.name || "—" })
+        : (g.contact?.name || "—")
+      const ownerKey = g.member?.id ? `m:${g.member.id}` : g.contact?.id ? `c:${g.contact.id}` : null
+      const party = ownerKey ? (partyByOwner[ownerKey] || []) : []
+      const note = party.length > 0 ? `With: ${party.map(p => p.label).join(", ")}` : ""
+      const confSeats = g.confirmed.reduce((s, b) => s + (b.seats || 1), 0)
+      const waitSeats = g.waitlist.reduce((s, b) => s + (b.seats || 1), 0)
+      if (confSeats > 0) confirmedRows.push({ name, seats: confSeats, note })
+      if (waitSeats > 0) waitlistRows.push({ name, seats: waitSeats, note })
+    })
+    confirmedRows.sort((a, b) => a.name.localeCompare(b.name))
+    waitlistRows.sort((a, b) => a.name.localeCompare(b.name))
+    const unassignedRows = (data?.unassigned_seat_names || [])
+      .slice().sort((a, b) => a.localeCompare(b))
+      .map(name => ({ name, seats: 1, note: "Unassigned seat" }))
+
+    const subtitleParts = []
+    if (event.event_date) subtitleParts.push(fmtDate(event.event_date))
+    if (event.event_time) subtitleParts.push(fmtTime(event.event_time))
+    if (event.location) subtitleParts.push(event.location)
+
+    const ok = exportAttendeeListPdf({
+      eventTitle: event.title,
+      eventSubtitle: subtitleParts.join(" · "),
+      sections: [
+        { heading: "Confirmed", rows: confirmedRows },
+        { heading: "Unassigned Seats", rows: unassignedRows },
+        { heading: "Waitlist", rows: waitlistRows },
+      ],
+    })
+    if (!ok) showToast("Couldn't open the export window — check your pop-up blocker", "error")
   }
 
   // Reconciliation "Close Out" (2026-08-19 -- ported from Social's own
@@ -974,14 +1027,21 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         const totalSeats = confirmed.reduce((s, b) => s + (b.seats || 1), 0)
         const unpaidSeats = sumUnpaidSeats(confirmed, { payment_required: paymentRequired })
         return (
-          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-            Attendees — {totalSeats} seat{totalSeats !== 1 ? "s" : ""} taken
-            {paymentRequired && unpaidSeats > 0 && (
-              <span style={{ color: "var(--amber-dark)", fontWeight: 700 }}> · {unpaidSeats} unpaid</span>
-            )}
-            {waitlisted.length > 0 && (
-              <span style={{ color: "var(--text-dim)", fontWeight: 600 }}>{" "}+ {waitlisted.length} waitlist</span>
-            )}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Attendees — {totalSeats} seat{totalSeats !== 1 ? "s" : ""} taken
+              {paymentRequired && unpaidSeats > 0 && (
+                <span style={{ color: "var(--amber-dark)", fontWeight: 700 }}> · {unpaidSeats} unpaid</span>
+              )}
+              {waitlisted.length > 0 && (
+                <span style={{ color: "var(--text-dim)", fontWeight: 600 }}>{" "}+ {waitlisted.length} waitlist</span>
+              )}
+            </div>
+            <button onClick={handleExportAttendees}
+              style={{ fontSize: 11, fontWeight: 700, color: clubInk(colour), background: "none", border: `1px solid ${colour}`,
+                borderRadius: 8, padding: "4px 8px", cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0 }}>
+              ⬇ Export PDF
+            </button>
           </div>
         )
       })()}
@@ -1131,23 +1191,12 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           event has the feature turned on in its own Edit form. */}
       {event.allow_unassigned_seats && (
         <div style={{ marginBottom: 12 }}>
-          {(data?.unassigned_seat_names?.length > 0) && (
-            <div style={{ marginBottom: 8, display: "flex", flexDirection: "column", gap: 4 }}>
-              {data.unassigned_seat_names.map((name, i) => (
-                <div key={i} style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  background: colour + "0d", border: `1px solid ${colour}30`, borderRadius: 8,
-                  padding: "6px 10px", fontSize: 13,
-                }}>
-                  <span>👤 {name} <span style={{ color: "var(--text-dim)", fontSize: 11 }}>(unassigned seat)</span></span>
-                  <button onClick={() => removeUnassignedSeat(i)} disabled={removingUnassignedIdx === i}
-                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--text-dim)" }}>
-                    {removingUnassignedIdx === i ? "…" : "✕"}
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+          {/* Name list moved out of this editor block (2026-09-11) -- it now
+              renders as its own section below the resident-booked attendee
+              tiles (see "Unassigned Seats" block after the attendeeGroups
+              render), so the names actually show up in the attendee list
+              itself instead of only in this add/remove management widget.
+              This widget stays purely for adding/removing. */}
           {!showAddUnassigned ? (
             <button onClick={() => setShowAddUnassigned(true)}
               style={{ fontSize: 13, fontWeight: 600, color: clubInk(colour), background: "none", border: `1px dashed ${colour}`,
@@ -1507,6 +1556,40 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           </div>
         )
       })()}
+
+      {/* Unassigned seats (2026-09-11) -- a new list of its own, starting
+          right below the resident-booked attendee tiles above, in the same
+          A-Z sort order those use. Previously these names only appeared
+          inside the add/remove management widget further up this panel,
+          never in the actual attendee list itself -- the coordinator could
+          see the raw count go up but not who was actually on the list.
+          Kept EC/admin-only (this whole panel already is), matching the
+          existing "unassigned seat" summary pill's own visibility rule. */}
+      {event.allow_unassigned_seats && (data?.unassigned_seat_names?.length > 0) && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+            Unassigned Seats — {data.unassigned_seat_names.length} seat{data.unassigned_seat_names.length !== 1 ? "s" : ""}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {data.unassigned_seat_names
+              .map((name, i) => ({ name, i }))
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map(({ name, i }) => (
+                <div key={i} style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10,
+                  padding: "10px 12px", fontSize: 14,
+                }}>
+                  <span>{name} <span style={{ color: "var(--text-dim)", fontSize: 11, fontWeight: 600 }}>(unassigned seat)</span></span>
+                  <button onClick={() => removeUnassignedSeat(i)} disabled={removingUnassignedIdx === i}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--text-dim)" }}>
+                    {removingUnassignedIdx === i ? "…" : "✕"}
+                  </button>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
 
       {/* Book Club: cancelled attendees whose book is still out — cancelling attendance
           doesn't return the physical book, so these stay visible until an EC/admin clears them. */}

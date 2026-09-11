@@ -22,6 +22,7 @@ import { byOwnThenName } from "@/lib/sortNames"
 import { useOwners } from "@/lib/useOwners"
 import { resolveMemberName } from "@/lib/memberName"
 import { busSeatsUsed } from "@/lib/busSeats"
+import { exportAttendeeListPdf } from "@/lib/attendeeExport"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -1240,6 +1241,39 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
 
   const blocked = closed && !isConfirmed && !isWaitlist && !canManagePayments
 
+  // Export attendee list as PDF (2026-09-11, Iain -- see the matching
+  // handler in components/EventSlideOut.js's CoordinatorPanel for the
+  // fuller explanation). Social keeps its own separate inline attendee
+  // accordion rather than going through that shared panel, so it needs its
+  // own copy of this handler built from this component's own data.
+  function handleExportAttendees() {
+    const rowFor = (b) => ({
+      name: b.member ? resolveMemberName(b.member, { canManage: true, fallback: b.member?.username || b.contact?.name || "—" }) : (b.contact?.name || "—"),
+      seats: b.seats || 1,
+      note: (() => {
+        const ownerKey = b.member_id ? `m:${b.member_id}` : b.contact_id ? `c:${b.contact_id}` : null
+        const party = ownerKey ? (partyByOwner[ownerKey] || []) : []
+        return party.length > 0
+          ? `With: ${party.map(p => p.guest_name || (p.contact_id ? (p.contact?.name || "Resident") : resolveMemberName(p.member, { canManage: true }))).join(", ")}`
+          : ""
+      })(),
+    })
+    const confirmedRows = confirmedBookings.map(rowFor).sort((a, b) => a.name.localeCompare(b.name))
+    const waitlistRows  = waitlistBookings.map(rowFor).sort((a, b) => a.name.localeCompare(b.name))
+    const subtitleParts = [fmtDate(event.event_date)]
+    if (event.event_time) subtitleParts.push(fmtTime(event.event_time))
+    if (event.location) subtitleParts.push(event.location)
+    const ok = exportAttendeeListPdf({
+      eventTitle: event.title,
+      eventSubtitle: subtitleParts.join(" · "),
+      sections: [
+        { heading: "Confirmed", rows: confirmedRows },
+        { heading: "Waitlist", rows: waitlistRows },
+      ],
+    })
+    if (!ok) window.alert("Couldn't open the export window — check your pop-up blocker")
+  }
+
   return (
     <div onClick={blocked ? undefined : onOpen} style={{
       background: "var(--surface)", borderRadius: "14px",
@@ -1361,6 +1395,14 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
           </button>
           {showAttendees && (
             <div style={{ padding: "0 1rem 0.75rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+              {canManagePayments && (confirmedBookings.length > 0 || waitlistBookings.length > 0) && (
+                <button onClick={e => { e.stopPropagation(); handleExportAttendees() }}
+                  style={{ alignSelf: "flex-end", marginBottom: "0.4rem", fontSize: "0.68rem", fontWeight: 700,
+                    color: "var(--terracotta)", background: "none", border: "1px solid var(--terracotta)",
+                    borderRadius: 8, padding: "0.2rem 0.5rem", cursor: "pointer", fontFamily: "inherit" }}>
+                  ⬇ Export PDF
+                </button>
+              )}
               {summary && (
                 <div onClick={e => e.stopPropagation()} style={{
                   background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,

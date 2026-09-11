@@ -21,6 +21,7 @@ import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName } from "@/lib/sortNames"
 import { resolveMemberName } from "@/lib/memberName"
 import { busSeatsUsed } from "@/lib/busSeats"
+import { exportAttendeeListPdf } from "@/lib/attendeeExport"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -1279,6 +1280,45 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
 
   const blocked = closed && !isConfirmed && !isWaitlist && !canManagePayments
 
+  // Export attendee list as PDF (2026-09-11, Iain -- see the matching
+  // handler in components/EventSlideOut.js's CoordinatorPanel). Special
+  // Events keeps its own separate inline attendees accordion on this card,
+  // so it needs its own copy built from this component's own booking data
+  // -- including the unassigned-seat names, unique to this hub.
+  function handleExportAttendees() {
+    const rowFor = (b) => {
+      const isOwn = b.member_id === member?.id
+      const name = isOwn ? "You"
+        : !showNames ? "Guest"
+        : b.member ? resolveMemberName(b.member, { canManage: isAdmin })
+        : (b.contact?.name || "Member")
+      const ownerKey = b.member_id ? `m:${b.member_id}` : b.contact_id ? `c:${b.contact_id}` : null
+      const party = ownerKey ? (partyByOwner[ownerKey] || []) : []
+      const partyNames = party.map(p => {
+        const gOwn = p.member_id && p.member_id === member?.id
+        return gOwn ? "You" : p.guest_name ? p.guest_name
+          : p.contact_id ? (p.contact?.name || "Resident")
+          : resolveMemberName(p.member, { canManage: isAdmin || isOwn })
+      })
+      return { name, seats: b.seats || 1, note: partyNames.length > 0 ? `With: ${partyNames.join(", ")}` : "" }
+    }
+    const confirmedRows = confirmedBookings.map(rowFor).sort((a, b) => a.name.localeCompare(b.name))
+    const waitlistRows  = waitlistBookings.map(rowFor)
+    const unassignedRows = (event.unassigned_seat_names || [])
+      .slice().sort((a, b) => a.localeCompare(b))
+      .map(name => ({ name, seats: 1, note: "" }))
+    const ok = exportAttendeeListPdf({
+      eventTitle: event.title,
+      eventSubtitle: `${fmtDate(event.event_date)}${event.event_time ? " · " + fmtTime(event.event_time) : ""}`,
+      sections: [
+        { heading: "Confirmed", rows: confirmedRows },
+        { heading: "Unassigned Seats", rows: unassignedRows },
+        { heading: "Waitlist", rows: waitlistRows },
+      ],
+    })
+    if (!ok) window.alert("Couldn't open the export window — check your pop-up blocker")
+  }
+
   return (
     <div onClick={blocked ? undefined : onOpen} style={{
       background: "var(--surface)", borderRadius: "14px",
@@ -1412,6 +1452,14 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
           </button>
           {showAttendees && (
             <div style={{ padding: "0 1rem 0.75rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+              {canManagePayments && (confirmedBookings.length > 0 || waitlistBookings.length > 0 || (event.unassigned_seat_names?.length > 0)) && (
+                <button onClick={e => { e.stopPropagation(); handleExportAttendees() }}
+                  style={{ alignSelf: "flex-end", marginBottom: "0.4rem", fontSize: "0.68rem", fontWeight: 700,
+                    color: "var(--terracotta)", background: "none", border: "1px solid var(--terracotta)",
+                    borderRadius: 8, padding: "0.2rem 0.5rem", cursor: "pointer", fontFamily: "inherit" }}>
+                  ⬇ Export PDF
+                </button>
+              )}
               {summary && (
                 <div onClick={e => e.stopPropagation()} style={{
                   background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
@@ -1725,6 +1773,30 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                 </>
               ) : (
                 <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", fontStyle: "italic" }}>No bookings yet</div>
+              )}
+              {/* Unassigned seats (2026-09-11) -- names entered by the
+                  coordinator/admin (EventSlideOut.js's "Add Unassigned
+                  Seats" widget) were only ever counted here (the "booked"
+                  total above, and the summary pill near the cost pill), never
+                  actually listed -- so the seat count went up but nobody
+                  could see who they were for. Read-only here (management is
+                  EventSlideOut.js's job); EC/admin-only, matching the
+                  existing unassigned-seat summary pill's own visibility
+                  rule, since these aren't real bookings a resident needs to
+                  see. Starts right below the resident-booked attendees
+                  above, sorted the same A-Z way. */}
+              {canManagePayments && event.allow_unassigned_seats && (event.unassigned_seat_names?.length > 0) && (
+                <>
+                  <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "0.5rem", marginBottom: "0.15rem" }}>
+                    Unassigned Seats
+                  </div>
+                  {[...event.unassigned_seat_names].sort((a, b) => a.localeCompare(b)).map((name, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
+                      <span style={{ color: "var(--text)" }}>{name}</span>
+                      <span style={{ color: "var(--text-dim)" }}>1 seat</span>
+                    </div>
+                  ))}
+                </>
               )}
               {isAdmin && waitlistBookings.length > 0 && (
                 <>
