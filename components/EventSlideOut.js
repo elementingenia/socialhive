@@ -2029,8 +2029,16 @@ function BookingSection({ event, onRefresh, onClose }) {
       .then(({ count }) => setWaitlistPos((count ?? 0) + 1))
   }, [event.id, myWaitlist?.created_at])
 
-  const booked = event.bookings_count
-    ?? (event.bookings?.filter(b => b.status === 'confirmed').reduce((s, b) => s + (b.seats || 1), 0) || 0)
+  // Unassigned seats (2026-09-04) consume real capacity with no booking row
+  // of their own, so they must be folded into "booked" here just like every
+  // other place that shows this event's overall capacity (CapacityBar,
+  // availableSeats, the waitlist-split math below) -- otherwise this modal
+  // undercounts real occupancy (BUG-051, 2026-09-11: reported as "31/70"
+  // when the true booked figure included unassigned seats the modal wasn't
+  // adding in).
+  const booked = (event.bookings_count
+    ?? (event.bookings?.filter(b => b.status === 'confirmed').reduce((s, b) => s + (b.seats || 1), 0) || 0))
+    + (event.unassigned_seats_count || 0)
   const max = event.max_seats || 0
   const maxPerBooking   = maxSeatsPerBooking(event)
   const isMovieEvent    = event.hub_type === "movie"

@@ -45,6 +45,7 @@ export async function GET(req) {
     .select(`
       id, hub_type, title, event_date, event_time, max_seats, max_seats_per_booking,
       is_public, cost, description, payment_required, show_attendee_names, archived,
+      unassigned_seats_count,
       reservation_cutoff, payment_due_by, allow_nonresident_guests, require_attendee_names, club_id,
       location_type, location, location_id,
       club:clubs!club_id ( id, name, slug, colour, single_signup ),
@@ -116,7 +117,11 @@ export async function GET(req) {
 
   const result = events.map(event => ({
     ...event,
-    bookings_count: confirmedMap[event.id] || 0,
+    // + unassigned_seats_count (BUG-051, 2026-09-11): those seats consume
+    // real capacity with no booking row of their own, so the Calendar chip's
+    // booked/max figure must include them, same as every other surface that
+    // shows this event's overall capacity.
+    bookings_count: (confirmedMap[event.id] || 0) + (event.unassigned_seats_count || 0),
     waitlist_count: waitlistMap[event.id] || 0,
     my_bookings: myBookingMap[event.id] || [],
   }))

@@ -1207,7 +1207,11 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
   // compatibility with rows written before this ledger existed.
   const refundPendingBookings = (event.bookings?.filter(isRefundPending) || []).sort(bySelfFirst)
   const refundIssuedBookings  = (event.bookings?.filter(b => b.status === "cancelled" && isRefundIssued(b)) || []).sort(bySelfFirst)
-  const booked  = confirmedBookings.reduce((s, b) => s + (b.seats || 1), 0)
+  // + unassigned_seats_count (BUG-051, 2026-09-11) -- consistent with
+  // special-events/events/page.js's own equivalent line; the column is
+  // generic on `events` so any hub's booked count must fold it in, even
+  // though only Special Events currently has UI to set it.
+  const booked  = confirmedBookings.reduce((s, b) => s + (b.seats || 1), 0) + (event.unassigned_seats_count || 0)
   const waiting = waitlistBookings.length
   const showNames = event.show_attendee_names !== false
   // Named additional attendees (workstream A), grouped by the booker.
