@@ -60,9 +60,20 @@ function Toast({ msg, type }) {
 }
 
 // ── Booking Strip ────────────────────────────────────────────────────────────
-function BookingStrip({ isJoined, seats = 1, hasBook, bookReturnDate, closed, blocked, colour = "var(--purple)" }) {
+function BookingStrip({ isJoined, seats = 1, hasBook, bookReturnDate, closed, blocked, open, colour = "var(--purple)" }) {
   const base = { display: "flex", alignItems: "center", justifyContent: "space-between",
     padding: "0.55rem 1rem", fontSize: "0.82rem", fontWeight: 600, gap: "0.5rem" }
+  // "Open, all welcome" events (Iain, 2026-09-11 -- Groups & Clubs dry run):
+  // no booking exists or is needed, so this takes priority over every other
+  // state -- checked first.
+  if (open) {
+    return (
+      <div style={{ ...base, background: colour + "14", borderTop: `1px solid ${colour}33` }}>
+        <span style={{ color: clubInk(colour) }}>✓ Open — All Welcome</span>
+        <span style={{ color: clubInk(colour), fontSize: "0.75rem", opacity: 0.85 }}>No booking needed</span>
+      </div>
+    )
+  }
   // Bug fixed 2026-08-21 (Iain): "Tap to sign up" used to show regardless of
   // the reservation cut-off having passed -- same fix shape as Movies/Social,
   // see lib/booking.js's bookingsClosed(). blocked is computed by EventCard
@@ -363,7 +374,9 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
           </div>
         )}
 
-        {/* Show more / Show attendees row */}
+        {/* Show more / Show attendees row -- "Show attendees" is meaningless
+            on an "open, all welcome" event (no bookings ever exist), so it's
+            hidden entirely rather than opening to an empty list. */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 4, paddingBottom: 2 }}>
           {book?.summary ? (
             <button onClick={e => { e.stopPropagation(); setSummaryOpen(o => !o) }}
@@ -372,11 +385,13 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
               {summaryOpen ? "Show less ▲" : "Show more ▼"}
             </button>
           ) : <span />}
-          <button onClick={e => { e.stopPropagation(); toggleAttendees() }} disabled={attendeesLoading}
-            style={{ background: "none", border: "none", color: clubInk(colour), fontSize: "0.78rem",
-              fontWeight: 700, cursor: attendeesLoading ? "wait" : "pointer", padding: "2px 0", fontFamily: "inherit" }}>
-            {attendeesLoading ? "Loading…" : attendeesOpen ? "Hide attendees ▲" : "Show attendees ▼"}
-          </button>
+          {event.booking_required !== false && (
+            <button onClick={e => { e.stopPropagation(); toggleAttendees() }} disabled={attendeesLoading}
+              style={{ background: "none", border: "none", color: clubInk(colour), fontSize: "0.78rem",
+                fontWeight: 700, cursor: attendeesLoading ? "wait" : "pointer", padding: "2px 0", fontFamily: "inherit" }}>
+              {attendeesLoading ? "Loading…" : attendeesOpen ? "Hide attendees ▲" : "Show attendees ▼"}
+            </button>
+          )}
         </div>
 
         {/* EC-only dish breakdown, grouped by category (Iain 2026-07-18) */}
@@ -462,7 +477,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
       </div>
 
       {/* Booking status strip */}
-      <BookingStrip isJoined={isJoined} seats={booking?.seats || 1} hasBook={!!booking?.has_book} bookReturnDate={event?.book_return_date} closed={closed} blocked={blocked} colour={colour} />
+      <BookingStrip isJoined={isJoined} seats={booking?.seats || 1} hasBook={!!booking?.has_book} bookReturnDate={event?.book_return_date} closed={closed} blocked={blocked} open={event.booking_required === false} colour={colour} />
     </div>
   )
 }
@@ -922,6 +937,11 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     has_bus:      event?.has_bus || false,
     bus_max_seats: event?.bus_max_seats ?? "",
     max_seats_per_booking: event?.max_seats_per_booking ?? 2,
+    // "Open, all welcome" events (Iain, 2026-09-11 -- Groups & Clubs dry run):
+    // no booking/RSVP at all, so no capacity, payment, or attendee-naming
+    // policy applies. Defaults true (Requires booking) for both new and
+    // existing events, matching the DB column's own default.
+    booking_required: event?.booking_required !== false,
     allow_nonresident_guests: event ? !!event.allow_nonresident_guests : true, // new events default to "Anyone" (2026-07-25)
     require_attendee_names: !!event?.require_attendee_names,
     payment_required: event?.payment_required || false,
@@ -1014,7 +1034,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     // chosen -- Iain, 2026-08-07, after catching the form letting Required
     // stay ON with zero categories selected (stale state left over from
     // picking a category, turning Required on, then deselecting it again).
-    if (caps.bringEnabled && form.bring_required && (form.bring_category_ids || []).length === 0) invalid.push("bring")
+    if (form.booking_required && caps.bringEnabled && form.bring_required && (form.bring_category_ids || []).length === 0) invalid.push("bring")
     if (!form.coordinator_ids.length) invalid.push("coordinators")
     return invalid
   }
@@ -1056,6 +1076,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             location_type: form.location_type || "onsite", location: form.location || null, location_id: form.location_id || null,
             max_seats: Number(form.max_seats) || 20,
             max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
+            booking_required: !!form.booking_required,
             allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
             require_attendee_names: Number(form.max_seats_per_booking) > 1 ? !!form.require_attendee_names : false,
             payment_required: !!form.payment_required,
@@ -1134,6 +1155,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       bus_driver_id:   form.location_type === "offsite" && form.has_bus ? (busDriver || null) : null,
       bus_max_seats:   form.location_type === "offsite" && form.has_bus && form.bus_max_seats !== "" ? Number(form.bus_max_seats) : null,
       max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
+      booking_required: !!form.booking_required,
       allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
       require_attendee_names: Number(form.max_seats_per_booking) > 1 ? !!form.require_attendee_names : false,
       payment_required: !!form.payment_required,
@@ -1408,6 +1430,31 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         />
       </div>
 
+      {/* Booking -- "open, all welcome" events skip capacity/payment/attendee
+          policy entirely (Iain, 2026-09-11 -- Groups & Clubs dry run). Sits
+          ahead of Attendees since it decides whether that whole section, plus
+          Payment, is even relevant. */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={labelStyle}>Booking</label>
+        <div style={{ display: "flex", gap: 8 }}>
+          {[{ v: true, t: "Requires booking" }, { v: false, t: "Open — All Welcome" }].map(opt => (
+            <button key={String(opt.v)} type="button" onClick={() => set("booking_required", opt.v)}
+              style={{ flex: 1, padding: "0.6rem 0.5rem", borderRadius: 10, fontSize: "0.88rem", fontFamily: "inherit", cursor: "pointer",
+                border: `1.5px solid ${!!form.booking_required === opt.v ? colour : "var(--border)"}`,
+                background: !!form.booking_required === opt.v ? colour : "var(--surface)",
+                color: !!form.booking_required === opt.v ? "#fff" : "var(--text)",
+                fontWeight: !!form.booking_required === opt.v ? 700 : 500 }}>{opt.t}</button>
+          ))}
+        </div>
+        {!form.booking_required && (
+          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 6 }}>
+            Anyone can attend — no seat count, payment, or sign-up required.
+          </div>
+        )}
+      </div>
+
+      {form.booking_required && (
+        <>
       {/* Attendees -- who's coming and what we need from them: capacity,
           per-booking cap, guest/naming policy, and (if the club has it)
           bring-a-dish. Grouped together per Iain, 2026-08-07 -- these were
@@ -1489,6 +1536,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
           </>
         )}
       </div>
+        </>
+      )}
 
       {/* Lending -- what's being lent out for this event and when it's due
           back, grouped with the Book picker rather than left near Capacity

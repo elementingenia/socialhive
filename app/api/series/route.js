@@ -38,8 +38,25 @@ async function resolve(req, clubId) {
 // Template fields a "this and future" edit propagates to later occurrences.
 // Never event_date (rule-driven) or book_id (per-occurrence, Book Club).
 const PROPAGATE = ["title","description","welcome_message","event_time","location_type","location",
-  "max_seats","max_seats_per_booking","allow_nonresident_guests","require_attendee_names","payment_required","cost",
+  "max_seats","max_seats_per_booking","allow_nonresident_guests","require_attendee_names","booking_required","payment_required","cost",
   "bring_category_ids","bring_required","theme_name","is_public","show_attendee_names"]
+
+// "Open, all welcome" events (Iain, 2026-09-11 — Groups & Clubs dry run):
+// booking_required=false means no booking ever exists, so payment/attendee-
+// naming/guest/bring-a-dish policies (all meaningless without a booking) can
+// never apply. Mirrors app/api/clubs/events/route.js's enforceOpenEventRules —
+// enforced server-side here too, not just hidden client-side.
+function enforceOpenEventRules(row) {
+  if (row.booking_required === false) {
+    row.payment_required = false
+    row.cost = 0
+    row.allow_nonresident_guests = false
+    row.require_attendee_names = false
+    row.bring_category_ids = []
+    row.bring_required = false
+  }
+  return row
+}
 
 export async function POST(req) {
   const body = await req.json().catch(() => ({}))
@@ -50,7 +67,7 @@ export async function POST(req) {
   const { error, status, member } = await resolve(req, club_id)
   if (error) return NextResponse.json({ error }, { status })
 
-  const row = {
+  const row = enforceOpenEventRules({
     club_id, created_by: member.id, mode: mode === "pattern" ? "pattern" : "series",
     rule_type, rule_config: rule_config || {},
     month_end_policy: body.month_end_policy === "skip" ? "skip" : "clamp",
@@ -59,13 +76,14 @@ export async function POST(req) {
     title: body.title || null, description: body.description || null, welcome_message: body.welcome_message || null,
     location_type: body.location_type || "onsite", location: body.location || null,
     max_seats: body.max_seats ?? 20, max_seats_per_booking: body.max_seats_per_booking ?? 1,
+    booking_required: body.booking_required !== false,
     allow_nonresident_guests: !!body.allow_nonresident_guests,
     require_attendee_names: !!body.require_attendee_names,
     payment_required: !!body.payment_required, cost: body.payment_required ? (body.cost ?? 0) : 0,
     bring_category_ids: body.bring_category_ids || [], bring_required: !!body.bring_required, theme_name: body.theme_name || null,
     is_public: body.is_public !== false, show_attendee_names: body.show_attendee_names !== false,
     coordinator_ids: Array.isArray(body.coordinator_ids) ? body.coordinator_ids : [],
-  }
+  })
   if (!row.start_date) return NextResponse.json({ error: "start_date required" }, { status: 400 })
   const bringCheck = validateBringRequirement(row)
   if (!bringCheck.ok) return NextResponse.json({ error: bringCheck.error }, { status: 400 })
@@ -155,6 +173,7 @@ export async function PATCH(req) {
     const fromDate = body.from_date || today
     const patch = {}
     for (const k of PROPAGATE) if (k in body) patch[k] = body[k]
+    enforceOpenEventRules(patch)
     if ("bring_required" in patch || "bring_category_ids" in patch) {
       const { data: seriesRow } = await supa.from("event_series").select("bring_required, bring_category_ids").eq("id", series_id).single()
       const bringCheck = validateBringRequirement({

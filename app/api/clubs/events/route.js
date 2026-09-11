@@ -70,14 +70,33 @@ async function validateSpace(payload, excludeEventId, viewerId, canManage) {
 
 const FIELDS = ["club_id", "event_date", "event_time", "event_end_time", "title", "is_public", "show_attendee_names",
   "description", "welcome_message", "book_id", "kit_return_date", "book_return_date", "reservation_cutoff", "max_seats",
-  "location_type", "location", "location_id", "has_bus", "bus_driver_id", "bus_max_seats", "max_seats_per_booking", "allow_nonresident_guests", "require_attendee_names", "payment_required", "cost",
+  "location_type", "location", "location_id", "has_bus", "bus_driver_id", "bus_max_seats", "max_seats_per_booking", "allow_nonresident_guests", "require_attendee_names", "booking_required", "payment_required", "cost",
   "payment_due_by", "bring_category_ids", "bring_required", "theme_name", "book_snapshot"]
+
+// "Open, all welcome" events (Iain, 2026-09-11 — Groups & Clubs dry run):
+// booking_required=false means no booking ever exists for this event, so
+// payment (wired through the booking record) and the attendee-naming/guest/
+// bring-a-dish policies (which only mean anything once bookings exist) can
+// never apply. Enforced here, not just hidden client-side — a client can't
+// be trusted to self-report "I turned Payment off."
+function enforceOpenEventRules(payload) {
+  if (payload.booking_required === false) {
+    payload.payment_required = false
+    payload.cost = 0
+    payload.payment_due_by = null
+    payload.allow_nonresident_guests = false
+    payload.require_attendee_names = false
+    payload.bring_category_ids = []
+    payload.bring_required = false
+  }
+  return payload
+}
 
 function buildPayload(body, isInsert) {
   const payload = {}
   for (const k of FIELDS) if (k in body) payload[k] = body[k]
   if (isInsert) { payload.hub_type = "club"; payload.archived = false }
-  return payload
+  return enforceOpenEventRules(payload)
 }
 
 export async function POST(req) {
@@ -165,7 +184,7 @@ export async function PATCH(req) {
     if (series_scope === "future") {
       const PROP = ["title", "description", "welcome_message", "event_time", "event_end_time", "location_type",
         "location", "location_id", "max_seats", "max_seats_per_booking", "allow_nonresident_guests", "require_attendee_names",
-        "payment_required", "cost", "bring_category_ids", "bring_required", "theme_name", "is_public", "show_attendee_names"]
+        "booking_required", "payment_required", "cost", "bring_category_ids", "bring_required", "theme_name", "is_public", "show_attendee_names"]
       const fields = {}
       for (const k of PROP) if (k in payload) fields[k] = payload[k]
       await fetch(new URL("/api/series", req.url), {

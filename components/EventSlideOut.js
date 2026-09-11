@@ -2098,6 +2098,21 @@ function BookingSection({ event, onRefresh, onClose }) {
   // now, not a hub name. Book Club = true; Dinner Club will be false.
   const isBookclubEvent = clubCaps(event.club).singleSignup
 
+  // "Open, all welcome" events (Iain, 2026-09-11 -- Groups & Clubs dry run):
+  // no booking/RSVP ever exists for these, so there is no capacity bar, seat
+  // picker, or Manage/Cancel flow to show -- just a short "you're welcome,
+  // no need to book" message. Placed after every hook above and before the
+  // real return so React's Rules of Hooks are still satisfied unconditionally.
+  if (event.booking_required === false) {
+    return (
+      <div style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12,
+        padding: "14px 16px", fontSize: 14, color: "var(--text)", lineHeight: 1.5, textAlign: "center" }}>
+        <div style={{ fontWeight: 700, marginBottom: 2 }}>✓ Open — All Welcome</div>
+        <div style={{ color: "var(--text-dim)", fontSize: 13 }}>Everyone's welcome — no booking or sign-up needed.</div>
+      </div>
+    )
+  }
+
   return (
     <div>
       {toast && <Toast msg={toast.msg} type={toast.type} />}
@@ -2460,7 +2475,9 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
   const isEC = member && coordinators.some(ec => ec.member_id === member.id)
   const isAreaOwner = !!member?.id && areaOwners.some(o => o.id === member.id)
   // Also allow admins to see coordinator panel
-  const showCoordinatorPanel = isAuthenticated && (isEC || isAdmin || isAreaOwner)
+  // "Open, all welcome" events (2026-09-11) have no bookings/payments to
+  // manage at all, so there's nothing for this panel to show.
+  const showCoordinatorPanel = isAuthenticated && (isEC || isAdmin || isAreaOwner) && event.booking_required !== false
 
   function handleClose() {
     setOpen(false)
