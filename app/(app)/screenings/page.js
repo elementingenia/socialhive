@@ -18,6 +18,7 @@ import AttendeeNamingPicker from '@/components/AttendeeNamingPicker'
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from '@/lib/formValidation'
 import { byOwnThenName, ordinal } from '@/lib/sortNames'
 import { useOwners } from '@/lib/useOwners'
+import { exportAttendeeListPdf } from '@/lib/attendeeExport'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -728,6 +729,29 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
   const waitlistAttendees  = (ev.attendees || []).filter(a => a.status === 'waitlist')
     .sort((a, b) => (a.waitlist_position || Infinity) - (b.waitlist_position || Infinity))
 
+  // Export attendee list as PDF (2026-09-11, Iain -- see the matching
+  // handler in components/EventSlideOut.js's CoordinatorPanel). Show
+  // Time keeps its own separate inline attendees accordion, so it needs
+  // its own copy built from this component's own flattened attendee data.
+  function handleExportAttendees() {
+    const rowFor = (a) => ({
+      name: a.name,
+      seats: a.seats,
+      note: a.party?.length > 0 ? `With: ${a.party.map(p => p.name).join(', ')}` : '',
+    })
+    const confirmedRows = confirmedAttendees.map(rowFor).sort((a, b) => a.name.localeCompare(b.name))
+    const waitlistRows  = waitlistAttendees.map(rowFor)
+    const ok = exportAttendeeListPdf({
+      eventTitle: movie?.title || ev.title,
+      eventSubtitle: `${fmtDateLong(ev.event_date)}${ev.event_time ? ' · ' + fmtTime24(ev.event_time) : ''}`,
+      sections: [
+        { heading: 'Confirmed', rows: confirmedRows },
+        { heading: 'Waitlist', rows: waitlistRows },
+      ],
+    })
+    if (!ok) window.alert("Couldn't open the export window — check your pop-up blocker")
+  }
+
   return (
     <div onClick={blocked ? undefined : onOpen}
       style={{ background: 'var(--surface)', borderRadius: '12px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow)', cursor: blocked ? 'default' : 'pointer' }}>
@@ -830,6 +854,14 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
         </button>
         {showAttendees && (
           <div style={{ padding: '0 1rem 0.75rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+            {(isAdmin || isEC) && (confirmedAttendees.length > 0 || waitlistAttendees.length > 0) && (
+              <button onClick={e => { e.stopPropagation(); handleExportAttendees() }}
+                style={{ alignSelf: 'flex-end', marginBottom: '0.4rem', fontSize: '0.68rem', fontWeight: 700,
+                  color: 'var(--terracotta)', background: 'none', border: '1px solid var(--terracotta)',
+                  borderRadius: 8, padding: '0.2rem 0.5rem', cursor: 'pointer', fontFamily: 'inherit' }}>
+                ⬇ Export PDF
+              </button>
+            )}
             {confirmedAttendees.length > 0 ? (
               <>
                 {isAdmin && <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--green)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.15rem' }}>Confirmed</div>}

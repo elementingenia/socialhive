@@ -30,6 +30,7 @@ import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName } from "@/lib/sortNames"
 import { resolveMemberName } from "@/lib/memberName"
+import { exportAttendeeListPdf } from "@/lib/attendeeExport"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -205,6 +206,25 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
         }),
       }
     }).sort((a, b) => byOwnThenName(a.isOwn, b.isOwn, a.name, b.name)))
+  }
+
+  // Export attendee list as PDF (2026-09-11, Iain -- see the matching
+  // handler in components/EventSlideOut.js's CoordinatorPanel). Groups &
+  // Clubs/Book Club keeps its own separate inline attendees list on this
+  // card, so it needs its own copy built from this component's own
+  // already-loaded `attendees` state.
+  function handleExportAttendees() {
+    const rows = (attendees || []).map(a => ({
+      name: a.name,
+      seats: a.seats,
+      note: (a.party || []).length > 0 ? `With: ${a.party.map(p => p.name).join(", ")}` : "",
+    }))
+    const ok = exportAttendeeListPdf({
+      eventTitle: label || event.title,
+      eventSubtitle: fmtDate(event.event_date),
+      sections: [{ heading: "Attendees", rows }],
+    })
+    if (!ok) window.alert("Couldn't open the export window — check your pop-up blocker")
   }
 
   async function toggleAttendees() {
@@ -418,6 +438,15 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
         {/* Attendees list */}
         {attendeesOpen && (
           <div style={{ marginTop: 6, background: "var(--surface2)", borderRadius: 10, padding: "0.4rem 0.8rem 0.5rem" }}>
+            {canManageBooks && attendees && attendees.length > 0 && (
+              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.3rem" }}>
+                <button onClick={e => { e.stopPropagation(); handleExportAttendees() }}
+                  style={{ fontSize: "0.68rem", fontWeight: 700, color: clubInk(colour), background: "none",
+                    border: `1px solid ${colour}`, borderRadius: 8, padding: "0.2rem 0.5rem", cursor: "pointer", fontFamily: "inherit" }}>
+                  ⬇ Export PDF
+                </button>
+              </div>
+            )}
             {attendees && attendees.length > 0 ? (
               attendees.map((a, i) => (
                 <div key={a.id || i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", padding: "0.3rem 0",
