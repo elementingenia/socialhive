@@ -41,8 +41,6 @@ function FileTypeBadge({ fileName }) {
 // way), that's a one-line change -- say the word.
 export default function CommitteeDocumentsPage() {
   const [docs, setDocs] = useState(null)
-  const [categories, setCategories] = useState([])
-  const [categoryFilter, setCategoryFilter] = useState("")
   const [search, setSearch] = useState("")
 
   useEffect(() => {
@@ -63,19 +61,15 @@ export default function CommitteeDocumentsPage() {
       const { data, error } = await query
       setDocs(error ? [] : (data || []))
     })()
-
-    supabase.from("document_categories").select("id, name").eq("active", true)
-      .order("display_order").then(({ data }) => setCategories(data || []))
   }, [])
 
   const filtered = useMemo(() => {
     if (!docs) return []
     return docs.filter(d => {
-      if (categoryFilter && d.category?.id !== categoryFilter) return false
       if (search.trim() && !d.title.toLowerCase().includes(search.trim().toLowerCase())) return false
       return true
     })
-  }, [docs, categoryFilter, search])
+  }, [docs, search])
 
   return (
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
@@ -85,13 +79,6 @@ export default function CommitteeDocumentsPage() {
             padding: "0.6rem 0.8rem", borderRadius: 10, border: "1px solid var(--border)",
             fontSize: "0.9rem", fontFamily: "inherit", background: "var(--surface)", color: "var(--text)",
           }} />
-        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} style={{
-          padding: "0.55rem 0.7rem", borderRadius: 10, border: "1px solid var(--border)",
-          fontSize: "0.85rem", fontFamily: "inherit", background: "var(--surface)", color: "var(--text)",
-        }}>
-          <option value="">All categories</option>
-          {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
       </div>
 
       {docs === null ? (
