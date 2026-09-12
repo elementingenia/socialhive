@@ -86,6 +86,7 @@ function targetForNotif(n) {
   if (n.type?.startsWith("question_")) return "/questions"
   if (n.type === "voting_opened") return "/voting"
   if (n.type === "survey_opened" || n.type === "survey_results_published") return "/surveys"
+  if (n.type === "committee_post_added") return "/committee"
   switch (n.events?.hub_type) {
     case "movie":    return "/screenings"
     case "social":   return "/social"
