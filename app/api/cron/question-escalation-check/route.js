@@ -11,16 +11,27 @@ export const dynamic = "force-dynamic"
 // Daily safety net for questions nobody has answered (Iain approved
 // 2026-07-27; scope §8.4).
 //
-// Why this exists: admins already have PASSIVE oversight -- answeringBoxQuestions()
-// returns every question to any admin -- but nothing ever TOLD them. A question
-// could sit 'open' indefinitely and the only feedback loop was the asker
-// complaining. That gap matters most for the new 'category' target, which is
-// the first routing context whose recipients have no single named owner: a
-// 4-person Committee with first-to-answer semantics is exactly the shape where
+// Why this exists: a question could sit 'open' indefinitely with the only
+// feedback loop being the asker complaining. That gap matters most for the
+// 'category' target, whose recipients have no single named owner: a 4-person
+// Committee with first-to-answer semantics is exactly the shape where
 // everyone assumes someone else has it.
 //
 // Applies to ALL context types, not just category -- a club or event question
 // can black-hole just as easily; category is only what surfaced the gap.
+//
+// IMPORTANT (corrected 2026-09-13, BUG-052): this used to say admins already
+// have PASSIVE oversight via answeringBoxQuestions() returning every question
+// to every admin -- that was true when this cron was written (2026-07-27) but
+// stopped being true on 2026-09-04, when answeringBoxQuestions() was changed
+// to only show an admin a question they're actually routed to answer (no
+// Owner/EC exists for that club/hub). Nobody updated this cron or this
+// comment at the time, so for months it kept notifying every admin about
+// questions most of them structurally could not see anywhere in the app --
+// a real notification into a dead end. answeringBoxQuestions() now carries a
+// matching exception: once THIS cron sets escalated_at below, the question
+// joins every admin's "To answer" box regardless of routing, precisely
+// because escalating is the signal that the normal flow already failed.
 //
 // Auth: Vercel sends `Authorization: Bearer <CRON_SECRET>` on cron-triggered
 // requests. Fails CLOSED -- an unconfigured secret returns 503 rather than
