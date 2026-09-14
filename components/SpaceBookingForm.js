@@ -6,6 +6,8 @@ import { authedFetch } from "@/lib/getAuthToken"
 import { BOOKING_REASON_MAX, INGENIA_CONFIRMED_BY_MAX } from "@/lib/spaceBookings"
 import { sydneyTodayStr, isoToSydneyHHMM } from "@/lib/date"
 import { toInstant, sydneyOffsetMinutes } from "@/lib/spaces"
+import EventShareActions from "@/components/EventShareActions"
+import { buildSpaceBookingShareUrl } from "@/lib/eventShare"
 
 // Venue hours (Iain, 2026-08-17): every space is only bookable 8am-10pm,
 // full stop -- applied here so it covers both entry points (Book by Date
@@ -571,6 +573,23 @@ export default function SpaceBookingForm({
             }}>
               Allow others to join
             </button>
+          )}
+
+          {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-13, decision
+              2): private Book a Space bookings are included, no carve-out --
+              same event-level action row every other hub's EventSlideOut
+              shows, just embedded here instead since a private booking has
+              no EventSlideOut-compatible shape (see MySpaceBookings.js's own
+              comment on why). */}
+          {isEdit && editBooking && (
+            <EventShareActions
+              url={buildSpaceBookingShareUrl("/spaces", editBooking.id)}
+              title={editBooking.title || "Space booking"}
+              location={editBooking.locations?.name || null}
+              start={new Date(editBooking.starts_at)}
+              end={new Date(editBooking.ends_at)}
+              colour="var(--amber)"
+            />
           )}
           <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: "1.25rem", lineHeight: 1.5 }}>
             {isEdit

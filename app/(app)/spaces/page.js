@@ -129,6 +129,7 @@ export default function SpacesPage() {
         onClose={() => setFullEvent(null)}
         isAuthenticated={true}
         onRefresh={() => { load(); if (fullEvent) openEvent(fullEvent.id) }}
+        shareBasePath="/spaces/scheduled"
       />
 
       <SpaceBookingForm

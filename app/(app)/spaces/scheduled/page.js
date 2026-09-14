@@ -33,6 +33,7 @@ export default function SpacesScheduledPage() {
   const { member } = useUser()
   const [rows, setRows] = useState(null) // null = loading; else [{kind:'event', ...}]
   const [fullEvent, setFullEvent] = useState(null)
+  const [deepLinkError, setDeepLinkError] = useState(null)
   // Edit pill, owner-only (Iain, 2026-08-23) -- same PromoteBookingModal
   // edit mode My Space Bookings and the Next Scheduled Space tile use.
   const [editingEvent, setEditingEvent] = useState(null)
@@ -62,10 +63,22 @@ export default function SpacesScheduledPage() {
       .from("events")
       .select("*, locations(name), bookings(id, status, seats, member_id, members(name, username)), booking_attendees(owner_id, owner_contact_id)")
       .eq("id", id).single()
-    if (!data) return
+    if (!data) {
+      // Dead/expired deep link -- Event_Deep_Linking_and_Calendar_Scope_v2,
+      // decision 5: surface this rather than silently doing nothing.
+      setDeepLinkError("This booking isn't available anymore")
+      return
+    }
     const my_bookings = (data.bookings || []).filter(b => b.member_id === member?.id)
     setFullEvent({ ...data, my_bookings })
   }
+
+  // Event Deep Linking (?event=<id>) -- build sequence step 1. Read once on mount.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const evId = params.get("event")
+    if (evId) openEvent(evId)
+  }, [])
 
   if (rows === null) {
     return (
@@ -79,6 +92,12 @@ export default function SpacesScheduledPage() {
 
   return (
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
+      {deepLinkError && (
+        <div style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12,
+          padding: "10px 14px", fontSize: 13, color: "var(--text-dim)", marginBottom: "1rem", textAlign: "center" }}>
+          {deepLinkError}
+        </div>
+      )}
       {rows.length === 0 ? (
         <div style={{ textAlign: "center", padding: "3.5rem 1.5rem", color: "var(--text-dim)" }}>
           <div style={{ fontSize: "2.25rem", marginBottom: "0.75rem" }}>📅</div>
@@ -104,6 +123,7 @@ export default function SpacesScheduledPage() {
         onClose={() => setFullEvent(null)}
         isAuthenticated={true}
         onRefresh={() => { load(); if (fullEvent) openEvent(fullEvent.id) }}
+        shareBasePath="/spaces/scheduled"
       />
 
       {editingEvent && (
