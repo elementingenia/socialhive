@@ -999,6 +999,27 @@ export default function Screenings() {
     setSlideOutEvent(toSlideOutShape(ev))
   }
 
+  // Event Deep Linking (?event=<id>) -- Event_Deep_Linking_and_Calendar_Scope_v2,
+  // build sequence step 1. Screenings are only ever opened from the already-
+  // loaded list (no per-id fetch exists here), so this waits for that load
+  // and matches against it; a dead/expired link (event passed/removed, no
+  // longer in the upcoming list) surfaces a toast rather than doing nothing.
+  // The ref guards against re-running on every subsequent list refresh
+  // (loadScreenings gets called again after any booking action) -- without
+  // it, a still-present ?event= param would silently re-open (or, if the
+  // link had since gone dead, re-toast) on every refresh.
+  const deepLinkHandled = useRef(false)
+  useEffect(() => {
+    if (loading || !screenings.length || deepLinkHandled.current) return
+    const params = new URLSearchParams(window.location.search)
+    const evId = params.get("event")
+    if (!evId) return
+    deepLinkHandled.current = true
+    const match = screenings.find(ev => String(ev.id) === evId)
+    if (match) openSlideOut(match)
+    else addToast("This screening isn't available anymore", "error")
+  }, [loading, screenings])
+
   async function handleSlideOutRefresh() {
     if (!session || !slideOutEvent) return
     const currentId = slideOutEvent.id
@@ -1058,6 +1079,7 @@ export default function Screenings() {
         event={slideOutEvent}
         onClose={() => setSlideOutEvent(null)}
         onRefresh={handleSlideOutRefresh}
+        shareBasePath="/screenings"
       />
 
       {(showAdd || editEvent) && (

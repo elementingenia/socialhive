@@ -144,7 +144,25 @@ export default function AppLayout({ children }) {
   useEffect(() => {
     async function init() {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { router.replace("/login"); return }
+      if (!session) {
+        // Event Deep Linking (decision 4, Iain 2026-09-13): a logged-out
+        // visitor following a shared ?event=/&sb= link must land on a
+        // read-only view of that event/booking, not a dead-end login page
+        // that loses the link entirely -- "they CAN see the event (read-
+        // only)... same behaviour as this app's existing public calendar
+        // (/cal)". /cal is the one route in the app that already renders
+        // EventSlideOut/etc for an anonymous visitor, so every hub's own
+        // ?event=/&sb= deep link is redirected there instead of /login,
+        // carrying the same param through, rather than inventing a second
+        // anonymous-visitor surface per hub.
+        const params = new URLSearchParams(window.location.search)
+        const evId = params.get("event")
+        const sbId = params.get("sb")
+        if (evId) { router.replace(`/cal?event=${encodeURIComponent(evId)}`); return }
+        if (sbId) { router.replace(`/cal?sb=${encodeURIComponent(sbId)}`); return }
+        router.replace("/login")
+        return
+      }
 
       const { data: member } = await supabase
         .from("members")

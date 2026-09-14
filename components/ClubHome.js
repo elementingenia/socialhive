@@ -2104,6 +2104,24 @@ export default function ClubHome({ club }) {
 
   useEffect(() => { if (member?.id !== undefined) load() }, [member?.id, canManage])
 
+  // Event Deep Linking (?event=<id>) -- Event_Deep_Linking_and_Calendar_Scope_v2,
+  // build sequence step 1. Club events are only ever opened from the already-
+  // loaded `events` list (no per-id fetch exists here), so this waits for
+  // that load and matches against it; a dead/expired link surfaces a toast
+  // rather than doing nothing. Ref guards against re-running (and re-
+  // toasting) on every subsequent load() call.
+  const deepLinkHandled = useRef(false)
+  useEffect(() => {
+    if (loading || deepLinkHandled.current) return
+    const params = new URLSearchParams(window.location.search)
+    const evId = params.get("event")
+    if (!evId) return
+    deepLinkHandled.current = true
+    const match = events.find(ev => String(ev.id) === evId)
+    if (match) openSlideOut(match)
+    else showToast("This event isn't available anymore", "error")
+  }, [loading, events])
+
   async function signUp(event) {
     const res = await authedFetch("/api/bookings", {
       method: "POST",
@@ -2273,6 +2291,7 @@ export default function ClubHome({ club }) {
         event={slideOutEvent}
         onClose={() => setSlideOutEvent(null)}
         onRefresh={handleSlideOutRefresh}
+        shareBasePath={club?.slug ? `/clubs/${club.slug}` : null}
       />
     </div>
   )

@@ -2077,8 +2077,24 @@ export default function SocialEvents() {
       const waitlist_count = waitlistBookings.reduce((sum, b) => sum + (b.seats || 1), 0)
       const my_bookings = allBookings.filter(b => b.member_id === member?.id)
       setFullEvent({ ...data, my_bookings, bookings_count, waitlist_count })
+    } else {
+      // Dead/expired deep link (event deleted or never existed) -- Event Deep
+      // Linking scope, decision 5: surface this rather than silently doing
+      // nothing (Iain, 2026-09-13).
+      showToast("This event isn't available anymore", "error")
     }
   }
+
+  // Event Deep Linking (?event=<id>) -- Event_Deep_Linking_and_Calendar_Scope_v2,
+  // build sequence step 1. Read once on mount; deliberately window.location.search
+  // rather than next/navigation's useSearchParams so no Suspense boundary is
+  // needed on an already-fully-client page (see app/login/page.js for the
+  // alternative pattern where that boundary IS needed).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const evId = params.get("event")
+    if (evId) openEventSlideOut({ id: evId })
+  }, [])
 
   const today    = new Date(); today.setHours(0, 0, 0, 0)
   const upcoming = events.filter(e => localDate(e.event_date) >= today)
@@ -2167,7 +2183,8 @@ export default function SocialEvents() {
 
       {fullEvent && (
         <EventSlideOut event={fullEvent} onClose={() => setFullEvent(null)}
-          onRefresh={async () => { if (fullEvent) await openEventSlideOut({ id: fullEvent.id }); load() }} />
+          onRefresh={async () => { if (fullEvent) await openEventSlideOut({ id: fullEvent.id }); load() }}
+          shareBasePath="/social/events" />
       )}
 
       {showForm && session && (

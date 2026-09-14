@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { authedFetch } from "@/lib/getAuthToken"
 import SpaceBookingForm from "@/components/SpaceBookingForm"
 import PromoteBookingModal from "@/components/PromoteBookingModal"
@@ -119,6 +119,30 @@ function MySpaceBookings({ refreshSignal, onOpenSharedEvent } = {}) {
   }, [])
 
   useEffect(() => { load() }, [load, refreshSignal])
+
+  // Event Deep Linking (?sb=<id>) for a PRIVATE space booking (Event_Deep_
+  // Linking_and_Calendar_Scope_v2, decision 2). Opens the same edit sheet a
+  // click on the row would. Only ever meaningful for the booking's own
+  // owner -- /api/spaces?mine=1 only ever returns the caller's own bookings,
+  // so this can never open someone else's private booking by id even if
+  // they had the link (anyone else following the link lands on /cal's
+  // read-only card instead -- see app/api/spaces/share/route.js). Ref
+  // guards against re-running (and re-toasting) on every refreshSignal bump.
+  const deepLinkHandled = useRef(false)
+  useEffect(() => {
+    if (bookings === null || deepLinkHandled.current) return
+    const params = new URLSearchParams(window.location.search)
+    const sbId = params.get("sb")
+    if (!sbId) return
+    deepLinkHandled.current = true
+    const match = bookings.find(b => String(b.id) === sbId)
+    if (match) setEditingBooking(match)
+    // If not found here, it may be a SHARED booking's own id instead --
+    // MySpaceBookings only holds private bookings; the shared-event
+    // equivalent goes through onOpenSharedEvent via the hub's own ?event=
+    // handling, not this file. Nothing to toast: a bad/expired private-
+    // booking link is silently a no-op rather than guessing which case it is.
+  }, [bookings])
 
   // Returns true on a successful cancel so the caller (the edit sheet's own
   // "Cancel this booking" button) knows to close itself too.
