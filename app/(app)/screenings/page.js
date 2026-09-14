@@ -19,6 +19,8 @@ import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from '@/lib/formValidation'
 import { byOwnThenName, ordinal } from '@/lib/sortNames'
 import { useOwners } from '@/lib/useOwners'
 import { exportAttendeeListPdf } from '@/lib/attendeeExport'
+import EventShareActions from '@/components/EventShareActions'
+import { buildShareUrl, resolveEventWindow } from '@/lib/eventShare'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -841,6 +843,27 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
       {/* Booking status strip — always visible */}
       <BookingStrip myBooking={ev.my_booking} isFull={isFull} closed={closed} blocked={blocked} />
 
+      {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-14 correction):
+          event-level, not booking-level -- lives on the tile itself, not the
+          booking slide-out. */}
+      {(() => {
+        const evWindow = resolveEventWindow(ev)
+        if (!evWindow) return null
+        return (
+          <div style={{ padding: '0.6rem 1rem', borderTop: '1px solid var(--border)' }}>
+            <EventShareActions
+              url={buildShareUrl('/screenings', ev.id)}
+              title={movie?.title || ev.title}
+              description={ev.notes}
+              location={ev.location ? (ev.location_type === 'offsite' ? ev.location.split('\n')[0] : ev.location) : null}
+              start={evWindow.start}
+              end={evWindow.end}
+              colour="var(--teal)"
+            />
+          </div>
+        )
+      })()}
+
       {/* Attendees accordion */}
       <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>
         <button onClick={e => { e.stopPropagation(); setShowAttendees(v => !v) }}
@@ -1079,7 +1102,6 @@ export default function Screenings() {
         event={slideOutEvent}
         onClose={() => setSlideOutEvent(null)}
         onRefresh={handleSlideOutRefresh}
-        shareBasePath="/screenings"
       />
 
       {(showAdd || editEvent) && (

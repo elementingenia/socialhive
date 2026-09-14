@@ -18,8 +18,6 @@ import { maxSeatsPerBooking, effectiveSeatCap } from "@/lib/modifyBooking"
 import { busSeatsUsed } from "@/lib/busSeats"
 import { useOwners } from "@/lib/useOwners"
 import { exportAttendeeListPdf } from "@/lib/attendeeExport"
-import EventShareActions from "@/components/EventShareActions"
-import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -2499,7 +2497,7 @@ function LoginPrompt() {
 }
 
 // ── EventSlideOut (main export) ───────────────────────────────────────────────
-export default function EventSlideOut({ event, onClose, isAuthenticated = true, onRefresh, shareBasePath = null }) {
+export default function EventSlideOut({ event, onClose, isAuthenticated = true, onRefresh }) {
   const { member, isAdmin } = useUser()
   // Bumped by a member booking action (BookingSection) so the coordinator panel,
   // which fetches its own attendee data, re-syncs instead of showing stale seats.
@@ -2653,29 +2651,6 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
               <BusIcon size={14} /> <span>{event.bus_driver.name || event.bus_driver.username}</span>
             </div>
           )}
-
-          {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-13) — EVENT-
-              level, not booking-level: shown to anyone who can see this event
-              at all, booked/waitlisted/not-booked alike, regardless of
-              isAuthenticated. shareBasePath is supplied by each hub page (its
-              own list URL, e.g. "/screenings", "/clubs/movie-buffs") since
-              that's the one thing this shared component can't infer from the
-              event data alone. */}
-          {shareBasePath && (() => {
-            const evWindow = resolveEventWindow(event)
-            if (!evWindow) return null
-            return (
-              <EventShareActions
-                url={buildShareUrl(shareBasePath, event.id)}
-                title={event.title}
-                description={event.description}
-                location={event.location ? (event.location_type === "offsite" ? event.location.split("\n")[0] : event.location) : null}
-                start={evWindow.start}
-                end={evWindow.end}
-                colour={colour}
-              />
-            )
-          })()}
 
           <>
               {/* Movie-specific */}

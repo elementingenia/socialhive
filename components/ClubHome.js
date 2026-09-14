@@ -31,6 +31,8 @@ import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName } from "@/lib/sortNames"
 import { resolveMemberName } from "@/lib/memberName"
 import { exportAttendeeListPdf } from "@/lib/attendeeExport"
+import EventShareActions from "@/components/EventShareActions"
+import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -507,6 +509,27 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
 
       {/* Booking status strip */}
       <BookingStrip isJoined={isJoined} seats={booking?.seats || 1} hasBook={!!booking?.has_book} bookReturnDate={event?.book_return_date} closed={closed} blocked={blocked} open={event.booking_required === false} colour={colour} />
+
+      {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-14 correction):
+          event-level, not booking-level -- lives on the tile itself, not the
+          booking slide-out. */}
+      {club?.slug && (() => {
+        const evWindow = resolveEventWindow(event)
+        if (!evWindow) return null
+        return (
+          <div style={{ padding: "0.6rem 1rem", borderTop: "1px solid var(--border)" }}>
+            <EventShareActions
+              url={buildShareUrl(`/clubs/${club.slug}`, event.id)}
+              title={event.title}
+              description={event.description}
+              location={event.location ? (event.location_type === "offsite" ? event.location.split("\n")[0] : event.location) : null}
+              start={evWindow.start}
+              end={evWindow.end}
+              colour={colour}
+            />
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -2291,7 +2314,6 @@ export default function ClubHome({ club }) {
         event={slideOutEvent}
         onClose={() => setSlideOutEvent(null)}
         onRefresh={handleSlideOutRefresh}
-        shareBasePath={club?.slug ? `/clubs/${club.slug}` : null}
       />
     </div>
   )

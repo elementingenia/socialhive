@@ -5,6 +5,8 @@ import { BusIcon } from "@/components/NavIcons"
 import { bookingsClosed } from "@/lib/booking"
 import { byOwnThenName } from '@/lib/sortNames'
 import { fmtSpaceEventDate, fmtSpaceEventTime } from "@/components/SharedSpaceEventRow"
+import EventShareActions from "@/components/EventShareActions"
+import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 
 // Full "system standard" event card for /spaces/scheduled -- Iain,
 // 2026-08-23: "Schedule Events needs to conform to the system standard as
@@ -146,6 +148,27 @@ export default function SpaceScheduledEventCard({ event, onOpen, onEdit }) {
 
         <CapacityBar booked={booked} max={event.max_seats} waitlist={waiting} />
       </div>
+
+      {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-14 correction):
+          event-level, not booking-level -- lives on the tile itself, not the
+          booking slide-out. */}
+      {(() => {
+        const evWindow = resolveEventWindow(event)
+        if (!evWindow) return null
+        return (
+          <div style={{ padding: "0 1rem 0.75rem" }}>
+            <EventShareActions
+              url={buildShareUrl("/spaces/scheduled", event.id)}
+              title={event.title}
+              description={event.description}
+              location={event.location ? (event.location_type === "offsite" ? event.location.split("\n")[0] : event.location) : null}
+              start={evWindow.start}
+              end={evWindow.end}
+              colour={COLOUR}
+            />
+          </div>
+        )
+      })()}
 
       {event.max_seats > 0 && (
         <div style={{ borderTop: "1px solid var(--border)", background: "var(--surface2)" }}>
