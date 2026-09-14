@@ -3,6 +3,8 @@ import EventCoordinators from "@/components/EventCoordinators"
 import { BusIcon } from "@/components/NavIcons"
 import { bookingsClosed } from "@/lib/booking"
 import { fmtSpaceEventDate, fmtSpaceEventTime } from "@/components/SharedSpaceEventRow"
+import EventShareActions from "@/components/EventShareActions"
+import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 
 // Standard "Next Event" tile, adapted for Space Bookings from Social's own
 // NextEventTile (app/(app)/social/page.js) -- Iain, 2026-08-23: "The
@@ -173,6 +175,27 @@ export default function NextSpaceEventTile({ event, coordinators = [], myBooking
             </button>
           )}
         </div>
+
+        {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-14 correction):
+            event-level, not booking-level -- lives on the tile itself, not
+            the booking slide-out. */}
+        {(() => {
+          const evWindow = resolveEventWindow(event)
+          if (!evWindow) return null
+          return (
+            <div style={{ marginTop: "0.6rem" }}>
+              <EventShareActions
+                url={buildShareUrl("/spaces/scheduled", event.id)}
+                title={event.title}
+                description={event.description}
+                location={event.location ? (event.location_type === "offsite" ? event.location.split("\n")[0] : event.location) : null}
+                start={evWindow.start}
+                end={evWindow.end}
+                colour={COLOUR}
+              />
+            </div>
+          )
+        })()}
       </div>
     </div>
   )

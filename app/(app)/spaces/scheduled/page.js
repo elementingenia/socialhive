@@ -123,7 +123,6 @@ export default function SpacesScheduledPage() {
         onClose={() => setFullEvent(null)}
         isAuthenticated={true}
         onRefresh={() => { load(); if (fullEvent) openEvent(fullEvent.id) }}
-        shareBasePath="/spaces/scheduled"
       />
 
       {editingEvent && (

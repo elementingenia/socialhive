@@ -4,7 +4,6 @@ import { supabase } from "@/lib/supabase"
 import CalendarView from "@/components/CalendarView"
 import EventSlideOut from "@/components/EventSlideOut"
 import { sydneyTodayStr, sydneyDateStrPlusDays } from "@/lib/date"
-import { hubPathForEvent } from "@/lib/eventShare"
 
 // Sydney-local wall-clock formatting for the private-space-booking read-only
 // card below -- same conversion isoToSydneyHHMM/isoToSydneyDateStr do
@@ -246,7 +245,6 @@ export default function PublicCalendarPage() {
         onClose={() => setSelected(null)}
         isAuthenticated={false}
         onRefresh={loadEvents}
-        shareBasePath={hubPathForEvent(selected)}
       />
     </div>
   )
