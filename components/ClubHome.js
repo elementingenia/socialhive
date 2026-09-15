@@ -128,7 +128,6 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
   const { owners: clubOwnersForCard } = useOwners("club", club?.id)
   const isOwner = !!member?.id && clubOwnersForCard.some(o => o.id === member.id)
   const caps = clubCaps(club)
-  const [summaryOpen,     setSummaryOpen]     = useState(false)
   const [attendeesOpen,   setAttendeesOpen]   = useState(false)
   const [attendees,       setAttendees]       = useState(null)
   const [attendeesLoading,setAttendeesLoading]= useState(false)
@@ -394,7 +393,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
               names={activeECs.map(ec => ec.members?.name || ec.members?.username)}
               colour={colour} style={{ marginTop: 6 }} stackNames trailing={shareCalendarBtn} />
             {shareUrl && shareEvWindow && (
-              <div style={{ marginTop: "0.15rem" }}>
+              <div style={{ marginTop: "0.15rem", textAlign: "right" }}>
                 <CopyLinkButton url={shareUrl} colour={colour} />
               </div>
             )}
@@ -421,45 +420,38 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
           </div>
         )}
 
-        {/* Book summary */}
+        {/* Book summary -- was a bespoke fade+button duplicate of
+            ExpandableText with its "Show more" pulled out into a separate
+            left-aligned row below (Iain, 2026-09-15, screenshot #2: "Show
+            More as is elsewhere throughout the system, is in centre aligned
+            in the faded row of text"). Routed through the same shared
+            ExpandableText this card already uses for Event notes two blocks
+            up, so the toggle renders centred inside the fade exactly like
+            every other truncated-text block in the app. */}
         {book?.summary && (
-          <div style={{ position: "relative" }}>
-            <div style={{
-              fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.6,
-              maxHeight: summaryOpen ? "none" : "4.8em",
-              overflow: "hidden",
-            }}>
-              {book.summary}
-            </div>
-            {!summaryOpen && (
-              <div style={{
-                position: "absolute", bottom: 0, left: 0, right: 0, height: "2.4em",
-                background: "linear-gradient(to bottom, transparent, var(--surface))",
-                pointerEvents: "none",
-              }} />
-            )}
+          <div style={{ marginBottom: 4 }}>
+            <ExpandableText
+              text={book.summary}
+              fontSize={13.1}
+              lineHeight={1.6}
+              maxLines={3}
+              colour={colour}
+            />
           </div>
         )}
 
-        {/* Show more / Show attendees row -- "Show attendees" is meaningless
-            on an "open, all welcome" event (no bookings ever exist), so it's
-            hidden entirely rather than opening to an empty list. */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 4, paddingBottom: 2 }}>
-          {book?.summary ? (
-            <button onClick={e => { e.stopPropagation(); setSummaryOpen(o => !o) }}
-              style={{ background: "none", border: "none", color: clubInk(colour), fontSize: "0.78rem",
-                fontWeight: 700, cursor: "pointer", padding: "2px 0", fontFamily: "inherit" }}>
-              {summaryOpen ? "Show less ▲" : "Show more ▼"}
-            </button>
-          ) : <span />}
-          {event.booking_required !== false && (
+        {/* Show attendees row -- meaningless on an "open, all welcome"
+            event (no bookings ever exist), so it's hidden entirely rather
+            than opening to an empty list. */}
+        {event.booking_required !== false && (
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", paddingTop: 4, paddingBottom: 2 }}>
             <button onClick={e => { e.stopPropagation(); toggleAttendees() }} disabled={attendeesLoading}
               style={{ background: "none", border: "none", color: clubInk(colour), fontSize: "0.78rem",
                 fontWeight: 700, cursor: attendeesLoading ? "wait" : "pointer", padding: "2px 0", fontFamily: "inherit" }}>
               {attendeesLoading ? "Loading…" : attendeesOpen ? "Hide attendees ▲" : "Show attendees ▼"}
             </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* EC-only dish breakdown, grouped by category (Iain 2026-07-18) */}
         {attendeesOpen && canManageBooks && caps.bringEnabled && attendees && (() => {
@@ -579,7 +571,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
             ) : shareCalendarBtn ? (
               <div>{shareCalendarBtn}</div>
             ) : null}
-            {hasCopyLink && <CopyLinkButton url={shareUrl} colour={colour} />}
+            {hasCopyLink && <div style={{ textAlign: "right" }}><CopyLinkButton url={shareUrl} colour={colour} /></div>}
           </div>
         )
       })()}
