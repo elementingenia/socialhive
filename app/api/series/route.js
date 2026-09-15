@@ -37,7 +37,13 @@ async function resolve(req, clubId) {
 
 // Template fields a "this and future" edit propagates to later occurrences.
 // Never event_date (rule-driven) or book_id (per-occurrence, Book Club).
-const PROPAGATE = ["title","description","welcome_message","event_time","location_type","location",
+// location_id/event_end_time added 2026-09-15 (migration 107) -- without
+// these, a "this and future dates" edit fixed only the ONE occurrence being
+// edited (via app/api/clubs/events/route.js's own direct update of that
+// event row) and never the series template or any OTHER already-existing
+// future occurrence, so the venue/end-time re-entry problem kept coming
+// back on every subsequent edit and every cron-generated occurrence.
+const PROPAGATE = ["title","description","welcome_message","event_time","location_type","location","location_id","event_end_time",
   "max_seats","max_seats_per_booking","allow_nonresident_guests","require_attendee_names","booking_required","payment_required","cost",
   "bring_category_ids","bring_required","theme_name","is_public","show_attendee_names"]
 
@@ -75,6 +81,10 @@ export async function POST(req) {
     start_date: body.start_date, event_time: body.event_time || "00:00",
     title: body.title || null, description: body.description || null, welcome_message: body.welcome_message || null,
     location_type: body.location_type || "onsite", location: body.location || null,
+    // Added 2026-09-15 (migration 107) -- see occurrencePayload() in
+    // lib/generateSeriesEvents.js for the full root-cause note. Store
+    // whatever the create form sent so generated occurrences can copy it.
+    location_id: body.location_id || null, event_end_time: body.event_end_time || null,
     max_seats: body.max_seats ?? 20, max_seats_per_booking: body.max_seats_per_booking ?? 1,
     booking_required: body.booking_required !== false,
     allow_nonresident_guests: !!body.allow_nonresident_guests,

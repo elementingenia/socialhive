@@ -1264,6 +1264,12 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             title: form.title.trim() || club?.name || "Group/Club Event",
             description: form.description, welcome_message: form.welcome_message,
             location_type: form.location_type || "onsite", location: form.location || null, location_id: form.location_id || null,
+            // event_end_time was never sent here at all (2026-09-15, migration
+            // 107) -- location_id made it across but had nowhere to land
+            // server-side; end time didn't even get that far. See
+            // lib/generateSeriesEvents.js's occurrencePayload() for the full
+            // root-cause note.
+            event_end_time: form.event_end_time || null,
             max_seats: Number(form.max_seats) || 20,
             max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
             booking_required: !!form.booking_required,
