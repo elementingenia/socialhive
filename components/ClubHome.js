@@ -342,125 +342,125 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
             objectPosition: `${event.image_focal_x ?? 50}% ${event.image_focal_y ?? 50}%` }} />
       )}
 
-      {/* Title/book info + Location + Coordinators + Add to Calendar + Copy
-          Link -- ONE layout for every club, book-selected or not (Iain,
-          2026-09-15, rebuild after screenshot comparison: "the pattern of
-          design in just book club for an event, is completely different
-          depending on the book choice being a real book or being the
-          option 'Not Selected Yet'... The tile design should not fall
-          apart just because no book was selected. All other tile
-          components should remain in place as if a Book HAD been
-          selected"). Root cause, confirmed by direct code read: this used
-          to be two entirely separate blocks -- a book selected rendered
-          cover+title+rating+EventCoordinators+Add to Calendar+Copy Link
-          right here, but no book rendered NONE of that here; instead a
-          second, independent copy of EventCoordinators+Add to Calendar+
-          Copy Link was rendered much further down the card, after the
-          booking strip/"Tap to sign up" -- so the exact same component
-          landed in two different card positions depending on data, not
-          design. Cards Fans/Craft & Coffee etc. (caps.hasBooks false --
-          this club has no book concept at all, not merely "no book chosen
-          yet") hit that same bottom-of-card path too, which is what made
-          every non-book club look structurally different from a
-          book-selected Book Club event. Now this one block always renders
-          directly after the header/image, for every club: a book-capable
-          club (caps.hasBooks) always shows the cover+title slot -- a real
-          book's cover/title/rating, or a placeholder cover + the event's
-          own title (or "Not selected yet", the same wording BookPicker's
-          own placeholder option uses -- was "Book not yet chosen",
-          inconsistent copy) when caps.hasBooks is true but no book is set
-          yet -- and a non-book club shows just its event title, same
-          slot. Coordinators/Add to Calendar/Copy Link are no longer a
-          second, separate render anywhere on the card.
+      {/* Full rebuild to Iain's explicit numbered spec (2026-09-15, after
+          the previous "unified block" attempt still conflated event name
+          and book title into one line and buried Coordinators inside the
+          book cover's own column). Confirmed against his own mockup
+          screenshots and exact wording before touching anything -- this
+          is not a guess at intent:
 
-          Location moved (2026-09-15, follow-up): Iain flagged "Location
-          should appear under the event name, not above it" -- it used to
-          render as its own div directly after the image, ABOVE this whole
-          title block (so above the title, not under it, for every club).
-          Confirmed live on production before touching anything: fetched
-          the actual rendered page text for a real Book Club event and it
-          read "📍 Community Main Dining" THEN "Charles Darwin: His Life"
-          -- location genuinely came first. It now renders inside this
-          content column, directly under the title line, matching the
-          title→date/location→details order Social/Show Time/Book a
-          Space's own event cards already use (e.g.
-          components/NextSpaceEventTile.js: title, then date/time, then
-          location). shareLocation is computed above (offsite events show
-          only the first line, matching Social's own display rule
-          exactly). */}
-      <div style={{ display: "flex", gap: 12, padding: "0.6rem 1rem 0.9rem", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
-        {caps.hasBooks && (
-          book?.cover_url ? (
-            bookLink
-              ? <a href={bookLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
-                  <img src={book.cover_url} alt={book.title}
-                    style={{ width: 56, height: 80, objectFit: "cover", borderRadius: 6, flexShrink: 0, display: "block" }} />
-                </a>
-              : <img src={book.cover_url} alt={book.title}
-                  style={{ width: 56, height: 80, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} />
-          ) : (
-            // Book placeholder -- keeps the cover slot (and therefore the
-            // row's height/alignment) identical whether or not a book has
-            // been chosen yet, rather than the row collapsing/reflowing.
-            <div aria-hidden style={{ width: 56, height: 80, borderRadius: 6, flexShrink: 0,
-              background: colour + "15", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem" }}>
-              📖
-            </div>
-          )
+          1. Event name -- its own line, always, independent of book state.
+             Root cause of the old bug ("Event Title only appears when
+             Book title is Not Yet Selected... Event Title is missing when
+             its a real book"): the old code showed EITHER event.title OR
+             book.title on one shared line, never both -- so a real book
+             hid the event name entirely, and choosing "Not selected yet"
+             swapped in event.title only if set, otherwise silently showed
+             the book placeholder with no text at all. Event name is now
+             its own unconditional line, decoupled from book state.
+          2. Location -- its own line, directly under the event name.
+          3. Book block (book-capable clubs only) -- cover image, then
+             title (real title, or literally "Not selected yet" -- never
+             falls back to event.title now that event name has its own
+             line above) / author / rating chips.
+          4. Coordinator + Add to Calendar + Copy Link -- its own
+             full-width section, NOT nested inside the book cover's flex
+             column. Root cause of "Coordinator content always sits UNDER
+             the image for the book": EventCoordinators used to live
+             inside the same flex item as the book title/author/rating,
+             to the right of the 56px cover -- so it inherited that
+             column's indent and read as attached to/hanging off the
+             book image instead of being its own section.
+          5. Event description (event.description).
+          6. Book details (book.summary) -- unchanged position from
+             before, kept directly after the event description.
+          7. Show attendees toggle -- unchanged.
+          8. Booking status strip -- unchanged (BookingStrip, further
+             down the component, already renders last). */}
+      <div style={{ padding: "0.9rem 1rem 0.7rem", borderBottom: "1px solid var(--border)" }}>
+        {/* 1. Event name */}
+        {event.title && (
+          <div style={{ fontWeight: 800, fontSize: "1.05rem", lineHeight: 1.2, marginBottom: 4, color: "var(--text)" }}>
+            {event.title}
+          </div>
         )}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {caps.hasBooks ? (
-            book ? (
+
+        {/* 2. Location */}
+        {shareLocation && (
+          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: event.title || shareLocation ? 10 : 0 }}>
+            📍 {shareLocation}
+          </div>
+        )}
+
+        {/* 3. Book block -- book-capable clubs only */}
+        {caps.hasBooks && (
+          <div style={{ display: "flex", gap: 12, marginBottom: 10, alignItems: "flex-start" }}>
+            {book?.cover_url ? (
               bookLink
-                ? <a href={bookLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                    style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2, color: "var(--text)", textDecoration: "none", display: "block" }}>
-                    {book.title}
+                ? <a href={bookLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
+                    <img src={book.cover_url} alt={book.title}
+                      style={{ width: 56, height: 80, objectFit: "cover", borderRadius: 6, flexShrink: 0, display: "block" }} />
                   </a>
-                : <div style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2 }}>{book.title}</div>
+                : <img src={book.cover_url} alt={book.title}
+                    style={{ width: 56, height: 80, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} />
             ) : (
-              <div style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2, color: event.title ? "var(--text)" : "var(--text-dim)" }}>
-                {event.title || "Not selected yet"}
+              // Book placeholder -- keeps the cover slot (and therefore the
+              // row's height/alignment) identical whether or not a book has
+              // been chosen yet, rather than the row collapsing/reflowing.
+              <div aria-hidden style={{ width: 56, height: 80, borderRadius: 6, flexShrink: 0,
+                background: colour + "15", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem" }}>
+                📖
               </div>
-            )
-          ) : (
-            event.title && <div style={{ fontWeight: 800, fontSize: "1.05rem", lineHeight: 1.2, marginBottom: 2, color: "var(--text)" }}>{event.title}</div>
-          )}
-          {shareLocation && (
-            <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: 4 }}>
-              📍 {shareLocation}
+            )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {book ? (
+                bookLink
+                  ? <a href={bookLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                      style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2, color: "var(--text)", textDecoration: "none", display: "block" }}>
+                      {book.title}
+                    </a>
+                  : <div style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2 }}>{book.title}</div>
+              ) : (
+                <div style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2, color: "var(--text-dim)" }}>
+                  Not selected yet
+                </div>
+              )}
+              {book && (
+                <>
+                  <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: 4 }}>{book.author && `by ${book.author}`}{book.published_year ? ` (${book.published_year})` : ""}</div>
+                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
+                    <span style={{ background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)", fontWeight: 700,
+                      fontSize: "0.68rem", padding: "0.15rem 0.5rem", borderRadius: 20, whiteSpace: "nowrap" }}>
+                      ⭐ {book.rating ?? "—"}
+                    </span>
+                    <span style={{ background: colour + "1f", color: clubInk(colour), fontWeight: 700,
+                      fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20, whiteSpace: "nowrap" }}>
+                      {communityScore ?? "—"} ({voteCount})
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
-          )}
-          {book && (
-            <>
-              <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: 4 }}>{book.author && `by ${book.author}`}{book.published_year ? ` (${book.published_year})` : ""}</div>
-              <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: 4, alignItems: "center" }}>
-                <span style={{ background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)", fontWeight: 700,
-                  fontSize: "0.68rem", padding: "0.15rem 0.5rem", borderRadius: 20, whiteSpace: "nowrap" }}>
-                  ⭐ {book.rating ?? "—"}
-                </span>
-                <span style={{ background: colour + "1f", color: clubInk(colour), fontWeight: 700,
-                  fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20, whiteSpace: "nowrap" }}>
-                  {communityScore ?? "—"} ({voteCount})
-                </span>
-              </div>
-            </>
-          )}
-          {ecNames.length > 0 ? (
-            <EventCoordinators eventId={event.id} eventTitle={event.title} names={ecNames}
-              colour={colour} style={{ marginTop: 6 }} stackNames trailing={shareCalendarBtn} />
-          ) : shareCalendarBtn ? (
-            <div style={{ marginTop: 6 }}>{shareCalendarBtn}</div>
-          ) : null}
-          {shareUrl && shareEvWindow && (
-            <div style={{ marginTop: "0.15rem", textAlign: "right" }}>
-              <CopyLinkButton url={shareUrl} colour={colour} />
-            </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        {/* 4. Coordinator + Add to Calendar + Copy Link -- own full-width
+            section, not nested inside the book cover's column */}
+        {ecNames.length > 0 ? (
+          <EventCoordinators eventId={event.id} eventTitle={event.title} names={ecNames}
+            colour={colour} stackNames trailing={shareCalendarBtn} />
+        ) : shareCalendarBtn ? (
+          <div>{shareCalendarBtn}</div>
+        ) : null}
+        {shareUrl && shareEvWindow && (
+          <div style={{ marginTop: "0.15rem", textAlign: "right" }}>
+            <CopyLinkButton url={shareUrl} colour={colour} />
+          </div>
+        )}
       </div>
 
       <div style={{ padding: "0.9rem 1rem 0.6rem" }}>
-        {/* Event notes */}
+        {/* 5. Event description */}
         {event.description && (
           <div style={{ marginBottom: 10 }}>
             <ExpandableText
