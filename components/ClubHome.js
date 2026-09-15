@@ -31,7 +31,7 @@ import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName } from "@/lib/sortNames"
 import { resolveMemberName } from "@/lib/memberName"
 import { exportAttendeeListPdf } from "@/lib/attendeeExport"
-import EventShareActions from "@/components/EventShareActions"
+import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -285,6 +285,19 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
   const closed  = bookingsClosed(event)
   const blocked = closed && !isJoined && !canManageBooks
 
+  // Event Deep Linking + Add to Calendar (Iain, 2026-09-15 correction): Add
+  // to Calendar sits on the Coordinators line, Copy Link directly below --
+  // computed once here since this club's event may or may not render a
+  // book section (the only place EventCoordinators currently shows for
+  // this card) below.
+  const shareEvWindow = resolveEventWindow(event)
+  const shareUrl = club?.slug ? buildShareUrl(`/clubs/${club.slug}`, event.id) : null
+  const shareLocation = event.location ? (event.location_type === "offsite" ? event.location.split("\n")[0] : event.location) : null
+  const shareCalendarBtn = shareUrl && shareEvWindow && (
+    <AddToCalendarButton url={shareUrl} title={event.title} description={event.description}
+      location={shareLocation} start={shareEvWindow.start} end={shareEvWindow.end} colour={colour} />
+  )
+
   return (
     <div onClick={blocked ? undefined : onOpen}
       style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",
@@ -352,7 +365,12 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
             </div>
             <EventCoordinators eventId={event.id} eventTitle={event.title}
               names={activeECs.map(ec => ec.members?.name || ec.members?.username)}
-              colour={colour} style={{ marginTop: 6 }} />
+              colour={colour} style={{ marginTop: 6 }} stackNames trailing={shareCalendarBtn} />
+            {shareUrl && shareEvWindow && (
+              <div style={{ marginTop: "0.15rem" }}>
+                <CopyLinkButton url={shareUrl} colour={colour} />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -510,26 +528,19 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
       {/* Booking status strip */}
       <BookingStrip isJoined={isJoined} seats={booking?.seats || 1} hasBook={!!booking?.has_book} bookReturnDate={event?.book_return_date} closed={closed} blocked={blocked} open={event.booking_required === false} colour={colour} />
 
-      {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-14 correction):
-          event-level, not booking-level -- lives on the tile itself, not the
-          booking slide-out. */}
-      {club?.slug && (() => {
-        const evWindow = resolveEventWindow(event)
-        if (!evWindow) return null
-        return (
-          <div style={{ padding: "0.6rem 1rem", borderTop: "1px solid var(--border)" }}>
-            <EventShareActions
-              url={buildShareUrl(`/clubs/${club.slug}`, event.id)}
-              title={event.title}
-              description={event.description}
-              location={event.location ? (event.location_type === "offsite" ? event.location.split("\n")[0] : event.location) : null}
-              start={evWindow.start}
-              end={evWindow.end}
-              colour={colour}
-            />
-          </div>
-        )
-      })()}
+      {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-15 correction):
+          fallback for a non-book club event -- the book section above (the
+          only place this card renders EventCoordinators) doesn't exist, so
+          there's no "Coordinators line" to attach to; show a compact
+          standalone row instead. Book club events get the buttons via the
+          book section's own EventCoordinators call above, not duplicated
+          here. */}
+      {!book && shareUrl && shareEvWindow && (
+        <div style={{ padding: "0 1rem 0.6rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+          {shareCalendarBtn}
+          <CopyLinkButton url={shareUrl} colour={colour} />
+        </div>
+      )}
     </div>
   )
 }

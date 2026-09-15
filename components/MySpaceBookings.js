@@ -4,7 +4,7 @@ import { authedFetch } from "@/lib/getAuthToken"
 import SpaceBookingForm from "@/components/SpaceBookingForm"
 import PromoteBookingModal from "@/components/PromoteBookingModal"
 import SharedSpaceEventRow from "@/components/SharedSpaceEventRow"
-import EventShareActions from "@/components/EventShareActions"
+import { AddToCalendarButton, CopyLinkButton } from "@/components/EventShareActions"
 import { buildSpaceBookingShareUrl } from "@/lib/eventShare"
 
 // Iain, 2026-08-22, second live review: the private-booking tile and the
@@ -76,12 +76,14 @@ function PrivateBookingRow({ booking, onOpen }) {
           {fmtSpaceDate(booking.starts_at)} · {fmtSpaceTime(booking.starts_at)}–{fmtSpaceTime(booking.ends_at)}
           </div><div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.5rem" }}><span style={{ background: "#f59e0b18", color: "var(--amber-dark, var(--amber))", borderRadius: "20px", padding: "0.2rem 0.65rem", fontSize: "0.75rem", fontWeight: 700 }}>✓ 1 seat booked</span><span style={{ fontSize: "0.72rem", color: "var(--amber-dark, var(--amber))", fontWeight: 700, textDecoration: "underline" }}>Edit</span></div><div style={{display:"none"}}>
         </div>
-        {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-14 correction):
+        {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-14 correction:
             event-level, not booking-level -- lives on the tile itself, not
             the edit sheet. Decision 2: private bookings are included, no
-            carve-out. */}
-        <div style={{ marginTop: "0.6rem" }}>
-          <EventShareActions
+            carve-out. 2026-09-15 correction: smaller buttons, Add to
+            Calendar's dropdown now portal-rendered so it can't be covered
+            by the next row in the list.) */}
+        <div style={{ marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+          <AddToCalendarButton
             url={buildSpaceBookingShareUrl("/spaces", booking.id)}
             title={booking.title || "Space booking"}
             location={booking.locations?.name || null}
@@ -89,6 +91,7 @@ function PrivateBookingRow({ booking, onOpen }) {
             end={new Date(booking.ends_at)}
             colour="var(--amber)"
           />
+          <CopyLinkButton url={buildSpaceBookingShareUrl("/spaces", booking.id)} colour="var(--amber)" />
         </div>
       </div>
     </div>

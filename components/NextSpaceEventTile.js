@@ -3,7 +3,7 @@ import EventCoordinators from "@/components/EventCoordinators"
 import { BusIcon } from "@/components/NavIcons"
 import { bookingsClosed } from "@/lib/booking"
 import { fmtSpaceEventDate, fmtSpaceEventTime } from "@/components/SharedSpaceEventRow"
-import EventShareActions from "@/components/EventShareActions"
+import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 
 // Standard "Next Event" tile, adapted for Space Bookings from Social's own
@@ -117,8 +117,34 @@ export default function NextSpaceEventTile({ event, coordinators = [], myBooking
           </div>
         )}
 
-        <EventCoordinators eventId={event.id} eventTitle={event.title} names={ecNames}
-          colour={COLOUR} style={{ marginBottom: "0.2rem" }} />
+        {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-15
+            correction): Add to Calendar sits on the Coordinators line,
+            Copy Link directly below -- falls back to its own compact row
+            when there's no coordinator. */}
+        {(() => {
+          const evWindow = resolveEventWindow(event)
+          const shareUrl = buildShareUrl("/spaces/scheduled", event.id)
+          const shareLocation = event.location ? (event.location_type === "offsite" ? event.location.split("\n")[0] : event.location) : null
+          const calendarBtn = evWindow && (
+            <AddToCalendarButton url={shareUrl} title={event.title} description={event.description}
+              location={shareLocation} start={evWindow.start} end={evWindow.end} colour={COLOUR} />
+          )
+          return (
+            <>
+              {ecNames.length > 0 ? (
+                <EventCoordinators eventId={event.id} eventTitle={event.title} names={ecNames}
+                  colour={COLOUR} style={{ marginBottom: "0.2rem" }} stackNames trailing={calendarBtn} />
+              ) : calendarBtn ? (
+                <div style={{ marginBottom: "0.2rem" }}>{calendarBtn}</div>
+              ) : null}
+              {evWindow && (
+                <div style={{ marginBottom: "0.2rem" }}>
+                  <CopyLinkButton url={shareUrl} colour={COLOUR} />
+                </div>
+              )}
+            </>
+          )
+        })()}
 
         {event.has_bus && event.bus_driver && (
           <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 5 }}>
@@ -176,26 +202,6 @@ export default function NextSpaceEventTile({ event, coordinators = [], myBooking
           )}
         </div>
 
-        {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-14 correction):
-            event-level, not booking-level -- lives on the tile itself, not
-            the booking slide-out. */}
-        {(() => {
-          const evWindow = resolveEventWindow(event)
-          if (!evWindow) return null
-          return (
-            <div style={{ marginTop: "0.6rem" }}>
-              <EventShareActions
-                url={buildShareUrl("/spaces/scheduled", event.id)}
-                title={event.title}
-                description={event.description}
-                location={event.location ? (event.location_type === "offsite" ? event.location.split("\n")[0] : event.location) : null}
-                start={evWindow.start}
-                end={evWindow.end}
-                colour={COLOUR}
-              />
-            </div>
-          )
-        })()}
       </div>
     </div>
   )
