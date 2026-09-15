@@ -141,6 +141,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
 
   const activeECs = (event.event_coordinators || []).filter(ec => !ec.replaced_at)
   const coordinator = activeECs.map(ec => ec.members?.name || ec.members?.username).filter(Boolean).join(", ") || null
+  const ecNames = activeECs.map(ec => ec.members?.name || ec.members?.username).filter(Boolean)
   const isEC = !!(member && activeECs.some(ec => ec.member_id === member.id))
   const canManageBooks = isAdmin || isEC || isOwner
 
@@ -358,10 +359,37 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
         </div>
       )}
 
-      {/* Book info */}
-      {book && (
-        <div style={{ display: "flex", gap: 12, padding: "0.6rem 1rem 0.9rem", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
-          {book.cover_url && (
+      {/* Title/book info + Coordinators + Add to Calendar + Copy Link --
+          ONE layout for every club, book-selected or not (Iain, 2026-09-15,
+          rebuild after screenshot comparison: "the pattern of design in
+          just book club for an event, is completely different depending
+          on the book choice being a real book or being the option 'Not
+          Selected Yet'... The tile design should not fall apart just
+          because no book was selected. All other tile components should
+          remain in place as if a Book HAD been selected"). Root cause,
+          confirmed by direct code read: this used to be two entirely
+          separate blocks -- a book selected rendered cover+title+rating+
+          EventCoordinators+Add to Calendar+Copy Link right here, but no
+          book rendered NONE of that here; instead a second, independent
+          copy of EventCoordinators+Add to Calendar+Copy Link was rendered
+          much further down the card, after the booking strip/"Tap to sign
+          up" -- so the exact same component landed in two different card
+          positions depending on data, not design. Cards Fans/Craft &
+          Coffee etc. (caps.hasBooks false -- this club has no book
+          concept at all, not merely "no book chosen yet") hit that same
+          bottom-of-card path too, which is what made every non-book club
+          look structurally different from a book-selected Book Club
+          event. Now this one block always renders directly after
+          Location, for every club: a book-capable club (caps.hasBooks)
+          always shows the cover+title slot -- a real book's cover/title/
+          rating, or a placeholder cover + the event's own title (or "Book
+          not yet chosen") when caps.hasBooks is true but no book is set
+          yet -- and a non-book club shows just its event title, same
+          slot. Coordinators/Add to Calendar/Copy Link are no longer a
+          second, separate render anywhere on the card. */}
+      <div style={{ display: "flex", gap: 12, padding: "0.6rem 1rem 0.9rem", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
+        {caps.hasBooks && (
+          book?.cover_url ? (
             bookLink
               ? <a href={bookLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
                   <img src={book.cover_url} alt={book.title}
@@ -369,43 +397,63 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
                 </a>
               : <img src={book.cover_url} alt={book.title}
                   style={{ width: 56, height: 80, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} />
-          )}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {bookLink
-              ? <a href={bookLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                  style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2, color: "var(--text)", textDecoration: "none", display: "block" }}>
-                  {book.title}
-                </a>
-              : <div style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2 }}>{book.title}</div>
-            }
-            <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: 4 }}>{book.author && `by ${book.author}`}{book.published_year ? ` (${book.published_year})` : ""}</div>
-            <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: 4, alignItems: "center" }}>
-              <span style={{ background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)", fontWeight: 700,
-                fontSize: "0.68rem", padding: "0.15rem 0.5rem", borderRadius: 20, whiteSpace: "nowrap" }}>
-                ⭐ {book.rating ?? "—"}
-              </span>
-              <span style={{ background: colour + "1f", color: clubInk(colour), fontWeight: 700,
-                fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20, whiteSpace: "nowrap" }}>
-                {communityScore ?? "—"} ({voteCount})
-              </span>
+          ) : (
+            // Book placeholder -- keeps the cover slot (and therefore the
+            // row's height/alignment) identical whether or not a book has
+            // been chosen yet, rather than the row collapsing/reflowing.
+            <div aria-hidden style={{ width: 56, height: 80, borderRadius: 6, flexShrink: 0,
+              background: colour + "15", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.6rem" }}>
+              📖
             </div>
-            <EventCoordinators eventId={event.id} eventTitle={event.title}
-              names={activeECs.map(ec => ec.members?.name || ec.members?.username)}
-              colour={colour} style={{ marginTop: 6 }} stackNames trailing={shareCalendarBtn} />
-            {shareUrl && shareEvWindow && (
-              <div style={{ marginTop: "0.15rem", textAlign: "right" }}>
-                <CopyLinkButton url={shareUrl} colour={colour} />
+          )
+        )}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {caps.hasBooks ? (
+            book ? (
+              bookLink
+                ? <a href={bookLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                    style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2, color: "var(--text)", textDecoration: "none", display: "block" }}>
+                    {book.title}
+                  </a>
+                : <div style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2 }}>{book.title}</div>
+            ) : (
+              <div style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2, color: event.title ? "var(--text)" : "var(--text-dim)" }}>
+                {event.title || "Book not yet chosen"}
               </div>
-            )}
-          </div>
+            )
+          ) : (
+            event.title && <div style={{ fontWeight: 800, fontSize: "1.05rem", lineHeight: 1.2, marginBottom: 2, color: "var(--text)" }}>{event.title}</div>
+          )}
+          {book && (
+            <>
+              <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", marginBottom: 4 }}>{book.author && `by ${book.author}`}{book.published_year ? ` (${book.published_year})` : ""}</div>
+              <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: 4, alignItems: "center" }}>
+                <span style={{ background: "rgba(180,150,0,0.15)", color: "var(--amber-dark)", fontWeight: 700,
+                  fontSize: "0.68rem", padding: "0.15rem 0.5rem", borderRadius: 20, whiteSpace: "nowrap" }}>
+                  ⭐ {book.rating ?? "—"}
+                </span>
+                <span style={{ background: colour + "1f", color: clubInk(colour), fontWeight: 700,
+                  fontSize: "0.68rem", padding: "0.15rem 0.55rem", borderRadius: 20, whiteSpace: "nowrap" }}>
+                  {communityScore ?? "—"} ({voteCount})
+                </span>
+              </div>
+            </>
+          )}
+          {ecNames.length > 0 ? (
+            <EventCoordinators eventId={event.id} eventTitle={event.title} names={ecNames}
+              colour={colour} style={{ marginTop: 6 }} stackNames trailing={shareCalendarBtn} />
+          ) : shareCalendarBtn ? (
+            <div style={{ marginTop: 6 }}>{shareCalendarBtn}</div>
+          ) : null}
+          {shareUrl && shareEvWindow && (
+            <div style={{ marginTop: "0.15rem", textAlign: "right" }}>
+              <CopyLinkButton url={shareUrl} colour={colour} />
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       <div style={{ padding: "0.9rem 1rem 0.6rem" }}>
-        {/* Event name (themed events) — book clubs already show the book title above */}
-        {!book && event.title && (
-          <div style={{ fontWeight: 800, fontSize: "1.05rem", color: "var(--text)", marginBottom: 6 }}>{event.title}</div>
-        )}
         {/* Event notes */}
         {event.description && (
           <div style={{ marginBottom: 10 }}>
@@ -547,34 +595,6 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
       {/* Booking status strip */}
       <BookingStrip isJoined={isJoined} seats={booking?.seats || 1} hasBook={!!booking?.has_book} bookReturnDate={event?.book_return_date} closed={closed} blocked={blocked} open={event.booking_required === false} colour={colour} />
 
-      {/* Coordinators + Event Deep Linking + Add to Calendar (Iain, 2026-09-15
-          correction, widened 2026-09-15 for item #7: "Groups and Clubs Event
-          tiles are not displaying EC, Location, Date and Time in the same
-          consistent layout as other hubs"). Book-club events already show
-          EventCoordinators via the book section above; a themed/non-book
-          event had no equivalent at all -- neither coordinator names nor an
-          ask-a-question link anywhere on the card. Mirrors Social's own
-          EventCard exactly (app/(app)/social/events/page.js): EC names carry
-          the Add to Calendar button as a trailing element when there are
-          coordinators, falling back to just the button on its own row when
-          there aren't. Renders nothing at all when none of the three (EC
-          names, calendar button, copy-link) apply -- never an empty row. */}
-      {!book && (() => {
-        const ecNames = activeECs.map(ec => ec.members?.name || ec.members?.username).filter(Boolean)
-        const hasCopyLink = !!(shareUrl && shareEvWindow)
-        if (ecNames.length === 0 && !shareCalendarBtn && !hasCopyLink) return null
-        return (
-          <div style={{ padding: "0 1rem 0.6rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
-            {ecNames.length > 0 ? (
-              <EventCoordinators eventId={event.id} eventTitle={event.title} names={ecNames}
-                colour={colour} stackNames trailing={shareCalendarBtn} />
-            ) : shareCalendarBtn ? (
-              <div>{shareCalendarBtn}</div>
-            ) : null}
-            {hasCopyLink && <div style={{ textAlign: "right" }}><CopyLinkButton url={shareUrl} colour={colour} /></div>}
-          </div>
-        )
-      })()}
     </div>
   )
 }
