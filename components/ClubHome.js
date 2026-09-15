@@ -342,9 +342,26 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
             objectPosition: `${event.image_focal_x ?? 50}% ${event.image_focal_y ?? 50}%` }} />
       )}
 
+      {/* Location — shown for every event, consistent with Social/Show Time
+          (Iain, 2026-09-15, item #7: "Groups and Clubs Event tiles are not
+          displaying EC, Location, Date and Time in the same consistent
+          layout as other hubs"). Moved here (was after the book block) so
+          the order matches every other hub exactly: date/time (header,
+          above) → location → coordinators/Add to Calendar/Copy Link —
+          Social's EventCard renders location immediately before its EC
+          line, this card had it after instead (2026-09-15, design-
+          consistency follow-up). shareLocation is computed above (offsite
+          events show only the first line, matching Social's own display
+          rule exactly). */}
+      {shareLocation && (
+        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", padding: "0.7rem 1rem 0", margin: 0 }}>
+          📍 {shareLocation}
+        </div>
+      )}
+
       {/* Book info */}
       {book && (
-        <div style={{ display: "flex", gap: 12, padding: "0.9rem 1rem", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
+        <div style={{ display: "flex", gap: 12, padding: "0.6rem 1rem 0.9rem", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
           {book.cover_url && (
             bookLink
               ? <a href={bookLink} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>
@@ -386,17 +403,6 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
       )}
 
       <div style={{ padding: "0.9rem 1rem 0.6rem" }}>
-        {/* Location — shown for every event, consistent with Social/Show Time
-            (Iain, 2026-09-15, item #7: "Groups and Clubs Event tiles are not
-            displaying EC, Location, Date and Time in the same consistent
-            layout as other hubs"). shareLocation is already computed above
-            (offsite events show only the first line, matching Social's own
-            display rule exactly). */}
-        {shareLocation && (
-          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: 6 }}>
-            📍 {shareLocation}
-          </div>
-        )}
         {/* Event name (themed events) — book clubs already show the book title above */}
         {!book && event.title && (
           <div style={{ fontWeight: 800, fontSize: "1.05rem", color: "var(--text)", marginBottom: 6 }}>{event.title}</div>
