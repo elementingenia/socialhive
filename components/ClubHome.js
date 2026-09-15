@@ -692,7 +692,17 @@ function BookPicker({ onSelect, initialBook, colour = "var(--purple)", invalid =
 
   useEffect(() => {
     async function loadBooks() {
-      const { data: books } = await supabase.from("books").select("id, title, author, cover_url, published_year").order("title")
+      // we_own=false: this picker is for community-suggested books, never
+      // the Book Library -- same missing filter as BookCatalogue.js's own
+      // load() (fixed 2026-09-15, migration 106_clear_book_club_suggestions),
+      // just not caught in that same pass since this is a separate
+      // component/query. Confirmed via direct production query before
+      // fixing: all 567 rows in `books` are we_own=true (Library); this
+      // picker was rendering literally the whole Library with no filter at
+      // all, which is also why the pinned "Not selected yet" row at the top
+      // of the dropdown read as invisible/lost to Iain -- it was sitting
+      // above a 567-title wall, not a short suggestions list.
+      const { data: books } = await supabase.from("books").select("id, title, author, cover_url, published_year").eq("we_own", false).order("title")
       const ids = (books || []).map(b => b.id)
       const sums = {}, counts = {}
       if (ids.length) {
@@ -1282,9 +1292,23 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     if (caps.hasBooks && selectedBook) {
     bookId = selectedBook.id || null
     if (!bookId && selectedBook.google_books_id) {
+      // we_own=false: Book Club and the Book Library are distinct systems
+      // that happen to share the same Google Books API and the same
+      // `books` table (Iain, 2026-09-15) -- this dedupe lookup must never
+      // match a we_own=true Library row just because it happens to share a
+      // google_books_id with a newly-searched suggestion. Without this
+      // scope, picking a book here that a Library title also happens to be
+      // sourced from would silently link the event to the LIBRARY's row
+      // (bookId = existing.id below) instead of creating/using a genuine
+      // Suggestions row -- the two systems bleeding into each other via a
+      // shared external id, same root cause class as the missing we_own
+      // filter just fixed on this picker's own read query above. Mirrors
+      // BookCatalogue.js's own identical dedupe check, which already scopes
+      // this correctly.
       const { data: existing } = await supabase
         .from("books")
         .select("id")
+        .eq("we_own", false)
         .eq("google_books_id", selectedBook.google_books_id)
         .maybeSingle()
 
