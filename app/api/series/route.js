@@ -64,7 +64,7 @@ function enforceOpenEventRules(row) {
   return row
 }
 
-// GET a series' own real saved state (2026-09-16, BUG fix) -- event_series
+// GET a series' own real saved state (2026-09-16, BUG-055) -- event_series
 // is deliberately service-role-only RLS (see migration 055's own comment:
 // series permissions are enforced in a service-role route, not row
 // policies), so the client can never read it directly. ClubHome.js's edit
@@ -79,18 +79,46 @@ function enforceOpenEventRules(row) {
 // uses, returning the real row so the client can populate the picker (and,
 // once real, correctly detect a genuine change) via an authorized read
 // instead of a silently-blocked one.
+//
+// Two lookup modes:
+//   ?series_id=...              -- a specific series row (edit flow, above).
+//   ?club_id=...&mode=pattern   -- a club's own active content-defined
+//                                  pattern (§7a, e.g. Book Club/Gym
+//                                  Happenings), used to pre-fill the
+//                                  recurrence picker when CREATING a new
+//                                  event for that club. Found during the
+//                                  BUG-055 sweep: ClubHome.js's
+//                                  loadClubPattern() had the exact same
+//                                  RLS-blocked direct read, so clubPattern
+//                                  was always null in production and new
+//                                  events for these clubs never got the
+//                                  established pattern pre-filled either --
+//                                  a second, previously unnoticed instance
+//                                  of the same defect.
 export async function GET(req) {
   const { searchParams } = new URL(req.url)
   const series_id = searchParams.get("series_id")
-  if (!series_id) return NextResponse.json({ error: "series_id required" }, { status: 400 })
+  const club_id = searchParams.get("club_id")
+  const mode = searchParams.get("mode")
 
-  const { data: series } = await supa.from("event_series").select("*").eq("id", series_id).maybeSingle()
-  if (!series) return NextResponse.json({ error: "Series not found" }, { status: 404 })
+  if (series_id) {
+    const { data: series } = await supa.from("event_series").select("*").eq("id", series_id).maybeSingle()
+    if (!series) return NextResponse.json({ error: "Series not found" }, { status: 404 })
+    const { error, status } = await resolve(req, series.club_id)
+    if (error) return NextResponse.json({ error }, { status })
+    return NextResponse.json({ series })
+  }
 
-  const { error, status } = await resolve(req, series.club_id)
-  if (error) return NextResponse.json({ error }, { status })
+  if (club_id && mode === "pattern") {
+    const { error, status } = await resolve(req, club_id)
+    if (error) return NextResponse.json({ error }, { status })
+    const { data } = await supa.from("event_series")
+      .select("*").eq("club_id", club_id).eq("mode", "pattern").eq("status", "active")
+      .order("created_at", { ascending: false }).limit(1)
+    return NextResponse.json({ series: (data && data[0]) || null })
+  }
 
-  return NextResponse.json({ series })
+  return NextResponse.json({ error: "series_id, or club_id+mode=pattern, required" }, { status: 400 })
 }
 
 export async function POST(req) {

@@ -2215,16 +2215,36 @@ export default function ClubHome({ club }) {
     load()
   }
 
+  // BUG FIX (2026-09-16, BUG-055 sweep): this used to read event_series
+  // directly via the anon-key client, exactly like the recurring-series edit
+  // bug fixed in AdminEventForm above -- event_series is deliberately
+  // service-role-only RLS (migration 055), so this was silently blocked
+  // every time and clubPattern was always null in production. That meant
+  // creating a NEW event for a content-defined club (Book Club, Gym
+  // Happenings) never pre-filled the club's own established recurrence
+  // pattern, the same silent-failure class as the edit-form bug. Fixed by
+  // reading through the new club_id+mode=pattern lookup on GET /api/series
+  // (admin/owner/coordinator gated, same as every other series action) --
+  // and skipped entirely for a viewer who can't manage the club, since only
+  // canManage can ever open the form that uses this.
   async function loadClubPattern() {
+    if (!canManage) { setClubPattern(null); return }
     if (!(clubCaps(club).hasBooks || clubCaps(club).oneEventAtATime)) return
-    const { data } = await supabase.from("event_series")
-      .select("*").eq("club_id", club.id).eq("mode", "pattern").eq("status", "active")
-      .order("created_at", { ascending: false }).limit(1)
-    setClubPattern((data && data[0]) || null)
+    try {
+      const res = await authedFetch(`/api/series?club_id=${club.id}&mode=pattern`)
+      const d = await res.json().catch(() => ({}))
+      setClubPattern(d?.series || null)
+    } catch { setClubPattern(null) }
   }
   async function load() {
-    loadClubPattern()
     setLoading(true)
+    // Loading guard (2026-09-16, standing principle -- see CLAUDE.md's Coding
+    // Standards): awaited, not fire-and-forget, so the page's existing
+    // `if (loading) return <skeleton>` gate above also covers this fetch --
+    // "+ Add Event" can't be clicked, and AdminEventForm can't mount with a
+    // new event's initial recur state, before the real club pattern (if any)
+    // has actually arrived.
+    await loadClubPattern()
     const today = sydneyTodayStr()
 
     // All non-archived BC events
