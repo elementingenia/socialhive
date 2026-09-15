@@ -17,7 +17,7 @@ import { clubTextOn, clubInk } from "@/lib/clubColours"
 import { maxSeatsPerBooking, effectiveSeatCap } from "@/lib/modifyBooking"
 import { busSeatsUsed } from "@/lib/busSeats"
 import { useOwners } from "@/lib/useOwners"
-import { exportAttendeeListPdf } from "@/lib/attendeeExport"
+import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/attendeeExport"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -444,6 +444,66 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         { heading: "Confirmed", rows: confirmedRows },
         { heading: "Unassigned Seats", rows: unassignedRows },
         { heading: "Waitlist", rows: waitlistRows },
+      ],
+    })
+    if (!ok) showToast("Couldn't open the export window — check your pop-up blocker", "error")
+  }
+
+  // Export payment reconciliation as PDF (2026-09-15, Iain, item #3):
+  // "Reconciliation needs a PDF print out of the info and consolidated
+  // list of paid by booking, Paid grouped, Unpaid Grouped, Partial Grouped
+  // and Refunds last." Reuses the same name-resolution as
+  // handleExportAttendees above, but groups by payment status instead of
+  // confirmed/waitlist and shows the amount owing per row instead of a
+  // free-text note. This panel is shared by Movies/Show Time, Groups &
+  // Clubs, Book Club and Special Events' full-detail view; Social's own
+  // separate inline panel and Special Events' own inline accordion get
+  // their own matching handler (they don't render through this shared
+  // component).
+  function handleExportReconciliation() {
+    const eventForCalc = { payment_required: paymentRequired, cost: data?.cost }
+    const nameFor = (b) => b.members
+      ? resolveMemberName(b.members, { canManage: true, fallback: b.members?.username || b.contacts?.name || "—" })
+      : (b.contacts?.name || "—")
+    const rowFor = (b) => {
+      const seats = b.seats || 1
+      return { name: nameFor(b), seats, amount: balancePhrase(b, eventForCalc, seats) }
+    }
+    const paidRows = [], unpaidRows = [], partialRows = []
+    for (const b of confirmed) {
+      if (computeIsRefunded(b)) continue
+      if (computeIsPaid(b)) paidRows.push(rowFor(b))
+      else if (computeIsPartial(b, eventForCalc)) partialRows.push(rowFor(b))
+      else unpaidRows.push(rowFor(b))
+    }
+    const refundRows = refundPending.map(b => {
+      const seats = b.seats || 1
+      return { name: nameFor(b), seats, amount: eventCost ? `$${(eventCost * seats).toFixed(2)} due` : "" }
+    })
+    ;[paidRows, unpaidRows, partialRows, refundRows].forEach(list => list.sort((a, b) => a.name.localeCompare(b.name)))
+
+    const summary = paymentSummary(confirmed, eventForCalc, refundPending)
+    const summaryLines = summary ? [
+      { label: "Expected", value: `$${summary.expectedTotal.toFixed(2)}` },
+      { label: "Collected", value: `$${summary.collectedTotal.toFixed(2)}`, colour: "#166534" },
+      { label: "Outstanding", value: `$${summary.outstandingTotal.toFixed(2)}`, colour: summary.outstandingTotal > 0 ? "#92400e" : undefined },
+      ...(summary.refundsDueCount > 0 ? [{ label: "Refunds due", value: `$${summary.refundsDueTotal.toFixed(2)}`, colour: "#92400e" }] : []),
+    ] : []
+
+    const subtitleParts = []
+    if (event.event_date) subtitleParts.push(fmtDate(event.event_date))
+    if (event.event_time) subtitleParts.push(fmtTime(event.event_time))
+    if (event.location) subtitleParts.push(event.location)
+
+    const ok = exportPaymentReconciliationPdf({
+      eventTitle: event.title,
+      eventSubtitle: subtitleParts.join(" · "),
+      summaryLines,
+      groups: [
+        { heading: "Paid", rows: paidRows },
+        { heading: "Unpaid", rows: unpaidRows },
+        { heading: "Partial", rows: partialRows },
+        { heading: "Refunds", rows: refundRows },
       ],
     })
     if (!ok) showToast("Couldn't open the export window — check your pop-up blocker", "error")
@@ -1016,8 +1076,14 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                   width: "100%", padding: "8px", borderRadius: 8, border: "1px solid var(--amber)",
                   background: "var(--amber)15", color: "var(--amber-dark)", fontSize: 12, fontWeight: 700,
                   cursor: closingOut ? "default" : "pointer", fontFamily: "inherit", opacity: closingOut ? 0.6 : 1,
+                  marginBottom: 8,
                 }}>{closingOut ? "Closing out…" : `Close Out — remind ${summary.unpaidCount} unpaid`}</button>
             )}
+            <button onClick={handleExportReconciliation}
+              style={{ fontSize: 11, fontWeight: 700, color: clubInk(colour), background: "none", border: `1px solid ${colour}`,
+                borderRadius: 8, padding: "4px 8px", cursor: "pointer" }}>
+              ⬇ Export Reconciliation PDF
+            </button>
           </div>
         )
       })()}

@@ -259,6 +259,7 @@ export async function PATCH(req) {
 
     const unpaid = (confirmedRows || []).filter(b => b.payment_status !== "confirmed" && b.payment_status !== "refunded")
 
+    const remindedAt = new Date().toISOString()
     for (const b of unpaid) {
       // Balance-aware (2026-08-12 follow-up, Iain -- Spring Ball 2): don't
       // restate the FULL amount as still owing if some of it is already
@@ -267,6 +268,14 @@ export async function PATCH(req) {
       // in the body -- the notification's own header already names it.
       await notify(b.member_id, event_id, "payment_reminder",
         `Reminder: ${paymentReminderPhrase(b, ev, b.seats)} is still owing.`)
+    }
+    // Stamp payment_reminded_at (2026-09-15, migration 106) on every
+    // reminded booking -- same as the single-attendee remind_payment below
+    // -- so the attendee-list bell can grey out today's reminders after a
+    // bulk Close Out too, not just after a one-tap nudge.
+    if (unpaid.length) {
+      await supa.from("bookings").update({ payment_reminded_at: remindedAt })
+        .in("id", unpaid.map(b => b.id))
     }
 
     await supa.from("events").update({
@@ -303,7 +312,17 @@ export async function PATCH(req) {
     await notify(bk.member_id, event_id, "payment_reminder",
       `Reminder: ${paymentReminderPhrase(bk, ev, bk.seats)} is still owing.`)
 
-    return NextResponse.json({ ok: true })
+    // Stamp payment_reminded_at (2026-09-15, migration 106, Iain) so the
+    // attendee-list bell greys out / disables for the rest of today
+    // (Australia/Sydney) instead of always looking freshly clickable
+    // regardless of reminder history -- mirrors remind_book_return's
+    // existing book_return_reminded_at stamp below. Returned in the
+    // response so the client can patch local state immediately, same
+    // convention as set_payment.
+    const remindedAt = new Date().toISOString()
+    await supa.from("bookings").update({ payment_reminded_at: remindedAt }).eq("id", booking_id)
+
+    return NextResponse.json({ ok: true, payment_reminded_at: remindedAt })
   }
 
   // ── Remind a single attendee to return their Book Club copy (2026-07-15) ────
@@ -427,7 +446,7 @@ export async function PATCH(req) {
     }
 
     const { data: ev } = await supa
-      .from("events").select("id, max_seats, max_seats_per_booking, unassigned_seats_count, hub_type, book_id, payment_required, title, allow_nonresident_guests, require_attendee_names")
+      .from("events").select("id, max_seats, max_seats_per_booking, unassigned_seats_count, hub_type, book_id, payment_required, title, allow_nonresident_guests, require_attendee_names, cost")
       .eq("id", event_id).single()
     if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
 
@@ -502,10 +521,21 @@ export async function PATCH(req) {
     const payment_status = !ev.payment_required ? "not_required"
       : bookingStatus === "confirmed" ? (mark_paid ? "confirmed" : "pending")
       : "pending"
+    // BUG (2026-09-15, Iain -- Oktoberfest reconciliation): "Mark Paid" on a
+    // walk-up booking used to set payment_status: "confirmed" with no
+    // amount_paid at all, leaving it at the DB default of 0 -- the booking
+    // then displayed as "Paid" everywhere that reads payment_status, while
+    // paymentSummary() (lib/payments.js, sums amount_paid) silently counted
+    // it as fully outstanding. Confirmed live on Oktoberfest: 28 seats
+    // "confirmed" = $980 expected, but $945 actually collected -- a single
+    // 1-seat walk-up booking marked paid this way. Fix: an amount owed must
+    // be written whenever payment_status is set to "confirmed" here, same
+    // as set_payment (above) always does.
+    const amount_paid = payment_status === "confirmed" ? amountOwing(ev, seats) : 0
 
     const { error: insErr } = await supa.from("bookings").insert({
       event_id, member_id: member_id || null, contact_id: contact_id || null, seats, status: bookingStatus,
-      booked_at: new Date().toISOString(), payment_status,
+      booked_at: new Date().toISOString(), payment_status, amount_paid,
     })
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
 
