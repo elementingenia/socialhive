@@ -820,7 +820,7 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
                   <div>{calendarBtn}</div>
                 ) : null}
                 {evWindow && (
-                  <div style={{ marginTop: '0.15rem' }}>
+                  <div style={{ marginTop: '0.15rem', textAlign: 'right' }}>
                     <CopyLinkButton url={shareUrl} colour="var(--teal)" />
                   </div>
                 )}

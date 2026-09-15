@@ -1456,7 +1456,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                 <div style={{ marginBottom: "0.2rem" }}>{calendarBtn}</div>
               ) : null}
               {evWindow && (
-                <div style={{ marginBottom: "0.2rem" }}>
+                <div style={{ marginBottom: "0.2rem", textAlign: "right" }}>
                   <CopyLinkButton url={shareUrl} colour="var(--special)" />
                 </div>
               )}
