@@ -1135,15 +1135,38 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     : { enabled: false, rule_type: "weekly", rule_config: { weekdays: [] }, month_end_policy: "clamp", horizon_months: 6 })
   const isSeriesOccurrence = !!event?.series_id
   const [seriesRow, setSeriesRow] = useState(null)
+  // Loading guard (2026-09-16, standing principle going forward -- see
+  // CLAUDE.md's Coding Standards): the recurring-series edit block below
+  // must not render its controls -- and Save must not be clickable -- until
+  // the real saved series row has actually arrived. Previously the block
+  // rendered immediately off `recur`'s hardcoded fallback state, which is
+  // indistinguishable on screen from a genuinely-loaded "no repeat set"
+  // series -- exactly what let the RLS-blocked read below go unnoticed.
+  const [seriesLoading, setSeriesLoading] = useState(!!event?.series_id)
   useEffect(() => {
-    if (!event?.series_id) return
-    supabase.from("event_series").select("*").eq("id", event.series_id).maybeSingle()
-      .then(({ data }) => {
-        if (!data) return
+    if (!event?.series_id) { setSeriesLoading(false); return }
+    let cancelled = false
+    setSeriesLoading(true)
+    // BUG FIX (2026-09-16): event_series is deliberately service-role-only
+    // RLS (migration 055) -- a direct client-side `supabase.from(...)`
+    // select here was silently blocked (no error, just an empty result),
+    // so this never actually populated with the real saved pattern; the
+    // form always showed its hardcoded fallback (weekly, no weekday)
+    // instead. Fixed by reading through the new authorized GET on
+    // /api/series, which applies the same admin/owner/coordinator check
+    // every other series action already uses.
+    authedFetch(`/api/series?series_id=${event.series_id}`)
+      .then(r => r.json())
+      .then(d => {
+        if (cancelled || !d?.series) return
+        const data = d.series
         setSeriesRow(data)
         setRecur({ enabled: true, rule_type: data.rule_type, rule_config: data.rule_config || {},
           month_end_policy: data.month_end_policy || "clamp", horizon_months: data.horizon_months || 6 })
       })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setSeriesLoading(false) })
+    return () => { cancelled = true }
   }, [event?.series_id])
   const recurChanged = () => seriesRow && (
     recur.rule_type !== seriesRow.rule_type ||
@@ -1195,7 +1218,13 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   useEffect(() => {
     if (bookReturnMode === "next" && computedNextReturnDate) set("book_return_date", computedNextReturnDate)
   }, [bookReturnMode, computedNextReturnDate])
-  const [seriesScope, setSeriesScope] = useState("this")   // 'this' | 'future' (scope §6)
+  // Default changed 2026-09-16 (Iain): "This and future dates" is the
+  // default selection when editing a recurring occurrence, not "This date
+  // only" -- most edits to a recurring event are meant to apply going
+  // forward, and the old "this"-only default combined with the recurrence
+  // editor being gated behind "future" meant the real saved pattern was
+  // never even visible unless the admin thought to click the other button.
+  const [seriesScope, setSeriesScope] = useState("future")   // 'this' | 'future' (scope §6)
   const [occBusy, setOccBusy] = useState(false)
   const { ask: askSameDate, Modal: SameDateModal } = useSameDateWarning()
   const { ask: askRequestOnly, Modal: RequestOnlyModal } = useRequestOnlyAcknowledge()
@@ -1889,26 +1918,38 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       {isSeriesOccurrence && (
         <div style={{ marginBottom: 12, padding: "0.75rem", border: `1px solid ${colour}`, borderRadius: 12, background: colour + "10" }}>
           <div style={{ fontSize: "0.78rem", fontWeight: 700, marginBottom: 6 }}>📅 Part of a recurring series — apply changes to:</div>
-          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-            {[["this", "This date only"], ["future", "This and future dates"]].map(([v, lbl]) => (
-              <button key={v} type="button" onClick={() => setSeriesScope(v)}
-                style={{ flex: 1, padding: "0.5rem", borderRadius: 8, fontFamily: "inherit", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer",
-                  border: seriesScope === v ? `1px solid ${colour}` : "1px solid var(--border)",
-                  background: seriesScope === v ? colour : "var(--surface)", color: seriesScope === v ? clubTextOn(colour) : "var(--text)" }}>{lbl}</button>
-            ))}
-          </div>
-          {seriesScope === "future" && (
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: 4 }}>Repeat pattern (applies to future dates):</div>
-              <RecurrencePicker value={recur} onChange={setRecur} startDate={form.event_date} colour={colour} mode="series" />
-            </div>
+          {/* Loading guard (2026-09-16): don't show the scope toggle, the
+              repeat-pattern editor, or the Remove/End actions until the
+              real saved series row has actually loaded -- rendering these
+              off the hardcoded `recur` fallback was indistinguishable on
+              screen from a genuinely-loaded "no repeat set" series, which
+              is exactly how the RLS-blocked read above went unnoticed. */}
+          {seriesLoading ? (
+            <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", padding: "0.4rem 0" }}>Loading recurring series details…</div>
+          ) : (
+            <>
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                {[["this", "This date only"], ["future", "This and future dates"]].map(([v, lbl]) => (
+                  <button key={v} type="button" onClick={() => setSeriesScope(v)}
+                    style={{ flex: 1, padding: "0.5rem", borderRadius: 8, fontFamily: "inherit", fontSize: "0.8rem", fontWeight: 700, cursor: "pointer",
+                      border: seriesScope === v ? `1px solid ${colour}` : "1px solid var(--border)",
+                      background: seriesScope === v ? colour : "var(--surface)", color: seriesScope === v ? clubTextOn(colour) : "var(--text)" }}>{lbl}</button>
+                ))}
+              </div>
+              {seriesScope === "future" && (
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginBottom: 4 }}>Repeat pattern (applies to future dates):</div>
+                  <RecurrencePicker value={recur} onChange={setRecur} startDate={form.event_date} colour={colour} mode="series" />
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" onClick={removeOccurrence} disabled={occBusy}
+                  style={{ flex: 1, padding: "0.5rem", borderRadius: 8, border: "1px solid #fca5a5", background: "#fee2e2", color: "#991b1b", fontWeight: 700, fontSize: "0.78rem", cursor: occBusy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>Remove this date</button>
+                <button type="button" onClick={endSeries} disabled={occBusy}
+                  style={{ flex: 1, padding: "0.5rem", borderRadius: 8, border: "1px solid #fca5a5", background: "#fee2e2", color: "#991b1b", fontWeight: 700, fontSize: "0.78rem", cursor: occBusy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>End series</button>
+              </div>
+            </>
           )}
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" onClick={removeOccurrence} disabled={occBusy}
-              style={{ flex: 1, padding: "0.5rem", borderRadius: 8, border: "1px solid #fca5a5", background: "#fee2e2", color: "#991b1b", fontWeight: 700, fontSize: "0.78rem", cursor: occBusy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>Remove this date</button>
-            <button type="button" onClick={endSeries} disabled={occBusy}
-              style={{ flex: 1, padding: "0.5rem", borderRadius: 8, border: "1px solid #fca5a5", background: "#fee2e2", color: "#991b1b", fontWeight: 700, fontSize: "0.78rem", cursor: occBusy ? "not-allowed" : "pointer", fontFamily: "inherit" }}>End series</button>
-          </div>
         </div>
       )}
       {event && !isSeriesOccurrence && (
@@ -1927,13 +1968,18 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             Date or Book was missing -- the exact "silent failure" pattern
             flagged repeatedly elsewhere in this app. Now always clickable
             (bar the in-flight save) so pressing it always tells you what's
-            missing and jumps to it, same as every other event form. */}
-        <button onClick={save} disabled={saving}
+            missing and jumps to it, same as every other event form.
+            Loading guard (2026-09-16): also disabled while the real saved
+            series row is still loading -- Save must not be clickable until
+            the actual saved recurrence pattern has arrived, otherwise a
+            save fired against the hardcoded fallback state could silently
+            overwrite the real recurrence with defaults. */}
+        <button onClick={save} disabled={saving || (isSeriesOccurrence && seriesLoading)}
           style={{ flex: 2, padding: "0.75rem", background: colour, border: "none",
             borderRadius: 12, fontWeight: 700, fontSize: "0.9rem", color: clubTextOn(colour),
-            cursor: saving ? "not-allowed" : "pointer",
-            opacity: saving ? 0.6 : 1, fontFamily: "inherit" }}>
-          {saving ? "Saving…" : event ? "Save Changes" : "Create Event"}
+            cursor: (saving || (isSeriesOccurrence && seriesLoading)) ? "not-allowed" : "pointer",
+            opacity: (saving || (isSeriesOccurrence && seriesLoading)) ? 0.6 : 1, fontFamily: "inherit" }}>
+          {saving ? "Saving…" : (isSeriesOccurrence && seriesLoading) ? "Loading…" : event ? "Save Changes" : "Create Event"}
         </button>
       </div>
     </div>
