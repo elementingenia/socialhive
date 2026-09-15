@@ -297,8 +297,12 @@ function AddBookForm({ onAdded, onClose }) {
       } catch {}
     }
 
+    // Scoped to we_own=false so a book already owned in the Book Library
+    // (a completely separate hub) never blocks or gets confused with a
+    // Book Club suggestion of the same title -- the two lists are meant to
+    // have nothing to do with each other (Iain, 2026-09-15).
     const { data: existing } = await supabase
-      .from("books").select("id").eq("google_books_id", enriched.google_books_id).maybeSingle()
+      .from("books").select("id").eq("we_own", false).eq("google_books_id", enriched.google_books_id).maybeSingle()
 
     if (!existing) {
       await supabase.from("books").insert({
@@ -376,9 +380,16 @@ export default function BookCatalogue() {
 
   const load = useCallback(async () => {
     setLoading(true)
+    // we_own=false: Book Club Suggestions must never show Book Library
+    // titles (a separate hub, added via /booklibrary/books) -- fixed
+    // 2026-09-15. Both features share the books table (migration 080
+    // mirrored the Library onto it via a we_own flag rather than a second
+    // table); this was the missing filter that let every Library add leak
+    // into the community suggestion/voting list.
     const { data: bks } = await supabase
       .from("books")
       .select("id, title, author, cover_url, summary, rating, rating_link, google_books_id, published_year")
+      .eq("we_own", false)
       .order("title")
 
     let votes = {}
