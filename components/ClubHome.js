@@ -1292,9 +1292,23 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     if (caps.hasBooks && selectedBook) {
     bookId = selectedBook.id || null
     if (!bookId && selectedBook.google_books_id) {
+      // we_own=false: Book Club and the Book Library are distinct systems
+      // that happen to share the same Google Books API and the same
+      // `books` table (Iain, 2026-09-15) -- this dedupe lookup must never
+      // match a we_own=true Library row just because it happens to share a
+      // google_books_id with a newly-searched suggestion. Without this
+      // scope, picking a book here that a Library title also happens to be
+      // sourced from would silently link the event to the LIBRARY's row
+      // (bookId = existing.id below) instead of creating/using a genuine
+      // Suggestions row -- the two systems bleeding into each other via a
+      // shared external id, same root cause class as the missing we_own
+      // filter just fixed on this picker's own read query above. Mirrors
+      // BookCatalogue.js's own identical dedupe check, which already scopes
+      // this correctly.
       const { data: existing } = await supabase
         .from("books")
         .select("id")
+        .eq("we_own", false)
         .eq("google_books_id", selectedBook.google_books_id)
         .maybeSingle()
 
