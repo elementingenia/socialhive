@@ -22,7 +22,7 @@ import { byOwnThenName } from "@/lib/sortNames"
 import { resolveMemberName } from "@/lib/memberName"
 import { busSeatsUsed } from "@/lib/busSeats"
 import { exportAttendeeListPdf } from "@/lib/attendeeExport"
-import EventShareActions from "@/components/EventShareActions"
+import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
@@ -1386,9 +1386,34 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
           </div>
         )}
 
-        {/* EC names — the names are the ask-a-question trigger for this event */}
-        <EventCoordinators eventId={event.id} eventTitle={event.title} names={ecNames}
-          colour="var(--special)" style={{ marginBottom: "0.2rem" }} />
+        {/* EC names — the names are the ask-a-question trigger for this event.
+            Event Deep Linking + Add to Calendar (Iain, 2026-09-15 correction):
+            Add to Calendar sits on this line, Copy Link directly below --
+            falls back to its own compact row when there's no coordinator. */}
+        {(() => {
+          const evWindow = resolveEventWindow(event)
+          const shareUrl = buildShareUrl("/special-events/events", event.id)
+          const shareLocation = event.location ? (event.location_type === "offsite" ? event.location.split("\n")[0] : event.location) : null
+          const calendarBtn = evWindow && (
+            <AddToCalendarButton url={shareUrl} title={event.title} description={event.description}
+              location={shareLocation} start={evWindow.start} end={evWindow.end} colour="var(--special)" />
+          )
+          return (
+            <>
+              {ecNames.length > 0 ? (
+                <EventCoordinators eventId={event.id} eventTitle={event.title} names={ecNames}
+                  colour="var(--special)" style={{ marginBottom: "0.2rem" }} stackNames trailing={calendarBtn} />
+              ) : calendarBtn ? (
+                <div style={{ marginBottom: "0.2rem" }}>{calendarBtn}</div>
+              ) : null}
+              {evWindow && (
+                <div style={{ marginBottom: "0.2rem" }}>
+                  <CopyLinkButton url={shareUrl} colour="var(--special)" />
+                </div>
+              )}
+            </>
+          )
+        })()}
 
         {/* Bus driver */}
         {event.has_bus && event.bus_driver && (
@@ -1437,27 +1462,6 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
       </div>
       {/* Booking status strip — always visible */}
       <BookingStrip myBooking={myBooking} event={event} isFull={booked >= event.max_seats && event.max_seats > 0} closed={closed} blocked={blocked} />
-
-      {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-14 correction):
-          event-level, not booking-level -- lives on the tile itself, not the
-          booking slide-out. */}
-      {(() => {
-        const evWindow = resolveEventWindow(event)
-        if (!evWindow) return null
-        return (
-          <div style={{ padding: "0.6rem 1rem", borderTop: "1px solid var(--border)" }}>
-            <EventShareActions
-              url={buildShareUrl("/special-events/events", event.id)}
-              title={event.title}
-              description={event.description}
-              location={event.location ? (event.location_type === "offsite" ? event.location.split("\n")[0] : event.location) : null}
-              start={evWindow.start}
-              end={evWindow.end}
-              colour="var(--special)"
-            />
-          </div>
-        )
-      })()}
 
       {/* Attendees accordion */}
       {event.max_seats > 0 && (

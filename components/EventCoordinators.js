@@ -22,50 +22,66 @@ import { clubInk } from "@/lib/clubColours"
 //
 // stopPropagation is essential: tiles are tap-to-open, so tapping the row
 // must open the ask modal WITHOUT also opening the tile's slide-out.
-export default function EventCoordinators({ eventId, eventTitle, names, colour = "var(--amber)", style, contextType = "event" }) {
+// trailing (optional): extra content rendered on the same row as this whole
+// block, right-aligned -- added 2026-09-15 so the Add to Calendar button can
+// sit "on the Coordinators line" (Iain) without a separate component having
+// to know this block's internal layout.
+// stackNames (optional, default false): one coordinator per line instead of
+// wrapping them inline -- added 2026-09-15 for the same reason: with
+// `trailing` present there's less horizontal room, so multiple coordinators
+// read better stacked. Off by default so every other existing caller of this
+// shared component is unaffected.
+export default function EventCoordinators({ eventId, eventTitle, names, colour = "var(--amber)", style, contextType = "event", trailing = null, stackNames = false }) {
   const list = (names || []).filter(Boolean)
   if (!list.length) return null
   const ink = clubInk(colour) // readable on the light card background (no-op for dark colours)
+  const body = (
+    <AskQuestion
+      contextType={contextType}
+      contextKey={eventId}
+      contextLabel={eventTitle}
+      colour={colour}
+      trigger={(open) => (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); open() }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface2)" }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = "none" }}
+          style={{
+            display: "flex", alignItems: "flex-start", gap: "0.5rem", width: "100%",
+            textAlign: "left", background: "none", border: "none",
+            padding: "0.3rem", margin: "-0.3rem", borderRadius: 10,
+            fontFamily: "inherit", cursor: "pointer",
+          }}>
+          <span aria-hidden style={{
+            flex: "none", width: 22, height: 22, borderRadius: "50%", marginTop: 1,
+            background: colour, color: "#fff",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <QuestionIcon size={12} />
+          </span>
+          <span style={{ display: "flex", flexDirection: "column", gap: "0.05rem", minWidth: 0 }}>
+            <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-dim)" }}>
+              Coordinator{list.length > 1 ? "s" : ""}
+            </span>
+            <span style={stackNames
+              ? { display: "flex", flexDirection: "column", gap: "0.05rem" }
+              : { display: "flex", flexWrap: "wrap", columnGap: "0.3rem", rowGap: "0.05rem" }}>
+              {list.map((name, i) => (
+                <span key={name} style={{ whiteSpace: "nowrap", fontWeight: 700, fontSize: "0.85rem", color: ink }}>
+                  {name}{!stackNames && i < list.length - 1 ? "," : ""}
+                </span>
+              ))}
+            </span>
+          </span>
+        </button>
+      )} />
+  )
+  if (!trailing) return <div style={style}>{body}</div>
   return (
-    <div style={style}>
-      <AskQuestion
-        contextType={contextType}
-        contextKey={eventId}
-        contextLabel={eventTitle}
-        colour={colour}
-        trigger={(open) => (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); open() }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface2)" }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = "none" }}
-            style={{
-              display: "flex", alignItems: "flex-start", gap: "0.5rem", width: "100%",
-              textAlign: "left", background: "none", border: "none",
-              padding: "0.3rem", margin: "-0.3rem", borderRadius: 10,
-              fontFamily: "inherit", cursor: "pointer",
-            }}>
-            <span aria-hidden style={{
-              flex: "none", width: 22, height: 22, borderRadius: "50%", marginTop: 1,
-              background: colour, color: "#fff",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <QuestionIcon size={12} />
-            </span>
-            <span style={{ display: "flex", flexDirection: "column", gap: "0.05rem", minWidth: 0 }}>
-              <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-dim)" }}>
-                Coordinator{list.length > 1 ? "s" : ""}
-              </span>
-              <span style={{ display: "flex", flexWrap: "wrap", columnGap: "0.3rem", rowGap: "0.05rem" }}>
-                {list.map((name, i) => (
-                  <span key={name} style={{ whiteSpace: "nowrap", fontWeight: 700, fontSize: "0.85rem", color: ink }}>
-                    {name}{i < list.length - 1 ? "," : ""}
-                  </span>
-                ))}
-              </span>
-            </span>
-          </button>
-        )} />
+    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem", ...style }}>
+      <div style={{ flex: "1 1 auto", minWidth: 0 }}>{body}</div>
+      <div style={{ flex: "none", marginTop: "0.15rem" }}>{trailing}</div>
     </div>
   )
 }

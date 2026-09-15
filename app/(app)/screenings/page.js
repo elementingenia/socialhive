@@ -19,7 +19,7 @@ import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from '@/lib/formValidation'
 import { byOwnThenName, ordinal } from '@/lib/sortNames'
 import { useOwners } from '@/lib/useOwners'
 import { exportAttendeeListPdf } from '@/lib/attendeeExport'
-import EventShareActions from '@/components/EventShareActions'
+import { CopyLinkButton, AddToCalendarButton } from '@/components/EventShareActions'
 import { buildShareUrl, resolveEventWindow } from '@/lib/eventShare'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -795,8 +795,38 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
               </span>
             )}
           </div>
-          <EventCoordinators eventId={ev.id} eventTitle={movie?.title || ev.title}
-            names={ev.coordinator ? [ev.coordinator.name || ev.coordinator.username] : []} colour="var(--teal)" />
+          {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-15
+              correction): Add to Calendar sits on the Coordinators line,
+              Copy Link directly below it -- not a separate footer row,
+              which a device screenshot showed getting visually covered by
+              the next tile down. Falls back to its own compact row when the
+              screening has no coordinator (EventCoordinators renders
+              nothing at all in that case, so there'd be no line to sit on). */}
+          {(() => {
+            const coordinatorNames = ev.coordinator ? [ev.coordinator.name || ev.coordinator.username] : []
+            const evWindow = resolveEventWindow(ev)
+            const shareUrl = buildShareUrl('/screenings', ev.id)
+            const shareLocation = ev.location ? (ev.location_type === 'offsite' ? ev.location.split('\n')[0] : ev.location) : null
+            const calendarBtn = evWindow && (
+              <AddToCalendarButton url={shareUrl} title={movie?.title || ev.title} description={ev.notes}
+                location={shareLocation} start={evWindow.start} end={evWindow.end} colour="var(--teal)" />
+            )
+            return (
+              <>
+                {coordinatorNames.length > 0 ? (
+                  <EventCoordinators eventId={ev.id} eventTitle={movie?.title || ev.title}
+                    names={coordinatorNames} colour="var(--teal)" stackNames trailing={calendarBtn} />
+                ) : calendarBtn ? (
+                  <div>{calendarBtn}</div>
+                ) : null}
+                {evWindow && (
+                  <div style={{ marginTop: '0.15rem' }}>
+                    <CopyLinkButton url={shareUrl} colour="var(--teal)" />
+                  </div>
+                )}
+              </>
+            )
+          })()}
           {movie?.actors && (
             <div style={{ color: 'var(--text-dim)', fontSize: '0.75rem' }}>
               {movie.actors.split(',')[0]?.trim()}
@@ -842,27 +872,6 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
 
       {/* Booking status strip — always visible */}
       <BookingStrip myBooking={ev.my_booking} isFull={isFull} closed={closed} blocked={blocked} />
-
-      {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-14 correction):
-          event-level, not booking-level -- lives on the tile itself, not the
-          booking slide-out. */}
-      {(() => {
-        const evWindow = resolveEventWindow(ev)
-        if (!evWindow) return null
-        return (
-          <div style={{ padding: '0.6rem 1rem', borderTop: '1px solid var(--border)' }}>
-            <EventShareActions
-              url={buildShareUrl('/screenings', ev.id)}
-              title={movie?.title || ev.title}
-              description={ev.notes}
-              location={ev.location ? (ev.location_type === 'offsite' ? ev.location.split('\n')[0] : ev.location) : null}
-              start={evWindow.start}
-              end={evWindow.end}
-              colour="var(--teal)"
-            />
-          </div>
-        )
-      })()}
 
       {/* Attendees accordion */}
       <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>
