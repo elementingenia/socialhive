@@ -342,51 +342,52 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
             objectPosition: `${event.image_focal_x ?? 50}% ${event.image_focal_y ?? 50}%` }} />
       )}
 
-      {/* Location — shown for every event, consistent with Social/Show Time
-          (Iain, 2026-09-15, item #7: "Groups and Clubs Event tiles are not
-          displaying EC, Location, Date and Time in the same consistent
-          layout as other hubs"). Moved here (was after the book block) so
-          the order matches every other hub exactly: date/time (header,
-          above) → location → coordinators/Add to Calendar/Copy Link —
-          Social's EventCard renders location immediately before its EC
-          line, this card had it after instead (2026-09-15, design-
-          consistency follow-up). shareLocation is computed above (offsite
-          events show only the first line, matching Social's own display
-          rule exactly). */}
-      {shareLocation && (
-        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", padding: "0.7rem 1rem 0", margin: 0 }}>
-          📍 {shareLocation}
-        </div>
-      )}
-
-      {/* Title/book info + Coordinators + Add to Calendar + Copy Link --
-          ONE layout for every club, book-selected or not (Iain, 2026-09-15,
-          rebuild after screenshot comparison: "the pattern of design in
-          just book club for an event, is completely different depending
-          on the book choice being a real book or being the option 'Not
-          Selected Yet'... The tile design should not fall apart just
-          because no book was selected. All other tile components should
-          remain in place as if a Book HAD been selected"). Root cause,
-          confirmed by direct code read: this used to be two entirely
-          separate blocks -- a book selected rendered cover+title+rating+
-          EventCoordinators+Add to Calendar+Copy Link right here, but no
-          book rendered NONE of that here; instead a second, independent
-          copy of EventCoordinators+Add to Calendar+Copy Link was rendered
-          much further down the card, after the booking strip/"Tap to sign
-          up" -- so the exact same component landed in two different card
-          positions depending on data, not design. Cards Fans/Craft &
-          Coffee etc. (caps.hasBooks false -- this club has no book
-          concept at all, not merely "no book chosen yet") hit that same
-          bottom-of-card path too, which is what made every non-book club
-          look structurally different from a book-selected Book Club
-          event. Now this one block always renders directly after
-          Location, for every club: a book-capable club (caps.hasBooks)
-          always shows the cover+title slot -- a real book's cover/title/
-          rating, or a placeholder cover + the event's own title (or "Book
-          not yet chosen") when caps.hasBooks is true but no book is set
+      {/* Title/book info + Location + Coordinators + Add to Calendar + Copy
+          Link -- ONE layout for every club, book-selected or not (Iain,
+          2026-09-15, rebuild after screenshot comparison: "the pattern of
+          design in just book club for an event, is completely different
+          depending on the book choice being a real book or being the
+          option 'Not Selected Yet'... The tile design should not fall
+          apart just because no book was selected. All other tile
+          components should remain in place as if a Book HAD been
+          selected"). Root cause, confirmed by direct code read: this used
+          to be two entirely separate blocks -- a book selected rendered
+          cover+title+rating+EventCoordinators+Add to Calendar+Copy Link
+          right here, but no book rendered NONE of that here; instead a
+          second, independent copy of EventCoordinators+Add to Calendar+
+          Copy Link was rendered much further down the card, after the
+          booking strip/"Tap to sign up" -- so the exact same component
+          landed in two different card positions depending on data, not
+          design. Cards Fans/Craft & Coffee etc. (caps.hasBooks false --
+          this club has no book concept at all, not merely "no book chosen
+          yet") hit that same bottom-of-card path too, which is what made
+          every non-book club look structurally different from a
+          book-selected Book Club event. Now this one block always renders
+          directly after the header/image, for every club: a book-capable
+          club (caps.hasBooks) always shows the cover+title slot -- a real
+          book's cover/title/rating, or a placeholder cover + the event's
+          own title (or "Not selected yet", the same wording BookPicker's
+          own placeholder option uses -- was "Book not yet chosen",
+          inconsistent copy) when caps.hasBooks is true but no book is set
           yet -- and a non-book club shows just its event title, same
           slot. Coordinators/Add to Calendar/Copy Link are no longer a
-          second, separate render anywhere on the card. */}
+          second, separate render anywhere on the card.
+
+          Location moved (2026-09-15, follow-up): Iain flagged "Location
+          should appear under the event name, not above it" -- it used to
+          render as its own div directly after the image, ABOVE this whole
+          title block (so above the title, not under it, for every club).
+          Confirmed live on production before touching anything: fetched
+          the actual rendered page text for a real Book Club event and it
+          read "📍 Community Main Dining" THEN "Charles Darwin: His Life"
+          -- location genuinely came first. It now renders inside this
+          content column, directly under the title line, matching the
+          title→date/location→details order Social/Show Time/Book a
+          Space's own event cards already use (e.g.
+          components/NextSpaceEventTile.js: title, then date/time, then
+          location). shareLocation is computed above (offsite events show
+          only the first line, matching Social's own display rule
+          exactly). */}
       <div style={{ display: "flex", gap: 12, padding: "0.6rem 1rem 0.9rem", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
         {caps.hasBooks && (
           book?.cover_url ? (
@@ -418,11 +419,16 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
                 : <div style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2 }}>{book.title}</div>
             ) : (
               <div style={{ fontWeight: 800, fontSize: "1rem", lineHeight: 1.2, marginBottom: 2, color: event.title ? "var(--text)" : "var(--text-dim)" }}>
-                {event.title || "Book not yet chosen"}
+                {event.title || "Not selected yet"}
               </div>
             )
           ) : (
             event.title && <div style={{ fontWeight: 800, fontSize: "1.05rem", lineHeight: 1.2, marginBottom: 2, color: "var(--text)" }}>{event.title}</div>
+          )}
+          {shareLocation && (
+            <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: 4 }}>
+              📍 {shareLocation}
+            </div>
           )}
           {book && (
             <>
