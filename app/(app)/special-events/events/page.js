@@ -9,7 +9,7 @@ import { BusIcon } from "@/components/NavIcons"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import EventImagePicker from "@/components/EventImagePicker"
 import ExpandableText from "@/components/ExpandableText"
-import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, isRefundPending, isRefundIssued, paymentSummary, reconciliationIsStale, balancePhrase, remainingBalance, wholeDollar, amountOwing } from "@/lib/payments"
+import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, isRefundPending, isRefundIssued, paymentSummary, reconciliationIsStale, balancePhrase, remainingBalance, wholeDollar, amountOwing, isRemindedToday } from "@/lib/payments"
 import { cutoffToInputValue, cutoffFromInputValue, bookingsClosed } from "@/lib/booking"
 import { useLocations } from "@/lib/useLocations"
 import TimeField from "@/components/TimeField"
@@ -21,7 +21,7 @@ import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName } from "@/lib/sortNames"
 import { resolveMemberName } from "@/lib/memberName"
 import { busSeatsUsed } from "@/lib/busSeats"
-import { exportAttendeeListPdf } from "@/lib/attendeeExport"
+import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/attendeeExport"
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 
@@ -1321,6 +1321,55 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
     if (!ok) window.alert("Couldn't open the export window — check your pop-up blocker")
   }
 
+  // Export payment reconciliation as PDF (2026-09-15, Iain, item #3): see
+  // the matching handler in components/EventSlideOut.js's CoordinatorPanel
+  // for the fuller explanation. Special Events keeps its own separate
+  // inline reconciliation summary rather than going through that shared
+  // panel, so it needs its own copy built from this component's own data.
+  // Unassigned seats have no booking/payment row at all, so (same as
+  // paymentSummary itself) they aren't part of this export.
+  function handleExportReconciliation() {
+    const rowFor = (b) => {
+      const isOwn = b.member_id === member?.id
+      const name = isOwn ? "You"
+        : !showNames ? "Guest"
+        : b.member ? resolveMemberName(b.member, { canManage: isAdmin })
+        : (b.contact?.name || "Member")
+      return { name, seats: b.seats || 1, amount: balancePhrase(b, event, b.seats || 1) }
+    }
+    const paidRows = [], unpaidRows = [], partialRows = []
+    for (const b of confirmedBookings) {
+      if (computeIsPaid(b)) paidRows.push(rowFor(b))
+      else if (computeIsPartial(b, event)) partialRows.push(rowFor(b))
+      else unpaidRows.push(rowFor(b))
+    }
+    const refundRows = refundPendingBookings.map(b => ({
+      ...rowFor(b),
+      amount: `$${(parseFloat(b.refund_due) || 0).toFixed(2)} due`,
+    }))
+    ;[paidRows, unpaidRows, partialRows, refundRows].forEach(list => list.sort((a, b) => a.name.localeCompare(b.name)))
+
+    const summaryLines = summary ? [
+      { label: "Expected", value: `$${summary.expectedTotal.toFixed(2)}` },
+      { label: "Collected", value: `$${summary.collectedTotal.toFixed(2)}`, colour: "#166534" },
+      { label: "Outstanding", value: `$${summary.outstandingTotal.toFixed(2)}`, colour: summary.outstandingTotal > 0 ? "#92400e" : undefined },
+      ...(summary.refundsDueCount > 0 ? [{ label: "Refunds due", value: `$${summary.refundsDueTotal.toFixed(2)}`, colour: "#92400e" }] : []),
+    ] : []
+
+    const ok = exportPaymentReconciliationPdf({
+      eventTitle: event.title,
+      eventSubtitle: `${fmtDate(event.event_date)}${event.event_time ? " · " + fmtTime(event.event_time) : ""}`,
+      summaryLines,
+      groups: [
+        { heading: "Paid", rows: paidRows },
+        { heading: "Unpaid", rows: unpaidRows },
+        { heading: "Partial", rows: partialRows },
+        { heading: "Refunds", rows: refundRows },
+      ],
+    })
+    if (!ok) window.alert("Couldn't open the export window — check your pop-up blocker")
+  }
+
   return (
     <div onClick={blocked ? undefined : onOpen} style={{
       background: "var(--surface)", borderRadius: "14px",
@@ -1533,8 +1582,14 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                         width: "100%", padding: "0.4rem", borderRadius: 8, border: "1px solid var(--amber)",
                         background: "var(--amber)15", color: "var(--amber-dark)", fontSize: "0.72rem", fontWeight: 700,
                         cursor: closingOut ? "default" : "pointer", fontFamily: "inherit", opacity: closingOut ? 0.6 : 1,
+                        marginBottom: "0.4rem",
                       }}>{closingOut ? "Closing out…" : `Close Out — remind ${summary.unpaidCount} unpaid`}</button>
                   )}
+                  <button onClick={e => { e.stopPropagation(); handleExportReconciliation() }}
+                    style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--terracotta)", background: "none",
+                      border: "1px solid var(--terracotta)", borderRadius: 8, padding: "0.2rem 0.5rem", cursor: "pointer", fontFamily: "inherit" }}>
+                    ⬇ Export Reconciliation PDF
+                  </button>
                 </div>
               )}
               {confirmedBookings.length > 0 ? (
@@ -1611,17 +1666,27 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                           <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
                           {canManagePayments && isPaidEvent && !paid && (() => {
                             const reminding = remindingId === b.id
+                            // Grey out / disable once a reminder has already gone out
+                            // today (2026-09-15, Iain -- migration 106's
+                            // payment_reminded_at) -- the bell used to look identically
+                            // clickable whether or not it had just been tapped, so an EC
+                            // had no way to tell "already reminded" from "never
+                            // reminded". Resets on its own at Sydney midnight, same
+                            // pattern as isExpiredEventReminder -- no cron needed.
+                            const remindedToday = isRemindedToday(b)
+                            const disabled = reminding || remindedToday
                             return (
                               <button
-                                disabled={reminding}
-                                onClick={e => { e.stopPropagation(); e.preventDefault(); onRemindPayment(event.id, b, label) }}
-                                aria-label={`Remind ${label} to pay`}
-                                title="Send payment reminder"
+                                disabled={disabled}
+                                onClick={e => { e.stopPropagation(); e.preventDefault(); if (!disabled) onRemindPayment(event.id, b, label) }}
+                                aria-label={remindedToday ? `Already reminded ${label} today` : `Remind ${label} to pay`}
+                                title={remindedToday ? "Reminder already sent today" : "Send payment reminder"}
                                 style={{
                                   display: "flex", alignItems: "center", justifyContent: "center",
                                   border: "none", background: "none", padding: "0.1rem 0.15rem",
-                                  cursor: reminding ? "default" : "pointer", fontFamily: "inherit",
-                                  flexShrink: 0, opacity: reminding ? 0.35 : 1, fontSize: "0.85rem", lineHeight: 1,
+                                  cursor: disabled ? "default" : "pointer", fontFamily: "inherit",
+                                  flexShrink: 0, opacity: reminding ? 0.35 : remindedToday ? 0.4 : 1, fontSize: "0.85rem", lineHeight: 1,
+                                  filter: remindedToday ? "grayscale(1)" : "none",
                                 }}>
                                 🔔
                               </button>
@@ -1961,7 +2026,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_unassigned_seats, unassigned_seats_count, unassigned_seat_names, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, bus_max_seats, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, contact_id, bus_passenger, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
+      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_unassigned_seats, unassigned_seats_count, unassigned_seat_names, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, bus_max_seats, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, payment_reminded_at, refund_due, refund_paid_at, member_id, contact_id, bus_passenger, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
       .eq("hub_type", "special")
       .eq("archived", false)
       .order("event_date", { ascending: true })
@@ -2108,6 +2173,20 @@ export default function SocialEvents() {
       const data = await res.json().catch(() => ({}))
       if (res.ok) {
         showToast(`Reminder sent to ${label}`)
+        // Optimistic patch (2026-09-15, migration 106) so the bell greys
+        // out immediately, matching handleTogglePayment's pattern below --
+        // load() still runs after for full reconciliation.
+        if (data.payment_reminded_at) {
+          setEvents(prev => prev.map(ev =>
+            ev.id !== eventId ? ev : {
+              ...ev,
+              bookings: (ev.bookings || []).map(b =>
+                b.id !== booking.id ? b : { ...b, payment_reminded_at: data.payment_reminded_at }
+              ),
+            }
+          ))
+        }
+        await load()
       } else {
         showToast(data.error || "Reminder failed", "error")
       }

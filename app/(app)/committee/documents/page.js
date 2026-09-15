@@ -4,6 +4,18 @@ import { supabase } from "@/lib/supabase"
 
 const COLOUR = "var(--committee)"
 
+// Same fix, same reason as app/(app)/committee/page.js's post attachments
+// (2026-09-15) -- route viewable files through the in-app viewer instead
+// of a raw cross-origin link, so an installed-PWA user always has a way
+// back. See app/(app)/committee/attachment/page.js for the root cause.
+function isViewableAttachment(name) {
+  return /\.(pdf|png|jpe?g|gif|webp)$/i.test(name || "")
+}
+function attachmentHref(url, name) {
+  if (!isViewableAttachment(name)) return url
+  return `/committee/attachment?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name || "Document")}`
+}
+
 function fmt(iso) {
   return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
 }
@@ -89,7 +101,8 @@ export default function CommitteeDocumentsPage() {
         </div>
       ) : (
         filtered.map(d => (
-          <a key={d.id} href={d.file_url} target="_blank" rel="noreferrer" style={{
+          <a key={d.id} href={attachmentHref(d.file_url, d.file_name)}
+            {...(isViewableAttachment(d.file_name) ? {} : { target: "_blank", rel: "noreferrer" })} style={{
             display: "block", background: "var(--surface)", border: "1px solid var(--border)",
             borderLeft: `4px solid ${COLOUR}`, borderRadius: 10, padding: "0.75rem 0.9rem",
             marginBottom: 8, textDecoration: "none",

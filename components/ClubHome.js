@@ -13,7 +13,7 @@ import { authedFetch } from "@/lib/getAuthToken"
 import { useOwners } from "@/lib/useOwners"
 import { clubCaps } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
-import { sydneyTodayStr } from "@/lib/date"
+import { sydneyTodayStr, dateStrPlusDays } from "@/lib/date"
 import { bookingsClosed } from "@/lib/booking"
 import EventCoordinators from "@/components/EventCoordinators"
 import RecurrencePicker from "@/components/RecurrencePicker"
@@ -47,6 +47,16 @@ function fmtDate(str) {
 function fmtYear(str) {
   if (!str) return ""
   return localDate(str).toLocaleDateString("en-AU", { month: "short", year: "numeric" })
+}
+// Same 12-hour formatter as Social's own EventCard (app/(app)/social/events/page.js)
+// -- added 2026-09-15 (Iain, item #7: "Groups and Clubs Event tiles are not
+// displaying EC, Location, Date and Time in the same consistent layout as
+// other hubs") so Club event tiles show a start time the same way every
+// other hub does, instead of date-only.
+function fmtTime(str) {
+  if (!str) return ""
+  const [h, m] = str.split(":").map(Number)
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")}${h >= 12 ? "pm" : "am"}`
 }
 
 
@@ -316,7 +326,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
       <div style={{ background: colour, padding: "0.6rem 1rem", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "4px 8px" }}>
         <span style={{ color: clubTextOn(colour), fontWeight: 700, fontSize: "0.85rem", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1 1 auto" }}>{label}</span>
         <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "4px 8px", minWidth: 0 }}>
-          <span style={{ color: clubTextOn(colour), opacity: 0.85, fontSize: "0.78rem", fontWeight: 600 }}>{fmtDate(event.event_date)}</span>
+          <span style={{ color: clubTextOn(colour), opacity: 0.85, fontSize: "0.78rem", fontWeight: 600 }}>{fmtDate(event.event_date)}{event.event_time ? ` · ${fmtTime(event.event_time)}` : ""}</span>
           {onEdit && (isAdmin || isOwner || isEC) && (
             <button onClick={(e) => { e.stopPropagation(); onEdit() }}
               style={{ background: "rgba(255,255,255,0.9)", color: clubInk(colour), border: "none", borderRadius: 14,
@@ -376,6 +386,17 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
       )}
 
       <div style={{ padding: "0.9rem 1rem 0.6rem" }}>
+        {/* Location — shown for every event, consistent with Social/Show Time
+            (Iain, 2026-09-15, item #7: "Groups and Clubs Event tiles are not
+            displaying EC, Location, Date and Time in the same consistent
+            layout as other hubs"). shareLocation is already computed above
+            (offsite events show only the first line, matching Social's own
+            display rule exactly). */}
+        {shareLocation && (
+          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: 6 }}>
+            📍 {shareLocation}
+          </div>
+        )}
         {/* Event name (themed events) — book clubs already show the book title above */}
         {!book && event.title && (
           <div style={{ fontWeight: 800, fontSize: "1.05rem", color: "var(--text)", marginBottom: 6 }}>{event.title}</div>
@@ -528,19 +549,34 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
       {/* Booking status strip */}
       <BookingStrip isJoined={isJoined} seats={booking?.seats || 1} hasBook={!!booking?.has_book} bookReturnDate={event?.book_return_date} closed={closed} blocked={blocked} open={event.booking_required === false} colour={colour} />
 
-      {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-15 correction):
-          fallback for a non-book club event -- the book section above (the
-          only place this card renders EventCoordinators) doesn't exist, so
-          there's no "Coordinators line" to attach to; show a compact
-          standalone row instead. Book club events get the buttons via the
-          book section's own EventCoordinators call above, not duplicated
-          here. */}
-      {!book && shareUrl && shareEvWindow && (
-        <div style={{ padding: "0 1rem 0.6rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
-          {shareCalendarBtn}
-          <CopyLinkButton url={shareUrl} colour={colour} />
-        </div>
-      )}
+      {/* Coordinators + Event Deep Linking + Add to Calendar (Iain, 2026-09-15
+          correction, widened 2026-09-15 for item #7: "Groups and Clubs Event
+          tiles are not displaying EC, Location, Date and Time in the same
+          consistent layout as other hubs"). Book-club events already show
+          EventCoordinators via the book section above; a themed/non-book
+          event had no equivalent at all -- neither coordinator names nor an
+          ask-a-question link anywhere on the card. Mirrors Social's own
+          EventCard exactly (app/(app)/social/events/page.js): EC names carry
+          the Add to Calendar button as a trailing element when there are
+          coordinators, falling back to just the button on its own row when
+          there aren't. Renders nothing at all when none of the three (EC
+          names, calendar button, copy-link) apply -- never an empty row. */}
+      {!book && (() => {
+        const ecNames = activeECs.map(ec => ec.members?.name || ec.members?.username).filter(Boolean)
+        const hasCopyLink = !!(shareUrl && shareEvWindow)
+        if (ecNames.length === 0 && !shareCalendarBtn && !hasCopyLink) return null
+        return (
+          <div style={{ padding: "0 1rem 0.6rem", display: "flex", flexDirection: "column", gap: "0.15rem" }}>
+            {ecNames.length > 0 ? (
+              <EventCoordinators eventId={event.id} eventTitle={event.title} names={ecNames}
+                colour={colour} stackNames trailing={shareCalendarBtn} />
+            ) : shareCalendarBtn ? (
+              <div>{shareCalendarBtn}</div>
+            ) : null}
+            {hasCopyLink && <CopyLinkButton url={shareUrl} colour={colour} />}
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -638,6 +674,15 @@ function ClosedEventsAccordion({ events, myBookedIds, colour = "var(--purple)" }
 }
 
 // ── Book Search (Google Books) ────────────────────────────────────────────────
+// A pinned pseudo-choice, not a real book row (2026-09-15, Iain -- item #4:
+// "need to be able to create events without knowing the book. Could be a
+// placeholder in the choose book dropdown for 'Not Selected Yet'?"). Purely
+// a display sentinel for BookPicker's own collapsed/open rendering --
+// pick() always calls onSelect(null) for it, so every downstream consumer
+// (book_id, book_snapshot, event title fallback) sees exactly what it
+// already saw for "no book chosen at all". Nothing else needed to change.
+const BOOK_NOT_SELECTED = { id: null, title: "Not selected yet", __notSelected: true }
+
 // BookPicker — selects from books already in the community suggestions table
 function BookPicker({ onSelect, initialBook, colour = "var(--purple)", invalid = false }) {
   const [allBooks, setAllBooks] = useState([])
@@ -683,18 +728,24 @@ function BookPicker({ onSelect, initialBook, colour = "var(--purple)", invalid =
   function pick(b) {
     setChosen(b)
     setOpen(false)
-    onSelect(b)
+    onSelect(b?.__notSelected ? null : b)
   }
 
   if (!open && chosen) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--surface2)",
         borderRadius: 10, padding: "0.65rem 0.9rem", marginBottom: 12 }}>
-        {chosen.cover_url && <img src={chosen.cover_url} alt="" style={{ width: 36, height: 50, objectFit: "cover", borderRadius: 4 }} />}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{chosen.title}</div>
-          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>{chosen.author && `by ${chosen.author}`}{chosen.published_year ? ` (${chosen.published_year})` : ""}</div>
-        </div>
+        {chosen.__notSelected ? (
+          <div style={{ flex: 1, minWidth: 0, fontSize: "0.9rem", color: "var(--text-dim)", fontStyle: "italic" }}>📖 Not selected yet</div>
+        ) : (
+          <>
+            {chosen.cover_url && <img src={chosen.cover_url} alt="" style={{ width: 36, height: 50, objectFit: "cover", borderRadius: 4 }} />}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: "0.9rem" }}>{chosen.title}</div>
+              <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>{chosen.author && `by ${chosen.author}`}{chosen.published_year ? ` (${chosen.published_year})` : ""}</div>
+            </div>
+          </>
+        )}
         <button onClick={() => { setChosen(null); setQuery(""); setOpen(true); onSelect(null) }}
           style={{ background: colour, color: clubTextOn(colour), border: "none", borderRadius: 8,
             padding: "4px 10px", fontSize: "0.75rem", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>
@@ -716,14 +767,19 @@ function BookPicker({ onSelect, initialBook, colour = "var(--purple)", invalid =
           boxSizing: "border-box", fontFamily: "inherit",
           ...(invalid ? { border: "2px solid #dc2626", background: "rgba(220, 38, 38, 0.10)" } : {}) }}
       />
-      {allBooks.length === 0 && (
-        <div style={{ fontSize: 12, color: "var(--text-dim)", padding: "4px 2px" }}>Loading books…</div>
-      )}
-      {allBooks.length > 0 && (
-        <div style={{ border: "1px solid var(--border)", borderRadius: 12,
-          boxShadow: "0 4px 20px rgba(0,0,0,0.12)", zIndex: 50, marginTop: 4,
-          background: "var(--surface)", overflow: "hidden" }}>
-          {filtered.length === 0 ? (
+      <div style={{ border: "1px solid var(--border)", borderRadius: 12,
+        boxShadow: "0 4px 20px rgba(0,0,0,0.12)", zIndex: 50, marginTop: 4,
+        background: "var(--surface)", overflow: "hidden" }}>
+        <div onClick={() => pick(BOOK_NOT_SELECTED)}
+          style={{ padding: "0.7rem 1rem", cursor: "pointer", fontStyle: "italic",
+            color: "var(--text-dim)", fontSize: "0.85rem", borderBottom: "1px solid var(--border)" }}>
+          📖 Not selected yet
+        </div>
+        {allBooks.length === 0 ? (
+            <div style={{ padding: "0.9rem 1rem", fontSize: "0.85rem", color: "var(--text-dim)" }}>
+              Loading books…
+            </div>
+          ) : filtered.length === 0 ? (
             <div style={{ padding: "0.9rem 1rem", fontSize: "0.85rem", color: "var(--text-dim)" }}>
               No matching books in suggestions
             </div>
@@ -744,7 +800,6 @@ function BookPicker({ onSelect, initialBook, colour = "var(--purple)", invalid =
             </div>
           ))}
         </div>
-      )}
       {allBooks.length > 0 && filtered.length === 0 && query.length === 0 && (
         <div style={{ border: "1px solid var(--border)", borderRadius: 12,
           background: "var(--surface)", overflow: "hidden", marginTop: 4 }}>
@@ -1026,9 +1081,21 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   const [selectedBook, setSelectedBook] = useState(event?.books || null)
   const [saving, setSaving] = useState(false)
   // Recurring events (scope §7a): schedule-defined clubs get a real series;
-  // content-defined clubs (books / one-at-a-time) get a pattern that only
-  // pre-fills the next date. Only offered when creating, never when editing.
-  const recurMode = (caps.hasBooks || caps.oneEventAtATime) ? "pattern" : "series"
+  // content-defined clubs get a pattern that only pre-fills the next date.
+  // Only offered when creating, never when editing.
+  //
+  // CHANGED 2026-09-15 (Iain, item #5): Book Club used to be forced onto
+  // "pattern" mode purely because hasBooks was true -- but that was never
+  // actually how Book Club runs. Iain: "there is a set a meeting pattern
+  // option but no option like other groups for REPEATS which is actually
+  // how book club will work" -- the meeting SCHEDULE repeats regardless of
+  // which book happens to be picked for a given occurrence, exactly like
+  // every other club. hasBooks no longer forces pattern mode; only
+  // oneEventAtATime does (a club that genuinely runs one thing at a time,
+  // with no fixed future schedule to generate -- no live club currently
+  // sets this flag, so this is a no-op for real clubs today and only
+  // matters if one is configured this way in future).
+  const recurMode = caps.oneEventAtATime ? "pattern" : "series"
   const [recur, setRecur] = useState(() => (!event && clubPattern)
     ? { enabled: true, rule_type: clubPattern.rule_type, rule_config: clubPattern.rule_config || {}, month_end_policy: clubPattern.month_end_policy || "clamp", horizon_months: clubPattern.horizon_months || 6 }
     : { enabled: false, rule_type: "weekly", rule_config: { weekdays: [] }, month_end_policy: "clamp", horizon_months: 6 })
@@ -1049,6 +1116,51 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     JSON.stringify(recur.rule_config || {}) !== JSON.stringify(seriesRow.rule_config || {}) ||
     (recur.month_end_policy || "clamp") !== (seriesRow.month_end_policy || "clamp") ||
     (recur.horizon_months || 6) !== (seriesRow.horizon_months || 6))
+
+  // Book return date defaulting to the NEXT event (2026-09-15, Iain, item
+  // #6): "Return Date option would be fixed to the date of the next event
+  // by default. Therefor the option should just be Set Book Return date to
+  // next event Y/N. If N then manually enter a return date."
+  //
+  // "Next event" means different things depending on where this form is:
+  //  - Editing an occurrence that's already part of a real series
+  //    (event.series_id) -- look up the actual next persisted occurrence,
+  //    since that reflects any one-off edits/exceptions, not just the raw
+  //    rule.
+  //  - Creating a brand-new event with a recurrence enabled (recurMode ===
+  //    "series") -- nothing exists yet to look up, so compute it with the
+  //    same nextOccurrence() engine that will generate the real series on
+  //    Save, seeded from the day after this occurrence's own date.
+  //  - A one-off event with no recurrence at all -- there IS no next
+  //    event, so the Y/N toggle doesn't apply; the date field just stays a
+  //    plain manual input, unchanged from before this feature.
+  const [nextSeriesEventDate, setNextSeriesEventDate] = useState(null)
+  useEffect(() => {
+    if (!event?.series_id) { setNextSeriesEventDate(null); return }
+    let cancelled = false
+    supabase.from("events").select("event_date")
+      .eq("series_id", event.series_id).eq("archived", false)
+      .gt("event_date", event.event_date).order("event_date", { ascending: true }).limit(1)
+      .then(({ data }) => { if (!cancelled) setNextSeriesEventDate(data?.[0]?.event_date || null) })
+    return () => { cancelled = true }
+  }, [event?.series_id, event?.event_date])
+  const computedNextReturnDate = event?.series_id
+    ? nextSeriesEventDate
+    : (!event && recurMode === "series" && recur.enabled && form.event_date)
+      ? nextOccurrence({ ...recur, start_date: form.event_date }, dateStrPlusDays(form.event_date, 1))
+      : null
+  const [bookReturnMode, setBookReturnMode] = useState(computedNextReturnDate ? "next" : "manual")
+  const bookReturnModeTouched = useRef(false)
+  // Re-defaults to "next" the moment a next-event date first becomes
+  // computable (e.g. the admin only just switched Repeats on) -- but never
+  // overrides an explicit Y/N choice the admin has already made.
+  useEffect(() => {
+    if (bookReturnModeTouched.current) return
+    setBookReturnMode(computedNextReturnDate ? "next" : "manual")
+  }, [computedNextReturnDate])
+  useEffect(() => {
+    if (bookReturnMode === "next" && computedNextReturnDate) set("book_return_date", computedNextReturnDate)
+  }, [bookReturnMode, computedNextReturnDate])
   const [seriesScope, setSeriesScope] = useState("this")   // 'this' | 'future' (scope §6)
   const [occBusy, setOccBusy] = useState(false)
   const { ask: askSameDate, Modal: SameDateModal } = useSameDateWarning()
@@ -1092,7 +1204,12 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     const venueMissing = form.location_type === "onsite" ? !form.location_id : !form.location.trim()
     if (venueMissing) invalid.push("location")
     if (needsSpaceValidation({ location_type: form.location_type, bookable: selectedLocation?.bookable }) && !form.event_end_time) invalid.push("event_end_time")
-    if (caps.hasBooks && !selectedBook) invalid.push("book")
+    // Book is no longer mandatory (2026-09-15, Iain, item #4): "need to be
+    // able to create events without knowing the book" -- BookPicker now
+    // offers an explicit "Not selected yet" choice for exactly this case,
+    // and leaving it unset entirely is equally valid (same as picking that
+    // option). The book can be set later by editing this occurrence once
+    // it's decided.
     // Bring Something: Required only makes sense once at least one category is
     // chosen -- Iain, 2026-08-07, after catching the form letting Required
     // stay ON with zero categories selected (stale state left over from
@@ -1626,8 +1743,20 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       {caps.hasBookReturn && (
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Book Return Date</label>
-        <input type="date" value={form.book_return_date} onChange={e => set("book_return_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
-          style={inputStyle} />
+        {computedNextReturnDate && (
+          <div style={{ marginBottom: 8 }}>
+            <Toggle value={bookReturnMode === "next"} onChange={v => { bookReturnModeTouched.current = true; setBookReturnMode(v ? "next" : "manual") }}
+              label="Set to next event's date" colour={colour} />
+          </div>
+        )}
+        {bookReturnMode === "next" && computedNextReturnDate ? (
+          <div style={{ ...inputStyle, display: "flex", alignItems: "center", color: "var(--text-dim)" }}>
+            {new Date(computedNextReturnDate + "T00:00:00").toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+          </div>
+        ) : (
+          <input type="date" value={form.book_return_date} onChange={e => set("book_return_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
+            style={inputStyle} />
+        )}
         <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 4 }}>When attendees must return their copy to you — allow time before the kit return date.</div>
       </div>
       )}

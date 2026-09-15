@@ -12,6 +12,22 @@ import { MAX_ATTACHMENT_BYTES, tooLargeMessage } from "@/lib/attachmentLimits"
 
 const COLOUR = "var(--committee)"
 
+// BUG (2026-09-15, Iain): opening a Committee post's PDF/image attachment
+// via a plain target="_blank" link to its raw, cross-origin (Supabase
+// Storage) URL left an installed-PWA user with no way back -- see the full
+// root-cause note in app/(app)/committee/attachment/page.js. PDFs and
+// images render inline in the browser (the failure mode), so route those
+// through our own in-app viewer instead; Word docs (.doc/.docx) trigger a
+// real download/share-sheet rather than an in-webview render, so they keep
+// the plain external link.
+function isViewableAttachment(name) {
+  return /\.(pdf|png|jpe?g|gif|webp)$/i.test(name || "")
+}
+function attachmentHref(url, name) {
+  if (!isViewableAttachment(name)) return url
+  return `/committee/attachment?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name || "Attachment")}`
+}
+
 function fmt(iso) {
   return new Date(iso).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })
 }
@@ -87,10 +103,12 @@ function PostCard({ post, canManage, onTogglePin, onArchive }) {
           : post.content}
       </div>
       {post.attachment_url && (
-        <a href={post.attachment_url} target="_blank" rel="noreferrer" style={{
-          display: "inline-block", marginTop: 8, fontSize: "0.82rem", fontWeight: 700,
-          color: COLOUR, textDecoration: "underline",
-        }}>
+        <a href={attachmentHref(post.attachment_url, post.attachment_name)}
+          {...(isViewableAttachment(post.attachment_name) ? {} : { target: "_blank", rel: "noreferrer" })}
+          style={{
+            display: "inline-block", marginTop: 8, fontSize: "0.82rem", fontWeight: 700,
+            color: COLOUR, textDecoration: "underline",
+          }}>
           📎 {post.attachment_name || "Attachment"}
         </a>
       )}
