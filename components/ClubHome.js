@@ -692,7 +692,17 @@ function BookPicker({ onSelect, initialBook, colour = "var(--purple)", invalid =
 
   useEffect(() => {
     async function loadBooks() {
-      const { data: books } = await supabase.from("books").select("id, title, author, cover_url, published_year").order("title")
+      // we_own=false: this picker is for community-suggested books, never
+      // the Book Library -- same missing filter as BookCatalogue.js's own
+      // load() (fixed 2026-09-15, migration 106_clear_book_club_suggestions),
+      // just not caught in that same pass since this is a separate
+      // component/query. Confirmed via direct production query before
+      // fixing: all 567 rows in `books` are we_own=true (Library); this
+      // picker was rendering literally the whole Library with no filter at
+      // all, which is also why the pinned "Not selected yet" row at the top
+      // of the dropdown read as invisible/lost to Iain -- it was sitting
+      // above a 567-title wall, not a short suggestions list.
+      const { data: books } = await supabase.from("books").select("id, title, author, cover_url, published_year").eq("we_own", false).order("title")
       const ids = (books || []).map(b => b.id)
       const sums = {}, counts = {}
       if (ids.length) {
