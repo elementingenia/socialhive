@@ -64,6 +64,35 @@ function enforceOpenEventRules(row) {
   return row
 }
 
+// GET a series' own real saved state (2026-09-16, BUG fix) -- event_series
+// is deliberately service-role-only RLS (see migration 055's own comment:
+// series permissions are enforced in a service-role route, not row
+// policies), so the client can never read it directly. ClubHome.js's edit
+// form used to try a plain client-side `supabase.from("event_series")`
+// select anyway -- RLS silently returned nothing (no error), so the "This
+// and future dates" recurrence editor always showed its hardcoded
+// fallback (weekly, no weekday) instead of the real saved pattern, and the
+// save-side change-detection compared against that same never-populated
+// row, so a genuine pattern change could never actually be detected and
+// change_recurrence below was never reachable. This route is the fix: the
+// same admin/owner/coordinator `resolve()` check every other action here
+// uses, returning the real row so the client can populate the picker (and,
+// once real, correctly detect a genuine change) via an authorized read
+// instead of a silently-blocked one.
+export async function GET(req) {
+  const { searchParams } = new URL(req.url)
+  const series_id = searchParams.get("series_id")
+  if (!series_id) return NextResponse.json({ error: "series_id required" }, { status: 400 })
+
+  const { data: series } = await supa.from("event_series").select("*").eq("id", series_id).maybeSingle()
+  if (!series) return NextResponse.json({ error: "Series not found" }, { status: 404 })
+
+  const { error, status } = await resolve(req, series.club_id)
+  if (error) return NextResponse.json({ error }, { status })
+
+  return NextResponse.json({ series })
+}
+
 export async function POST(req) {
   const body = await req.json().catch(() => ({}))
   const { club_id, rule_type, rule_config, mode = "series" } = body
