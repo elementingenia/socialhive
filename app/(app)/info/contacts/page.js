@@ -85,7 +85,11 @@ function exportContactsCsv(entries, scopeLabel) {
 // viewing details and editing them are different actions (2026-07-12,
 // clarified same day: Edit alone isn't a substitute for a quick "More").
 function ContactCard({ contact, badges = [], external = false, isResident = true, onEdit }) {
-  const hasMore = !!(contact.title || contact.phone || contact.email)
+  // Title/Role is always visible under the name now (Iain, 2026-09-16) --
+  // it's identity information (who this person is), not contact detail
+  // like phone/email, so it no longer waits behind "More". "More" now only
+  // ever reveals phone/email -- hasMore is scoped to those two alone.
+  const hasMore = !!(contact.phone || contact.email)
   // External contacts open with their details already showing. They can't be
   // messaged in the app, so the useful thing is their phone/email -- burying
   // it behind "More" would make a dimmed card a dead end (scope §7).
@@ -140,6 +144,11 @@ function ContactCard({ contact, badges = [], external = false, isResident = true
           )}
         </div>
       </div>
+      {contact.title && (
+        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.15rem" }}>
+          {contact.title}
+        </div>
+      )}
       {contact.realName && (
         <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.15rem" }}>
           {contact.realName}
@@ -147,9 +156,6 @@ function ContactCard({ contact, badges = [], external = false, isResident = true
       )}
       {expanded && (
         <div style={{ marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-          {contact.title && (
-            <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>{contact.title}</div>
-          )}
           {contact.phone && (
             <a href={`tel:${contact.phone}`} style={{ fontSize: "0.85rem", color: COLOUR, textDecoration: "none", fontWeight: 600 }}>
               📞 {contact.phone}
