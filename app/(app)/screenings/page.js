@@ -1,4 +1,5 @@
 'use client'
+import { useRouter } from "next/navigation"
 import EventCoordinators from "@/components/EventCoordinators"
 import { useLocations } from "@/lib/useLocations"
 import EventImagePicker from "@/components/EventImagePicker"
@@ -706,6 +707,7 @@ function BookingStrip({ myBooking, isFull, closed, blocked }) {
 // ── Screening Card ─────────────────────────────────────────────────────────────
 // Pure display — tap anywhere to open the unified slide-over for booking/modify/cancel
 function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit, canBypassClosed = false }) {
+  const router = useRouter()
   const [showAttendees, setShowAttendees] = useState(false)
   const movie              = ev.movies
   const isFull             = ev.seats_remaining === 0
@@ -750,8 +752,10 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
         { heading: 'Confirmed', rows: confirmedRows },
         { heading: 'Waitlist', rows: waitlistRows },
       ],
+      router,
+      hubColour: 'var(--teal)',
     })
-    if (!ok) window.alert("Couldn't open the export window — check your pop-up blocker")
+    if (!ok) window.alert("Couldn't open the attendee export")
   }
 
   return (

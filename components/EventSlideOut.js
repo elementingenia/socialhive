@@ -447,8 +447,10 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         { heading: "Unassigned Seats", rows: unassignedRows },
         { heading: "Waitlist", rows: waitlistRows },
       ],
+      router,
+      hubColour: colour,
     })
-    if (!ok) showToast("Couldn't open the export window — check your pop-up blocker", "error")
+    if (!ok) showToast("Couldn't open the attendee export", "error")
   }
 
   // Export payment reconciliation as PDF (2026-09-15, Iain, item #3):

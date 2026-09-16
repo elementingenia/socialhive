@@ -1319,8 +1319,10 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
         { heading: "Unassigned Seats", rows: unassignedRows },
         { heading: "Waitlist", rows: waitlistRows },
       ],
+      router,
+      hubColour: "var(--special)",
     })
-    if (!ok) window.alert("Couldn't open the export window — check your pop-up blocker")
+    if (!ok) window.alert("Couldn't open the attendee export")
   }
 
   // Export payment reconciliation as PDF (2026-09-15, Iain, item #3): see
