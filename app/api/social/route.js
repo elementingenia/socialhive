@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
+import { notifyEventDetailsChanged } from '@/lib/notifyEventUpdated'
 import { notifyAllActiveMembers } from '@/lib/notifyAudience'
 import { checkCancelPaymentGuard } from '@/lib/eventCancelGuard'
 import { needsSpaceValidation, fetchLocation } from '@/lib/eventClash'
@@ -214,7 +215,7 @@ export async function PATCH(req) {
     before.location !== (body.location || null)
   )
   if (dateChanged) {
-    await notifyEventAttendees(supabaseAdmin, body.id, 'event_updated',
+    await notifyEventDetailsChanged(supabaseAdmin, body.id,
       `${body.title} has been updated — check the new date, time or location.`,
       { excludeMemberId: member.id })
   }

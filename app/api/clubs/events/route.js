@@ -1,7 +1,7 @@
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { notifyClubMembers } from "@/lib/notifyAudience"
-import { notifyEventAttendees } from "@/lib/notifyEventAttendees"
+import { notifyEventDetailsChanged } from "@/lib/notifyEventUpdated"
 import { needsSpaceValidation, fetchLocation } from "@/lib/eventClash"
 import { findAnyRoomConflict } from "@/lib/spaceBookings"
 import { notifyRequestOnlySpace } from "@/lib/notifyRequestOnlySpace"
@@ -206,7 +206,7 @@ export async function PATCH(req) {
     || ("event_time" in payload && payload.event_time !== existing.event_time)
     || ("location" in payload && payload.location !== existing.location)
   if (detailsChanged) {
-    await notifyEventAttendees(supa, event_id, "event_updated",
+    await notifyEventDetailsChanged(supa, event_id,
       `${payload.title || existing.title || "An event you booked"} has been updated — check the new date, time or location.`,
       { excludeMemberId: member.id })
   }
