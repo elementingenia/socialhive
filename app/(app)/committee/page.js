@@ -296,6 +296,7 @@ export default function CommitteePage() {
   const [welcomeText, setWelcomeText] = useState("")
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState(null)
+  const [composerOpen, setComposerOpen] = useState(false)
 
   const load = useCallback(async () => {
     const [postsRes, hubRes] = await Promise.all([
@@ -349,7 +350,24 @@ export default function CommitteePage() {
         style={{ margin: "-2px 0 12px" }}
         right={<CommitteeNotifyToggle colour={COLOUR} />} />
 
-      {canManage && <Composer onPosted={load} />}
+      {canManage && (
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: composerOpen ? 10 : 14 }}>
+          <button onClick={() => setComposerOpen(o => !o)} style={{
+            display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.9rem",
+            borderRadius: 20, fontFamily: "inherit", fontWeight: 700, fontSize: "0.82rem",
+            cursor: "pointer", whiteSpace: "nowrap",
+            border: `1.5px solid ${COLOUR}`,
+            background: composerOpen ? "var(--surface)" : COLOUR,
+            color: composerOpen ? COLOUR : "#fff",
+          }}>
+            {composerOpen ? "Close" : "+ Add Update"}
+          </button>
+        </div>
+      )}
+
+      {canManage && composerOpen && (
+        <Composer onPosted={() => { load(); setComposerOpen(false) }} />
+      )}
 
       {posts.length === 0 ? (
         <div style={{ textAlign: "center", padding: "2rem 1rem", color: "var(--text-dim)", fontSize: "0.9rem" }}>
