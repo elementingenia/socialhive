@@ -1,6 +1,7 @@
 "use client"
 import { Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
+import DocumentViewer from "@/components/DocumentViewer"
 
 // BUG (2026-09-15, Iain): "when Export is engaged on the Committee PDF
 // attached to an update, there is no way to close the document and return
@@ -44,12 +45,18 @@ import { useSearchParams, useRouter } from "next/navigation"
 // (dvh-based, accounting for the toolbar/BottomNav) instead of a fixed
 // 75vh guess, and is a horizontally + vertically scrollable box so a wide
 // page can be panned rather than silently clipped off-screen.
+//
+// 2026-09-16: the toolbar/preview markup itself was extracted into
+// components/DocumentViewer.js so the identical Close/Download/Open-in-
+// browser behaviour could be reused for the payment reconciliation export
+// (app/(app)/documents/view/page.js) without a second, drifting copy --
+// this page now only owns the Committee-specific bits (the close target,
+// the committee accent colour).
 function AttachmentViewerInner() {
   const params = useSearchParams()
   const router = useRouter()
   const url = params.get("url") || ""
   const name = params.get("name") || "Attachment"
-  const isImage = /\.(png|jpe?g|gif|webp)$/i.test(name)
 
   function close() {
     // router.back() when this viewer was reached via in-app navigation
@@ -60,53 +67,7 @@ function AttachmentViewerInner() {
     else router.push("/committee")
   }
 
-  const btnStyle = {
-    display: "inline-flex", alignItems: "center", gap: 6, padding: "0.5rem 0.85rem",
-    borderRadius: 8, fontSize: "0.85rem", fontWeight: 700, cursor: "pointer",
-    textDecoration: "none", whiteSpace: "nowrap", border: "1px solid var(--border)",
-    background: "var(--surface)", color: "var(--text)",
-  }
-
-  return (
-    <div style={{ background: "var(--bg)", minHeight: "100vh", padding: "0 0 6rem" }}>
-      {/* Dedicated toolbar -- deliberately separate from the shared Header's
-          small logo, per Iain's feedback that the logo alone didn't read as
-          a way to close this. */}
-      <div style={{
-        position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center",
-        gap: 8, flexWrap: "wrap", padding: "0.6rem 1rem", borderBottom: "1px solid var(--border)",
-        background: "var(--surface)",
-      }}>
-        <button onClick={close} style={{ ...btnStyle, background: "var(--committee)", color: "#fff", border: "none" }}>
-          ‹ Close
-        </button>
-        {url && (
-          <>
-            <a href={url} download={name} style={btnStyle}>⬇ Download</a>
-            <a href={url} target="_blank" rel="noreferrer" style={btnStyle}>Open in browser ↗</a>
-          </>
-        )}
-        <div style={{
-          flex: "1 1 160px", minWidth: 0, fontSize: "0.8rem", color: "var(--text-dim)",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", textAlign: "right",
-        }}>
-          📎 {name}
-        </div>
-      </div>
-      <div style={{
-        height: "calc(100dvh - 130px)", background: "#525659",
-        overflow: "auto", WebkitOverflowScrolling: "touch",
-      }}>
-        {url ? (
-          isImage
-            ? <img src={url} alt={name} style={{ maxWidth: "100%", display: "block", margin: "0 auto" }} />
-            : <iframe src={url} title={name} style={{ width: "100%", height: "100%", border: "none", minWidth: "100%" }} />
-        ) : (
-          <div style={{ padding: "2rem", color: "#fff", textAlign: "center" }}>No attachment specified.</div>
-        )}
-      </div>
-    </div>
-  )
+  return <DocumentViewer url={url} name={name} accentColor="var(--committee)" onClose={close} />
 }
 
 export default function AttachmentViewerPage() {

@@ -1,6 +1,7 @@
 "use client"
 import EventCoordinators from "@/components/EventCoordinators"
 import { useEffect, useState, useCallback, useRef } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { getAuthToken, authedFetch } from "@/lib/getAuthToken"
 import { useUser } from "@/lib/UserContext"
@@ -1190,6 +1191,7 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
 // ── Event Card ────────────────────────────────────────────────────────────────
 function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, onTogglePayment, togglingId, onCloseOutPayments, closingOut, onRemindPayment, remindingId, onToggleRefund, togglingRefundId }) {
   const { member } = useUser()
+  const router = useRouter()
   const [showAttendees, setShowAttendees] = useState(false)
   // Inline "record a payment" mini-form (2026-08-11) -- replaces the old
   // blind Paid/Unpaid toggle. Marking someone paid now asks for the amount
@@ -1366,8 +1368,10 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
         { heading: "Partial", rows: partialRows },
         { heading: "Refunds", rows: refundRows },
       ],
+      router,
+      hubColour: "var(--special)",
     })
-    if (!ok) window.alert("Couldn't open the export window — check your pop-up blocker")
+    if (!ok) window.alert("Couldn't open the reconciliation export")
   }
 
   return (

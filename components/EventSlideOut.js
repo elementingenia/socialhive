@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect, useRef, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
 import { HUB_COLOURS } from "@/lib/navUtils"
 import { BusIcon, CalendarIcon } from "@/components/NavIcons"
@@ -324,6 +325,7 @@ function ECNames({ coordinators, colour }) {
 
 // ── Coordinator Panel ─────────────────────────────────────────────────────────
 function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey = 0 }) {
+  const router = useRouter()
   const [data,        setData]        = useState(null)
   const [partyByOwner, setPartyByOwner] = useState({})
   const [loading,     setLoading]     = useState(true)
@@ -505,8 +507,10 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         { heading: "Partial", rows: partialRows },
         { heading: "Refunds", rows: refundRows },
       ],
+      router,
+      hubColour: colour,
     })
-    if (!ok) showToast("Couldn't open the export window — check your pop-up blocker", "error")
+    if (!ok) showToast("Couldn't open the reconciliation export", "error")
   }
 
   // Reconciliation "Close Out" (2026-08-19 -- ported from Social's own
