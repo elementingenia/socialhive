@@ -7,6 +7,7 @@ import { authedFetch, getAuthToken } from "@/lib/getAuthToken"
 import RichEditor from "@/components/RichEditor"
 import { ContactBar } from "@/components/OwnersManager"
 import CommitteeNotifyToggle from "@/components/CommitteeNotifyToggle"
+import CommitteeOptOutsToggle from "@/components/CommitteeOptOutsToggle"
 import { FormattedText } from "@/lib/textFormatter"
 import { MAX_ATTACHMENT_BYTES, tooLargeMessage } from "@/lib/attachmentLimits"
 
@@ -349,6 +350,12 @@ export default function CommitteePage() {
       <ContactBar contextType="hub" contextKey="committee" contextLabel="Committee" colour={COLOUR}
         style={{ margin: "-2px 0 12px" }}
         right={<CommitteeNotifyToggle colour={COLOUR} />} />
+
+      {canManage && (
+        <div style={{ marginBottom: 12 }}>
+          <CommitteeOptOutsToggle colour={COLOUR} visible={canManage} />
+        </div>
+      )}
 
       {canManage && (
         <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: composerOpen ? 10 : 14 }}>
