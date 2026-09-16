@@ -1,6 +1,7 @@
 "use client"
 import { useEffect, useState, useRef } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
@@ -122,6 +123,7 @@ function BookingStrip({ isJoined, seats = 1, hasBook, bookReturnDate, closed, bl
 
 // ── Book Club Event Card ─────────────────────────────────────────────────────
 function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var(--purple)", showToast, club }) {
+  const router = useRouter()
   const { member, isAdmin } = useUser()
   // Club Owner gets the same manage/EC-view options an admin has, scoped to
   // this club only (Iain, 2026-08-10).
@@ -235,8 +237,10 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
       eventTitle: label || event.title,
       eventSubtitle: fmtDate(event.event_date),
       sections: [{ heading: "Attendees", rows }],
+      router,
+      hubColour: colour,
     })
-    if (!ok) window.alert("Couldn't open the export window — check your pop-up blocker")
+    if (!ok) window.alert("Couldn't open the attendee export")
   }
 
   async function toggleAttendees() {
