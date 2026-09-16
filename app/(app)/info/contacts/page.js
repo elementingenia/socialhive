@@ -145,7 +145,13 @@ function ContactCard({ contact, badges = [], external = false, isResident = true
         </div>
       </div>
       {contact.title && (
-        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.15rem" }}>
+        // Distinct colour from the realName line below (Iain, 2026-09-16):
+        // both used to be var(--text-dim), and since Title/Role became
+        // always-visible (not gated behind "More") they were reading as
+        // the same line twice. --role-accent is a bronze, deliberately not
+        // the page's own blue (COLOUR, used for phone/email/"More") and not
+        // any hub colour -- see app/globals.css for the contrast check.
+        <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--role-accent)", marginTop: "0.15rem" }}>
           {contact.title}
         </div>
       )}

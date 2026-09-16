@@ -41,6 +41,16 @@
                              2026-09-08 ("Cyan is good"). Distinct from
                              every hue above. */
 
+  /* Contact Title/Role accent (2026-09-16) -- Iain: Title/Role and the
+     admin-only real-name annotation were both var(--text-dim), so once
+     Title/Role became always-visible (not just behind "More") the two
+     lines read as identical and were easy to confuse. This is a warm
+     bronze, deliberately NOT the page's own blue (#4e7aab, used for
+     phone/email/"More") and not any hub colour above, so it can't be
+     mistaken for either. WCAG AA on --surface/--bg/--surface2 (5.1-5.9:1).
+     Real name stays --text-dim -- only Title/Role gets the accent. */
+  --role-accent: #8a5a2b;
+
   /* External contacts -- a muted sage for people outside the community
      (tradespeople, suppliers, the Community Manager). Deliberately NOT grey:
      grey reads as "disabled/broken" and these contacts are perfectly usable,
