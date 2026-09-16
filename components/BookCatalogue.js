@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
+import { sydneyTodayStr } from "@/lib/date"
 import VoteScoreGrid from "@/components/VoteScoreGrid"
 
 // ── Bulk swiper (unrated books) ────────────────────────────────────────────────
@@ -371,7 +372,9 @@ function AddBookForm({ onAdded, onClose }) {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function BookCatalogue() {
   const { member, isAdmin } = useUser()
-  const [books,     setBooks]     = useState([])
+  const [books,        setBooks]        = useState([])
+  const [readBooks,    setReadBooks]    = useState([])
+  const [readExpanded, setReadExpanded] = useState(false)
   const [myVotes,   setMyVotes]   = useState({})
   const [unrated,   setUnrated]   = useState([])
   const [loading,   setLoading]   = useState(true)
@@ -386,11 +389,25 @@ export default function BookCatalogue() {
     // mirrored the Library onto it via a we_own flag rather than a second
     // table); this was the missing filter that let every Library add leak
     // into the community suggestion/voting list.
-    const { data: bks } = await supabase
-      .from("books")
-      .select("id, title, author, cover_url, summary, rating, rating_link, google_books_id, published_year")
-      .eq("we_own", false)
-      .order("title")
+    // Read Books bucketing (change-request-log #13): mirrors Show Time's
+    // "Previously Screened" pattern in app/(app)/library/page.js exactly --
+    // a book with only past Book Club event(s) (nothing scheduled going
+    // forward) moves out of the main/active list into a closed-by-default
+    // "Read Books" section below it, computed live from events.book_id/
+    // event_date on every load, not a stored flag.
+    const today = sydneyTodayStr()
+    const [{ data: bks }, { data: futureEvts }, { data: pastEvts }] = await Promise.all([
+      supabase
+        .from("books")
+        .select("id, title, author, cover_url, summary, rating, rating_link, google_books_id, published_year")
+        .eq("we_own", false)
+        .order("title"),
+      supabase.from("events").select("book_id").gte("event_date", today).not("book_id", "is", null),
+      supabase.from("events").select("book_id").lt("event_date", today).not("book_id", "is", null),
+    ])
+    const scheduledBookIds = new Set((futureEvts || []).map(e => e.book_id))
+    const pastBookIds = new Set((pastEvts || []).map(e => e.book_id))
+    const onlyReadIds = new Set([...pastBookIds].filter(id => !scheduledBookIds.has(id)))
 
     let votes = {}
     if (member?.id) {
@@ -412,9 +429,11 @@ export default function BookCatalogue() {
       vote_count: scoreCounts[b.id] || 0,
     })).sort((a, b) => (parseFloat(b.avg_score) || 0) - (parseFloat(a.avg_score) || 0))
 
-    setBooks(enriched)
+    const activeBooks = enriched.filter(b => !onlyReadIds.has(b.id))
+    setBooks(activeBooks)
+    setReadBooks(enriched.filter(b => onlyReadIds.has(b.id)))
     setMyVotes(votes)
-    setUnrated(enriched.filter(b => !votes[b.id]))
+    setUnrated(activeBooks.filter(b => !votes[b.id]))
     setLoading(false)
   }, [member?.id])
 
@@ -473,7 +492,7 @@ export default function BookCatalogue() {
         </button>
       ))}
 
-      {books.length === 0 ? (
+      {books.length === 0 && readBooks.length === 0 ? (
         <div style={{ textAlign: "center", color: "var(--text-dim)", padding: "2rem 0", fontSize: "0.9rem" }}>
           No books suggested yet — be the first!
         </div>
@@ -489,6 +508,39 @@ export default function BookCatalogue() {
             onDelete={deleteBook}
           />
         ))
+      )}
+
+      {readBooks.length > 0 && (
+        <div style={{ marginTop: "1.5rem" }}>
+          <button
+            onClick={() => setReadExpanded(e => !e)}
+            style={{
+              width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+              background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10,
+              padding: "0.65rem 1rem", cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--text-dim)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+              Read Books ({readBooks.length})
+            </span>
+            <span style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>{readExpanded ? "▲" : "▼"}</span>
+          </button>
+          {readExpanded && (
+            <div style={{ marginTop: "0.65rem" }}>
+              {readBooks.map(b => (
+                <BookCard
+                  key={b.id}
+                  book={b}
+                  myVote={myVotes[b.id]}
+                  memberId={member?.id}
+                  onVote={load}
+                  isAdmin={isAdmin}
+                  onDelete={deleteBook}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
