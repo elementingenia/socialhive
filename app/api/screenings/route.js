@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
+import { notifyEventDetailsChanged } from '@/lib/notifyEventUpdated'
 import { notifyHubFollowers } from '@/lib/notifyAudience'
 import { hubLocation, fetchLocation } from '@/lib/eventClash'
 import { findAnyRoomConflict } from '@/lib/spaceBookings'
@@ -354,7 +355,7 @@ export async function PATCH(req) {
 
   const dateChanged = before && (before.event_date !== event_date || before.event_time !== event_time)
   if (dateChanged) {
-    await notifyEventAttendees(supabaseAdmin, event_id, 'event_updated',
+    await notifyEventDetailsChanged(supabaseAdmin, event_id,
       `${title} has been rescheduled — check the new date and time.`,
       { excludeMemberId: member.id })
   }

@@ -8,7 +8,7 @@ import {
   toSpaceBookingWindow, BOOKING_REASON_MAX, validateIngeniaConfirmation,
   promoteSpaceBookingToEvent, updateSpaceEvent,
 } from '@/lib/spaceBookings'
-import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
+import { notifyEventDetailsChanged } from '@/lib/notifyEventUpdated'
 import { resolveMemberName } from '@/lib/memberName'
 
 // Personal Space Booking. Scope: Social_Hive_Personal_Space_Booking_Scope.md
@@ -519,7 +519,7 @@ export async function PATCH(req) {
       )
       if (result.error) return NextResponse.json({ error: result.error }, { status: result.status })
       if (result.changed) {
-        await notifyEventAttendees(supabaseAdmin, id, 'event_updated',
+        await notifyEventDetailsChanged(supabaseAdmin, id,
           `${title.trim()} has been updated — check the details.`,
           { excludeMemberId: member.id })
       }
