@@ -1091,6 +1091,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     location:     event?.location || "",
     location_id:  event?.location_id || null,
     has_bus:      event?.has_bus || false,
+    allow_personal_vehicles: event?.allow_personal_vehicles || false,
     bus_max_seats: event?.bus_max_seats ?? "",
     max_seats_per_booking: event?.max_seats_per_booking ?? 2,
     // "Open, all welcome" events (Iain, 2026-09-11 -- Groups & Clubs dry run):
@@ -1421,6 +1422,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       has_bus:         form.location_type === "offsite" ? !!form.has_bus : false,
       bus_driver_id:   form.location_type === "offsite" && form.has_bus ? (busDriver || null) : null,
       bus_max_seats:   form.location_type === "offsite" && form.has_bus && form.bus_max_seats !== "" ? Number(form.bus_max_seats) : null,
+      allow_personal_vehicles: form.location_type === "offsite" ? !!form.allow_personal_vehicles : false,
       max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
       booking_required: !!form.booking_required,
       allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
@@ -1673,6 +1675,15 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
                 onChange={e => set("bus_max_seats", e.target.value)} style={inputStyle} placeholder="Uncapped" />
             </div>
           )}
+          {/* Personal vehicles (migration 109, Iain 2026-09-17) — a second,
+              independent transport option alongside Bus. Plain on/off, no
+              admin fields: the driver's own seats-offered number and
+              passenger picks are all set by residents in the booking flow. */}
+          <div style={{ marginBottom: 12 }}>
+            <Toggle value={form.allow_personal_vehicles} colour={colour}
+              onChange={v => set("allow_personal_vehicles", v)}
+              label="Personal vehicles" />
+          </div>
         </>
       )}
 
@@ -2254,7 +2265,7 @@ export default function ClubHome({ club }) {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver:members!bus_driver_id(name, username), image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, username), image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("club_id", club.id)
       .eq("archived", false)
       .order("event_date", { ascending: true })

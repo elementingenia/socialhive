@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase"
 import { authedFetch } from "@/lib/getAuthToken"
 import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
+import VehicleOffersPanel from "@/components/VehicleOffersPanel"
 import ExpandableText from "@/components/ExpandableText"
 import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge, balancePhrase, remainingBalance, wholeDollar, paymentSummary, reconciliationIsStale } from "@/lib/payments"
 import { byOwnThenName, ordinal } from "@/lib/sortNames"
@@ -2434,6 +2435,9 @@ function BookingSection({ event, onRefresh, onClose }) {
               </div>
             )
           })()}
+          {myConfirmed && !!event.allow_personal_vehicles && (
+            <VehicleOffersPanel event={event} meId={me?.id} showToast={showToast} />
+          )}
           {myConfirmed && event.payment_required && event.payment_due_by && !computeIsPaid(myConfirmed) && (
             <div style={{ fontSize: 12, color: "var(--amber-dark)", lineHeight: 1.4 }}>
               Payment due by {fmtDate(event.payment_due_by)}.
