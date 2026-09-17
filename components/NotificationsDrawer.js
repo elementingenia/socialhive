@@ -92,6 +92,7 @@ function targetForNotif(n) {
     case "social":   return "/social"
     case "bookclub": return "/bookclub"
     case "club":     return "/clubs"
+    case "special":  return "/special-events"
     default:         return null
   }
 }
