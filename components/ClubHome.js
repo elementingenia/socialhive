@@ -280,7 +280,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
       owners: transportOwners, event, carSections: carData.carSections, carPeopleKeys: carData.carPeopleKeys,
     })
     const ok = exportAttendeeListPdf({
-      eventTitle: label || event.title,
+      eventTitle: event.title,
       eventSubtitle: fmtDate(event.event_date),
       sections: [
         { heading: "Attendees", rows },
