@@ -330,6 +330,8 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   const [data,        setData]        = useState(null)
   const [partyByOwner, setPartyByOwner] = useState({})
   const [carByOwner, setCarByOwner] = useState({})
+  const [carSections, setCarSections] = useState([]) // [{driverKey, driverName, seatsOffered, offerId, passengers:[{name,guest}]}] -- feeds both the nested attendee-list display and the PDF export
+  const [carPeopleKeys, setCarPeopleKeys] = useState(new Set()) // every m:/c:/g: identity that's a driver or passenger in ANY car, for "own way" exclusion in the export
   const [loading,     setLoading]     = useState(true)
   const [apiError,    setApiError]    = useState(null)
   const [toast,       setToast]       = useState(null)
@@ -436,6 +438,69 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       .slice().sort((a, b) => a.localeCompare(b))
       .map(name => ({ name, seats: 1, note: "Unassigned seat" }))
 
+    // Transport sections (Iain, follow-up on PR #145): "the Export PDF needs
+    // to accommodate both the bus and the cars in an event, so needs to list
+    // who is on the bus and who is the driver, then who is driving cars and
+    // who is going in those cars and finally any that have not chosen a ride
+    // anywhere and are assumed to be finding their own way." Reuses the same
+    // carSections/carPeopleKeys this component already built for the nested
+    // attendee-list display above, so the export can't drift from what's
+    // shown on screen.
+    //
+    // CORRECTION: an earlier version of this comment claimed there was no
+    // "bus driver" concept anywhere in the app. That was wrong -- Iain
+    // called it out directly, and re-checking found `events.bus_driver_id`
+    // (migration 015_hub_settings_and_social_fields.sql, a real FK to
+    // `members`), already wired into the create/edit forms and read-side
+    // displays in Social, Special Events, Groups & Clubs, Book a Space and
+    // Show Time -- and already shown at the TOP of this very component
+    // (line ~2880, "Bus driver — sits directly with Coordinator"). It just
+    // wasn't included in the export below, which is the actual gap. Fixed:
+    // the bus driver is now the first row of the Bus section, same as a car
+    // section always leads with its driver.
+    const busRows = []
+    const ownWayRows = []
+    const busDriverIdentityKey = event.bus_driver_id ? `m:${event.bus_driver_id}` : null
+    if (event.has_bus && event.bus_driver) {
+      busRows.push({ name: event.bus_driver.name || event.bus_driver.username, seats: "", note: "Driver" })
+    }
+    Object.values(grouped).forEach(g => {
+      const ownerName = g.member
+        ? resolveMemberName(g.member, { canManage: true, fallback: g.member?.username || g.contact?.name || "—" })
+        : (g.contact?.name || "—")
+      const ownerKey = g.member?.id ? `m:${g.member.id}` : g.contact?.id ? `c:${g.contact.id}` : null
+      if (g.confirmed.length === 0) return // waitlist-only parties aren't going yet -- no transport to report
+      const party = ownerKey ? (partyByOwner[ownerKey] || []) : []
+      const ownerIsBusDriver = !!busDriverIdentityKey && ownerKey === busDriverIdentityKey
+      const ownerIsBusRider = !!g.confirmed[0]?.bus_passenger
+      const ownerInCar = ownerKey ? carPeopleKeys.has(ownerKey) : false
+      // The bus driver already has their own row above -- don't also list
+      // them as a rider or "own way" just because they didn't separately
+      // tick "riding the bus" on their own booking.
+      if (!ownerIsBusDriver) {
+        if (ownerIsBusRider) busRows.push({ name: ownerName, seats: 1, note: "" })
+        if (!ownerIsBusRider && !ownerInCar) ownWayRows.push({ name: ownerName, seats: 1, note: "" })
+      }
+      for (const p of party) {
+        const inCar = p.identityKey ? carPeopleKeys.has(p.identityKey) : false
+        const isBusDriver = !!busDriverIdentityKey && p.identityKey === busDriverIdentityKey
+        if (isBusDriver) continue
+        if (p.bus) busRows.push({ name: p.label, seats: 1, note: p.guest ? "Named attendee (guest)" : "Named attendee" })
+        if (!p.bus && !inCar) ownWayRows.push({ name: p.label, seats: 1, note: p.guest ? "Named attendee (guest)" : "Named attendee" })
+      }
+    })
+    busRows.sort((a, b) => (a.note === "Driver" ? -1 : b.note === "Driver" ? 1 : a.name.localeCompare(b.name)))
+    ownWayRows.sort((a, b) => a.name.localeCompare(b.name))
+
+    const carSectionsForExport = carSections
+      .map(s => ({
+        heading: `🚗 ${s.driverName}'s car`,
+        rows: [
+          { name: s.driverName, seats: s.seatsOffered, note: "Driver" },
+          ...s.passengers.map(p => ({ name: p.name, seats: 1, note: p.guest ? "Passenger (guest)" : "Passenger" })),
+        ],
+      }))
+
     const subtitleParts = []
     if (event.event_date) subtitleParts.push(fmtDate(event.event_date))
     if (event.event_time) subtitleParts.push(fmtTime(event.event_time))
@@ -448,6 +513,11 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         { heading: "Confirmed", rows: confirmedRows },
         { heading: "Unassigned Seats", rows: unassignedRows },
         { heading: "Waitlist", rows: waitlistRows },
+        ...(event.allow_personal_vehicles || event.has_bus ? [
+          { heading: "🚌 Community Bus", rows: busRows },
+          ...carSectionsForExport,
+          { heading: "🚶 Making Own Way (no bus or car chosen)", rows: ownWayRows },
+        ] : []),
       ],
       router,
       hubColour: colour,
@@ -617,10 +687,15 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           // contact (owner_contact_id), not a member (owner_id) -- migration
           // 061, 2026-07-23.
           const key = r.owner_id ? `m:${r.owner_id}` : `c:${r.owner_contact_id}`
+          // identityKey added (follow-up on PR #145) so the attendee export
+          // can check each NAMED attendee's own bus/car status individually,
+          // not just the booking owner's -- bus riding is tracked per
+          // individual (unlike personal vehicles, which is whole-party).
+          const identityKey = r.member_id ? `m:${r.member_id}` : r.contact_id ? `c:${r.contact_id}` : r.guest_name ? `g:${r.guest_name.trim().toLowerCase()}` : null
           ;(map[key] = map[key] || []).push(
-            r.member_id ? { label: resolveMemberName(r.member, { canManage: true, fallback: r.member?.username || "Resident" }), guest: false, bus: !!r.is_bus_passenger }
-              : r.contact_id ? { label: r.contact?.name || "Resident", guest: false, bus: !!r.is_bus_passenger }
-              : { label: r.guest_name, guest: true, bus: !!r.is_bus_passenger }
+            r.member_id ? { label: resolveMemberName(r.member, { canManage: true, fallback: r.member?.username || "Resident" }), guest: false, bus: !!r.is_bus_passenger, identityKey }
+              : r.contact_id ? { label: r.contact?.name || "Resident", guest: false, bus: !!r.is_bus_passenger, identityKey }
+              : { label: r.guest_name, guest: true, bus: !!r.is_bus_passenger, identityKey }
           )
         }
         setPartyByOwner(map)
@@ -634,6 +709,17 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   // status belongs to, it applies to the WHOLE party under that booking
   // (migration 110's whole-party rule), so this is keyed one status per
   // owner -- same m:/c: key as partyByOwner above -- not per named attendee.
+  // FOLLOW-UP (Iain, after PR #145 merged): the icons above were rendering,
+  // but flat -- a driver's own row said "Driving" and each rider's own row
+  // said "Riding with X", with no way to see a car's whole roster at a
+  // glance. Iain: "a car icon next to drivers and a human icon next to
+  // passengers... passengers nested under their name." This also needed
+  // passenger NAMES, which the query above never selected (it only carried
+  // enough to build the rider's own "riding with X" label). Now also builds
+  // `carSections` -- one entry per vehicle_offers row, with its resolved
+  // passenger list -- which both feeds the nested nested-under-driver
+  // rendering below AND is reused as-is by the attendee-list PDF export
+  // (handleExportAttendees) so the two can't drift apart.
   useEffect(() => {
     Promise.all([
       supabase.from("vehicle_offers")
@@ -641,16 +727,29 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         .eq("event_id", event.id),
       supabase.from("vehicle_offer_passengers")
         .select(`
-          party_owner_member_id, party_owner_contact_id, member_id, contact_id,
+          id, vehicle_offer_id, party_owner_member_id, party_owner_contact_id, member_id, contact_id, guest_name,
+          passenger_member:members!member_id(name, display_name, hide_name, username),
+          passenger_contact:contacts!contact_id(name),
           vehicle_offer:vehicle_offers!vehicle_offer_id(member_id, driver:members!member_id(name, display_name, hide_name, username))
         `)
         .eq("event_id", event.id),
     ]).then(([{ data: offers }, { data: passengers }]) => {
       const map = {}
+      const sections = []
+      const peopleKeys = new Set()
       for (const o of offers || []) {
         const key = `m:${o.member_id}`
         map[key] = { role: "driving", seatsOffered: o.seats_offered }
+        peopleKeys.add(key)
+        sections.push({
+          driverKey: key,
+          driverName: resolveMemberName(o.driver, { canManage: true, fallback: "a resident" }),
+          seatsOffered: o.seats_offered,
+          offerId: o.id,
+          passengers: [],
+        })
       }
+      const sectionByOfferId = Object.fromEntries(sections.map(s => [s.offerId, s]))
       for (const p of passengers || []) {
         // Fall back to the passenger's own identity if a row somehow has no
         // party owner stamped (pre-migration-110 rows) -- see
@@ -658,11 +757,22 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         const key = p.party_owner_member_id ? `m:${p.party_owner_member_id}`
           : p.party_owner_contact_id ? `c:${p.party_owner_contact_id}`
           : p.member_id ? `m:${p.member_id}` : p.contact_id ? `c:${p.contact_id}` : null
-        if (!key) continue
-        const driverName = resolveMemberName(p.vehicle_offer?.driver, { canManage: true, fallback: "a resident" })
-        map[key] = { role: "riding", driverName }
+        if (key) {
+          const driverName = resolveMemberName(p.vehicle_offer?.driver, { canManage: true, fallback: "a resident" })
+          map[key] = { role: "riding", driverName }
+        }
+        const personKey = p.member_id ? `m:${p.member_id}` : p.contact_id ? `c:${p.contact_id}` : p.guest_name ? `g:${p.guest_name.trim().toLowerCase()}` : null
+        if (personKey) peopleKeys.add(personKey)
+        const section = sectionByOfferId[p.vehicle_offer_id]
+        if (section) {
+          const name = p.passenger_member ? resolveMemberName(p.passenger_member, { canManage: true, fallback: p.passenger_member?.username || "Resident" })
+            : p.passenger_contact ? p.passenger_contact.name : p.guest_name
+          section.passengers.push({ name, guest: !p.member_id && !p.contact_id })
+        }
       }
       setCarByOwner(map)
+      setCarSections(sections)
+      setCarPeopleKeys(peopleKeys)
     })
   }, [event.id])
 
@@ -1428,6 +1538,11 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
               const isHidden   = !!primaryRow?.name_hidden
               const carOwnerKey = member?.id ? `m:${member.id}` : contact?.id ? `c:${contact.id}` : null
               const carStatus   = carOwnerKey ? carByOwner[carOwnerKey] : null
+              // The car this owner is driving, if any -- carries the resolved
+              // passenger list, so it can be nested under this tile rather
+              // than repeated as a flat row per rider (Iain's follow-up ask:
+              // "passengers nested under their name to keep things organised").
+              const drivingSection = carStatus?.role === "driving" ? carSections.find(s => s.driverKey === carOwnerKey) : null
               return (
                 <div key={member?.id || contact?.id || name} style={{ background: isOwnBooking ? colour + "10" : "var(--surface2)", borderRadius: 10, padding: "10px 12px",
                   border: `${isOwnBooking ? 2 : 1}px solid ${borderCol}` }}>
@@ -1449,9 +1564,21 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                           <span title={`Driving -- offering ${carStatus.seatsOffered} seat${carStatus.seatsOffered === 1 ? "" : "s"}`} style={{ marginLeft: 5, fontSize: 11 }}>🚗 Driving</span>
                         )}
                         {carStatus?.role === "riding" && (
-                          <span title={`Riding with ${carStatus.driverName}`} style={{ marginLeft: 5, fontSize: 11 }}>🚗 Riding with {carStatus.driverName}</span>
+                          <span title={`In ${carStatus.driverName}'s car`} style={{ marginLeft: 5, fontSize: 11 }}>🧍 In {carStatus.driverName}'s car</span>
                         )}
                       </div>
+                      {/* Nested passenger list under the driver's own tile
+                          (Iain, follow-up on PR #145): a car icon marks the
+                          driver above, a human icon marks each passenger
+                          here, and they're indented under the driver rather
+                          than appearing as separate flat rows. */}
+                      {drivingSection && drivingSection.passengers.length > 0 && (
+                        <div style={{ fontSize: 11.5, color: "var(--text-dim)", marginTop: 3, marginLeft: 14, borderLeft: "2px solid var(--border)", paddingLeft: 8 }}>
+                          {drivingSection.passengers.map((p, i) => (
+                            <div key={i}>🧍 {p.name}{p.guest ? " (guest)" : ""}</div>
+                          ))}
+                        </div>
+                      )}
                       {realName && (
                         <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{realName}</div>
                       )}
