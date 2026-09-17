@@ -13,6 +13,8 @@ import {
   validateDriverSelfNomination,
   validatePartyForVehicle,
   validateBumpReason,
+  buildSeatClaimedMessage,
+  buildSeatAssignedMessage,
 } from '../../lib/vehicleOffers.js'
 
 let pass = 0, fail = 0
@@ -145,6 +147,22 @@ ok(validateBumpReason('   ').ok === false, 'whitespace-only reason rejected')
 ok(validateBumpReason(undefined).ok === false, 'missing reason rejected')
 ok(validateBumpReason('Need the seat for my partner instead').ok === true, 'a real reason is accepted')
 ok(validateBumpReason('  trimmed  ').reason === 'trimmed', 'reason is trimmed before being stored/sent')
+
+// buildSeatClaimedMessage / buildSeatAssignedMessage -- the notification
+// wording fix (Iain, 2026-09-17): a real display name in place of the
+// earlier "Someone" / "A booking party" placeholders, while still reading
+// naturally when the name is masked (hide_name) and the API route passes null.
+ok(buildSeatClaimedMessage({ claimantName: 'Scampi', seatCount: 1, eventTitle: 'Bowlers Unite' }) === "Scampi claimed a seat in your car for Bowlers Unite.",
+  'a named single claimant is used directly, singular "a seat"')
+ok(buildSeatClaimedMessage({ claimantName: 'Scampi', seatCount: 3, eventTitle: 'Bowlers Unite' }) === "Scampi claimed 3 seats in your car for Bowlers Unite.",
+  'a multi-person party claim is plural and counts every seat, not just the claimant')
+ok(buildSeatClaimedMessage({ claimantName: null, seatCount: 1, eventTitle: 'Bowlers Unite' }) === "A resident claimed a seat in your car for Bowlers Unite.",
+  'a masked (hide_name) claimant falls back to "A resident", never blank or "Someone"')
+
+ok(buildSeatAssignedMessage({ driverName: 'Iain Pallot', eventTitle: 'Bowlers Unite' }) === "You and your booking party have been given seats in Iain Pallot's car for Bowlers Unite.",
+  'a named driver is credited by name, possessive')
+ok(buildSeatAssignedMessage({ driverName: null, eventTitle: 'Bowlers Unite' }) === "You and your booking party have been given seats in a car for Bowlers Unite.",
+  'a masked (hide_name) driver falls back to the original generic "a car" wording')
 
 console.log(`\nlib/vehicleOffers.js: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
