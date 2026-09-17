@@ -534,6 +534,7 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
     is_public:             event?.is_public           !== false,
     show_attendee_names:   event?.show_attendee_names !== false,
     has_bus:               event?.has_bus             || false,
+    allow_personal_vehicles: event?.allow_personal_vehicles || false,
     bus_max_seats:         event?.bus_max_seats       ?? "",
     location_type:         event?.location_type       || "onsite",
     location:              event?.location            || "",
@@ -663,6 +664,7 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
       coordinator_ids:       coordinators.map(m => m.id),
       bus_driver_id:         form.has_bus ? busDriver?.id || null : null,
       bus_max_seats:         form.has_bus && form.bus_max_seats !== "" ? Number(form.bus_max_seats) : null,
+      allow_personal_vehicles: !!form.allow_personal_vehicles,
       has_dining:            form.has_dining,
       menu_type:             form.has_dining ? form.menu_type : null,
       menu_text:             form.has_dining && form.menu_type === "text" ? form.menu_text : null,
@@ -1099,6 +1101,14 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
                     onChange={e => set("bus_max_seats", e.target.value)} style={INPUT} placeholder="Uncapped" />
                 </div>
               )}
+              {/* Personal vehicles (migration 109, Iain 2026-09-17) — a second,
+                  independent transport option alongside Bus. Plain on/off, no
+                  admin fields (unlike Bus's driver/seat-cap fields): the driver's
+                  own seats-offered number and passenger picks are all set by
+                  residents themselves in the booking flow, not here. */}
+              <div style={FIELD}>
+                <Toggle value={form.allow_personal_vehicles} onChange={v => set("allow_personal_vehicles", v)} label="Personal vehicles" />
+              </div>
             </>
           )}
 
@@ -2032,7 +2042,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_unassigned_seats, unassigned_seats_count, unassigned_seat_names, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, bus_max_seats, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, payment_reminded_at, refund_due, refund_paid_at, member_id, contact_id, bus_passenger, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
+      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_unassigned_seats, unassigned_seats_count, unassigned_seat_names, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, bus_max_seats, allow_personal_vehicles, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, payment_reminded_at, refund_due, refund_paid_at, member_id, contact_id, bus_passenger, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
       .eq("hub_type", "special")
       .eq("archived", false)
       .order("event_date", { ascending: true })
