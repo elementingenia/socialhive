@@ -25,6 +25,7 @@ import { busSeatsUsed } from "@/lib/busSeats"
 import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/attendeeExport"
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
+import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -1217,6 +1218,21 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
   // Confirm-before-wipe for "Reset to unpaid" (2026-08-11 hotfix) -- see the
   // bug this replaces, below.
   const [resetConfirmId, setResetConfirmId] = useState(null)
+  // Personal vehicle offers (Iain, follow-up on PR #147): this card's own
+  // inline "Attendees" accordion is a separate implementation from
+  // EventSlideOut.js's Coordinator View and was missed when the
+  // driver/passenger icons were first added there -- see
+  // lib/vehicleSections.js's header comment.
+  const [carData, setCarData] = useState({ carByOwner: {}, carSections: [], carPeopleKeys: new Set() })
+  useEffect(() => {
+    if (!event.allow_personal_vehicles) return
+    Promise.all([
+      supabase.from("vehicle_offers").select(VEHICLE_OFFER_SELECT).eq("event_id", event.id),
+      supabase.from("vehicle_offer_passengers").select(VEHICLE_OFFER_PASSENGER_SELECT).eq("event_id", event.id),
+    ]).then(([{ data: offers }, { data: passengers }]) => {
+      setCarData(buildCarSections(offers || [], passengers || [], (m, fallback) => resolveMemberName(m, { canManage: true, fallback })))
+    })
+  }, [event.id, event.allow_personal_vehicles])
   const today     = new Date(); today.setHours(0, 0, 0, 0)
   const evDate    = localDate(event.event_date)
   const isPast    = evDate < today
@@ -1321,6 +1337,28 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
     const unassignedRows = (event.unassigned_seat_names || [])
       .slice().sort((a, b) => a.localeCompare(b))
       .map(name => ({ name, seats: 1, note: "" }))
+    // Transport sections (Iain, follow-up on PR #147): built via the same
+    // shared buildTransportExportSections() every other hub's own export
+    // now calls -- see lib/vehicleSections.js.
+    const transportOwners = [...confirmedBookings, ...waitlistBookings].map(b => {
+      const ownerKey = b.member_id ? `m:${b.member_id}` : b.contact_id ? `c:${b.contact_id}` : null
+      const party = ownerKey ? (partyByOwner[ownerKey] || []) : []
+      return {
+        key: ownerKey,
+        name: b.member_id === member?.id ? "You" : b.member ? resolveMemberName(b.member, { canManage: isAdmin }) : (b.contact?.name || "Member"),
+        going: b.status === "confirmed",
+        isBusRider: !!b.bus_passenger,
+        party: party.map(p => ({
+          identityKey: p.member_id ? `m:${p.member_id}` : p.contact_id ? `c:${p.contact_id}` : p.guest_name ? `g:${p.guest_name.trim().toLowerCase()}` : null,
+          label: p.guest_name || (p.contact_id ? (p.contact?.name || "Resident") : resolveMemberName(p.member, { canManage: isAdmin })),
+          bus: !!p.is_bus_passenger,
+          guest: !!p.guest_name,
+        })),
+      }
+    })
+    const transportSections = buildTransportExportSections({
+      owners: transportOwners, event, carSections: carData.carSections, carPeopleKeys: carData.carPeopleKeys,
+    })
     const ok = exportAttendeeListPdf({
       eventTitle: event.title,
       eventSubtitle: `${fmtDate(event.event_date)}${event.event_time ? " · " + fmtTime(event.event_time) : ""}`,
@@ -1328,6 +1366,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
         { heading: "Confirmed", rows: confirmedRows },
         { heading: "Unassigned Seats", rows: unassignedRows },
         { heading: "Waitlist", rows: waitlistRows },
+        ...(event.allow_personal_vehicles || event.has_bus ? transportSections : []),
       ],
       router,
       hubColour: "var(--special)",
@@ -1656,6 +1695,12 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                     // record it a second time).
                     const balanceNum = remainingBalance(b, event, b.seats || 1)
                     const isRecording = recordingId === b.id
+                    // Driver/passenger status (Iain, follow-up on PR #147) --
+                    // same carByOwner/carSections shape EventSlideOut.js's
+                    // Coordinator View already uses, see lib/vehicleSections.js.
+                    const carOwnerKey = b.member_id ? `m:${b.member_id}` : b.contact_id ? `c:${b.contact_id}` : null
+                    const carStatus = carOwnerKey ? carData.carByOwner[carOwnerKey] : null
+                    const drivingSection = carStatus?.role === "driving" ? carData.carSections.find(s => s.driverKey === carOwnerKey) : null
                     return (
                       <div key={i} style={{ padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
                         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", gap: "0.5rem" }}>
@@ -1663,6 +1708,12 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                           {label}
                           {isPrivate && isAdmin && !isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
                           {b.bus_passenger && <BusIcon style={{ width: 12, height: 12, marginLeft: 4, verticalAlign: "-1px", opacity: 0.75 }} />}
+                          {carStatus?.role === "driving" && (
+                            <span title={`Driving -- offering ${carStatus.seatsOffered} seat${carStatus.seatsOffered === 1 ? "" : "s"}`} style={{ marginLeft: 4, fontSize: "0.72rem" }}>🚗 Driving</span>
+                          )}
+                          {carStatus?.role === "riding" && (
+                            <span title={`In ${carStatus.driverName}'s car`} style={{ marginLeft: 4, fontSize: "0.72rem" }}>🧍 In {carStatus.driverName}'s car</span>
+                          )}
                         </span>
                         <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
                           {canManagePayments && submitted && (
@@ -1768,6 +1819,18 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                           })()}
                         </span>
                         </div>
+                        {/* Nested passenger list under the driver's own row
+                            (Iain, follow-up on PR #145/#147): a car icon marks
+                            the driver above, a human icon marks each
+                            passenger here, indented under the driver rather
+                            than appearing as separate rows. */}
+                        {drivingSection && drivingSection.passengers.length > 0 && (
+                          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 2, marginLeft: 10, borderLeft: "2px solid var(--border)", paddingLeft: 6 }}>
+                            {drivingSection.passengers.map((p, pi) => (
+                              <div key={pi}>🧍 {p.name}{p.guest ? " (guest)" : ""}</div>
+                            ))}
+                          </div>
+                        )}
                         {/* Inline record-payment form (2026-08-11) -- amount
                             pre-filled with the full amount owed (editable down for
                             a short payment or up for an overpayment), comment
