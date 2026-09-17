@@ -16,6 +16,21 @@
 import { useState, useEffect, useCallback } from "react"
 import { authedFetch } from "@/lib/getAuthToken"
 
+// Groups a car's flat passenger list back into booking parties (migration
+// 110 follow-up: every passenger row carries a party_key from the API --
+// party_owner_member_id/contact_id, or the row's own id when it has no
+// party owner) so the panel can show "riding together" rather than a flat
+// list that hides who's actually in one booking.
+function groupByParty(passengers) {
+  const groups = new Map()
+  for (const p of passengers) {
+    const key = p.party_key || `p:${p.id}`
+    if (!groups.has(key)) groups.set(key, { key, members: [] })
+    groups.get(key).members.push(p)
+  }
+  return Array.from(groups.values())
+}
+
 function driverLabel(driver) {
   if (!driver) return "Someone"
   if (driver.member_id) return driver.hide_name ? "Resident" : (driver.display_name || driver.name || driver.username || "Resident")
@@ -30,6 +45,8 @@ export default function VehicleOffersPanel({ event, meId, showToast }) {
   const [busyId, setBusyId] = useState(null)
   const [bumpTarget, setBumpTarget] = useState(null) // { passengerId, name } while the reason prompt is open
   const [bumpReason, setBumpReason] = useState("")
+  const [withdrawTarget, setWithdrawTarget] = useState(null) // { offerId } while the withdraw-reason form is open
+  const [withdrawReason, setWithdrawReason] = useState("")
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -72,17 +89,24 @@ export default function VehicleOffersPanel({ event, meId, showToast }) {
 
   async function withdraw(offerId, hasPassengers) {
     if (hasPassengers) {
-      const reason = window.prompt("This car has passengers already seated -- give them a reason for the cars no longer being available:")
-      if (reason === null) return
-      if (!reason.trim()) { showToast("A reason is needed to notify the passengers", "error"); return }
-      setBusyId(offerId)
-      await call("withdraw_offer", { vehicle_offer_id: offerId, reason })
-      setBusyId(null)
+      // No native window.prompt() -- an inline form below (see withdrawTarget)
+      // collects the reason instead, matching the app's "no native browser
+      // controls" standard (flagged by Iain, live-fire review of PR #145).
+      setWithdrawTarget({ offerId })
+      setWithdrawReason("")
       return
     }
     setBusyId(offerId)
     await call("withdraw_offer", { vehicle_offer_id: offerId })
     setBusyId(null)
+  }
+
+  async function confirmWithdraw() {
+    if (!withdrawReason.trim()) { showToast("A reason is needed to notify the passengers", "error"); return }
+    setBusyId(withdrawTarget.offerId)
+    const ok = await call("withdraw_offer", { vehicle_offer_id: withdrawTarget.offerId, reason: withdrawReason })
+    setBusyId(null)
+    if (ok) setWithdrawTarget(null)
   }
 
   async function claimSeat(offerId) {
@@ -135,11 +159,11 @@ export default function VehicleOffersPanel({ event, meId, showToast }) {
           </div>
           {myOffer && myOffer.passengers.length > 0 && (
             <div style={{ marginBottom: 6 }}>
-              {myOffer.passengers.map(p => (
-                <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "2px 0" }}>
-                  <span>{p.name}{p.guest ? " (guest)" : ""}</span>
-                  <button onClick={() => startBump(p.id, p.name)} disabled={busyId === p.id}
-                    style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", fontSize: 11.5 }}>
+              {groupByParty(myOffer.passengers).map(group => (
+                <div key={group.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "2px 0" }}>
+                  <span>{group.members.map(p => `${p.name}${p.guest ? " (guest)" : ""}`).join(" + ")}{group.members.length > 1 ? " (one booking)" : ""}</span>
+                  <button onClick={() => startBump(group.members[0].id, group.members.map(p => p.name).join(" + "))} disabled={group.members.some(p => busyId === p.id)}
+                    style={{ background: "none", border: "none", color: "var(--danger)", cursor: "pointer", fontSize: 11.5, flexShrink: 0, marginLeft: 8 }}>
                     Remove
                   </button>
                 </div>
@@ -189,15 +213,19 @@ export default function VehicleOffersPanel({ event, meId, showToast }) {
                   ) : (
                     eligibleToRide && o.seats_remaining > 0 && (
                       <button onClick={() => claimSeat(o.id)} disabled={busyId === o.id}
+                        title="Claiming a seat brings your whole booking party along -- if your booking is for more than one seat, everyone in it rides in this car"
                         style={{ padding: "3px 8px", borderRadius: 6, border: "none", background: "var(--teal)", color: "#fff", cursor: "pointer", fontSize: 11.5 }}>
                         Claim a seat
                       </button>
                     )
                   )}
                 </div>
+                {!myRow && eligibleToRide && o.seats_remaining > 0 && (
+                  <div style={{ color: "var(--text-dim)", fontSize: 11 }}>Your whole booking party comes with you into this car.</div>
+                )}
                 {o.passengers.length > 0 && (
                   <div style={{ color: "var(--text-dim)", fontSize: 11.5 }}>
-                    Riding: {o.passengers.map(p => `${p.name}${p.guest ? " (guest)" : ""}`).join(", ")}
+                    Riding: {groupByParty(o.passengers).map(g => g.members.map(p => `${p.name}${p.guest ? " (guest)" : ""}`).join(" + ")).join(", ")}
                   </div>
                 )}
               </div>
@@ -218,6 +246,24 @@ export default function VehicleOffersPanel({ event, meId, showToast }) {
               Remove & notify
             </button>
             <button onClick={() => setBumpTarget(null)} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "none", color: "var(--text)", cursor: "pointer" }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {withdrawTarget && (
+        <div style={{ marginTop: 10, padding: 8, borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
+          <div style={{ marginBottom: 6 }}>This car has passengers already seated — give them a reason for the car no longer being available:</div>
+          <textarea value={withdrawReason} onChange={e => setWithdrawReason(e.target.value)} rows={2}
+            style={{ width: "100%", boxSizing: "border-box", padding: "4px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", marginBottom: 6 }}
+            placeholder="e.g. My plans changed and I won't be driving after all" />
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={confirmWithdraw} disabled={busyId === withdrawTarget.offerId}
+              style={{ padding: "4px 10px", borderRadius: 6, border: "none", background: "var(--danger)", color: "#fff", cursor: "pointer" }}>
+              Stop offering & notify
+            </button>
+            <button onClick={() => setWithdrawTarget(null)} style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "none", color: "var(--text)", cursor: "pointer" }}>
               Cancel
             </button>
           </div>
