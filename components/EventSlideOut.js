@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabase"
 import { authedFetch } from "@/lib/getAuthToken"
 import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
+import VehicleOffersPanel from "@/components/VehicleOffersPanel"
 import ExpandableText from "@/components/ExpandableText"
 import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge, balancePhrase, remainingBalance, wholeDollar, paymentSummary, reconciliationIsStale } from "@/lib/payments"
 import { byOwnThenName, ordinal } from "@/lib/sortNames"
@@ -328,6 +329,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   const router = useRouter()
   const [data,        setData]        = useState(null)
   const [partyByOwner, setPartyByOwner] = useState({})
+  const [carByOwner, setCarByOwner] = useState({})
   const [loading,     setLoading]     = useState(true)
   const [apiError,    setApiError]    = useState(null)
   const [toast,       setToast]       = useState(null)
@@ -623,6 +625,45 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         }
         setPartyByOwner(map)
       })
+  }, [event.id])
+
+  // Personal vehicle offers (migration 109/110) -- driver/passenger status
+  // per booking OWNER for the attendee list, flagged as missing by Iain in
+  // live-fire review of PR #145 ("in the attendees list there is nothing to
+  // show who is driving and who is in which car"). Whichever booking a car
+  // status belongs to, it applies to the WHOLE party under that booking
+  // (migration 110's whole-party rule), so this is keyed one status per
+  // owner -- same m:/c: key as partyByOwner above -- not per named attendee.
+  useEffect(() => {
+    Promise.all([
+      supabase.from("vehicle_offers")
+        .select("id, member_id, seats_offered, driver:members!member_id(name, display_name, hide_name, username)")
+        .eq("event_id", event.id),
+      supabase.from("vehicle_offer_passengers")
+        .select(`
+          party_owner_member_id, party_owner_contact_id, member_id, contact_id,
+          vehicle_offer:vehicle_offers!vehicle_offer_id(member_id, driver:members!member_id(name, display_name, hide_name, username))
+        `)
+        .eq("event_id", event.id),
+    ]).then(([{ data: offers }, { data: passengers }]) => {
+      const map = {}
+      for (const o of offers || []) {
+        const key = `m:${o.member_id}`
+        map[key] = { role: "driving", seatsOffered: o.seats_offered }
+      }
+      for (const p of passengers || []) {
+        // Fall back to the passenger's own identity if a row somehow has no
+        // party owner stamped (pre-migration-110 rows) -- see
+        // partyRowsInOffer's identical fallback in the API route.
+        const key = p.party_owner_member_id ? `m:${p.party_owner_member_id}`
+          : p.party_owner_contact_id ? `c:${p.party_owner_contact_id}`
+          : p.member_id ? `m:${p.member_id}` : p.contact_id ? `c:${p.contact_id}` : null
+        if (!key) continue
+        const driverName = resolveMemberName(p.vehicle_offer?.driver, { canManage: true, fallback: "a resident" })
+        map[key] = { role: "riding", driverName }
+      }
+      setCarByOwner(map)
+    })
   }, [event.id])
 
   useEffect(() => {
@@ -1385,6 +1426,8 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
               const primaryRow = confRows[0] || waitRows[0]
               const hasBook    = !!primaryRow?.has_book
               const isHidden   = !!primaryRow?.name_hidden
+              const carOwnerKey = member?.id ? `m:${member.id}` : contact?.id ? `c:${contact.id}` : null
+              const carStatus   = carOwnerKey ? carByOwner[carOwnerKey] : null
               return (
                 <div key={member?.id || contact?.id || name} style={{ background: isOwnBooking ? colour + "10" : "var(--surface2)", borderRadius: 10, padding: "10px 12px",
                   border: `${isOwnBooking ? 2 : 1}px solid ${borderCol}` }}>
@@ -1402,6 +1445,12 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                         {name}
                         {isPrivate && !isOwnBooking && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", marginLeft: 5 }}>(P)</span>}
                         {!!firstConf?.bus_passenger && <span title="Riding the bus" style={{ marginLeft: 5 }}><BusIcon size={11} /></span>}
+                        {carStatus?.role === "driving" && (
+                          <span title={`Driving -- offering ${carStatus.seatsOffered} seat${carStatus.seatsOffered === 1 ? "" : "s"}`} style={{ marginLeft: 5, fontSize: 11 }}>🚗 Driving</span>
+                        )}
+                        {carStatus?.role === "riding" && (
+                          <span title={`Riding with ${carStatus.driverName}`} style={{ marginLeft: 5, fontSize: 11 }}>🚗 Riding with {carStatus.driverName}</span>
+                        )}
                       </div>
                       {realName && (
                         <div style={{ fontSize: 11, color: "var(--text-dim)" }}>{realName}</div>
@@ -2434,6 +2483,9 @@ function BookingSection({ event, onRefresh, onClose }) {
               </div>
             )
           })()}
+          {myConfirmed && !!event.allow_personal_vehicles && (
+            <VehicleOffersPanel event={event} meId={me?.id} showToast={showToast} />
+          )}
           {myConfirmed && event.payment_required && event.payment_due_by && !computeIsPaid(myConfirmed) && (
             <div style={{ fontSize: 12, color: "var(--amber-dark)", lineHeight: 1.4 }}>
               Payment due by {fmtDate(event.payment_due_by)}.
