@@ -70,7 +70,7 @@ async function validateSpace(payload, excludeEventId, viewerId, canManage) {
 
 const FIELDS = ["club_id", "event_date", "event_time", "event_end_time", "title", "is_public", "show_attendee_names",
   "description", "welcome_message", "book_id", "kit_return_date", "book_return_date", "reservation_cutoff", "max_seats",
-  "location_type", "location", "location_id", "has_bus", "bus_driver_id", "bus_max_seats", "max_seats_per_booking", "allow_nonresident_guests", "require_attendee_names", "booking_required", "payment_required", "cost",
+  "location_type", "location", "location_id", "has_bus", "bus_driver_id", "bus_max_seats", "allow_personal_vehicles", "max_seats_per_booking", "allow_nonresident_guests", "require_attendee_names", "booking_required", "payment_required", "cost",
   "payment_due_by", "bring_category_ids", "bring_required", "theme_name", "book_snapshot"]
 
 // "Open, all welcome" events (Iain, 2026-09-11 — Groups & Clubs dry run):
