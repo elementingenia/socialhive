@@ -1,9 +1,12 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { notify } from "@/lib/notify"
+import { resolveMemberName } from "@/lib/memberName"
+import { VEHICLE_OFFER_SELECT } from "@/lib/vehicleSections"
 import {
   validateSeatsOffered, vehicleSeatsUsed, validateVehicleSeatRequest,
   validateDriverSelfNomination, validatePartyForVehicle, validateBumpReason,
+  buildSeatClaimedMessage, buildSeatAssignedMessage,
 } from "@/lib/vehicleOffers"
 
 // Personal vehicle offers (migration 109, Iain 2026-09-17). Self-service --
@@ -31,7 +34,7 @@ export const dynamic = "force-dynamic"
 async function getMember(token) {
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
   if (error || !user) return null
-  const { data: member } = await supabaseAdmin.from("members").select("id, name").eq("auth_id", user.id).single()
+  const { data: member } = await supabaseAdmin.from("members").select("id, name, display_name, hide_name").eq("auth_id", user.id).single()
   return member
 }
 
@@ -313,8 +316,9 @@ export async function POST(req) {
       if (!bumpCheck.ok) return NextResponse.json({ error: bumpCheck.error }, { status: 400 })
       for (const p of passengers) {
         if (p.member_id) {
+          const driverName = resolveMemberName(member, { viewerId: p.member_id, fallback: "The driver" })
           await notify(p.member_id, event_id, "vehicle_offer_seat_removed",
-            `${member.name} withdrew their car offer for ${event.title}: ${bumpCheck.reason}`, undefined, member.id)
+            `${driverName} withdrew their car offer for ${event.title}: ${bumpCheck.reason}`, undefined, member.id)
         }
       }
     }
@@ -325,7 +329,7 @@ export async function POST(req) {
 
   // ── Driver pre-assigns a specific attendee's WHOLE PARTY to their own offer ─
   if (action === "assign_passenger") {
-    const { data: offer } = await supabaseAdmin.from("vehicle_offers").select("id, member_id, seats_offered").eq("id", body.vehicle_offer_id).eq("event_id", event_id).single()
+    const { data: offer } = await supabaseAdmin.from("vehicle_offers").select(VEHICLE_OFFER_SELECT).eq("id", body.vehicle_offer_id).eq("event_id", event_id).single()
     if (!offer) return NextResponse.json({ error: "Offer not found" }, { status: 404 })
     if (offer.member_id !== member.id) return NextResponse.json({ error: "Not your offer" }, { status: 403 })
 
@@ -333,16 +337,16 @@ export async function POST(req) {
     if (!identity.memberId && !identity.contactId && !identity.guestName) {
       return NextResponse.json({ error: "A passenger needs a resident or guest name." }, { status: 400 })
     }
-    return await addPartyToOffer({ event, offer, identity, nominatedByDriver: true, actingMemberId: member.id })
+    return await addPartyToOffer({ event, offer, identity, nominatedByDriver: true, actingMemberId: member.id, actingMember: member })
   }
 
   // ── Attendee self-claims an open seat -- brings their WHOLE PARTY ─────────
   if (action === "claim_seat") {
-    const { data: offer } = await supabaseAdmin.from("vehicle_offers").select("id, member_id, seats_offered").eq("id", body.vehicle_offer_id).eq("event_id", event_id).single()
+    const { data: offer } = await supabaseAdmin.from("vehicle_offers").select(VEHICLE_OFFER_SELECT).eq("id", body.vehicle_offer_id).eq("event_id", event_id).single()
     if (!offer) return NextResponse.json({ error: "Offer not found" }, { status: 404 })
     if (offer.member_id === member.id) return NextResponse.json({ error: "You can't claim a seat in your own car." }, { status: 400 })
 
-    return await addPartyToOffer({ event, offer, identity: { memberId: member.id }, nominatedByDriver: false, actingMemberId: member.id })
+    return await addPartyToOffer({ event, offer, identity: { memberId: member.id }, nominatedByDriver: false, actingMemberId: member.id, actingMember: member })
   }
 
   // ── Driver bumps an already-seated passenger's WHOLE PARTY (reason mandatory) ─
@@ -363,8 +367,9 @@ export async function POST(req) {
 
     for (const p of partyRows) {
       if (p.member_id) {
+        const driverName = resolveMemberName(member, { viewerId: p.member_id, fallback: "The driver" })
         await notify(p.member_id, event_id, "vehicle_offer_seat_removed",
-          `${member.name} removed your booking party from their car for ${event.title}: ${bumpCheck.reason}`, undefined, member.id)
+          `${driverName} removed your booking party from their car for ${event.title}: ${bumpCheck.reason}`, undefined, member.id)
       }
     }
     return NextResponse.json({ ok: true, removed: partyRows.length })
@@ -412,7 +417,7 @@ async function partyRowsInOffer(passenger) {
 // "whole party moves together, same rule everywhere" behaviour can't drift
 // between the two entry points (Iain's confirmed answer, live-fire review
 // of PR #145).
-async function addPartyToOffer({ event, offer, identity, nominatedByDriver, actingMemberId }) {
+async function addPartyToOffer({ event, offer, identity, nominatedByDriver, actingMemberId, actingMember }) {
   const party = await resolveBookingParty(event.id, identity)
   if (!party || party.members.length === 0) {
     return NextResponse.json({ error: "Couldn't find that person's booking for this event." }, { status: 400 })
@@ -464,16 +469,26 @@ async function addPartyToOffer({ event, offer, identity, nominatedByDriver, acti
   // Courtesy notifications, deliberately not in PUSH_TYPES (see lib/notify.js)
   // -- lower stakes than a bump, in-app only. One per newly-seated member
   // with a login (contacts/guests have no app to notify).
+  //
+  // Named with the actual (privacy-masked) display name rather than a
+  // generic "Someone"/"A booking party" placeholder (Iain, 2026-09-17,
+  // caught from a real notification screenshot -- the data was always
+  // there, the wording just never used it). resolveMemberName still
+  // respects hide_name exactly as everywhere else in the app: a resident
+  // who's set their name private falls back to "The driver"/"A resident"
+  // for this recipient, same as they'd render "Resident" anywhere else.
   if (nominatedByDriver) {
+    const driverName = resolveMemberName(offer.driver, { fallback: null })
     for (const m of newMembers) {
       if (m.member_id) {
         await notify(m.member_id, event.id, "vehicle_offer_seat_assigned",
-          `You and your booking party have been given seats in a car for ${event.title}.`, undefined, actingMemberId)
+          buildSeatAssignedMessage({ driverName, eventTitle: event.title }), undefined, actingMemberId)
       }
     }
   } else if (offer.member_id) {
+    const claimantName = resolveMemberName(actingMember, { viewerId: offer.member_id, fallback: null })
     await notify(offer.member_id, event.id, "vehicle_offer_seat_claimed",
-      `A booking party claimed seats in your car for ${event.title}.`, undefined, actingMemberId)
+      buildSeatClaimedMessage({ claimantName, seatCount: newMembers.length, eventTitle: event.title }), undefined, actingMemberId)
   }
 
   return NextResponse.json({ ok: true, ids: (saved || []).map(r => r.id), party_size: newMembers.length })
