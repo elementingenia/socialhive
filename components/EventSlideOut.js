@@ -19,6 +19,7 @@ import { clubTextOn, clubInk } from "@/lib/clubColours"
 import { maxSeatsPerBooking, effectiveSeatCap } from "@/lib/modifyBooking"
 import { busSeatsUsed } from "@/lib/busSeats"
 import { useOwners } from "@/lib/useOwners"
+import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
 import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/attendeeExport"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -458,48 +459,20 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
     // wasn't included in the export below, which is the actual gap. Fixed:
     // the bus driver is now the first row of the Bus section, same as a car
     // section always leads with its driver.
-    const busRows = []
-    const ownWayRows = []
-    const busDriverIdentityKey = event.bus_driver_id ? `m:${event.bus_driver_id}` : null
-    if (event.has_bus && event.bus_driver) {
-      busRows.push({ name: event.bus_driver.name || event.bus_driver.username, seats: "", note: "Driver" })
-    }
-    Object.values(grouped).forEach(g => {
+    const transportOwners = Object.values(grouped).map(g => {
       const ownerName = g.member
         ? resolveMemberName(g.member, { canManage: true, fallback: g.member?.username || g.contact?.name || "—" })
         : (g.contact?.name || "—")
       const ownerKey = g.member?.id ? `m:${g.member.id}` : g.contact?.id ? `c:${g.contact.id}` : null
-      if (g.confirmed.length === 0) return // waitlist-only parties aren't going yet -- no transport to report
-      const party = ownerKey ? (partyByOwner[ownerKey] || []) : []
-      const ownerIsBusDriver = !!busDriverIdentityKey && ownerKey === busDriverIdentityKey
-      const ownerIsBusRider = !!g.confirmed[0]?.bus_passenger
-      const ownerInCar = ownerKey ? carPeopleKeys.has(ownerKey) : false
-      // The bus driver already has their own row above -- don't also list
-      // them as a rider or "own way" just because they didn't separately
-      // tick "riding the bus" on their own booking.
-      if (!ownerIsBusDriver) {
-        if (ownerIsBusRider) busRows.push({ name: ownerName, seats: 1, note: "" })
-        if (!ownerIsBusRider && !ownerInCar) ownWayRows.push({ name: ownerName, seats: 1, note: "" })
-      }
-      for (const p of party) {
-        const inCar = p.identityKey ? carPeopleKeys.has(p.identityKey) : false
-        const isBusDriver = !!busDriverIdentityKey && p.identityKey === busDriverIdentityKey
-        if (isBusDriver) continue
-        if (p.bus) busRows.push({ name: p.label, seats: 1, note: p.guest ? "Named attendee (guest)" : "Named attendee" })
-        if (!p.bus && !inCar) ownWayRows.push({ name: p.label, seats: 1, note: p.guest ? "Named attendee (guest)" : "Named attendee" })
+      return {
+        key: ownerKey,
+        name: ownerName,
+        going: g.confirmed.length > 0, // waitlist-only parties aren't going yet -- no transport to report
+        isBusRider: !!g.confirmed[0]?.bus_passenger,
+        party: ownerKey ? (partyByOwner[ownerKey] || []) : [],
       }
     })
-    busRows.sort((a, b) => (a.note === "Driver" ? -1 : b.note === "Driver" ? 1 : a.name.localeCompare(b.name)))
-    ownWayRows.sort((a, b) => a.name.localeCompare(b.name))
-
-    const carSectionsForExport = carSections
-      .map(s => ({
-        heading: `🚗 ${s.driverName}'s car`,
-        rows: [
-          { name: s.driverName, seats: s.seatsOffered, note: "Driver" },
-          ...s.passengers.map(p => ({ name: p.name, seats: 1, note: p.guest ? "Passenger (guest)" : "Passenger" })),
-        ],
-      }))
+    const transportSections = buildTransportExportSections({ owners: transportOwners, event, carSections, carPeopleKeys })
 
     const subtitleParts = []
     if (event.event_date) subtitleParts.push(fmtDate(event.event_date))
@@ -513,11 +486,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         { heading: "Confirmed", rows: confirmedRows },
         { heading: "Unassigned Seats", rows: unassignedRows },
         { heading: "Waitlist", rows: waitlistRows },
-        ...(event.allow_personal_vehicles || event.has_bus ? [
-          { heading: "🚌 Community Bus", rows: busRows },
-          ...carSectionsForExport,
-          { heading: "🚶 Making Own Way (no bus or car chosen)", rows: ownWayRows },
-        ] : []),
+        ...(event.allow_personal_vehicles || event.has_bus ? transportSections : []),
       ],
       router,
       hubColour: colour,
@@ -722,57 +691,16 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   // (handleExportAttendees) so the two can't drift apart.
   useEffect(() => {
     Promise.all([
-      supabase.from("vehicle_offers")
-        .select("id, member_id, seats_offered, driver:members!member_id(name, display_name, hide_name, username)")
-        .eq("event_id", event.id),
-      supabase.from("vehicle_offer_passengers")
-        .select(`
-          id, vehicle_offer_id, party_owner_member_id, party_owner_contact_id, member_id, contact_id, guest_name,
-          passenger_member:members!member_id(name, display_name, hide_name, username),
-          passenger_contact:contacts!contact_id(name),
-          vehicle_offer:vehicle_offers!vehicle_offer_id(member_id, driver:members!member_id(name, display_name, hide_name, username))
-        `)
-        .eq("event_id", event.id),
+      supabase.from("vehicle_offers").select(VEHICLE_OFFER_SELECT).eq("event_id", event.id),
+      supabase.from("vehicle_offer_passengers").select(VEHICLE_OFFER_PASSENGER_SELECT).eq("event_id", event.id),
     ]).then(([{ data: offers }, { data: passengers }]) => {
-      const map = {}
-      const sections = []
-      const peopleKeys = new Set()
-      for (const o of offers || []) {
-        const key = `m:${o.member_id}`
-        map[key] = { role: "driving", seatsOffered: o.seats_offered }
-        peopleKeys.add(key)
-        sections.push({
-          driverKey: key,
-          driverName: resolveMemberName(o.driver, { canManage: true, fallback: "a resident" }),
-          seatsOffered: o.seats_offered,
-          offerId: o.id,
-          passengers: [],
-        })
-      }
-      const sectionByOfferId = Object.fromEntries(sections.map(s => [s.offerId, s]))
-      for (const p of passengers || []) {
-        // Fall back to the passenger's own identity if a row somehow has no
-        // party owner stamped (pre-migration-110 rows) -- see
-        // partyRowsInOffer's identical fallback in the API route.
-        const key = p.party_owner_member_id ? `m:${p.party_owner_member_id}`
-          : p.party_owner_contact_id ? `c:${p.party_owner_contact_id}`
-          : p.member_id ? `m:${p.member_id}` : p.contact_id ? `c:${p.contact_id}` : null
-        if (key) {
-          const driverName = resolveMemberName(p.vehicle_offer?.driver, { canManage: true, fallback: "a resident" })
-          map[key] = { role: "riding", driverName }
-        }
-        const personKey = p.member_id ? `m:${p.member_id}` : p.contact_id ? `c:${p.contact_id}` : p.guest_name ? `g:${p.guest_name.trim().toLowerCase()}` : null
-        if (personKey) peopleKeys.add(personKey)
-        const section = sectionByOfferId[p.vehicle_offer_id]
-        if (section) {
-          const name = p.passenger_member ? resolveMemberName(p.passenger_member, { canManage: true, fallback: p.passenger_member?.username || "Resident" })
-            : p.passenger_contact ? p.passenger_contact.name : p.guest_name
-          section.passengers.push({ name, guest: !p.member_id && !p.contact_id })
-        }
-      }
-      setCarByOwner(map)
-      setCarSections(sections)
-      setCarPeopleKeys(peopleKeys)
+      const { carByOwner, carSections, carPeopleKeys } = buildCarSections(
+        offers || [], passengers || [],
+        (m, fallback) => resolveMemberName(m, { canManage: true, fallback }),
+      )
+      setCarByOwner(carByOwner)
+      setCarSections(carSections)
+      setCarPeopleKeys(carPeopleKeys)
     })
   }, [event.id])
 

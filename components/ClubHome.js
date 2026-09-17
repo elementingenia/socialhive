@@ -32,6 +32,7 @@ import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName } from "@/lib/sortNames"
 import { resolveMemberName } from "@/lib/memberName"
 import { exportAttendeeListPdf } from "@/lib/attendeeExport"
+import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 
@@ -136,6 +137,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
   const [togglingId,      setTogglingId]      = useState(null)
   const [remindingId,     setRemindingId]     = useState(null)
   const [remindedId,      setRemindedId]      = useState(null)
+  const [carData, setCarData] = useState({ carByOwner: {}, carSections: [], carPeopleKeys: new Set() })
   const book          = event.books || event.book_snapshot
   const bookLink      = book?.rating_link || null
   const communityScore = book?.avg_score ? parseFloat(book.avg_score).toFixed(1) : null
@@ -158,6 +160,21 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
       .from("booking_attendees")
       .select("owner_id, owner_contact_id, member_id, contact_id, guest_name, bring_note, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name), bring:club_bring_categories!bring_category_id(label)")
       .eq("event_id", event.id)
+    // Personal vehicle offers (Iain, follow-up on PR #147: this card's own
+    // inline attendee list is a separate implementation from
+    // EventSlideOut.js's Coordinator View and was missed when the
+    // driver/passenger icons were first added there -- see
+    // lib/vehicleSections.js's header comment). Fetched alongside the two
+    // queries above so one loadAttendees() call builds the whole list.
+    const [{ data: offers }, { data: passengers }] = await Promise.all([
+      supabase.from("vehicle_offers").select(VEHICLE_OFFER_SELECT).eq("event_id", event.id),
+      supabase.from("vehicle_offer_passengers").select(VEHICLE_OFFER_PASSENGER_SELECT).eq("event_id", event.id),
+    ])
+    const { carByOwner, carSections, carPeopleKeys } = buildCarSections(
+      offers || [], passengers || [],
+      (m, fallback) => resolveMemberName(m, { viewerId: member?.id, canManage: canManageBooks, selfLabel: "You", fallback }),
+    )
+    setCarData({ carByOwner, carSections, carPeopleKeys })
     const partyByOwner = {}
     for (const p of partyRows || []) {
       // Composite key: a walk-up booking's party is owned by a contact
@@ -184,6 +201,14 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
       const isOwn     = b.members?.id === member?.id
       const isPrivate = !!(b.members?.hide_name || b.name_hidden)
       const memberForName = b.members ? { ...b.members, hide_name: isPrivate } : null
+      // Driver/passenger status (Iain, follow-up on PR #147): "a car icon
+      // next to drivers and a human icon next to passengers... passengers
+      // nested under their name." Same carByOwner/carSections shape
+      // EventSlideOut.js's Coordinator View already uses -- see
+      // lib/vehicleSections.js.
+      const carOwnerKey = b.members?.id ? `m:${b.members.id}` : b.contacts?.id ? `c:${b.contacts.id}` : null
+      const carStatus = carOwnerKey ? carByOwner[carOwnerKey] : null
+      const drivingSection = carStatus?.role === "driving" ? carSections.find(s => s.driverKey === carOwnerKey) : null
       return {
         id: b.id,
         name: memberForName
@@ -196,6 +221,9 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
         isPrivate,
         seats: b.seats || 1,
         busPassenger: !!b.bus_passenger,
+        carOwnerKey,
+        carStatus,
+        drivingPassengers: drivingSection?.passengers || [],
         hasBook: !!b.has_book,
         bring: b.bring?.label || null,
         bringNote: b.bring_note || null,
@@ -214,6 +242,7 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
                 : "Resident",
             guest: !!p.guest_name,
             busPassenger: !!p.is_bus_passenger,
+            identityKey: p.member_id ? `m:${p.member_id}` : p.contact_id ? `c:${p.contact_id}` : p.guest_name ? `g:${p.guest_name.trim().toLowerCase()}` : null,
             bring: p.bring?.label || null,
             bringNote: p.bring_note || null,
           }
@@ -227,16 +256,36 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
   // Clubs/Book Club keeps its own separate inline attendees list on this
   // card, so it needs its own copy built from this component's own
   // already-loaded `attendees` state.
+  //
+  // Transport sections (Iain, follow-up on PR #147): this card's own export
+  // had been missed entirely when Bus/Car/Own-Way sections were first added
+  // to the attendee-list export -- built via the same shared
+  // buildTransportExportSections() every other hub's own export now calls,
+  // so this one can't drift out of sync with them. carData is set by
+  // loadAttendees() above, alongside `attendees` itself.
   function handleExportAttendees() {
     const rows = (attendees || []).map(a => ({
       name: a.name,
       seats: a.seats,
       note: (a.party || []).length > 0 ? `With: ${a.party.map(p => p.name).join(", ")}` : "",
     }))
+    const transportOwners = (attendees || []).map(a => ({
+      key: a.carOwnerKey,
+      name: a.name,
+      going: true, // this card only ever loads confirmed bookings
+      isBusRider: a.busPassenger,
+      party: (a.party || []).map(p => ({ identityKey: p.identityKey, label: p.name, bus: p.busPassenger, guest: p.guest })),
+    }))
+    const transportSections = buildTransportExportSections({
+      owners: transportOwners, event, carSections: carData.carSections, carPeopleKeys: carData.carPeopleKeys,
+    })
     const ok = exportAttendeeListPdf({
       eventTitle: label || event.title,
       eventSubtitle: fmtDate(event.event_date),
-      sections: [{ heading: "Attendees", rows }],
+      sections: [
+        { heading: "Attendees", rows },
+        ...(event.allow_personal_vehicles || event.has_bus ? transportSections : []),
+      ],
       router,
       hubColour: colour,
     })
@@ -555,8 +604,26 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
                       {a.name}
                       {a.isPrivate && canManageBooks && !a.isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
                       {a.busPassenger && <span title="Riding the bus" style={{ marginLeft: 4 }}><BusIcon style={{ width: 12, height: 12, verticalAlign: "-1px", opacity: 0.75 }} /></span>}
+                      {a.carStatus?.role === "driving" && (
+                        <span title={`Driving -- offering ${a.carStatus.seatsOffered} seat${a.carStatus.seatsOffered === 1 ? "" : "s"}`} style={{ marginLeft: 4, fontSize: "0.72rem" }}>🚗 Driving</span>
+                      )}
+                      {a.carStatus?.role === "riding" && (
+                        <span title={`In ${a.carStatus.driverName}'s car`} style={{ marginLeft: 4, fontSize: "0.72rem" }}>🧍 In {a.carStatus.driverName}'s car</span>
+                      )}
                       {a.bring && <span style={{ fontWeight: 600, color: clubInk(colour) }}> · {a.bring}{a.bringNote ? ` — ${a.bringNote}` : ""}</span>}
                     </span>
+                    {/* Nested passenger list under the driver's own row
+                        (Iain, follow-up on PR #145/#147): a car icon marks
+                        the driver above, a human icon marks each passenger
+                        here, indented under the driver rather than appearing
+                        as separate rows. */}
+                    {a.drivingPassengers.length > 0 && (
+                      <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 2, marginLeft: 10, borderLeft: "2px solid var(--border)", paddingLeft: 6 }}>
+                        {a.drivingPassengers.map((p, i) => (
+                          <div key={i}>🧍 {p.name}{p.guest ? " (guest)" : ""}</div>
+                        ))}
+                      </div>
+                    )}
                     {(a.party || []).map((p, j) => (
                       <span key={j} style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: "0.75rem", color: "var(--text-dim)" }}>
                         {p.name}{p.guest ? " (guest)" : ""}
