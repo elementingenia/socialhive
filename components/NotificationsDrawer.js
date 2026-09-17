@@ -75,11 +75,21 @@ function typeColour(type) {
   }
 }
 
-// Best-effort mapping from a notification's event to the hub page that
-// covers it. There is no per-event URL/page anywhere in this app (event
-// detail always renders in an in-page slide-out, never its own route), so
-// this is deliberately a landing-page approximation, not a deep link to the
-// exact booking/screening/club post -- flagged rather than pretended away.
+// Maps a notification to where it should navigate. Where a hub's own
+// event-list page supports the app's Event Deep Linking feature
+// (2026-09-13, ?event=<id> read on mount -- see lib/eventShare.js and each
+// page's own "Event Deep Linking" comment), route straight there with the
+// real event id so the resident lands on the actual event with its booking
+// modal already open, not just the hub's landing page (fixed 2026-09-18 --
+// Iain: "should go to the Special Events Scheduled page and either land at
+// the event tile OR open the booking modal for the event"). Movies'
+// /screenings and Special Events' /special-events/events are their own
+// list pages already, so this is a straight fix there too, not new scope.
+// Club/Book Club events are NOT deep-linkable this way yet: ClubHome.js
+// needs the club's slug in the URL (/clubs/<slug>?event=<id>), which this
+// notification query doesn't join, and /bookclub's redirect drops query
+// strings entirely -- both still land on their plain hub page. Flagged as
+// a known remaining gap, not silently treated as fixed.
 // Notification types with no event_id (club_notice_posted, bar_reconciled)
 // have no navigable target and stay tick-only.
 function targetForNotif(n) {
@@ -87,12 +97,13 @@ function targetForNotif(n) {
   if (n.type === "voting_opened") return "/voting"
   if (n.type === "survey_opened" || n.type === "survey_results_published") return "/surveys"
   if (n.type === "committee_post_added") return "/committee"
+  const evId = n.event_id
   switch (n.events?.hub_type) {
-    case "movie":    return "/screenings"
-    case "social":   return "/social"
+    case "movie":    return evId ? `/screenings?event=${evId}` : "/screenings"
+    case "social":   return evId ? `/social/events?event=${evId}` : "/social"
     case "bookclub": return "/bookclub"
     case "club":     return "/clubs"
-    case "special":  return "/special-events"
+    case "special":  return evId ? `/special-events/events?event=${evId}` : "/special-events"
     default:         return null
   }
 }
