@@ -9,6 +9,7 @@ import {
   promoteSpaceBookingToEvent, updateSpaceEvent,
 } from '@/lib/spaceBookings'
 import { notifyEventDetailsChanged } from '@/lib/notifyEventUpdated'
+import { promoteWaitlist } from '@/lib/promoteWaitlist'
 import { resolveMemberName } from '@/lib/memberName'
 
 // Personal Space Booking. Scope: Social_Hive_Personal_Space_Booking_Scope.md
@@ -518,6 +519,15 @@ export async function PATCH(req) {
         { title, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names },
       )
       if (result.error) return NextResponse.json({ error: result.error }, { status: result.status })
+      // BUG-060/BUG-061 class (Iain, 2026-09-18): raising Total Seats never
+      // re-checked the waitlist -- capacity was only ever recalculated at
+      // cancellation time. promoteWaitlist() recomputes available seats
+      // fresh and is a no-op when nothing has actually freed up, so it's
+      // safe to call unconditionally rather than trying to detect exactly
+      // which field changed. (Kept out of lib/spaceBookings.js itself --
+      // see the note in updateSpaceEvent -- since that file is also
+      // imported client-side.)
+      await promoteWaitlist(id)
       if (result.changed) {
         await notifyEventDetailsChanged(supabaseAdmin, id,
           `${title.trim()} has been updated — check the details.`,

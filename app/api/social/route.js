@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyEventDetailsChanged } from '@/lib/notifyEventUpdated'
 import { notifyAllActiveMembers } from '@/lib/notifyAudience'
+import { promoteWaitlist } from '@/lib/promoteWaitlist'
 import { checkCancelPaymentGuard } from '@/lib/eventCancelGuard'
 import { needsSpaceValidation, fetchLocation } from '@/lib/eventClash'
 import { findAnyRoomConflict } from '@/lib/spaceBookings'
@@ -198,6 +199,14 @@ export async function PATCH(req) {
     .eq('id', body.id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // BUG-060/BUG-061 class (Iain, 2026-09-18): raising Total Seats never
+  // re-checked the waitlist -- capacity was only ever recalculated at
+  // cancellation time. promoteWaitlist() recomputes available seats fresh and
+  // is a no-op when nothing has actually freed up, so it's safe to call
+  // unconditionally on every edit rather than trying to detect exactly which
+  // field changed.
+  await promoteWaitlist(body.id)
 
   await writeCoordinators(body.id, body.coordinator_ids, member.id)
 

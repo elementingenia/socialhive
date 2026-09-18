@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyEventDetailsChanged } from '@/lib/notifyEventUpdated'
+import { promoteWaitlist } from '@/lib/promoteWaitlist'
 import { notifyHubFollowers } from '@/lib/notifyAudience'
 import { hubLocation, fetchLocation } from '@/lib/eventClash'
 import { findAnyRoomConflict } from '@/lib/spaceBookings'
@@ -337,6 +338,14 @@ export async function PATCH(req) {
     .eq('id', event_id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // BUG-060/BUG-061 class (Iain, 2026-09-18): raising Total Seats never
+  // re-checked the waitlist -- capacity was only ever recalculated at
+  // cancellation time. promoteWaitlist() recomputes available seats fresh and
+  // is a no-op when nothing has actually freed up, so it's safe to call
+  // unconditionally on every edit rather than trying to detect exactly which
+  // field changed.
+  await promoteWaitlist(event_id)
 
   // "Request Only" (Iain, 2026-08-04): only nudge when the room actually
   // changed onto a Request Only venue -- not on every unrelated edit.
