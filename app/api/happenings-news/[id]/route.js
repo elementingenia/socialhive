@@ -8,7 +8,9 @@ export const dynamic = "force-dynamic"
 const POST_SELECT = "id, event_id, member_id, content, primary_photo_id, created_at, edited_at, " +
   "members(name), " +
   "events(id, title, event_date, event_time, hub_type, club_id, clubs!club_id(name, colour)), " +
-  "happenings_news_photos(id, url, storage_path, position, is_primary, archived_at)"
+  // !post_id disambiguates the embed -- see app/api/happenings-news/route.js's
+  // POST_SELECT comment for why (two FKs exist between these tables).
+  "happenings_news_photos!post_id(id, url, storage_path, position, is_primary, archived_at)"
 
 // GET — single post, full detail (for the slide-out + carousel). Any
 // authenticated resident, same read policy as the list route.

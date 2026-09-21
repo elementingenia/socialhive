@@ -8,7 +8,17 @@ export const dynamic = "force-dynamic"
 const POST_SELECT = "id, event_id, member_id, content, primary_photo_id, created_at, edited_at, " +
   "members(name), " +
   "events(id, title, event_date, event_time, hub_type, club_id, clubs!club_id(name, slug, colour)), " +
-  "happenings_news_photos(id, url, position, is_primary, archived_at)"
+  // !post_id disambiguates the embed -- happenings_news_posts and
+  // happenings_news_photos have TWO foreign keys between them
+  // (photos.post_id -> posts.id, AND posts.primary_photo_id ->
+  // photos.id), so PostgREST can't infer which relationship to embed
+  // without being told explicitly. Root-caused 2026-09-22 (Iain: every
+  // "Read recap" / "View recap" link 404'd, and the Home tile silently
+  // showed "No recaps posted yet" even though posts were persisting fine
+  // -- the actual server response, once checked via the Network tab, was
+  // a 500 with "Could not embed because more than one relationship was
+  // found for 'happenings_news_posts' and 'happenings_news_photos'").
+  "happenings_news_photos!post_id(id, url, position, is_primary, archived_at)"
 
 function shapePost(row) {
   const photos = (row.happenings_news_photos || []).sort((a, b) => a.position - b.position)

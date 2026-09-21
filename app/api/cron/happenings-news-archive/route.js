@@ -38,7 +38,9 @@ export async function GET(req) {
   const cutoff = new Date(Date.now() - archiveDays * 24 * 60 * 60 * 1000).toISOString()
   const { data: candidatePosts, error } = await supa
     .from("happenings_news_posts")
-    .select("id, created_at, happenings_news_photos(id, storage_path, archived_at)")
+    // !post_id disambiguates the embed -- see app/api/happenings-news/route.js's
+    // POST_SELECT comment for why (two FKs exist between these tables).
+    .select("id, created_at, happenings_news_photos!post_id(id, storage_path, archived_at)")
     .lte("created_at", cutoff)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
