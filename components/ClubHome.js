@@ -2665,8 +2665,18 @@ export default function ClubHome({ club }) {
         </div>
       )}
 
-      {/* Closed events (past only) */}
-      <ClosedEventsAccordion events={closedEvents} myBookedIds={myBookedIds} colour={colour} />
+      {/* Closed events (past only) -- book-catalogue return/participation
+          history. Gated to hasBooks (Iain, 2026-09-22): this accordion was
+          never actually restricted to book-enabled clubs despite being
+          built purely for Book Club's return tracking (cover art, "✓
+          Participated" badge) -- confirmed by reading its render, which
+          falls back to a generic 📖 emoji and shows for every club with any
+          past event. That made it a near-duplicate of the Happenings News
+          Past Events accordion right below for every non-book club (e.g.
+          Gym Happenings), showing the same events twice for no reason. */}
+      {caps.hasBooks && (
+        <ClosedEventsAccordion events={closedEvents} myBookedIds={myBookedIds} colour={colour} />
+      )}
 
       {/* Happenings News recap of this club's own past events -- separate
           from ClosedEventsAccordion above (that one's about the club's
