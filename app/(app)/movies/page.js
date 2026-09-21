@@ -589,7 +589,7 @@ export default function MoviesHomePage() {
         </div>
       )}
 
-      <PastEventsAccordion hubType="movie" colour="var(--teal)" />
+      <PastEventsAccordion hubType="movie" colour="var(--teal)" onOpenEvent={(id) => openSlideOutForEvent(id)} />
     </div>
   )
 }

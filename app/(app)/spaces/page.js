@@ -158,7 +158,7 @@ export default function SpacesPage() {
         />
       )}
 
-      <PastEventsAccordion hubType="space" colour="var(--space)" />
+      <PastEventsAccordion hubType="space" colour="var(--space)" onOpenEvent={openEvent} />
     </div>
   )
 }

@@ -482,7 +482,7 @@ export default function SpecialEventsHome() {
           onRefresh={() => { setFullEvent(null); load() }} />
       )}
 
-      <PastEventsAccordion hubType="special" colour="var(--special)" />
+      <PastEventsAccordion hubType="special" colour="var(--special)" onOpenEvent={(id) => openEventSlideOut({ id })} />
     </div>
   )
 }

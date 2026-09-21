@@ -2275,6 +2275,22 @@ export default function ClubHome({ club }) {
     setSlideOutEvent(toSlideOutShape(ev, myBookings[ev.id]))
   }
 
+  // For PastEventsAccordion's onOpenEvent: unlike openSlideOut above, the
+  // accordion only hands back an id (its past-events API returns a light
+  // {id, title, event_date, ...} row, not the full event) -- and a past
+  // event isn't guaranteed to already be in local `events` state (that's
+  // scoped to non-archived events). Fetches fresh, same select shape as the
+  // main load() query, so the Coordinator can reach "Write a recap" inside
+  // CoordinatorPanel even for a meeting they never personally booked.
+  async function openEventById(id) {
+    const { data } = await supabase
+      .from("events")
+      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, username), image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .eq("id", id).single()
+    if (!data) return
+    setSlideOutEvent(toSlideOutShape(data, myBookings[id]))
+  }
+
   async function handleSlideOutRefresh() {
     if (!slideOutEvent) return
     const currentId = slideOutEvent.id
@@ -2656,7 +2672,7 @@ export default function ClubHome({ club }) {
           from ClosedEventsAccordion above (that one's about the club's
           book-catalogue "closed meeting" history; this one's every past
           event, with a link through to its news post if one exists). */}
-      <PastEventsAccordion clubId={club.id} colour={colour} />
+      <PastEventsAccordion clubId={club.id} colour={colour} onOpenEvent={openEventById} />
 
       {/* Unified booking slide-over */}
       <EventSlideOut

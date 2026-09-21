@@ -487,7 +487,7 @@ export default function SocialHome() {
           onRefresh={() => { setFullEvent(null); load() }} />
       )}
 
-      <PastEventsAccordion hubType="social" colour="var(--terracotta)" />
+      <PastEventsAccordion hubType="social" colour="var(--terracotta)" onOpenEvent={(id) => openEventSlideOut({ id })} />
     </div>
   )
 }
