@@ -7,6 +7,7 @@ import { posterFor, posterPosition, posterAlt } from '@/lib/showing'
 import { sydneyTodayStr, isEventPast } from '@/lib/date'
 import { bookingsClosed } from '@/lib/booking'
 import EventSlideOut from '@/components/EventSlideOut'
+import PastEventsAccordion from '@/components/PastEventsAccordion'
 import EventCoordinators from '@/components/EventCoordinators'
 import FollowHubButton from '@/components/FollowHubButton'
 import { ContactBar } from '@/components/OwnersManager'
@@ -587,6 +588,8 @@ export default function MoviesHomePage() {
           <div style={{ fontSize: '0.88rem' }}>You&apos;re all caught up on ratings!</div>
         </div>
       )}
+
+      <PastEventsAccordion hubType="movie" colour="var(--teal)" onOpenEvent={(id) => openSlideOutForEvent(id)} />
     </div>
   )
 }

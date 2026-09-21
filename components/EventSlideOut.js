@@ -10,6 +10,7 @@ import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import VehicleOffersPanel from "@/components/VehicleOffersPanel"
 import ExpandableText from "@/components/ExpandableText"
+import HappeningsNewsCard from "@/components/HappeningsNewsCard"
 import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge, balancePhrase, remainingBalance, wholeDollar, paymentSummary, reconciliationIsStale } from "@/lib/payments"
 import { byOwnThenName, ordinal } from "@/lib/sortNames"
 import { resolveMemberName } from "@/lib/memberName"
@@ -1037,6 +1038,11 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           </div>
         )
       })()}
+
+      {/* Happenings News -- EC's entry point to write a recap, once the
+          event has ended (Iain, 2026-09-21). Self-contained, renders
+          nothing until the event is actually past. */}
+      <HappeningsNewsCard event={event} colour={colour} />
 
       {/* EC Notes */}
       <div style={{ marginBottom: 14 }}>
