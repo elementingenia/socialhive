@@ -48,18 +48,45 @@ export default function HappeningsNewsComposer({ eventId, postId: initialPostId,
   }
 
   async function uploadPhoto(file) {
-    if (photos.length >= MAX_PHOTOS_PER_POST) { setError(`A post can have at most ${MAX_PHOTOS_PER_POST} photos`); return }
-    setError(""); setBusy(true)
     const fd = new FormData()
     fd.append("post_id", postId)
     fd.append("file", file)
     const res = await authedFetch("/api/happenings-news/photos", { method: "POST", body: fd })
     const json = await res.json().catch(() => ({}))
+    if (!res.ok) throw new Error(json.error || "Could not upload that photo")
+    return json
+  }
+
+  // Handles a multi-select from the file picker (Iain, 2026-09-22: "upload
+  // only allows one image at a time -- can this be multiple?"). Uploads
+  // sequentially rather than in parallel -- the API auto-nominates the
+  // first photo of a post as primary purely by upload order (see
+  // app/api/happenings-news/photos/route.js), so parallel requests could
+  // race and leave the wrong photo as headline. Stops at the 10-photo cap
+  // (using a local running count, since setPhotos hasn't re-rendered mid-loop)
+  // and reports how many made it in if the batch was trimmed or one failed.
+  async function uploadPhotos(files) {
+    setError(""); setBusy(true)
+    let count = photos.length
+    let uploaded = 0
+    for (const file of files) {
+      if (count >= MAX_PHOTOS_PER_POST) {
+        setError(`Only added ${uploaded} of ${files.length} -- a post can have at most ${MAX_PHOTOS_PER_POST} photos`)
+        break
+      }
+      try {
+        const json = await uploadPhoto(file)
+        const newPhoto = { id: json.id, url: json.url, is_primary: count === 0 }
+        setPhotos(p => [...p, newPhoto])
+        if (count === 0) setPrimaryPhotoId(json.id)
+        count++
+        uploaded++
+      } catch (err) {
+        setError(uploaded > 0 ? `Added ${uploaded}, then: ${err.message}` : err.message)
+        break
+      }
+    }
     setBusy(false)
-    if (!res.ok) { setError(json.error || "Could not upload that photo"); return }
-    const newPhoto = { id: json.id, url: json.url, is_primary: photos.length === 0 }
-    setPhotos(p => [...p, newPhoto])
-    if (photos.length === 0) setPrimaryPhotoId(json.id)
   }
 
   async function removePhoto(photoId) {
@@ -146,8 +173,8 @@ export default function HappeningsNewsComposer({ eventId, postId: initialPostId,
                     color: "var(--text-dim)", fontSize: "1.5rem",
                   }}>
                     +
-                    <input type="file" accept="image/*" style={{ display: "none" }}
-                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); e.target.value = "" }} />
+                    <input type="file" accept="image/*" multiple style={{ display: "none" }}
+                      onChange={e => { const files = Array.from(e.target.files || []); if (files.length) uploadPhotos(files); e.target.value = "" }} />
                   </label>
                 )}
               </div>
