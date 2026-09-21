@@ -10,7 +10,6 @@ import { useUser } from "@/lib/UserContext"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import VehicleOffersPanel from "@/components/VehicleOffersPanel"
 import ExpandableText from "@/components/ExpandableText"
-import HappeningsNewsCard from "@/components/HappeningsNewsCard"
 import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge, balancePhrase, remainingBalance, wholeDollar, paymentSummary, reconciliationIsStale } from "@/lib/payments"
 import { byOwnThenName, ordinal } from "@/lib/sortNames"
 import { resolveMemberName } from "@/lib/memberName"
@@ -1038,11 +1037,6 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           </div>
         )
       })()}
-
-      {/* Happenings News -- EC's entry point to write a recap, once the
-          event has ended (Iain, 2026-09-21). Self-contained, renders
-          nothing until the event is actually past. */}
-      <HappeningsNewsCard event={event} colour={colour} />
 
       {/* EC Notes */}
       <div style={{ marginBottom: 14 }}>
@@ -2607,7 +2601,18 @@ function BookingSection({ event, onRefresh, onClose }) {
               })()
             )
           )}
-          {myConfirmed && !isBookclubEvent && !closed && (
+          {/* Once bookings are closed, a resident with an existing booking can
+              still reduce their seats or cancel outright -- only ADDING seats
+              is blocked (server-side, lib/modifyBooking.js's
+              planSeatModification already only rejects a growing request
+              when closed, shrinking has always been fine). This button used
+              to be hidden outright whenever `closed`, which hid the reduce
+              path along with the (correctly blocked) increase path -- fixed
+              2026-09-21 (Iain): "They should be able to reduce seats (not
+              increase) as well as cancel." The modifying panel below clamps
+              the seat picker's max so growth still can't be requested from
+              the UI either way. */}
+          {myConfirmed && !isBookclubEvent && (
             <button onClick={() => { setModifySeats((myConfirmed.seats || 1) + (myWaitlist?.seats || 0)); setModifying(true) }}
               style={{ width: "100%", padding: "12px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>
               Modify Seats
@@ -2620,12 +2625,23 @@ function BookingSection({ event, onRefresh, onClose }) {
         </div>
       )}
 
-      {modifying && (
+      {modifying && (() => {
+        const currentTotal = (myConfirmed?.seats || 0) + (myWaitlist?.seats || 0)
+        // Can't grow while already split across confirmed+waitlist (cancel
+        // and rebook instead), and can't grow at all once bookings have
+        // closed -- either way the picker's own max clamps the UI so growth
+        // can't even be requested; shrinking down to 1 is always allowed.
+        const modifyMax = (myWaitlist || closed) ? currentTotal : maxPerBooking
+        return (
         <div>
-          <SeatSelector value={modifySeats} min={1} max={myWaitlist ? (myConfirmed?.seats || 0) + (myWaitlist?.seats || 0) : maxPerBooking} onChange={setModifySeats} />
-          {myWaitlist && (
+          <SeatSelector value={modifySeats} min={1} max={modifyMax} onChange={setModifySeats} />
+          {myWaitlist ? (
             <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 8 }}>
               Can&apos;t increase seats on a split booking — cancel and rebook to request more seats.
+            </div>
+          ) : closed && (
+            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 8 }}>
+              Bookings for this event are closed — you can reduce your seats or cancel, but can&apos;t add more.
             </div>
           )}
           {bringApplicable && bringCats.length > 0 && (
@@ -2657,7 +2673,8 @@ function BookingSection({ event, onRefresh, onClose }) {
             </button>
           </div>
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

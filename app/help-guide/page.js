@@ -742,11 +742,14 @@ export default function HelpGuidePage() {
                 confirmed</strong>. Two buttons appear:
               </Step>
               <Step>
-                <strong>Modify Seats</strong> — change the number of seats in your booking.
+                <strong>Modify Seats</strong> — change the number of seats in your booking. Once
+                bookings for the event have closed, this can only reduce your seats, not add more —
+                you'll see a note explaining this in the panel.
               </Step>
               <Step>
                 <strong>Cancel Booking</strong> — cancel your reservation entirely (shown with a red
-                border). Your seat is released immediately for other residents.
+                border). Your seat is released immediately for other residents. Cancelling is always
+                available, even after bookings have closed.
               </Step>
             </Subsection>
 
