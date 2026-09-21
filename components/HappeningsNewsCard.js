@@ -59,7 +59,14 @@ export default function HappeningsNewsCard({ event, colour }) {
 
       {composerOpen && (
         <HappeningsNewsComposer eventId={event.id} onClose={() => setComposerOpen(false)}
-          onSaved={(newPostId) => { setComposerOpen(false); setPostId(newPostId) }} />
+          onSaved={(newPostId) => {
+            setComposerOpen(false)
+            // Defence in depth against the silent-failure shape Iain hit
+            // (2026-09-22): never just trust whatever id the composer hands
+            // back -- re-check against the server so the card can't flip to
+            // "View / edit your recap" for a post that isn't actually there.
+            if (newPostId) recheck(); else setPostId(null)
+          }} />
       )}
       {viewingPostId && (
         <PostSlideOut postId={viewingPostId} onClose={() => setViewingPostId(null)} onChanged={recheck} />

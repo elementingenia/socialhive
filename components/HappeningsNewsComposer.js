@@ -36,13 +36,43 @@ export default function HappeningsNewsComposer({ eventId, postId: initialPostId,
   async function createPost() {
     if (!content.trim()) { setError("Write something about the event first."); return }
     setError(""); setBusy(true)
-    const res = await authedFetch("/api/happenings-news", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event_id: eventId, content }),
-    })
-    const json = await res.json().catch(() => ({}))
+    let res
+    try {
+      res = await authedFetch("/api/happenings-news", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: eventId, content }),
+      })
+    } catch (err) {
+      // Network failure (offline, timeout, proxy drop) never reached the
+      // server at all -- previously this threw uncaught and the modal just
+      // sat there with no feedback. Log the real error for diagnosis (Iain,
+      // 2026-09-22: several posts created "successfully" in the UI never
+      // actually persisted -- with no error shown, there was nothing to go
+      // on). console.error survives to devtools even though this UI only
+      // shows a friendly message.
+      setBusy(false); console.error("Happenings News create failed (network):", err)
+      setError("Couldn't reach the server -- check your connection and try again.")
+      return
+    }
+    const rawText = await res.text()
+    let json = {}
+    try { json = rawText ? JSON.parse(rawText) : {} } catch { /* non-JSON response, handled below */ }
     setBusy(false)
-    if (!res.ok) { setError(json.error || "Could not create the post"); return }
+    if (!res.ok) {
+      console.error("Happenings News create failed:", res.status, rawText)
+      setError(json.error || `Could not create the post (server said ${res.status})`)
+      return
+    }
+    if (!json.id) {
+      // The server said 200 OK but didn't hand back a post id -- this is
+      // exactly the silent-failure shape Iain hit: the UI would previously
+      // sail on to the photos step as if it worked, then the post was
+      // nowhere to be found afterward. Never proceed on a response we can't
+      // actually use.
+      console.error("Happenings News create: 200 OK but no id in response:", rawText)
+      setError("The server didn't confirm the post was saved -- nothing has been posted. Please try again, and if this keeps happening, check the browser console (F12) for the logged error.")
+      return
+    }
     setPostId(json.id)
     setStep("photos")
   }
