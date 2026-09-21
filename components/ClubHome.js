@@ -32,7 +32,12 @@ import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName } from "@/lib/sortNames"
 import { resolveMemberName } from "@/lib/memberName"
-import { exportAttendeeListPdf } from "@/lib/attendeeExport"
+import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/attendeeExport"
+// Payment-management port (2026-09-22, Iain -- Club payment parity): same
+// hub-agnostic helpers Social's events page and EventSlideOut.js's
+// CoordinatorPanel already use, see lib/payments.js for the shared
+// status/reconciliation math.
+import { paymentSummary, reconciliationIsStale, isPaid as isPaymentPaid, isSubmitted as isPaymentSubmitted, isPartial as isPaymentPartial, seatsCost, remainingBalance, wholeDollar, balancePhrase, isRemindedToday } from "@/lib/payments"
 import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
@@ -139,6 +144,20 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
   const [remindingId,     setRemindingId]     = useState(null)
   const [remindedId,      setRemindedId]      = useState(null)
   const [carData, setCarData] = useState({ carByOwner: {}, carSections: [], carPeopleKeys: new Set() })
+  // Payment-management state (2026-09-22 port from Social's events page) --
+  // kept separate from the book-return toggling/reminding state above
+  // (togglingId/remindingId/remindedId), which is a distinct action on the
+  // same row.
+  const [paymentData,       setPaymentData]       = useState(null)
+  const [payTogglingId,     setPayTogglingId]     = useState(null)
+  const [recordingId,       setRecordingId]       = useState(null)
+  const [recordAmount,      setRecordAmount]      = useState("")
+  const [recordNote,        setRecordNote]        = useState("")
+  const [resetConfirmId,    setResetConfirmId]    = useState(null)
+  const [remindingPaymentId,setRemindingPaymentId]= useState(null)
+  const [remindedPaymentId, setRemindedPaymentId] = useState(null)
+  const [closingOutPayments,setClosingOutPayments]= useState(false)
+  const [togglingRefundId,  setTogglingRefundId]  = useState(null)
   const book          = event.books || event.book_snapshot
   const bookLink      = book?.rating_link || null
   const communityScore = book?.avg_score ? parseFloat(book.avg_score).toFixed(1) : null
@@ -149,6 +168,8 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
   const ecNames = activeECs.map(ec => ec.members?.name || ec.members?.username).filter(Boolean)
   const isEC = !!(member && activeECs.some(ec => ec.member_id === member.id))
   const canManageBooks = isAdmin || isEC || isOwner
+  // Paid-event gate (2026-09-22 port) -- same shape as Social's isPaidEvent.
+  const isPaidEvent = !!(event.payment_required && event.cost > 0)
 
   async function loadAttendees() {
     const { data } = await supabase
@@ -252,6 +273,24 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
     }).sort((a, b) => byOwnThenName(a.isOwn, b.isOwn, a.name, b.name)))
   }
 
+  // Load payment data for the Attendees accordion (2026-09-22 port from
+  // Social's events page). Unlike loadAttendees() above (a direct Supabase
+  // read -- fine for RLS-open club/booking data), payment fields are only
+  // readable through the existing, already-gated GET /api/coordinator
+  // endpoint (EC/admin only server-side, same one EventSlideOut.js's
+  // CoordinatorPanel already uses for every hub) -- no new server code
+  // needed. Kept as its own call, separate from loadAttendees(), since it's
+  // conditional on isPaidEvent and canManageBooks while loadAttendees()
+  // always needs to run for the plain attendee list.
+  async function loadPaymentData() {
+    if (!isPaidEvent || !canManageBooks) { setPaymentData(null); return }
+    const res = await authedFetch(`/api/coordinator?event_id=${event.id}`)
+    if (res.ok) {
+      const data = await res.json().catch(() => null)
+      setPaymentData(data)
+    }
+  }
+
   // Export attendee list as PDF (2026-09-11, Iain -- see the matching
   // handler in components/EventSlideOut.js's CoordinatorPanel). Groups &
   // Clubs/Book Club keeps its own separate inline attendees list on this
@@ -293,10 +332,54 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
     if (!ok) window.alert("Couldn't open the attendee export")
   }
 
+  // Export payment reconciliation as PDF (2026-09-22 port from Social's
+  // events page -- see handleExportAttendees above for why this card keeps
+  // its own copy rather than going through EventSlideOut.js's shared
+  // CoordinatorPanel). Built from paymentData, loaded by loadPaymentData()
+  // above alongside attendees.
+  function handleExportReconciliation() {
+    const nameFor = (b) => b.members
+      ? resolveMemberName({ ...b.members, hide_name: !!(b.members?.hide_name || b.name_hidden) },
+          { viewerId: member?.id, canManage: canManageBooks, selfLabel: "You", fallback: b.members?.username || b.contacts?.name || "Member" })
+      : (b.contacts?.name || "Member")
+    const rowFor = (b) => ({ name: nameFor(b), seats: b.seats || 1, amount: balancePhrase(b, event, b.seats || 1) })
+    const confirmed = (paymentData?.bookings || []).filter(b => b.status === "confirmed")
+    const paidRows = [], unpaidRows = [], partialRows = []
+    for (const b of confirmed) {
+      if (isPaymentPaid(b)) paidRows.push(rowFor(b))
+      else if (isPaymentPartial(b, event)) partialRows.push(rowFor(b))
+      else unpaidRows.push(rowFor(b))
+    }
+    const refundRows = (paymentData?.refund_pending || []).map(b => ({
+      name: nameFor(b), seats: b.seats || 1, amount: `$${(parseFloat(b.refund_due) || 0).toFixed(2)} due`,
+    }))
+    ;[paidRows, unpaidRows, partialRows, refundRows].forEach(list => list.sort((a, b) => a.name.localeCompare(b.name)))
+    const summaryLines = paymentSummaryData ? [
+      { label: "Expected", value: `$${paymentSummaryData.expectedTotal.toFixed(2)}` },
+      { label: "Collected", value: `$${paymentSummaryData.collectedTotal.toFixed(2)}`, colour: "#166534" },
+      { label: "Outstanding", value: `$${paymentSummaryData.outstandingTotal.toFixed(2)}`, colour: paymentSummaryData.outstandingTotal > 0 ? "#92400e" : undefined },
+      ...(paymentSummaryData.refundsDueCount > 0 ? [{ label: "Refunds due", value: `$${paymentSummaryData.refundsDueTotal.toFixed(2)}`, colour: "#92400e" }] : []),
+    ] : []
+    const ok = exportPaymentReconciliationPdf({
+      eventTitle: event.title,
+      eventSubtitle: fmtDate(event.event_date),
+      summaryLines,
+      groups: [
+        { heading: "Paid", rows: paidRows },
+        { heading: "Unpaid", rows: unpaidRows },
+        { heading: "Partial", rows: partialRows },
+        { heading: "Refunds", rows: refundRows },
+      ],
+      router,
+      hubColour: colour,
+    })
+    if (!ok) window.alert("Couldn't open the reconciliation export")
+  }
+
   async function toggleAttendees() {
     if (attendeesOpen) { setAttendeesOpen(false); return }
     setAttendeesLoading(true)
-    await loadAttendees()
+    await Promise.all([loadAttendees(), loadPaymentData()])
     setAttendeesLoading(false)
     setAttendeesOpen(true)
   }
@@ -340,6 +423,118 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
       showToast?.(data.error || "Could not send reminder")
     }
   }
+
+  // ── Payment handlers (2026-09-22 port from app/(app)/social/events/page.js)
+  // -- same /api/coordinator PATCH actions Social and EventSlideOut.js's
+  // CoordinatorPanel already use, no server changes needed. Follows this
+  // card's own authedFetch convention (not Social's older raw-fetch +
+  // getAuthToken pattern) -- consistent with toggleHasBook/remindBookReturn
+  // above.
+  async function handleTogglePayment(bookingObj, amount, note) {
+    if (payTogglingId) return
+    const isSettled = bookingObj.payment_status === "confirmed" || bookingObj.payment_status === "partial"
+    const next = isSettled ? "pending" : "confirmed"
+    setPayTogglingId(bookingObj.id)
+    const res = await authedFetch("/api/coordinator", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event_id: event.id, action: "set_payment", booking_id: bookingObj.id, payment_status: next,
+        ...(next === "confirmed" ? { amount: amount === "" ? undefined : amount, note: note || undefined } : {}),
+      }),
+    })
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}))
+      const resultLabel = data.payment_status === "partial" ? "Partial payment recorded"
+        : data.payment_status === "confirmed" ? "Marked as paid" : "Marked as unpaid"
+      showToast?.(resultLabel)
+    } else {
+      const data = await res.json().catch(() => ({}))
+      showToast?.(data.error || "Update failed")
+    }
+    await loadPaymentData()
+    setPayTogglingId(null)
+  }
+
+  async function handleCloseOutPayments() {
+    if (closingOutPayments) return
+    setClosingOutPayments(true)
+    const res = await authedFetch("/api/coordinator", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: event.id, action: "close_out_payments" }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) {
+      showToast?.(data.reminded > 0 ? `Reminded ${data.reminded} unpaid attendee${data.reminded !== 1 ? "s" : ""}` : "All paid up -- nothing to remind")
+    } else {
+      showToast?.(data.error || "Close Out failed")
+    }
+    await loadPaymentData()
+    setClosingOutPayments(false)
+  }
+
+  async function handleRemindPayment(bookingObj, name) {
+    if (remindingPaymentId) return
+    setRemindingPaymentId(bookingObj.id)
+    const res = await authedFetch("/api/coordinator", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: event.id, action: "remind_payment", booking_id: bookingObj.id }),
+    })
+    setRemindingPaymentId(null)
+    if (res.ok) {
+      setRemindedPaymentId(bookingObj.id)
+      setTimeout(() => setRemindedPaymentId(null), 2500)
+      showToast?.(`Reminder sent to ${name}`)
+    } else {
+      const data = await res.json().catch(() => ({}))
+      showToast?.(data.error || "Could not send reminder")
+    }
+    await loadPaymentData()
+  }
+
+  async function handleToggleRefund(bookingObj, name, currentlyRefunded) {
+    if (togglingRefundId) return
+    setTogglingRefundId(bookingObj.id)
+    const res = await authedFetch("/api/coordinator", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event_id: event.id, action: "mark_refund_paid", booking_id: bookingObj.id, refunded: !currentlyRefunded }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) {
+      showToast?.(currentlyRefunded ? `Refund unmarked for ${name}` : `Refund marked for ${name}`)
+    } else {
+      showToast?.(data.error || "Failed to update refund")
+    }
+    await loadPaymentData()
+    setTogglingRefundId(null)
+  }
+
+  // Derived payment values for the Attendees accordion (2026-09-22 port) --
+  // sourced from paymentData (loaded via loadPaymentData() above), not the
+  // separate `attendees` state, since only /api/coordinator's response
+  // carries payment_status/amount_paid/refund fields. Looked up per-row by
+  // booking id below so the existing attendee row rendering (name/car/bring/
+  // book-return) doesn't need restructuring.
+  const paymentByBookingId = {}
+  for (const b of (paymentData?.bookings || [])) paymentByBookingId[b.id] = b
+  const confirmedPayBookings = (paymentData?.bookings || []).filter(b => b.status === "confirmed")
+  const refundPendingBookings = paymentData?.refund_pending || []
+  const refundIssuedBookings  = paymentData?.refund_issued || []
+  const paymentSummaryData = canManageBooks && isPaidEvent && paymentData
+    ? paymentSummary(confirmedPayBookings, event, refundPendingBookings)
+    : null
+  const isPaymentsStale = canManageBooks && isPaidEvent && paymentData
+    ? reconciliationIsStale({ ...event, payments_reconciled_at: paymentData.payments_reconciled_at },
+        [...confirmedPayBookings, ...refundPendingBookings, ...refundIssuedBookings])
+    : false
+  const payeeName = (b) => b.members?.id === member?.id ? "You"
+    : b.members
+      ? resolveMemberName({ ...b.members, hide_name: !!(b.members?.hide_name || b.name_hidden) },
+          { viewerId: member?.id, canManage: canManageBooks, selfLabel: "You", fallback: b.members?.username || b.contacts?.name || "Member" })
+      : (b.contacts?.name || "Member")
 
   const isJoined = booking?.status === "confirmed"
   // Bug fixed 2026-08-21 (Iain): see BookingStrip below. canManageBooks
@@ -594,10 +789,73 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
                 </button>
               </div>
             )}
+            {/* Payment summary card (2026-09-22 port from Social's events
+                page) -- Expected/Collected/Outstanding, Last reviewed +
+                stale flag, Close Out, Export Reconciliation PDF. Gated the
+                same way as every other payment-management element on this
+                card: canManageBooks && isPaidEvent, plus paymentSummaryData
+                itself only computes once paymentData has loaded. */}
+            {paymentSummaryData && (
+              <div onClick={e => e.stopPropagation()} style={{
+                background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
+                padding: "0.6rem 0.7rem", marginBottom: "0.6rem", fontSize: "0.75rem",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: "0.4rem",
+                  marginBottom: paymentData?.payments_reconciled_at || paymentSummaryData.unpaidCount > 0 || paymentSummaryData.refundsDueCount > 0 ? "0.5rem" : 0 }}>
+                  <span style={{ color: "var(--text-dim)" }}>Expected <strong style={{ color: "var(--text)" }}>${paymentSummaryData.expectedTotal.toFixed(2)}</strong></span>
+                  <span style={{ color: "var(--text-dim)" }}>Collected <strong style={{ color: "var(--green)" }}>${paymentSummaryData.collectedTotal.toFixed(2)}</strong></span>
+                  <span style={{ color: "var(--text-dim)" }}>Outstanding <strong style={{ color: paymentSummaryData.outstandingTotal > 0 ? "var(--amber-dark)" : "var(--text)" }}>${paymentSummaryData.outstandingTotal.toFixed(2)}</strong></span>
+                  {paymentSummaryData.refundsDueCount > 0 && (
+                    <span style={{ color: "var(--text-dim)" }}>Refunds due <strong style={{ color: "#92400e" }}>${paymentSummaryData.refundsDueTotal.toFixed(2)}</strong></span>
+                  )}
+                </div>
+                {paymentData?.payments_reconciled_at && (
+                  <div style={{ fontSize: "0.68rem", color: isPaymentsStale ? "var(--amber-dark)" : "var(--text-dim)", marginBottom: paymentSummaryData.unpaidCount > 0 ? "0.5rem" : 0 }}>
+                    Last reviewed {fmtDate(paymentData.payments_reconciled_at.slice(0, 10))}
+                    {paymentData.reconciled_by_member && ` by ${paymentData.reconciled_by_member.name || paymentData.reconciled_by_member.username}`}
+                    {isPaymentsStale && <strong> — new activity since, worth another look</strong>}
+                  </div>
+                )}
+                {paymentSummaryData.submittedCount > 0 && (
+                  <div style={{ fontSize: "0.68rem", color: "#0f766e", marginBottom: "0.5rem" }}>
+                    🧾 {paymentSummaryData.submittedCount} of these marked payment submitted — check and confirm below
+                  </div>
+                )}
+                {paymentSummaryData.partialCount > 0 && (
+                  <div style={{ fontSize: "0.68rem", color: "#075985", marginBottom: "0.5rem" }}>
+                    {paymentSummaryData.partialCount} partial payment{paymentSummaryData.partialCount !== 1 ? "s" : ""} (${paymentSummaryData.partialTotal.toFixed(2)} received so far) — still short of the full amount
+                  </div>
+                )}
+                {paymentSummaryData.unpaidCount > 0 && (
+                  <button
+                    disabled={closingOutPayments}
+                    onClick={handleCloseOutPayments}
+                    style={{
+                      width: "100%", padding: "0.4rem", borderRadius: 8, border: "1px solid var(--amber)",
+                      background: "var(--amber)15", color: "var(--amber-dark)", fontSize: "0.72rem", fontWeight: 700,
+                      cursor: closingOutPayments ? "default" : "pointer", fontFamily: "inherit", opacity: closingOutPayments ? 0.6 : 1,
+                      marginBottom: "0.4rem",
+                    }}>{closingOutPayments ? "Closing out…" : `Close Out — remind ${paymentSummaryData.unpaidCount} unpaid`}</button>
+                )}
+                <button onClick={e => { e.stopPropagation(); handleExportReconciliation() }}
+                  style={{ fontSize: "0.68rem", fontWeight: 700, color: clubInk(colour), background: "none",
+                    border: `1px solid ${colour}`, borderRadius: 8, padding: "0.2rem 0.5rem", cursor: "pointer", fontFamily: "inherit" }}>
+                  ⬇ Export Reconciliation PDF
+                </button>
+              </div>
+            )}
             {attendees && attendees.length > 0 ? (
-              attendees.map((a, i) => (
-                <div key={a.id || i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", padding: "0.3rem 0",
+              attendees.map((a, i) => {
+                const payBooking = paymentByBookingId[a.id]
+                const paid = payBooking ? isPaymentPaid(payBooking) : false
+                const partial = payBooking ? isPaymentPartial(payBooking, event) : false
+                const submitted = !paid && payBooking ? isPaymentSubmitted(payBooking) : false
+                const balanceNum = payBooking ? remainingBalance(payBooking, event, payBooking.seats || a.seats || 1) : 0
+                const isRecording = recordingId === a.id
+                return (
+                <div key={a.id || i} style={{ padding: "0.3rem 0",
                   borderBottom: i < attendees.length - 1 ? "1px solid var(--border)" : "none" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem" }}>
                   <span style={{ minWidth: 0, flex: 1 }}>
                     {/* One person per line; dish in the club colour; fades if it
                         doesn't fit (Iain 2026-07-18 — colour is the lead, no icon). */}
@@ -659,12 +917,195 @@ function EventCard({ event, label, booking, onOpen, onEdit = null, colour = "var
                         </div>
                       </div>
                       )}
+                      {isPaidEvent && payBooking && !paid && (() => {
+                        const reminding = remindingPaymentId === a.id
+                        const remindedToday = isRemindedToday(payBooking)
+                        const disabled = reminding || remindedToday
+                        return (
+                          <button
+                            disabled={disabled}
+                            onClick={e => { e.stopPropagation(); if (!disabled) handleRemindPayment(payBooking, a.name) }}
+                            aria-label={remindedToday ? `Already reminded ${a.name} today` : `Remind ${a.name} to pay`}
+                            title={remindedToday ? "Reminder already sent today" : "Send payment reminder"}
+                            style={{ display: "flex", alignItems: "center", justifyContent: "center", border: "none", background: "none",
+                              padding: "0.1rem 0.15rem", cursor: disabled ? "default" : "pointer", fontFamily: "inherit",
+                              flexShrink: 0, opacity: reminding ? 0.35 : remindedToday ? 0.4 : 1, fontSize: "0.85rem", lineHeight: 1,
+                              filter: remindedToday ? "grayscale(1)" : "none" }}>
+                            {remindedPaymentId === a.id ? "✅" : "🔔"}
+                          </button>
+                        )
+                      })()}
+                      {isPaidEvent && payBooking && (() => {
+                        const pending = payTogglingId === a.id
+                        return (
+                          <button
+                            disabled={pending}
+                            onClick={e => {
+                              e.stopPropagation()
+                              setRecordingId(a.id)
+                              setRecordAmount(String(Math.round(balanceNum)))
+                              setRecordNote("")
+                              setResetConfirmId(null)
+                            }}
+                            role="switch" aria-checked={paid} aria-label={paid || partial ? "Adjust recorded payment" : "Record a payment"}
+                            style={{ display: "flex", alignItems: "center", gap: 5, border: "none", background: "none",
+                              padding: "0.15rem 0.1rem", cursor: pending ? "default" : "pointer", fontFamily: "inherit",
+                              flexShrink: 0, opacity: pending ? 0.55 : 1 }}>
+                            <span style={{ fontSize: "0.62rem", fontWeight: 700, color: partial ? "#0369a1" : !paid ? "var(--amber-dark)" : "var(--text-dim)" }}>Unpaid</span>
+                            <span style={{ width: 32, height: 18, borderRadius: 9, position: "relative", flexShrink: 0,
+                              background: paid ? "var(--green)" : partial ? "#0369a1" : "var(--amber)", transition: "background 0.15s" }}>
+                              <span style={{ position: "absolute", top: 2, left: paid ? 16 : 2, width: 14, height: 14, borderRadius: "50%",
+                                background: "#fff", transition: "left 0.15s", boxShadow: "0 1px 2px rgba(0,0,0,.25)" }} />
+                            </span>
+                            <span style={{ fontSize: "0.62rem", fontWeight: 700, color: paid ? "var(--green)" : "var(--text-dim)" }}>Paid</span>
+                          </button>
+                        )
+                      })()}
                     </div>
                   )}
                 </div>
-              ))
+                {canManageBooks && submitted && (
+                  <div style={{ marginTop: "0.15rem" }}>
+                    <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#0f766e", background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 8, padding: "0.05rem 0.35rem" }}>🧾 Submitted</span>
+                  </div>
+                )}
+                {/* Inline record-payment form (2026-09-22 port) -- amount
+                    pre-filled to the outstanding balance, comment required
+                    only if the amount doesn't complete it. The server
+                    derives Partial/Confirmed from the amount -- this never
+                    sends a status directly. */}
+                {canManageBooks && isRecording && (() => {
+                  const owed = payBooking ? seatsCost(event, payBooking.seats || a.seats || 1) : null
+                  const enteredAmt = recordAmount === "" ? null : (parseFloat(recordAmount) || 0)
+                  const willComplete = enteredAmt !== null && Math.round(enteredAmt) === Math.round(balanceNum)
+                  const commentNeeded = !willComplete
+                  const pending = payTogglingId === a.id
+                  const saveBlocked = commentNeeded && !recordNote.trim()
+                  const saveDisabled = pending || saveBlocked
+                  return (
+                  <div onClick={e => e.stopPropagation()} style={{ marginTop: "0.4rem", padding: "0.5rem", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8, display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+                      <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>Amount received</span>
+                      <input type="number" min="0" step="1" value={recordAmount} onChange={e => setRecordAmount(e.target.value)}
+                        style={{ width: 90, padding: "0.3rem 0.5rem", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: "0.8rem", boxSizing: "border-box", fontFamily: "inherit" }} />
+                      <span style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>of {wholeDollar(balanceNum)} balance</span>
+                    </div>
+                    {partial && owed && (
+                      <div style={{ fontSize: "0.68rem", color: "var(--text-dim)" }}>Completes {owed} total</div>
+                    )}
+                    <textarea placeholder={willComplete ? "Comment (optional)" : "Comment (required — amount doesn't complete the balance owed)"}
+                      value={recordNote} onChange={e => setRecordNote(e.target.value)} rows={2}
+                      style={{ width: "100%", padding: "0.4rem 0.5rem", borderRadius: 8, border: `1px solid ${saveBlocked ? "var(--red, #dc2626)" : "var(--border)"}`, background: "var(--surface)", color: "var(--text)", fontSize: "0.78rem", boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
+                    {saveBlocked && (
+                      <div style={{ fontSize: "0.68rem", color: "var(--red, #dc2626)", fontWeight: 600 }}>
+                        ⚠ Add a comment before saving — the amount doesn't complete the balance owed.
+                      </div>
+                    )}
+                    <div style={{ display: "flex", gap: "0.4rem" }}>
+                      <button onClick={() => { setRecordingId(null); setResetConfirmId(null) }} style={{ flex: 1, padding: "0.35rem", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)", cursor: "pointer", fontSize: "0.75rem", fontWeight: 600, fontFamily: "inherit" }}>Cancel</button>
+                      <button
+                        disabled={saveDisabled}
+                        title={saveBlocked ? "Add a comment before saving — the amount doesn't complete the balance owed." : undefined}
+                        onClick={() => {
+                          if (saveBlocked) return
+                          handleTogglePayment(payBooking, recordAmount, recordNote); setRecordingId(null)
+                        }}
+                        style={{ flex: 1, padding: "0.35rem", borderRadius: 8, border: "none", background: saveDisabled ? "var(--surface2)" : colour, color: saveDisabled ? "var(--text-dim)" : "#fff", cursor: saveDisabled ? "not-allowed" : "pointer", opacity: saveDisabled ? 0.6 : 1, fontSize: "0.75rem", fontWeight: 700, fontFamily: "inherit" }}>Save</button>
+                    </div>
+                    {(paid || partial) && (
+                      resetConfirmId === a.id ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginTop: "0.1rem" }}>
+                          <span style={{ fontSize: "0.68rem", color: "var(--amber-dark)", flex: 1 }}>
+                            Clear the {wholeDollar(payBooking?.amount_paid)} on file and mark unpaid?
+                          </span>
+                          <button onClick={() => setResetConfirmId(null)}
+                            style={{ fontSize: "0.68rem", background: "none", border: "none", color: "var(--text-dim)", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>No</button>
+                          <button
+                            onClick={() => { handleTogglePayment(payBooking); setResetConfirmId(null); setRecordingId(null) }}
+                            style={{ fontSize: "0.68rem", fontWeight: 700, background: "none", border: "none", color: "var(--amber-dark)", cursor: "pointer", fontFamily: "inherit", padding: 0, textDecoration: "underline" }}>
+                            Yes, reset
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setResetConfirmId(a.id)}
+                          style={{ fontSize: "0.68rem", color: "var(--text-dim)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0, textAlign: "left", textDecoration: "underline" }}>
+                          Reset to unpaid
+                        </button>
+                      )
+                    )}
+                  </div>
+                  )
+                })()}
+                </div>
+                )
+              })
             ) : (
               <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", fontStyle: "italic" }}>No attendees yet</div>
+            )}
+            {/* Refunds Due / Refunds Issued (2026-09-22 port from Social's
+                events page, itself ported from Movies/Book Club's
+                Coordinator panel -- same mark_refund_paid action). */}
+            {canManageBooks && isPaidEvent && refundPendingBookings.length > 0 && (
+              <div style={{ background: "#fef3c7", borderRadius: 10, padding: "0.6rem 0.7rem", border: "1px solid #d97706", marginTop: "0.6rem" }}>
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "#92400e", marginBottom: "0.4rem" }}>⚠️ Refunds Due ({refundPendingBookings.length})</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+                  {refundPendingBookings.map(b => {
+                    const label = payeeName(b)
+                    const isPrivate = !!(b.members?.hide_name || b.name_hidden)
+                    const isOwn = b.members?.id === member?.id
+                    const total = seatsCost(event, b.seats || 1)
+                    const pending = togglingRefundId === b.id
+                    return (
+                      <div key={b.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                        <div>
+                          <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#92400e" }}>
+                            {label}
+                            {isPrivate && canManageBooks && !isOwn && <span style={{ fontSize: "0.68rem", fontWeight: 700, color: "#92400e", opacity: 0.7, marginLeft: 4 }}>(P)</span>}
+                          </span>
+                          <span style={{ fontSize: "0.68rem", color: "#d97706", marginLeft: 6 }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}{total ? ` · ${total}` : ""}</span>
+                        </div>
+                        <button
+                          disabled={pending}
+                          onClick={e => { e.stopPropagation(); handleToggleRefund(b, label, false) }}
+                          style={{ fontSize: "0.68rem", fontWeight: 700, padding: "0.2rem 0.55rem", borderRadius: 8, border: "1px solid #d97706", background: "none", color: "#d97706", cursor: pending ? "default" : "pointer", whiteSpace: "nowrap", fontFamily: "inherit", opacity: pending ? 0.6 : 1 }}>
+                          {pending ? "…" : "Mark Refunded"}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+            {canManageBooks && isPaidEvent && refundIssuedBookings.length > 0 && (
+              <div style={{ background: "var(--surface2)", borderRadius: 10, padding: "0.6rem 0.7rem", border: "1px solid var(--border)", marginTop: "0.6rem" }}>
+                <div style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-dim)", marginBottom: "0.4rem" }}>✓ Refunds Issued ({refundIssuedBookings.length})</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
+                  {refundIssuedBookings.map(b => {
+                    const label = payeeName(b)
+                    const isPrivate = !!(b.members?.hide_name || b.name_hidden)
+                    const isOwn = b.members?.id === member?.id
+                    const total = seatsCost(event, b.seats || 1)
+                    const pending = togglingRefundId === b.id
+                    return (
+                      <div key={b.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem" }}>
+                        <div>
+                          <span style={{ fontSize: "0.76rem", color: "var(--text-dim)", fontWeight: isOwn ? 700 : 400 }}>
+                            {label}
+                            {isPrivate && canManageBooks && !isOwn && <span style={{ fontWeight: 700, marginLeft: 4 }}>(P)</span>}
+                          </span>
+                          <span style={{ fontSize: "0.68rem", color: "var(--text-dim)", marginLeft: 6 }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}{total ? ` · ${total}` : ""}</span>
+                        </div>
+                        <button
+                          disabled={pending}
+                          onClick={e => { e.stopPropagation(); handleToggleRefund(b, label, true) }}
+                          style={{ fontSize: "0.65rem", color: "var(--text-dim)", background: "none", border: "none", cursor: pending ? "default" : "pointer", textDecoration: "underline", fontFamily: "inherit" }}>
+                          {pending ? "…" : "Unmark"}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
             )}
           </div>
         )}

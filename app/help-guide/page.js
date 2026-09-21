@@ -1006,6 +1006,12 @@ export default function HelpGuidePage() {
                 <strong>Upcoming dates</strong> accordion beneath. Tap a card to open the full event
                 panel and book your place, exactly like Show Time or Social Hive.
               </Step>
+              <Step>
+                Tap <strong>Show attendees ▼</strong> on a card to expand a quick attendee list
+                without leaving the page — same idea as Show Time's Attendees toggle. For ECs, the
+                club's Owner, and admins, this is also where payment is managed on a paid event (see{" "}
+                <strong>§5 Coordinator & Owner panel</strong> below).
+              </Step>
             </Subsection>
 
             <Subsection id="sub-clubs-signup" title="Signing up for a meeting or activity">
