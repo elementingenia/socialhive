@@ -1,5 +1,6 @@
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { requireAdminOrAreaOwner } from "@/lib/areaAuth"
+import { isHappeningsNewsLive } from "@/lib/happeningsNewsTier"
 export const dynamic = "force-dynamic"
 
 // Which hub_settings rows an Owner (not just admin) may write, and which
@@ -23,7 +24,7 @@ export async function GET() {
   // Return empty object if table doesn't exist yet.
   const { data, error } = await supa
     .from("hub_settings")
-    .select("hub_type, welcome_text, sub_messages, loan_cap, enabled")
+    .select("hub_type, welcome_text, sub_messages, loan_cap, enabled, production_enabled, happenings_news_archive_days")
 
   if (error) {
     // Column or table missing — try without sub_messages
@@ -50,12 +51,22 @@ export async function GET() {
       // false, and only 'voting' currently has any UI reading this field.
       enabled: row.enabled !== false,
     }
+    // happenings_news carries two extra, independently-toggleable flags
+    // (Preview `enabled` / Production `production_enabled`) plus its
+    // archive-delay admin setting -- see migration 112 and
+    // lib/happeningsNewsTier.js's isHappeningsNewsLive() for why a single
+    // `enabled` flag isn't enough here, unlike every other hub above.
+    if (row.hub_type === "happenings_news") {
+      out[row.hub_type].production_enabled = !!row.production_enabled
+      out[row.hub_type].live = isHappeningsNewsLive(row)
+      out[row.hub_type].archive_days = row.happenings_news_archive_days || 90
+    }
   }
   return Response.json(out)
 }
 
 export async function PATCH(req) {
-  const { hub_type, welcome_text, sub_messages, location_id, loan_cap, enabled } = await req.json()
+  const { hub_type, welcome_text, sub_messages, location_id, loan_cap, enabled, production_enabled, happenings_news_archive_days } = await req.json()
   if (!hub_type) return Response.json({ error: "hub_type required" }, { status: 400 })
 
   // AUTH FROM THE TOKEN, not from the request body — the bearer token is the
@@ -99,6 +110,20 @@ export async function PATCH(req) {
   if (enabled !== undefined) {
     if (!member.is_admin) return Response.json({ error: "Admins only can show/hide a hub" }, { status: 403 })
     update.enabled = !!enabled
+  }
+  // Happenings News' second, Production-only visibility flag -- admin-only,
+  // same reasoning as `enabled` above. No hub_type other than
+  // happenings_news reads or writes this field.
+  if (production_enabled !== undefined) {
+    if (!member.is_admin) return Response.json({ error: "Admins only can show/hide a hub" }, { status: 403 })
+    update.production_enabled = !!production_enabled
+  }
+  if (happenings_news_archive_days !== undefined) {
+    if (!member.is_admin) return Response.json({ error: "Admins only" }, { status: 403 })
+    if (![30, 90, 150].includes(Number(happenings_news_archive_days))) {
+      return Response.json({ error: "archive delay must be 30, 90, or 150 days" }, { status: 400 })
+    }
+    update.happenings_news_archive_days = Number(happenings_news_archive_days)
   }
   // null is meaningful here — it clears the hub's nominated venue.
   if (location_id !== undefined) update.location_id = location_id

@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
-import { VotingIcon, SpecialEventsIcon, SurveysIcon } from "@/components/NavIcons"
+import { VotingIcon, SpecialEventsIcon, SurveysIcon, HappeningsNewsIcon } from "@/components/NavIcons"
 
 // Admin's single discovery entry point for hidden-by-default, occasional-use
 // hubs -- Iain, 2026-09-04: "change the Voting option in Admin to Occasional
@@ -40,6 +40,11 @@ const AREAS = [
     manageHref: "/surveys/manage",
     blurb: "Question bank, and the show/hide toggle for the Surveys hub.",
   },
+  {
+    key: "happenings_news", label: "Happenings News", Icon: HappeningsNewsIcon, colour: "var(--happenings-news)",
+    manageHref: "/happenings-news/manage",
+    blurb: "Coordinator recaps of past events, and the archive-delay setting.",
+  },
 ]
 
 export default function OccasionalActivitiesPage() {
@@ -71,7 +76,15 @@ export default function OccasionalActivitiesPage() {
       </p>
 
       {AREAS.map(area => {
-        const enabled = !!settings?.[area.key]?.enabled
+        // happenings_news is the one area here with two independent
+        // switches (Preview `enabled` / Production `production_enabled`)
+        // instead of one -- the status pill reads the env-resolved `live`
+        // field (see app/api/hub-settings/route.js) rather than raw
+        // `enabled`, so this pill matches what residents in THIS
+        // deployment actually see, not just the Preview flag.
+        const enabled = area.key === "happenings_news"
+          ? !!settings?.[area.key]?.live
+          : !!settings?.[area.key]?.enabled
         return (
           <div key={area.key} onClick={() => router.push(area.manageHref)} style={{
             display: "flex", alignItems: "center", gap: "0.9rem",

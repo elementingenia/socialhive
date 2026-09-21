@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { authedFetch } from "@/lib/getAuthToken"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import { useUser } from "@/lib/UserContext"
-import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon, SpecialEventsIcon, CommitteeIcon, SurveysIcon } from "@/components/NavIcons"
+import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon, SpecialEventsIcon, CommitteeIcon, SurveysIcon, HappeningsNewsIcon } from "@/components/NavIcons"
 import { BAR_ENABLED, SPACE_BOOKINGS_ENABLED } from "@/lib/features"
 import AskQuestion from "@/components/AskQuestion"
 
@@ -385,6 +385,70 @@ function SurveysTile() {
   )
 }
 
+// Happenings News tile (Iain, 2026-09-21): deliberately LARGER than every
+// other Home tile above -- "large enough to show at least part of the
+// post's written content as well as a photo... 50/50 split Text/Photo" when
+// the latest post has a photo, all-text when it doesn't. Gated on the
+// env-resolved `live` flag (isHappeningsNewsLive), not raw `enabled` --
+// same Preview/Production independence every other piece of this hub
+// respects. Renders nothing at all until an admin turns it on for THIS
+// deployment via /happenings-news/manage.
+function HappeningsNewsTile() {
+  const router = useRouter()
+  const [live, setLive] = useState(false)
+  const [post, setPost] = useState(undefined) // undefined = loading, null = none yet
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      const hs = await fetch("/api/hub-settings").then(r => r.json()).catch(() => ({}))
+      if (cancelled) return
+      const isLive = !!hs?.happenings_news?.live
+      setLive(isLive)
+      if (!isLive) { setPost(null); return }
+      const json = await fetch("/api/happenings-news?limit=1").then(r => r.json()).catch(() => ({}))
+      if (cancelled) return
+      setPost((json.posts || [])[0] || null)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [])
+
+  if (!live) return null
+
+  const snippet = post?.content ? (post.content.length > 160 ? post.content.slice(0, 160).trimEnd() + "…" : post.content) : null
+
+  return (
+    <div onClick={() => router.push("/happenings-news")} style={{
+      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px",
+      overflow: "hidden", cursor: "pointer", display: "flex", minHeight: 128,
+      marginTop: "0.5rem", marginBottom: "0.75rem", borderLeft: "4px solid var(--happenings-news)",
+    }}>
+      <div style={{ flex: post?.primary_photo ? "0 0 50%" : "1 1 100%", padding: "1rem 1.1rem", display: "flex", flexDirection: "column", justifyContent: "center", minWidth: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.35rem" }}>
+          <span style={{ color: "var(--happenings-news)", lineHeight: 0, display: "flex" }}><HappeningsNewsIcon size={22} /></span>
+          <span style={{ fontWeight: 800, fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--happenings-news)" }}>Happenings News</span>
+        </div>
+        {post === undefined ? (
+          <div style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}>Loading…</div>
+        ) : post === null ? (
+          <div style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}>No recaps posted yet — check back after the next event.</div>
+        ) : (
+          <>
+            <div style={{ fontWeight: 700, fontSize: "0.92rem", marginBottom: "0.25rem" }}>{post.event?.title || "Recent event"}</div>
+            <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.4 }}>{snippet}</div>
+          </>
+        )}
+      </div>
+      {post?.primary_photo && (
+        <div style={{ flex: "0 0 50%", minWidth: 0 }}>
+          <img src={post.primary_photo.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+        </div>
+      )}
+    </div>
+  )
+}
+
 function BarTabCard({ memberId }) {
   const router = useRouter()
   const [openTotal,    setOpenTotal]    = useState(null)
@@ -496,6 +560,10 @@ export default function HomePage() {
               </div>
             )
           }
+
+          {/* Happenings News -- deliberately above the hub grid, larger
+              than every tile in it (see HappeningsNewsTile's own comment) */}
+          <HappeningsNewsTile />
 
           {/* Hub tiles — between main and sub notices */}
           <HubTiles />

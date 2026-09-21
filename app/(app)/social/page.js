@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
+import PastEventsAccordion from "@/components/PastEventsAccordion"
 import { bbToHtml } from "@/components/RichEditor"
 import { BusIcon } from "@/components/NavIcons"
 import { ContactBar } from "@/components/OwnersManager"
@@ -485,6 +486,8 @@ export default function SocialHome() {
         <EventSlideOut event={fullEvent} onClose={() => setFullEvent(null)}
           onRefresh={() => { setFullEvent(null); load() }} />
       )}
+
+      <PastEventsAccordion hubType="social" colour="var(--terracotta)" />
     </div>
   )
 }

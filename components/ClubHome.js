@@ -17,6 +17,7 @@ import { clubTextOn, clubInk } from "@/lib/clubColours"
 import { sydneyTodayStr, dateStrPlusDays } from "@/lib/date"
 import { bookingsClosed } from "@/lib/booking"
 import EventCoordinators from "@/components/EventCoordinators"
+import PastEventsAccordion from "@/components/PastEventsAccordion"
 import RecurrencePicker from "@/components/RecurrencePicker"
 import { nextOccurrence } from "@/lib/recurrence"
 import EventImagePicker from "@/components/EventImagePicker"
@@ -2650,6 +2651,12 @@ export default function ClubHome({ club }) {
 
       {/* Closed events (past only) */}
       <ClosedEventsAccordion events={closedEvents} myBookedIds={myBookedIds} colour={colour} />
+
+      {/* Happenings News recap of this club's own past events -- separate
+          from ClosedEventsAccordion above (that one's about the club's
+          book-catalogue "closed meeting" history; this one's every past
+          event, with a link through to its news post if one exists). */}
+      <PastEventsAccordion clubId={club.id} colour={colour} />
 
       {/* Unified booking slide-over */}
       <EventSlideOut

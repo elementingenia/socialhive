@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import EventSlideOut from "@/components/EventSlideOut"
+import PastEventsAccordion from "@/components/PastEventsAccordion"
 import MySpaceBookings from "@/components/MySpaceBookings"
 import SpaceBookingForm from "@/components/SpaceBookingForm"
 import LocationScheduleView from "@/components/LocationScheduleView"
@@ -156,6 +157,8 @@ export default function SpacesPage() {
           onPromoted={() => { setEditingEvent(null); load() }}
         />
       )}
+
+      <PastEventsAccordion hubType="space" colour="var(--space)" />
     </div>
   )
 }

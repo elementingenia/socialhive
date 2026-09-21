@@ -239,6 +239,24 @@ export function VotingIcon({ size = 26 }) {
   )
 }
 
+// Happenings News hub icon (2026-09-21) -- a folded newspaper, distinct from
+// Committee's clipboard/pinned-notice glyph (that's a governance/official
+// board; this is a resident-written recap of past events -- different
+// register, different icon).
+export function HappeningsNewsIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 8 10 L 56 10 L 56 58 C 56 60.2 54.2 62 52 62 L 12 62 C 9.8 62 8 60.2 8 58 Z
+           M 14 18 L 50 18 L 50 24 L 14 24 Z
+           M 14 28 L 50 28 L 50 33 L 14 33 Z
+           M 14 37 L 32 37 L 32 42 L 14 42 Z
+           M 14 46 L 50 46 L 50 51 L 14 51 Z
+           M 36 37 L 50 37 L 50 42 L 36 42 Z"/>
+    </svg>
+  )
+}
+
 // Noticeboard / pinned notice -- Committee hub icon (2026-09-07). A clipboard
 // with a pinned notice, distinct from every other hub glyph in this file --
 // reads as "official/administrative" (matching the slate colour, decision 6
