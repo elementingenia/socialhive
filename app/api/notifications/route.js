@@ -20,7 +20,13 @@ export async function GET(req) {
 
   const { data, error } = await supabaseAdmin
     .from('notifications')
-    .select('id, type, message, created_at, read_at, event_id, events(title, event_date, event_time, location, hub_type)')
+    // club_id + club:clubs(slug) added (2026-09-22) so a club/Book Club
+    // notification can deep-link straight to the event via
+    // /clubs/<slug>?event=<id> (see lib/eventNav.js) instead of always
+    // falling back to the club's plain landing page -- matches how
+    // hubKeyOf() elsewhere in this app treats club_id, not hub_type, as
+    // the ground truth for "is this a club event."
+    .select('id, type, message, created_at, read_at, event_id, events(title, event_date, event_time, location, hub_type, club_id, club:clubs!club_id(slug))')
     .eq('member_id', member.id)
     .order('created_at', { ascending: false })
     .limit(50)

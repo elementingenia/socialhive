@@ -60,10 +60,10 @@ export default function FindButton() {
 
   function handleEventTap(ev) {
     handleClose()
-    // Club/Book Club events aren't deep-linkable to the specific event yet
-    // (see lib/eventNav.js) -- eventDeepLinkFor degrades to the hub's plain
-    // page for those, same as notifications already do, rather than
-    // erroring or dead-ending.
+    // eventDeepLinkFor lands on the specific event for every hub, including
+    // Club/Book Club (routes via the club's own slug -- see lib/eventNav.js)
+    // -- falls back to a hub's plain page only if that data is genuinely
+    // unavailable, rather than erroring or dead-ending.
     const target = eventDeepLinkFor(ev)
     if (target) router.push(target)
   }
