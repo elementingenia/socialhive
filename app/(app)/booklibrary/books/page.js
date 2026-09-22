@@ -768,7 +768,9 @@ export default function BookLibraryPage() {
       // 2026-09-10: the "Library Home" welcome banner (hub_settings.library)
       // now renders here too, since the standalone Library Home page it used
       // to live on was removed -- this page is the only Library landing page.
-      setWelcomeText(data?.library?.text || '')
+      // Same "Shown to residents" switch as every other Page Texts section
+      // (2026-09-22) -- hidden means treat exactly like no text was saved.
+      setWelcomeText(data?.library?.enabled !== false ? (data?.library?.text || '') : '')
     } catch { /* keep defaults */ }
   }, [])
 
