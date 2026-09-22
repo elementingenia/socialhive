@@ -528,8 +528,13 @@ export default function HomePage() {
     fetch("/api/hub-settings")
       .then(r => r.json())
       .then(d => {
-        setMainText(d.home?.text || "")
-        setSubTexts(Array.isArray(d.home?.subs) ? d.home.subs.filter(Boolean) : [])
+        // Admin's Page Texts "Shown to residents" switch (2026-09-22) --
+        // treat a disabled Home section exactly like no text was ever
+        // saved, so it falls through to the plain one-line greeting below
+        // rather than rendering the saved (but hidden) copy.
+        const homeEnabled = d.home?.enabled !== false
+        setMainText(homeEnabled ? (d.home?.text || "") : "")
+        setSubTexts(homeEnabled && Array.isArray(d.home?.subs) ? d.home.subs.filter(Boolean) : [])
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -547,16 +552,20 @@ export default function HomePage() {
         </div>
       ) : (
         <>
-          {/* Primary notice */}
+          {/* Primary notice -- when no text is saved (or the section is
+              hidden), this must take exactly one line of height, not a
+              placeholder card (Iain, 2026-09-22: was rendering an extra
+              bordered "No announcements right now" box even with nothing
+              to show). No box, no border, no padding beyond the same
+              bottom margin the real card uses. */}
           {mainText
             ? <MainNoticeCard text={mainText} memberName={memberName} />
             : (
               <div style={{
-                background: "var(--surface)", borderRadius: "14px", padding: "0.9rem 1.1rem",
-                border: "1px solid var(--border)", marginBottom: "0.75rem",
-                color: "var(--text-dim)", fontSize: "0.88rem", textAlign: "center"
+                fontSize: "0.95rem", fontWeight: 700, color: "var(--text)",
+                opacity: 0.85, margin: "0 0 0.75rem", lineHeight: 1.3,
               }}>
-                No announcements right now
+                Welcome{memberName ? ` ${memberName}` : ""},
               </div>
             )
           }

@@ -565,7 +565,9 @@ export default function DvdPage() {
     loadLoans()
     fetch('/api/hub-settings').then(r => r.json()).then(d => {
       setLoanCap(d?.movies_dvd?.loanCap ?? 3)
-      if (d?.movies_dvd?.text) setInfoText(d.movies_dvd.text)
+      // Falls back to the hardcoded default infoText above when disabled --
+      // same as when no admin text was ever saved (2026-09-22 on/off scope).
+      if (d?.movies_dvd?.enabled !== false && d?.movies_dvd?.text) setInfoText(d.movies_dvd.text)
     }).catch(() => {})
   }, [loadData, loadLoans])
 

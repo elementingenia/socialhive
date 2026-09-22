@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 import RichEditor from '@/components/RichEditor'
 import { getAuthToken } from '@/lib/getAuthToken'
 import { HUB_SECTIONS } from '@/lib/hubSections'
+import { useUser } from '@/lib/UserContext'
 
 // Self-contained Page Texts editor for ONE hub_settings row. Extracted from
 // Admin's PageTextsTab 2026-08-12 (Owner self-service scope, Part A.3) so an
@@ -37,6 +38,7 @@ function SubRow({ item, hubColour, previewBg, onChange, onDelete }) {
 }
 
 export default function HubTextSection({ sectionKey }) {
+  const { isAdmin } = useUser()
   const sec = HUB_SECTIONS.find(s => s.key === sectionKey)
   const [data,    setData]    = useState(null)
   const [draft,   setDraft]   = useState({})
@@ -59,6 +61,7 @@ export default function HubTextSection({ sectionKey }) {
           subs: (row.subs || []).map(text => ({ id: newSubId(), text })),
         }
         if (sec?.hasLoanCap) init.loanCap = row.loanCap ?? 3
+        if (sec?.hasEnableToggle) init.enabled = row.enabled !== false
         setDraft(init)
         setLoading(false)
       })
@@ -88,6 +91,14 @@ export default function HubTextSection({ sectionKey }) {
     if (sec.hasLoanCap) {
       body.loan_cap = Number(draft.loanCap) || 3
     }
+    // enabled is admin-only server-side (app/api/hub-settings/route.js) --
+    // an Owner saving their section's text must NOT send this field at all,
+    // even unchanged, or the whole PATCH 403s and their text save is lost
+    // along with it. Only admins, who can actually see/flip the switch
+    // below, include it.
+    if (sec.hasEnableToggle && isAdmin) {
+      body.enabled = !!draft.enabled
+    }
     await fetch('/api/hub-settings', {
       method: 'PATCH',
       headers: {
@@ -100,6 +111,7 @@ export default function HubTextSection({ sectionKey }) {
       text: body.welcome_text,
       subs: body.sub_messages || data?.subs || [],
       loanCap: body.loan_cap !== undefined ? body.loan_cap : data?.loanCap,
+      enabled: body.enabled !== undefined ? body.enabled : data?.enabled,
     })
     setSaved(true); setSaving(false)
     setTimeout(() => setSaved(false), 2500)
@@ -119,6 +131,26 @@ export default function HubTextSection({ sectionKey }) {
           <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginBottom: 8, lineHeight: 1.4 }}>
             {sec.hint}
           </div>
+        )}
+
+        {/* Show/hide this section's saved text without deleting it -- admin-
+            only (matches app/api/hub-settings/route.js's server-side gate
+            on `enabled`, and app/(app)/voting/manage/page.js's
+            VotingEnabledToggle button style/copy for consistency). Owners
+            never see this control, same as Voting's. */}
+        {sec.hasEnableToggle && isAdmin && (
+          <button
+            onClick={() => setDraftField('enabled', !draft.enabled)}
+            style={{
+              display: 'block', width: '100%', textAlign: 'left', marginBottom: 12,
+              background: draft.enabled ? sec.colour + '14' : 'transparent',
+              color: draft.enabled ? sec.colour : 'var(--text-dim)',
+              border: `1px solid ${draft.enabled ? sec.colour : 'var(--border)'}`,
+              borderRadius: 10, padding: '0.55rem 0.75rem', fontWeight: 700,
+              fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'inherit',
+            }}>
+            {draft.enabled ? '✓ Shown to residents — tap to hide' : 'Hidden from residents — tap to show'}
+          </button>
         )}
 
         <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)',

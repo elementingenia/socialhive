@@ -408,7 +408,7 @@ export default function MoviesHomePage() {
   const [nextWaitlistPosition, setNextWaitlistPosition] = useState(null)
 
   const load = useCallback(async () => {
-    fetch('/api/hub-settings').then(r => r.json()).then(d => setWelcomeText(d.movies?.text || '')).catch(() => {})
+    fetch('/api/hub-settings').then(r => r.json()).then(d => setWelcomeText(d.movies?.enabled !== false ? (d.movies?.text || '') : '')).catch(() => {})
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { setLoading(false); return }
     setSession(session)

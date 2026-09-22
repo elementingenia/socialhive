@@ -49,6 +49,7 @@ const RAW_SECTIONS = [
     subs: [
       { title: "Happenings Home — the Main & Sub Notices", id: "sub-pt-home" },
       { title: "Show Time, Social Hive & Library wording", id: "sub-pt-other" },
+      { title: "Shown to residents — hiding text without deleting it", id: "sub-pt-toggle" },
       { title: "Loan caps — what happens at the limit", id: "sub-pt-loancap" },
     ],
   },
@@ -444,6 +445,38 @@ export default function AdminGuidePage() {
                 displays anywhere on that page — only its loan cap (below) is still live — since the info
                 box it used to fill was removed at the same time.
               </Step>
+              <InfoBox>
+                💡 Two text fields on this screen have no on-screen display anywhere in the app right now:{" "}
+                <strong>Library — Books</strong> (see above) and <strong>Show Time — Suggestions</strong> —
+                the Suggestions page has never rendered it. Both still save and show/hide normally; there's
+                just nothing for a resident to see until a page is built to show them.
+              </InfoBox>
+            </Subsection>
+            <Subsection id="sub-pt-toggle" title="Shown to residents — hiding text without deleting it">
+              <Step>
+                Added 2026-09-22. Every section on this screen except <strong>Voting</strong> and{" "}
+                <strong>Committee</strong> now has a <strong>Shown to residents / Hidden from
+                residents</strong> switch above its text box. Turning it off hides that section's saved
+                text from the resident-facing page the moment you hit Save — the text itself stays exactly
+                as typed, ready to switch back on later, nothing is deleted.
+              </Step>
+              <Step>
+                On <strong>Happenings Home</strong>, switching it off also affects the Home screen's empty
+                state: with the Main Notice hidden (or nothing saved), Home shows a single plain line —
+                "Welcome, &lt;your name&gt;," — instead of the notice banner. Sub Notices are hidden along
+                with the Main Notice when this switch is off.
+              </Step>
+              <InfoBox>
+                💡 <strong>Voting</strong> and <strong>Committee</strong> don't get this switch here, because
+                the same underlying field already means <em>something else</em> for both: it's what hides the{" "}
+                <em>entire hub</em>'s tile from Home, not just its welcome text. Voting has its own switch for
+                that at Admin → Voting → Manage ("Show this Hub to residents"). Committee's tile is gated by
+                the same field too, but as of this writing there is no admin screen that sets it — that's a
+                pre-existing gap, separate from this change, worth a look if Committee ever needs to come off
+                Home. Either way, adding a second switch here that quietly wrote the same field would have let
+                an admin take a whole hub off Home while only meaning to hide its welcome message, so it was
+                left out for both.
+              </InfoBox>
             </Subsection>
             <Subsection id="sub-pt-loancap" title="Loan caps — what happens at the limit">
               <Step>
