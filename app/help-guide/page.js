@@ -1242,8 +1242,9 @@ export default function HelpGuidePage() {
             <Subsection id="sub-calendar-find" title="Finding an event">
               <Step>
                 If you know roughly when something is happening but aren't sure which section of the
-                app it's in — Show Time, Social Hive, a Group or Club, or a Special Event — tap the{" "}
-                <strong>🔍 Find</strong> button next to the filter buttons at the top of the Calendar.
+                app it's in — Show Time, Social Hive, a Group or Club, or a Special Event — you don't
+                need to be on the Calendar at all. A small <strong>🔍</strong> button floats in the
+                bottom-right corner of every screen — tap it from wherever you are.
               </Step>
               <Step>
                 Type any part of the event's name (for example "Melbourne Cup") and matching events
