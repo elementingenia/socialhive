@@ -86,14 +86,14 @@ function typeColour(type) {
 // the event tile OR open the booking modal for the event"). Movies'
 // /screenings and Special Events' /special-events/events are their own
 // list pages already, so this is a straight fix there too, not new scope.
-// Club/Book Club events are NOT deep-linkable this way yet: ClubHome.js
-// needs the club's slug in the URL (/clubs/<slug>?event=<id>), which this
-// notification query doesn't join, and /bookclub's redirect drops query
-// strings entirely -- both still land on their plain hub page. Flagged as
-// a known remaining gap, not silently treated as fixed.
+// Club/Book Club events ARE deep-linkable this way too (fixed 2026-09-22,
+// found while chasing a live report that the Find button had the same
+// gap): ClubHome.js (/clubs/[slug]) has always supported ?event=<id>, it
+// just needed the club's slug, which the query below now joins. See
+// lib/eventNav.js for the full root-cause note.
 // Notification types with no event_id (club_notice_posted, bar_reconciled)
 // have no navigable target and stay tick-only.
-// The hub_type -> URL routing itself now lives in lib/eventNav.js
+// The hub_type/club -> URL routing itself now lives in lib/eventNav.js
 // (eventDeepLink), shared with the global Find button, so the two don't
 // drift apart as hubs are added.
 function targetForNotif(n) {
@@ -101,7 +101,12 @@ function targetForNotif(n) {
   if (n.type === "voting_opened") return "/voting"
   if (n.type === "survey_opened" || n.type === "survey_results_published") return "/surveys"
   if (n.type === "committee_post_added") return "/committee"
-  return eventDeepLink(n.events?.hub_type, n.event_id)
+  return eventDeepLink({
+    hubType: n.events?.hub_type,
+    eventId: n.event_id,
+    clubId: n.events?.club_id,
+    clubSlug: n.events?.club?.slug,
+  })
 }
 
 export default function NotificationsDrawer() {
