@@ -483,7 +483,10 @@ function MonthView({ events, onEventTap }) {
 // regardless of which filter pills are on/off (Iain, 2026-09-22: a resident
 // couldn't find Melbourne Cup content because they didn't know which hub it
 // was in -- the whole point is not making them guess that first).
-function SearchResultsList({ query, results, onEventTap }) {
+// Exported (with eventMatchesQuery below) so the global Find button
+// (components/FindButton.js, 2026-09-22) renders results identically to
+// Calendar's own inline search instead of a second, drifting copy.
+export function SearchResultsList({ query, results, onEventTap }) {
   if (query.trim().length < 2) {
     return (
       <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
@@ -526,7 +529,7 @@ function SearchResultsList({ query, results, onEventTap }) {
   )
 }
 
-function eventMatchesQuery(ev, words) {
+export function eventMatchesQuery(ev, words) {
   const haystack = `${ev.title || ""} ${ev.description || ""} ${eventLabel(ev) || ""}`.toLowerCase()
   return words.every(w => haystack.includes(w))
 }

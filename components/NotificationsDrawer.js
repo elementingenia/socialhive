@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { authedFetch } from "@/lib/getAuthToken"
 import { useUI } from "@/lib/UIContext"
+import { eventDeepLink } from "@/lib/eventNav"
 
 const TOP_OFFSET = 72 // matches ProfileSlideOver
 
@@ -92,20 +93,15 @@ function typeColour(type) {
 // a known remaining gap, not silently treated as fixed.
 // Notification types with no event_id (club_notice_posted, bar_reconciled)
 // have no navigable target and stay tick-only.
+// The hub_type -> URL routing itself now lives in lib/eventNav.js
+// (eventDeepLink), shared with the global Find button, so the two don't
+// drift apart as hubs are added.
 function targetForNotif(n) {
   if (n.type?.startsWith("question_")) return "/questions"
   if (n.type === "voting_opened") return "/voting"
   if (n.type === "survey_opened" || n.type === "survey_results_published") return "/surveys"
   if (n.type === "committee_post_added") return "/committee"
-  const evId = n.event_id
-  switch (n.events?.hub_type) {
-    case "movie":    return evId ? `/screenings?event=${evId}` : "/screenings"
-    case "social":   return evId ? `/social/events?event=${evId}` : "/social"
-    case "bookclub": return "/bookclub"
-    case "club":     return "/clubs"
-    case "special":  return evId ? `/special-events/events?event=${evId}` : "/special-events"
-    default:         return null
-  }
+  return eventDeepLink(n.events?.hub_type, n.event_id)
 }
 
 export default function NotificationsDrawer() {

@@ -9,6 +9,7 @@ import Header from "@/components/Header"
 import ProfileSlideOver from "@/components/ProfileSlideOver"
 import PinModal from "@/components/PinModal"
 import NotificationsDrawer from "@/components/NotificationsDrawer"
+import FindButton from "@/components/FindButton"
 
 const INACTIVITY_DAYS = 14
 const INACTIVITY_MS   = INACTIVITY_DAYS * 24 * 60 * 60 * 1000
@@ -66,6 +67,10 @@ function InnerLayout({ children }) {
 
       <PinModal open={pinModalOpen} onClose={closePinModal} />
       <NotificationsDrawer />
+      {/* Persistent global "Find an event" button — visible on every
+          authenticated page (Iain, 2026-09-22), not just inside Calendar's
+          own filter row. See components/FindButton.js. */}
+      <FindButton />
 
       {savedToast && (
         <div style={{
