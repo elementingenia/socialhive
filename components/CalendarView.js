@@ -476,9 +476,67 @@ function MonthView({ events, onEventTap }) {
   )
 }
 
+// ── Search results list ───────────────────────────────────────────────────────
+// Flat, date-grouped list -- same shape as the "Upcoming" lists already used
+// in WeekView/FourWeekView/MonthView -- shown in place of the normal grid
+// while a search is active. Deliberately searches across every hub
+// regardless of which filter pills are on/off (Iain, 2026-09-22: a resident
+// couldn't find Melbourne Cup content because they didn't know which hub it
+// was in -- the whole point is not making them guess that first).
+function SearchResultsList({ query, results, onEventTap }) {
+  if (query.trim().length < 2) {
+    return (
+      <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--text-dim)", fontSize: 13 }}>
+        Type at least 2 characters to search
+      </div>
+    )
+  }
+  if (results.length === 0) {
+    return (
+      <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--text-dim)" }}>
+        <div style={{ fontSize: 28, marginBottom: 6 }}>🔍</div>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>No events found</div>
+        <div style={{ fontSize: 13, marginTop: 4 }}>Try a different word, or check back closer to the date.</div>
+      </div>
+    )
+  }
+
+  const byDate = {}
+  for (const ev of results) {
+    if (!byDate[ev.event_date]) byDate[ev.event_date] = []
+    byDate[ev.event_date].push(ev)
+  }
+
+  return (
+    <div style={{ padding: "0 16px 16px" }}>
+      <div style={{ fontSize: 13, color: "var(--text-dim)", padding: "10px 0 6px" }}>
+        {results.length} matching event{results.length === 1 ? "" : "s"}
+      </div>
+      {Object.entries(byDate)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([dateStr, evs]) => (
+          <div key={dateStr} style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 5, paddingBottom: 3, borderBottom: "1px solid var(--border)" }}>
+              {fmtShortDate(localDate(dateStr))}
+            </div>
+            {evs.map(ev => <EventChip key={ev.id} event={ev} onTap={onEventTap} />)}
+          </div>
+        ))}
+    </div>
+  )
+}
+
+function eventMatchesQuery(ev, words) {
+  const haystack = `${ev.title || ""} ${ev.description || ""} ${eventLabel(ev) || ""}`.toLowerCase()
+  return words.every(w => haystack.includes(w))
+}
+
 // ── CalendarView (main export) ────────────────────────────────────────────────
 export default function CalendarView({ events = [], onEventTap, defaultView = "week" }) {
   const [view, setView] = useState(defaultView)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const searchInputRef = useRef(null)
   // "space" only joins the default set while Book a Space is actually live
   // (Iain, 2026-09-05: "remove spaces from calendar - unless I am missing
   // something, it should at least be hidden as part of the Spaces function
@@ -540,6 +598,26 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
     }
     return map
   }, [filteredEvents])
+
+  // Search ignores the hub filter pills entirely -- see SearchResultsList's
+  // comment above for why -- but still only sees what's already loaded (the
+  // parent page's 90-day window), same as every other Calendar view.
+  const searchResults = useMemo(() => {
+    const words = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean)
+    if (words.length === 0) return []
+    return events
+      .filter(ev => eventMatchesQuery(ev, words))
+      .sort((a, b) => a.event_date.localeCompare(b.event_date) || (a.event_time || "").localeCompare(b.event_time || ""))
+  }, [events, searchQuery])
+
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus()
+  }, [searchOpen])
+
+  function closeSearch() {
+    setSearchOpen(false)
+    setSearchQuery("")
+  }
 
   const viewBtns = [
     { id: "week",  label: "Week"    },
@@ -651,12 +729,67 @@ export default function CalendarView({ events = [], onEventTap, defaultView = "w
             </button>
           )
         })}
-      </div>
+
+        {/* Find an event -- searches title/description across EVERY hub,
+            ignoring the filter pills above, so a resident doesn't need to
+            know which hub something lives in before they can find it (Iain,
+            2026-09-22). Deliberately a toggle appended to this existing
+            pill row rather than a new persistent search bar or a header
+            icon -- costs no extra vertical space until someone actually
+            wants it. */}
+        <button
+          onClick={() => searchOpen ? closeSearch() : setSearchOpen(true)}
+          style={{
+            display: "flex", alignItems: "center", gap: 5, flexShrink: 0,
+            padding: "4px 10px", borderRadius: 20,
+            border: `1px solid ${searchOpen ? "var(--amber)" : "var(--border)"}`,
+            background: searchOpen ? "var(--amber)" + "20" : "var(--surface2)",
+            cursor: "pointer", fontFamily: "inherit",
+            transition: "all 0.15s",
+          }}
+        >
+          <span style={{ fontSize: 13 }}>🔍</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: searchOpen ? "var(--amber-dark)" : "var(--text-dim)" }}>Find</span>
+        </button>
       </div>
 
-      {view === "week"  && <WeekView     days={weekDays}   eventsByDate={eventsByDate} onEventTap={onEventTap} />}
-      {view === "4week" && <FourWeekView days={month4Days} eventsByDate={eventsByDate} onEventTap={onEventTap} />}
-      {view === "month" && <MonthView    events={filteredEvents}   onEventTap={onEventTap} />}
+      {searchOpen && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderBottom: "1px solid var(--border)" }}>
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search event names and descriptions…"
+            style={{
+              flex: 1, padding: "0.6rem 0.9rem", borderRadius: 10,
+              border: "1px solid var(--border)", background: "var(--surface)",
+              color: "var(--text)", fontSize: "0.9rem", fontFamily: "inherit",
+              boxSizing: "border-box",
+            }}
+          />
+          <button
+            onClick={closeSearch}
+            aria-label="Close search"
+            style={{
+              flexShrink: 0, background: "var(--surface2)", border: "1px solid var(--border)",
+              borderRadius: 10, padding: "0.6rem 0.8rem", fontSize: 13, fontWeight: 600,
+              color: "var(--text-dim)", cursor: "pointer",
+            }}
+          >Cancel</button>
+        </div>
+      )}
+      </div>
+
+      {searchOpen ? (
+        <SearchResultsList query={searchQuery} results={searchResults} onEventTap={onEventTap} />
+      ) : (
+        <>
+          {view === "week"  && <WeekView     days={weekDays}   eventsByDate={eventsByDate} onEventTap={onEventTap} />}
+          {view === "4week" && <FourWeekView days={month4Days} eventsByDate={eventsByDate} onEventTap={onEventTap} />}
+          {view === "month" && <MonthView    events={filteredEvents}   onEventTap={onEventTap} />}
+        </>
+      )}
     </div>
   )
 }

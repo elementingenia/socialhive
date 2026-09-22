@@ -125,6 +125,7 @@ const RAW_SECTIONS = [
   {
     id: "calendar", num: 9, title: "Community Calendar & Booking a Space",
     subs: [
+      { title: "Finding an event",                           id: "sub-calendar-find" },
       { title: "Booking a common space from the Calendar",  id: "sub-calendar-space" },
       { title: "The Space Bookings hub",                     id: "sub-calendar-spacehub" },
       { title: "Allow others to join",                       id: "sub-calendar-spacepromote" },
@@ -1237,6 +1238,19 @@ export default function HelpGuidePage() {
               <strong>Month view</strong> and <strong>Week view</strong> using the view toggle. Tap
               any event to open its full detail panel and book your place directly from the calendar.
             </Step>
+
+            <Subsection id="sub-calendar-find" title="Finding an event">
+              <Step>
+                If you know roughly when something is happening but aren't sure which section of the
+                app it's in — Show Time, Social Hive, a Group or Club, or a Special Event — tap the{" "}
+                <strong>🔍 Find</strong> button next to the filter buttons at the top of the Calendar.
+              </Step>
+              <Step>
+                Type any part of the event's name (for example "Melbourne Cup") and matching events
+                appear straight away, across every section, with their date. Tap one to open it and
+                book your place, exactly as you would from anywhere else in the app.
+              </Step>
+            </Subsection>
 
             <Subsection id="sub-calendar-space" title="Booking a common space from the Calendar">
               <Step>
