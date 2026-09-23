@@ -10,6 +10,7 @@ import ExpandableText from "@/components/ExpandableText"
 import EventImagePicker from "@/components/EventImagePicker"
 import EventCoordinators from "@/components/EventCoordinators"
 import { useUser } from "@/lib/UserContext"
+import { isHtmlContent } from "@/lib/richText"
 
 const INPUT = {
   width: "100%", padding: "0.75rem 1rem", borderRadius: "10px",
@@ -509,7 +510,7 @@ function WelcomeBanner({ text }) {
     try { setDismissed(localStorage.getItem(VOTING_WELCOME_KEY) === "1") } catch {}
   }, [])
   if (!text) return null
-  const isHtml = /<[a-z][\s\S]*>/i.test(text)
+  const isHtml = isHtmlContent(text)
   if (dismissed) {
     return (
       <button onClick={() => {

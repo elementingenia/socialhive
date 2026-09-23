@@ -59,3 +59,24 @@ export async function DELETE(req) {
   if (delError) return NextResponse.json({ error: delError.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
+
+// Edit a notice (Iain, 2026-09-24). Same permission as Remove: admin or this
+// club's Owner. Deliberately does NOT re-notify members -- an edit is a
+// correction to something they were already told about, and re-pushing on
+// every typo fix would be notification spam (same reasoning as BUG-058).
+export async function PATCH(req) {
+  const { id, content } = await req.json()
+  if (!id || !content?.trim()) {
+    return NextResponse.json({ error: "id and content required" }, { status: 400 })
+  }
+
+  const { data: existing } = await supa.from("club_notices").select("club_id, archived").eq("id", id).maybeSingle()
+  if (!existing || existing.archived) return NextResponse.json({ error: "Notice not found" }, { status: 404 })
+
+  const { error, status } = await requireAdminOrAreaOwner(req, "club", existing.club_id)
+  if (error) return NextResponse.json({ error }, { status })
+
+  const { error: updError } = await supa.from("club_notices").update({ content: content.trim() }).eq("id", id)
+  if (updError) return NextResponse.json({ error: updError.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}

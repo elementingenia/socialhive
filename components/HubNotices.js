@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabase"
 import { authedFetch } from "@/lib/getAuthToken"
 import RichEditor from "@/components/RichEditor"
 import { hubHasNotices } from "@/lib/hubNotices"
+import { isHtmlContent } from "@/lib/richText"
 
 // Hub notices (Iain, 2026-09-23) -- the hub equivalent of Groups & Clubs'
 // notices (components/ClubHome.js ClubSocial), same look and behaviour:
@@ -19,6 +20,9 @@ export default function HubNotices({ hubType, colour = "var(--teal)", canPost = 
   const [draft, setDraft]         = useState("")
   const [posting, setPosting]     = useState(false)
   const [confirmId, setConfirmId] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [editDraft, setEditDraft] = useState("")
+  const [saving, setSaving]       = useState(false)
   const [toast, setToast]         = useState(null)
   const enabled = hubHasNotices(hubType)
 
@@ -64,6 +68,25 @@ export default function HubNotices({ hubType, colour = "var(--teal)", canPost = 
     load()
   }
 
+  // Edit a notice in place (Iain, 2026-09-24). Saves quietly -- members are
+  // not re-notified for an edit (see PATCH in app/api/hub-notices).
+  async function saveEdit() {
+    if (!editDraft.trim() || saving) return
+    setSaving(true)
+    try {
+      const res = await authedFetch("/api/hub-notices", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingId, content: editDraft }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { flash(d.error || "Could not save changes"); return }
+      setEditingId(null); setEditDraft(""); load(); flash("Notice updated")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (!enabled) return null
   if (!canPost && notices.length === 0) return null
 
@@ -102,19 +125,33 @@ export default function HubNotices({ hubType, colour = "var(--teal)", canPost = 
                 <span style={{ fontSize: "0.72rem", fontWeight: 700, color: colour, textTransform: "uppercase", letterSpacing: "0.04em" }}>📣 Notice</span>
                 <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>{fmt(n.created_at)}</span>
               </div>
-              <div style={{ fontSize: "0.88rem", color: "var(--text)", lineHeight: 1.5, marginTop: 4 }}>
-                {/<[a-z][\s\S]*>/i.test(n.content)
-                  ? <span dangerouslySetInnerHTML={{ __html: n.content }} />
-                  : n.content}
-              </div>
-              {canPost && (confirmId === n.id ? (
+              {editingId === n.id ? (
+                <div style={{ marginTop: 6 }}>
+                  <RichEditor key={`hub-notice-edit-${n.id}`} initialValue={n.content} hubColour={colour}
+                    bg="card" onChange={setEditDraft} placeholder="Notice text…" />
+                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <button onClick={() => { setEditingId(null); setEditDraft("") }} style={{ flex: 1, padding: "0.6rem", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text)", fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>Cancel</button>
+                    <button onClick={saveEdit} disabled={saving || !editDraft.trim()} style={{ flex: 2, padding: "0.6rem", borderRadius: 10, border: "none", background: colour, color: "#fff", fontWeight: 700, fontFamily: "inherit", cursor: (saving || !editDraft.trim()) ? "not-allowed" : "pointer", opacity: (saving || !editDraft.trim()) ? 0.6 : 1 }}>{saving ? "Saving…" : "Save changes"}</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: "0.88rem", color: "var(--text)", lineHeight: 1.5, marginTop: 4 }}>
+                  {isHtmlContent(n.content)
+                    ? <span dangerouslySetInnerHTML={{ __html: n.content }} />
+                    : n.content}
+                </div>
+              )}
+              {canPost && editingId !== n.id && (confirmId === n.id ? (
                 <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
                   <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>Remove this notice?</span>
                   <button onClick={() => removeNotice(n.id)} style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Yes, remove</button>
                   <button onClick={() => setConfirmId(null)} style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Keep</button>
                 </div>
               ) : (
-                <button onClick={() => setConfirmId(n.id)} style={{ marginTop: 6, background: "none", border: "none", color: "var(--danger)", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Remove</button>
+                <div style={{ display: "flex", gap: 16, marginTop: 6 }}>
+                  <button onClick={() => { setEditingId(n.id); setEditDraft(n.content); setConfirmId(null) }} style={{ background: "none", border: "none", color: colour, fontSize: "0.78rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Edit</button>
+                  <button onClick={() => setConfirmId(n.id)} style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Remove</button>
+                </div>
               ))}
             </div>
           ))}
