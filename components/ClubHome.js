@@ -2918,7 +2918,7 @@ export default function ClubHome({ club }) {
 
     // Members for EC picker (admin or this club's Owner)
     if (canManage) {
-      const { data: mems } = await supabase.from("members").select("id, name, display_name, username").order("name")
+      const { data: mems } = await supabase.from("members").select("id, name, display_name, username").eq("is_test", false).order("name")
       setMembers(mems || [])
     }
 

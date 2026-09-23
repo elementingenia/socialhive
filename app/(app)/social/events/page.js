@@ -2044,7 +2044,7 @@ export default function SocialEvents() {
 
     const { data: membersData } = await supabase
       .from("members").select("id, name, username")
-      .order("name")
+      .eq("is_test", false).order("name")
     setAllMembers(membersData || [])
 
     const { data: eventsData } = await supabase

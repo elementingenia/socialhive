@@ -219,7 +219,7 @@ function CreateEventForm({ onCreated }) {
   const [error, setError] = useState("")
 
   useEffect(() => {
-    supabase.from("members").select("id, name").order("name")
+    supabase.from("members").select("id, name").eq("is_test", false).order("name")
       .then(({ data }) => setMembers(data || []))
   }, [])
 
@@ -1012,7 +1012,7 @@ function EditEventForm({ event, choices: initialChoices, onSaved, onCancel }) {
   const [error, setError] = useState("")
 
   useEffect(() => {
-    supabase.from("members").select("id, name").order("name").then(({ data }) => setMembers(data || []))
+    supabase.from("members").select("id, name").eq("is_test", false).order("name").then(({ data }) => setMembers(data || []))
   }, [])
 
   function setChoice(i, patch) { setChoices(cs => cs.map((c, idx) => idx === i ? { ...c, ...patch } : c)) }

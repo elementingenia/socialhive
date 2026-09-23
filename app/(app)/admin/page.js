@@ -1013,7 +1013,7 @@ function PrivateOwnershipTab({ addToast }) {
   async function load() {
     const [recRes, memRes] = await Promise.all([
       supabase.from('movie_ownership').select('id, ownership_type, created_at, movies(id, title, year, actors), members(id, name)').order('created_at', { ascending: false }),
-      supabase.from('members').select('id, name').order('name'),
+      supabase.from('members').select('id, name').eq('is_test', false).order('name'),
     ])
     setRecords(recRes.data || [])
     setMembers(memRes.data || [])

@@ -1002,7 +1002,7 @@ export default function Screenings() {
       if (s) {
         supabase.from('members').select('id, is_admin').eq('auth_id', s.user.id).single()
           .then(({ data }) => setMember(data))
-        supabase.from('members').select('id, name, username').order('name')
+        supabase.from('members').select('id, name, username').eq('is_test', false).order('name')
           .then(({ data }) => setMembers(data || []))
       }
     })

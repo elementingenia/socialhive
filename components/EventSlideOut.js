@@ -34,7 +34,7 @@ import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/att
 // search against so that distinction is consistent everywhere.
 async function fetchResidentDirectory() {
   const [{ data: members }, { data: contacts }] = await Promise.all([
-    supabase.from("members").select("id, name, username, house_number").eq("status", "active").order("name"),
+    supabase.from("members").select("id, name, username, house_number").eq("status", "active").eq("is_test", false).order("name"),
     supabase.from("contacts").select("id, name, house_number").eq("active", true).is("member_id", null).order("name"),
   ])
   const list = [
