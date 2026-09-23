@@ -23,7 +23,7 @@ export default function OwnersManager({ contextType, contextKey, hint }) {
   const [busy, setBusy]       = useState(false)
 
   useEffect(() => {
-    supabase.from("members").select("id, name").order("name")
+    supabase.from("members").select("id, name").eq("is_test", false).order("name")
       .then(({ data }) => setMembers(data || []))
   }, [])
 

@@ -240,7 +240,7 @@ function CreateSurveyForm({ onCreated }) {
   const [error, setError] = useState("")
 
   useEffect(() => {
-    supabase.from("members").select("id, name").order("name").then(({ data }) => setMembers(data || []))
+    supabase.from("members").select("id, name").eq("is_test", false).order("name").then(({ data }) => setMembers(data || []))
     authedFetch("/api/survey-questions").then(r => r.json()).then(json => setBank((json.questions || []).filter(q => !q.archived))).catch(() => setBank([]))
   }, [])
 
@@ -482,7 +482,7 @@ function SurveyCoordinatorsEditor({ survey, detail, onSaved }) {
 
   useEffect(() => {
     if (!open || selected !== null) return
-    supabase.from("members").select("id, name").order("name").then(({ data }) => setMembers(data || []))
+    supabase.from("members").select("id, name").eq("is_test", false).order("name").then(({ data }) => setMembers(data || []))
     setSelected((detail.coordinatorIds || []).map((id, i) => ({ id, name: detail.coordinatorNames?.[i] })))
   }, [open, selected, detail.coordinatorIds, detail.coordinatorNames])
 

@@ -577,14 +577,14 @@ export default function ContactsPage() {
   // flag -- Private only hides you from other (non-admin) residents, not
   // from yourself (Iain, 2026-07-12).
   // Test/fixture accounts (members.is_test, migration 087) are hidden from
-  // this directory for everyone except admins -- mirrors events.is_test
-  // (migration 036)'s existing "invisible to residents, still usable/
-  // findable in the backend" pattern. Root cause this fixes: testbot
+  // this directory for EVERYONE, admins included (Iain, 2026-09-23: "This
+  // account should be invisible to the UI"). Was admin-visible with a
+  // "Test Account" badge from 2026-09-02 until then. Root cause this fixes: testbot
   // (status=active, hide_name=true, no house number/phone) was showing up
   // here as an unexplained "Resident" card with blank details, which
   // raised real community concern (Iain, 2026-09-02).
   const entries = useMemo(() => {
-    const memberEntries = members.filter(m => !m.is_test || isAdmin).map(m => {
+    const memberEntries = members.filter(m => !m.is_test).map(m => {
       const linked = contactByMemberId[m.id]
       const isSelf = m.id === me?.id
       const maskedForViewer = m.hide_name && !isAdmin && !isSelf
@@ -618,7 +618,7 @@ export default function ContactsPage() {
         // member is never external.
         external: false,
         isResident: true,   // members are implicitly Residents (migration 029)
-      badges: [isAdmin && m.is_test && "Test Account", isAdmin && m.is_admin && "Admin", isAdmin && m.hide_name && "Private"].filter(Boolean),
+      badges: [isAdmin && m.is_admin && "Admin", isAdmin && m.hide_name && "Private"].filter(Boolean),
       }
     })
     const contactEntries = displayContacts.map(c => ({
