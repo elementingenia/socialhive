@@ -655,8 +655,10 @@ export default function AdminGuidePage() {
                 ⚠ There is no "post a club notice" control inside this Admin panel. Each club's{" "}
                 <strong>📣 Post notice</strong> button is on that club's own page (Groups & Clubs → the
                 club → Post notice), usable by that club's assigned Owner or an app admin. Posting there
-                fires a notification to everyone who has joined that specific club — nobody else. Social Hive
-                has no equivalent — this is Groups/Clubs only. See Section 11 for how this differs from the
+                fires a notification to everyone who has joined that specific club — nobody else. Show Time
+                has the same <strong>📣 Post notice</strong> button on its own home page (Show Time Owner or
+                admin), notifying everyone who has Joined Show Time. Social Hive and Special Events have no
+                members, so they have no notices. See Section 11 for how this differs from the
                 Home banner in Section 2.
               </WarnBox>
             </Subsection>

@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { authedFetch } from "@/lib/getAuthToken"
 import { useUI } from "@/lib/UIContext"
 import { eventDeepLink } from "@/lib/eventNav"
+import { hubNoticeHomeFromMessage } from "@/lib/hubNotices"
 
 const TOP_OFFSET = 72 // matches ProfileSlideOver
 
@@ -32,6 +33,7 @@ function typeIcon(type) {
     case "book_return_reminder": return "📚"
     case "book_return_overdue":  return "📚"
     case "club_notice_posted":   return "📣"
+    case "hub_notice_posted":    return "📣"
     case "event_added":          return "🗓️"
     case "payment_refunded":     return "💸"
     case "question_received":    return "❓"
@@ -62,6 +64,7 @@ function typeColour(type) {
     case "book_return_reminder": return "var(--purple)"
     case "book_return_overdue":  return "#e53e3e"
     case "club_notice_posted":   return "var(--purple)"
+    case "hub_notice_posted":    return "var(--teal)"
     case "event_added":          return "var(--teal)"
     case "payment_refunded":     return "var(--teal)"
     case "question_received":    return "var(--amber-dark)"
@@ -101,6 +104,8 @@ function targetForNotif(n) {
   if (n.type === "voting_opened") return "/voting"
   if (n.type === "survey_opened" || n.type === "survey_results_published") return "/surveys"
   if (n.type === "committee_post_added") return "/committee"
+  // Hub notices (2026-09-23): route back to the hub the message names.
+  if (n.type === "hub_notice_posted") return hubNoticeHomeFromMessage(n.message)
   return eventDeepLink({
     hubType: n.events?.hub_type,
     eventId: n.event_id,
