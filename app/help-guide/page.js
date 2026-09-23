@@ -842,8 +842,9 @@ export default function HelpGuidePage() {
                 The Owner and admins also see a <strong>📣 Post notice</strong> button on the Show Time
                 home page. Write your message and tap <strong>Post notice</strong> — everyone who has
                 tapped <strong>+ Join</strong> on Show Time gets an alert, and the notice appears on the
-                Show Time home page for all residents to read. Tap <strong>Remove</strong> under a
-                notice to take it down. (Social and Special Events don't have members, so they don't
+                Show Time home page for all residents to read. Tap <strong>Edit</strong> under a
+                notice to correct it (members are not alerted again for an edit), or{" "}
+                <strong>Remove</strong> to take it down. (Social and Special Events don't have members, so they don't
                 have notices.)
               </Step>
               <Step>

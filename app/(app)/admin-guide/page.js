@@ -658,7 +658,9 @@ export default function AdminGuidePage() {
                 fires a notification to everyone who has joined that specific club — nobody else. Show Time
                 has the same <strong>📣 Post notice</strong> button on its own home page (Show Time Owner or
                 admin), notifying everyone who has Joined Show Time. Social Hive and Special Events have no
-                members, so they have no notices. See Section 11 for how this differs from the
+                members, so they have no notices. Every notice (club or Show Time) has{" "}
+                <strong>Edit</strong> and <strong>Remove</strong> under it for the same Owner/admin —
+                editing saves quietly and does not notify members a second time. See Section 11 for how this differs from the
                 Home banner in Section 2.
               </WarnBox>
             </Subsection>

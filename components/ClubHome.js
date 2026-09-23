@@ -41,6 +41,7 @@ import { paymentSummary, reconciliationIsStale, isPaid as isPaymentPaid, isSubmi
 import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
+import { isHtmlContent } from "@/lib/richText"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -2524,6 +2525,10 @@ function ClubSocial({ club, colour, isAdmin }) {
   const [draft, setDraft]       = useState("")
   const [posting, setPosting]   = useState(false)
   const [toast, setToast]       = useState(null)
+  const [confirmId, setConfirmId] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [editDraft, setEditDraft] = useState("")
+  const [saving, setSaving]       = useState(false)
   // Owner eligibility for posting notices -- same space_owners rows that
   // make someone eligible to answer questions asked on this club's page.
   const { owners } = useOwners("club", club.id)
@@ -2570,8 +2575,30 @@ function ClubSocial({ club, colour, isAdmin }) {
     setTimeout(() => setToast(null), 3000)
   }
 
+  // Edit a notice in place (Iain, 2026-09-24) -- same as hub notices
+  // (components/HubNotices.js). Saves quietly, members are not re-notified.
+  async function saveEdit() {
+    if (!editDraft.trim() || saving) return
+    setSaving(true)
+    try {
+      const res = await authedFetch("/api/clubs/notices", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingId, content: editDraft }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setToast(d.error || "Could not save changes"); setTimeout(() => setToast(null), 3000); return }
+      setEditingId(null); setEditDraft(""); loadNotices()
+      setToast("Notice updated"); setTimeout(() => setToast(null), 3000)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Inline confirm (was a native browser confirm() -- brought in line with
+  // hub notices and the no-native-controls UI standard, 2026-09-24).
   async function removeNotice(id) {
-    if (!confirm("Remove this notice?")) return
+    setConfirmId(null)
     const res = await authedFetch("/api/clubs/notices", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
@@ -2640,14 +2667,34 @@ function ClubSocial({ club, colour, isAdmin }) {
                 <span style={{ fontSize: "0.72rem", fontWeight: 700, color: clubInk(colour), textTransform: "uppercase", letterSpacing: "0.04em" }}>📣 Notice</span>
                 <span style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>{fmt(n.created_at)}</span>
               </div>
-              <div style={{ fontSize: "0.88rem", color: "var(--text)", lineHeight: 1.5, marginTop: 4 }}>
-                {/<[a-z][\s\S]*>/i.test(n.content)
-                  ? <span dangerouslySetInnerHTML={{ __html: n.content }} />
-                  : n.content}
-              </div>
-              {(isAdmin || isOwner) && (
-                <button onClick={() => removeNotice(n.id)} style={{ marginTop: 6, background: "none", border: "none", color: "var(--danger)", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Remove</button>
+              {editingId === n.id ? (
+                <div style={{ marginTop: 6 }}>
+                  <RichEditor key={`club-notice-edit-${n.id}`} initialValue={n.content} hubColour={colour.startsWith("var(") ? undefined : colour}
+                    bg="card" onChange={setEditDraft} placeholder="Notice text…" />
+                  <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                    <button onClick={() => { setEditingId(null); setEditDraft("") }} style={{ flex: 1, padding: "0.6rem", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text)", fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>Cancel</button>
+                    <button onClick={saveEdit} disabled={saving || !editDraft.trim()} style={{ flex: 2, padding: "0.6rem", borderRadius: 10, border: "none", background: colour, color: clubTextOn(colour), fontWeight: 700, fontFamily: "inherit", cursor: (saving || !editDraft.trim()) ? "not-allowed" : "pointer", opacity: (saving || !editDraft.trim()) ? 0.6 : 1 }}>{saving ? "Saving…" : "Save changes"}</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: "0.88rem", color: "var(--text)", lineHeight: 1.5, marginTop: 4 }}>
+                  {isHtmlContent(n.content)
+                    ? <span dangerouslySetInnerHTML={{ __html: n.content }} />
+                    : n.content}
+                </div>
               )}
+              {(isAdmin || isOwner) && editingId !== n.id && (confirmId === n.id ? (
+                <div style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>Remove this notice?</span>
+                  <button onClick={() => removeNotice(n.id)} style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Yes, remove</button>
+                  <button onClick={() => setConfirmId(null)} style={{ background: "none", border: "none", color: "var(--text-dim)", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Keep</button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 16, marginTop: 6 }}>
+                  <button onClick={() => { setEditingId(n.id); setEditDraft(n.content); setConfirmId(null) }} style={{ background: "none", border: "none", color: clubInk(colour), fontSize: "0.78rem", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Edit</button>
+                  <button onClick={() => setConfirmId(n.id)} style={{ background: "none", border: "none", color: "var(--danger)", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Remove</button>
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -3036,7 +3083,7 @@ export default function ClubHome({ club }) {
       {welcomeText && (
         <div style={{ background: colour, borderRadius: 14,
           padding: "1rem", marginBottom: 16, fontSize: "0.9rem", color: clubTextOn(colour), lineHeight: 1.6 }}>
-          {/<[a-z][\s\S]*>/i.test(welcomeText)
+          {isHtmlContent(welcomeText)
             ? <span dangerouslySetInnerHTML={{ __html: welcomeText }} />
             : welcomeText}
         </div>

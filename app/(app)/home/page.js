@@ -9,6 +9,7 @@ import { useUser } from "@/lib/UserContext"
 import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon, SpecialEventsIcon, CommitteeIcon, SurveysIcon, HappeningsNewsIcon } from "@/components/NavIcons"
 import { BAR_ENABLED, SPACE_BOOKINGS_ENABLED } from "@/lib/features"
 import AskQuestion from "@/components/AskQuestion"
+import { isHtmlContent } from "@/lib/richText"
 
 // Home hub grid — kept to at most TWO rows (Iain: mobile vertical space is
 // premium). Row 1 = three tiles (span 2 of a 6-col grid), row 2 = three tiles.
@@ -26,7 +27,7 @@ const HUBS = [
 // Render HTML (WYSIWYG) or legacy BBCode content
 function HubContent({ text, c1Colour, c2Colour }) {
   if (!text) return null
-  if (/<[a-z][\s\S]*>/i.test(text)) {
+  if (isHtmlContent(text)) {
     return <span dangerouslySetInnerHTML={{ __html: text }} />
   }
   return <FormattedText text={text} c1Colour={c1Colour} c2Colour={c2Colour} />

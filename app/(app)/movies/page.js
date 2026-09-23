@@ -16,6 +16,7 @@ import VoteScoreGrid from '@/components/VoteScoreGrid'
 import ManageLink from '@/components/ManageLink'
 import { useUser } from '@/lib/UserContext'
 import { useOwners } from '@/lib/useOwners'
+import { isHtmlContent } from "@/lib/richText"
 
 function parseGenres(g) {
   if (!g) return []
@@ -366,7 +367,7 @@ function WelcomeBanner({ text, colour = "var(--teal)" }) {
       borderRadius: 14, padding: "0.9rem 1rem", marginBottom: "1rem",
       position: "relative" }}>
       <div style={{ fontSize: "0.88rem", lineHeight: 1.55, color: "#fff" }}>
-        {/<[a-z][\s\S]*>/i.test(text)
+        {isHtmlContent(text)
           ? <span dangerouslySetInnerHTML={{ __html: text }} />
           : <FormattedText text={text} c1Colour={colour} c2Colour="var(--text-dim)" />
         }

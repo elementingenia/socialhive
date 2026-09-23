@@ -10,6 +10,7 @@ import CommitteeNotifyToggle from "@/components/CommitteeNotifyToggle"
 import CommitteeOptOutsToggle from "@/components/CommitteeOptOutsToggle"
 import { FormattedText } from "@/lib/textFormatter"
 import { MAX_ATTACHMENT_BYTES, tooLargeMessage } from "@/lib/attachmentLimits"
+import { isHtmlContent } from "@/lib/richText"
 
 const COLOUR = "var(--committee)"
 
@@ -67,7 +68,7 @@ function WelcomeBanner({ text }) {
       position: "relative",
     }}>
       <div style={{ fontSize: "0.88rem", lineHeight: 1.55, color: "#fff", paddingRight: "1.5rem" }}>
-        {/<[a-z][\s\S]*>/i.test(text)
+        {isHtmlContent(text)
           ? <span dangerouslySetInnerHTML={{ __html: text }} />
           : <FormattedText text={text} c1Colour="var(--committee)" c2Colour="rgba(255,255,255,0.85)" />
         }
@@ -99,7 +100,7 @@ function PostCard({ post, canManage, onTogglePin, onArchive }) {
         </span>
       </div>
       <div style={{ fontSize: "0.9rem", color: "var(--text)", lineHeight: 1.55, marginTop: 6 }}>
-        {/<[a-z][\s\S]*>/i.test(post.content)
+        {isHtmlContent(post.content)
           ? <span dangerouslySetInnerHTML={{ __html: post.content }} />
           : post.content}
       </div>

@@ -15,6 +15,7 @@ import { FormattedText } from "@/lib/textFormatter"
 import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted, balancePhrase } from "@/lib/payments"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import { bookingsClosed } from "@/lib/booking"
+import { isHtmlContent } from "@/lib/richText"
 
 const COLOUR = "var(--terracotta)"
 
@@ -63,7 +64,7 @@ function WelcomeBanner({ text }) {
       position: "relative",
     }}>
       <div style={{ fontSize: "0.88rem", lineHeight: 1.55, color: "#fff", paddingRight: "1.5rem" }}>
-        {/<[a-z][\s\S]*>/i.test(text)
+        {isHtmlContent(text)
           ? <span dangerouslySetInnerHTML={{ __html: text }} />
           : <FormattedText text={text} c1Colour="var(--terracotta)" c2Colour="rgba(255,255,255,0.85)" />
         }
