@@ -10,6 +10,7 @@ import EventSlideOut from '@/components/EventSlideOut'
 import PastEventsAccordion from '@/components/PastEventsAccordion'
 import EventCoordinators from '@/components/EventCoordinators'
 import FollowHubButton from '@/components/FollowHubButton'
+import HubNotices from '@/components/HubNotices'
 import { ContactBar } from '@/components/OwnersManager'
 import VoteScoreGrid from '@/components/VoteScoreGrid'
 import ManageLink from '@/components/ManageLink'
@@ -558,6 +559,8 @@ export default function MoviesHomePage() {
         right={<FollowHubButton hubType="movie" colour="var(--teal)" />} style={{ margin: '-2px 0 12px' }} />
 
       {canManage && <ManageLink href="/movies/manage" label="Manage Show Time" colour="var(--teal)" />}
+
+      <HubNotices hubType="movie" colour="var(--teal)" canPost={canManage} />
 
       {nextEvent ? (
         <NextScreeningCard event={nextEvent} myBooking={nextBookingSummary} coordinator={nextEventCoordinator} seatsLeft={nextEventSeatsLeft} onOpen={() => openSlideOutForEvent(nextEvent.id, nextEvent)}

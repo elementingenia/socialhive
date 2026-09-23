@@ -839,6 +839,14 @@ export default function HelpGuidePage() {
                 sees this count or list.
               </Step>
               <Step>
+                The Owner and admins also see a <strong>📣 Post notice</strong> button on the Show Time
+                home page. Write your message and tap <strong>Post notice</strong> — everyone who has
+                tapped <strong>+ Join</strong> on Show Time gets an alert, and the notice appears on the
+                Show Time home page for all residents to read. Tap <strong>Remove</strong> under a
+                notice to take it down. (Social and Special Events don't have members, so they don't
+                have notices.)
+              </Step>
+              <Step>
                 Adding a walk-up booking or using <strong>Modify Seats</strong> on someone's booking
                 here is not held to the resident-facing per-booking seat limit — as the event's
                 admin/Owner/coordinator, you can bring in as many seats as you need, up to the
