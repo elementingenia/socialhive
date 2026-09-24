@@ -3,6 +3,7 @@ import { useState, useEffect } from "react"
 import { authedFetch } from "@/lib/getAuthToken"
 import { recipientSummary } from "@/lib/categoryQuestions"
 import { Sheet } from "@/components/Sheet"
+import QuestionImagePicker, { messageRequestInit, sendErrorMessage } from "@/components/QuestionImagePicker"
 
 const inputStyle = {
   width: "100%", padding: "0.75rem 1rem", borderRadius: "10px",
@@ -35,6 +36,7 @@ export default function AskQuestion({
   const [busy, setBusy]       = useState(false)
   const [done, setDone]       = useState(false)
   const [error, setError]     = useState("")
+  const [images, setImages]   = useState([])   // up to 3 photos, see QuestionImagePicker
 
   const [targets, setTargets]         = useState(null)   // null = not loaded yet
   const [targetsError, setTargetsErr] = useState("")
@@ -42,6 +44,7 @@ export default function AskQuestion({
 
   function reset() {
     setSubject(""); setBody(""); setError(""); setDone(false); setPicked(null)
+    images.forEach(i => URL.revokeObjectURL(i.previewUrl)); setImages([])
   }
 
   useEffect(() => {
@@ -71,14 +74,12 @@ export default function AskQuestion({
   const activeNames = picked?.recipient_names || recipientNames || []
 
   async function submit() {
-    if (!subject.trim() || !body.trim()) { setError("Please add a subject and your question."); return }
+    if (!subject.trim() || (!body.trim() && !images.length)) { setError("Please add a subject and your question."); return }
     setBusy(true); setError("")
     try {
-      const res = await authedFetch("/api/questions", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ context_type: activeType, context_key: activeKey ?? null, subject, body }),
-      })
-      if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || "Could not send. Please try again."); setBusy(false); return }
+      const res = await authedFetch("/api/questions", messageRequestInit(
+        { context_type: activeType, context_key: activeKey ?? null, subject, body }, images))
+      if (!res.ok) { setError(await sendErrorMessage(res, "Could not send. Please try again.")); setBusy(false); return }
       setDone(true)
     } catch { setError("Could not send. Please try again.") }
     setBusy(false)
@@ -159,6 +160,7 @@ export default function AskQuestion({
               placeholder="Subject (a few words)" style={{ ...inputStyle, marginBottom: "0.6rem" }} />
             <textarea value={body} onChange={e => setBody(e.target.value)} rows={5}
               placeholder="Your question…" style={{ ...inputStyle, resize: "vertical" }} />
+            <QuestionImagePicker images={images} onChange={setImages} disabled={busy} colour={colour} />
             {error && <div style={{ color: "#b91c1c", fontSize: "0.82rem", marginTop: "0.5rem" }}>{error}</div>}
           </>
         )}

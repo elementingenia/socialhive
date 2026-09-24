@@ -6,6 +6,8 @@ import {
   askableCategories, sortQuestionsForDisplay,
 } from "@/lib/questionRouting"
 import { resolveMemberName } from "@/lib/memberName"
+import { readMessageRequest, prepareImages, storeImages } from "@/lib/questionImages"
+import { hasContent, photoSuffix } from "@/lib/questionImageRules"
 
 export const dynamic = "force-dynamic"
 
@@ -105,13 +107,21 @@ export async function POST(req) {
   const member = await getMember(req)
   if (!member) return NextResponse.json({ error: "Unauthorised" }, { status: 401 })
 
-  const { context_type, context_key, subject, body } = await req.json()
+  // Multipart when photos are attached (up to 3, Iain 2026-09-25), JSON otherwise.
+  const { fields, files } = await readMessageRequest(req)
+  const { context_type, context_key, subject } = fields
+  const body = fields.body || ""
   if (!["general", "hub", "club", "event", "category", "voting_event"].includes(context_type))
     return NextResponse.json({ error: "Invalid context" }, { status: 400 })
   if (context_type !== "general" && !context_key)
     return NextResponse.json({ error: "Missing context" }, { status: 400 })
-  if (!subject?.trim() || !body?.trim())
-    return NextResponse.json({ error: "A subject and a message are required" }, { status: 400 })
+  if (!subject?.trim() || !hasContent(body, files.length))
+    return NextResponse.json({ error: "Please add a subject and your question (or a photo)" }, { status: 400 })
+
+  // Resize every photo before writing anything -- a bad photo fails the
+  // whole send with nothing half-saved.
+  const prep = await prepareImages(files)
+  if (prep.error) return NextResponse.json({ error: prep.error }, { status: 400 })
 
   // Category targets are gated SERVER-SIDE, not just hidden in the picker
   // (dynamic-eligibility-in-routes standard). Both conditions are checked
@@ -132,11 +142,20 @@ export async function POST(req) {
   }).select("id").single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  const stored = await storeImages(prep.processed, { questionId: q.id, memberId: member.id })
+  if (stored.error) {
+    // Roll the question back so the asker can simply try again -- a
+    // question that silently lost its photos would be worse than a clear
+    // failure. Nobody has been notified yet at this point.
+    await supabaseAdmin.from("questions").delete().eq("id", q.id)
+    return NextResponse.json({ error: stored.error }, { status: 500 })
+  }
+
   // Notify the answerer(s) for this context (excluding the asker).
   const answerers = (await primaryAnswererIds(context_type, key)).filter(id => id !== member.id)
   const label = await contextLabel(context_type, key)
   for (const id of answerers) {
-    await notify(id, null, "question_received", `New question about ${label}: "${subject.trim().slice(0, 80)}"`, "/questions")
+    await notify(id, null, "question_received", `New question about ${label}: "${subject.trim().slice(0, 80)}"${photoSuffix(prep.processed.length)}`, "/questions")
   }
   return NextResponse.json({ id: q.id })
 }

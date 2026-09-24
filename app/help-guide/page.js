@@ -1180,6 +1180,12 @@ export default function HelpGuidePage() {
                 coordinator, or an admin if no one's assigned). Type your question and send it; the
                 other side gets notified and can reply.
               </Step>
+              <Step>
+                To show them something, tap <strong>📷 Add photos (up to 3)</strong> under your question
+                and choose up to three photos. Tap the <strong>×</strong> on a photo to take it off before
+                sending. Photos are shrunk automatically so they send quickly, and only you and the people
+                answering can see them.
+              </Step>
             </Subsection>
 
             <Subsection id="sub-questions-mine" title="Your questions & answering">
@@ -1187,7 +1193,9 @@ export default function HelpGuidePage() {
                 Tap <strong>Questions</strong> from Home to see every question you've asked or been
                 asked. Switch between <strong>Mine</strong> (questions you've sent) and questions routed
                 to you. Open a question to read the conversation and reply — you'll be notified as soon
-                as the other side answers or adds a follow-up.
+                as the other side answers or adds a follow-up. Replies can include up to three photos
+                too — use <strong>📷 Add photos</strong> under the reply box. Tap any photo in the
+                conversation to see it full size.
               </Step>
             </Subsection>
           </Section>

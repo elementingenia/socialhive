@@ -2,6 +2,8 @@
 import { useState, useEffect, useCallback } from "react"
 import { authedFetch } from "@/lib/getAuthToken"
 import { useUI } from "@/lib/UIContext"
+import QuestionImagePicker, { messageRequestInit, sendErrorMessage } from "@/components/QuestionImagePicker"
+import ImageCarouselModal from "@/components/ImageCarouselModal"
 
 const STATUS = {
   open:     { label: "Awaiting answer", colour: "var(--amber-dark)" },
@@ -109,6 +111,8 @@ function Thread({ id, onBack }) {
   const [reply, setReply] = useState("")
   const [busy, setBusy]   = useState(false)
   const [error, setError] = useState("")
+  const [images, setImages] = useState([])        // photos on the reply being written
+  const [viewer, setViewer] = useState(null)      // { photos, index } for the carousel
   const [withdrawing, setWithdrawing] = useState(false)
   const [finalising, setFinalising] = useState(false)
 
@@ -120,13 +124,16 @@ function Thread({ id, onBack }) {
   useEffect(() => { load() }, [load])
 
   async function send() {
-    if (!reply.trim()) return
+    if (!reply.trim() && !images.length) return
     setBusy(true); setError("")
-    const res = await authedFetch(`/api/questions/${id}`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ body: reply }),
-    })
-    if (res.ok) { setReply(""); await load() }
-    else { const d = await res.json().catch(() => ({})); setError(d.error || "Could not send.") }
+    try {
+      const res = await authedFetch(`/api/questions/${id}`, messageRequestInit({ body: reply }, images))
+      if (res.ok) {
+        setReply("")
+        images.forEach(i => URL.revokeObjectURL(i.previewUrl)); setImages([])
+        await load()
+      } else setError(await sendErrorMessage(res, "Could not send."))
+    } catch { setError("Could not send.") }
     setBusy(false)
   }
 
@@ -166,11 +173,13 @@ function Thread({ id, onBack }) {
       <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: "1rem" }}>{q.context_label} · asked by {q.asker_name} · {fmt(q.created_at)}</div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-        <Bubble who={q.asker_name} when={q.created_at} text={q.body} mine={data.isAsker} />
+        <Bubble who={q.asker_name} when={q.created_at} text={q.body} mine={data.isAsker}
+          images={q.images} onOpenImage={(i) => setViewer({ photos: q.images, index: i })} />
         {data.replies.map(r => (
           <Bubble key={r.id} who={r.author} when={r.created_at} text={r.body}
             mine={r.is_answer ? !data.isAsker : data.isAsker}
-            tag={r.is_answer ? "Answer" : "Follow-up"} />
+            tag={r.is_answer ? "Answer" : "Follow-up"}
+            images={r.images} onOpenImage={(i) => setViewer({ photos: r.images, index: i })} />
         ))}
       </div>
 
@@ -184,9 +193,10 @@ function Thread({ id, onBack }) {
           <textarea value={reply} onChange={e => setReply(e.target.value)} rows={4}
             placeholder={data.isAsker ? "Anything to add…" : "Type your answer…"}
             style={{ width: "100%", padding: "0.75rem 1rem", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", fontSize: "0.95rem", boxSizing: "border-box", fontFamily: "inherit", resize: "vertical" }} />
+          <QuestionImagePicker images={images} onChange={setImages} disabled={busy} />
           {error && <div style={{ color: "#b91c1c", fontSize: "0.82rem", marginTop: "0.4rem" }}>{error}</div>}
-          <button onClick={send} disabled={busy || !reply.trim()}
-            style={{ marginTop: "0.6rem", width: "100%", padding: "0.8rem", borderRadius: 12, border: "none", background: "var(--teal)", color: "#fff", fontWeight: 700, cursor: busy || !reply.trim() ? "not-allowed" : "pointer", opacity: busy || !reply.trim() ? 0.6 : 1, fontFamily: "inherit" }}>
+          <button onClick={send} disabled={busy || (!reply.trim() && !images.length)}
+            style={{ marginTop: "0.6rem", width: "100%", padding: "0.8rem", borderRadius: 12, border: "none", background: "var(--teal)", color: "#fff", fontWeight: 700, cursor: busy || (!reply.trim() && !images.length) ? "not-allowed" : "pointer", opacity: busy || (!reply.trim() && !images.length) ? 0.6 : 1, fontFamily: "inherit" }}>
             {busy ? "Sending…" : (data.isAsker ? "Send follow-up" : "Send answer")}
           </button>
         </div>
@@ -213,17 +223,30 @@ function Thread({ id, onBack }) {
           )}
         </div>
       )}
+
+      {viewer && <ImageCarouselModal photos={viewer.photos} startIndex={viewer.index} onClose={() => setViewer(null)} />}
     </div>
   )
 }
 
-function Bubble({ who, when, text, mine, tag }) {
+function Bubble({ who, when, text, mine, tag, images = [], onOpenImage }) {
   return (
     <div style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "88%", background: mine ? "var(--teal)" : "var(--surface)", color: mine ? "#fff" : "var(--text)", border: mine ? "none" : "1px solid var(--border)", borderRadius: 14, padding: "0.65rem 0.85rem" }}>
       <div style={{ fontSize: "0.7rem", opacity: 0.8, marginBottom: "0.2rem", fontWeight: 700 }}>
         {tag ? `${tag} · ` : ""}{who} · {fmt(when)}
       </div>
-      <div style={{ fontSize: "0.9rem", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{text}</div>
+      {text && <div style={{ fontSize: "0.9rem", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{text}</div>}
+      {images.length > 0 && (
+        <div style={{ display: "flex", gap: "0.4rem", marginTop: text ? "0.5rem" : 0, flexWrap: "wrap" }}>
+          {images.map((img, i) => (
+            <button key={img.url} type="button" onClick={() => onOpenImage?.(i)} aria-label={`Open photo ${i + 1}`}
+              style={{ padding: 0, border: "none", background: "none", cursor: "pointer", borderRadius: 10, lineHeight: 0 }}>
+              <img src={img.url} alt="" loading="lazy"
+                style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 10, border: mine ? "1px solid rgba(255,255,255,0.5)" : "1px solid var(--border)", display: "block" }} />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

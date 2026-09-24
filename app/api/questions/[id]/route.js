@@ -3,6 +3,11 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { notify } from "@/lib/notify"
 import { canAnswer, primaryAnswererIds, contextLabel } from "@/lib/questionRouting"
 import { resolveMemberName } from "@/lib/memberName"
+import {
+  readMessageRequest, prepareImages, storeImages, loadThreadImages,
+  questionStoragePaths, removeStoragePaths,
+} from "@/lib/questionImages"
+import { hasContent, photoSuffix } from "@/lib/questionImageRules"
 
 export const dynamic = "force-dynamic"
 
@@ -49,15 +54,19 @@ export async function GET(req, { params }) {
     t.q.asker_seen_at = new Date().toISOString()
   }
 
+  const images = await loadThreadImages(t.q.id)
+
   return NextResponse.json({
     question: {
       id: t.q.id, subject: t.q.subject, body: t.q.body, status: t.q.status,
       context_type: t.q.context_type, context_label: t.label,
       asker_name: t.askerName, created_at: t.q.created_at,
       answered_at: t.q.answered_at,
+      images: images.question,
     },
     replies: t.replies.map(r => ({
       id: r.id, body: r.body, is_answer: r.is_answer, created_at: r.created_at,
+      images: images.replies[r.id] || [],
       author: resolveMemberName(r.members, {
         viewerId: member.id, canManage: !!member.is_admin,
         fallback: r.is_answer ? "Coordinator" : "Resident",
@@ -79,6 +88,9 @@ export async function DELETE(req, { params }) {
   // Only the person who asked it (withdraw) or an admin (cleanup) may delete.
   if (q.asker_member_id !== member.id && !member.is_admin)
     return NextResponse.json({ error: "Not allowed" }, { status: 403 })
+  // Photos live in Storage, which the row cascade can't reach -- remove the
+  // files first, then the rows (cascades replies + question_images).
+  await removeStoragePaths(await questionStoragePaths(params.id))
   await supabaseAdmin.from("questions").delete().eq("id", params.id)   // cascades replies
   return NextResponse.json({ ok: true })
 }
@@ -86,8 +98,10 @@ export async function DELETE(req, { params }) {
 export async function POST(req, { params }) {
   const member = await getMember(req)
   if (!member) return NextResponse.json({ error: "Unauthorised" }, { status: 401 })
-  const { body } = await req.json()
-  if (!body?.trim()) return NextResponse.json({ error: "Message is required" }, { status: 400 })
+  // Multipart when photos are attached (up to 3 per reply), JSON otherwise.
+  const { fields, files } = await readMessageRequest(req)
+  const body = fields.body || ""
+  if (!hasContent(body, files.length)) return NextResponse.json({ error: "Please add a message or a photo" }, { status: 400 })
 
   const { data: q } = await supabaseAdmin.from("questions").select("*").eq("id", params.id).single()
   if (!q) return NextResponse.json({ error: "Not found" }, { status: 404 })
@@ -125,9 +139,21 @@ export async function POST(req, { params }) {
     notifyTargets = (await primaryAnswererIds(q.context_type, q.context_key)).filter(id => id !== member.id)
   }
 
-  await supabaseAdmin.from("question_replies").insert({
+  // Resize before writing anything, so a bad photo leaves no stray reply.
+  const prep = await prepareImages(files)
+  if (prep.error) return NextResponse.json({ error: prep.error }, { status: 400 })
+
+  const { data: reply, error: replyErr } = await supabaseAdmin.from("question_replies").insert({
     question_id: q.id, member_id: member.id, body: body.trim(), is_answer,
-  })
+  }).select("id").single()
+  if (replyErr) return NextResponse.json({ error: "Could not send. Please try again." }, { status: 500 })
+
+  const stored = await storeImages(prep.processed, { questionId: q.id, replyId: reply.id, memberId: member.id })
+  if (stored.error) {
+    // Roll back before any status change or notification has happened.
+    await supabaseAdmin.from("question_replies").delete().eq("id", reply.id)
+    return NextResponse.json({ error: stored.error }, { status: 500 })
+  }
 
   const patch = { status: newStatus, updated_at: now }
   if (is_answer) {
@@ -145,10 +171,11 @@ export async function POST(req, { params }) {
   // several open threads in that context it was. Matches the same
   // subject.trim().slice(0, 80) truncation used at creation (POST /api/questions).
   const subject = q.subject?.trim().slice(0, 80) || ""
+  const photos = photoSuffix(prep.processed.length)
   for (const id of notifyTargets) {
     const msg = notifyType === "question_answered"
-      ? `Your question about ${label} has a new reply: "${subject}"`
-      : `New reply on a question about ${label}: "${subject}"`
+      ? `Your question about ${label} has a new reply: "${subject}"${photos}`
+      : `New reply on a question about ${label}: "${subject}"${photos}`
     await notify(id, null, notifyType, msg, "/questions", member.id)
   }
 
