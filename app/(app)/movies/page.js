@@ -77,7 +77,7 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen, c
         ) : (
           <div style={{ width: 100, minHeight: 130, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', flexShrink: 0 }}>🎬</div>
         )}
-        <div style={{ flex: 1, padding: '0.9rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+        <div style={{ flex: 1, minWidth: 0, padding: '0.9rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
           <div style={{ fontWeight: 800, fontSize: '1.05rem', lineHeight: 1.2 }}>
             {movie?.title || event.title}{movie?.rating && <span style={{ fontWeight: 400, fontSize: '0.75em', verticalAlign: 'baseline', color: 'var(--text-dim)' }}> ({movie.rating})</span>}
           </div>
@@ -297,7 +297,7 @@ function RatingSwiper({ movies, memberId, onDone }) {
           ) : (
             <div style={{ width: 90, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', flexShrink: 0 }}>🎬</div>
           )}
-          <div style={{ flex: 1, padding: '0.9rem 1rem' }}>
+          <div style={{ flex: 1, minWidth: 0, padding: '0.9rem 1rem' }}>
             <div style={{ fontWeight: 800, fontSize: '1rem', lineHeight: 1.2, marginBottom: '0.25rem' }}>
               {movie.title}{movie.rating && <span style={{ fontWeight: 400, fontSize: '0.75em', verticalAlign: 'baseline', color: 'var(--text-dim)' }}> ({movie.rating})</span>}
             </div>

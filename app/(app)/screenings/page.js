@@ -772,7 +772,10 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
               style={{ width: 100, minHeight: 140, objectFit: 'cover', objectPosition: posterPosition(ev, movie), flexShrink: 0 }} />
           : <div style={{ width: 100, minHeight: 140, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', flexShrink: 0 }}>🎬</div>
         }
-        <div style={{ flex: 1, padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+        {/* minWidth: 0 (BUG-066) -- without it this flex:1 column grows to its
+            widest child's minimum width and spills past the card's right edge
+            (clipped by overflow:hidden) instead of wrapping inside it. */}
+        <div style={{ flex: 1, minWidth: 0, padding: '0.85rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
             <div style={{ color: 'var(--teal)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.06em', lineHeight: 1.2 }}>
               {fmtDateLong(ev.event_date)}{ev.event_time ? ' · ' + fmtTime24(ev.event_time) : ''}

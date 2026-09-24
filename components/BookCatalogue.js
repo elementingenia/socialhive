@@ -72,7 +72,7 @@ function RatingSwiper({ books, memberId, onDone }) {
           ) : (
             <div style={{ width: 80, background: "var(--surface2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "2rem", flexShrink: 0 }}>📖</div>
           )}
-          <div style={{ flex: 1, padding: "0.9rem 1rem" }}>
+          <div style={{ flex: 1, minWidth: 0, padding: "0.9rem 1rem" }}>
             <div style={{ fontWeight: 800, fontSize: "0.95rem", lineHeight: 1.2, marginBottom: 2 }}>{book.title}</div>
             <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: 4 }}>
               {book.author && `by ${book.author}`}{book.published_year ? ` (${book.published_year})` : ""}

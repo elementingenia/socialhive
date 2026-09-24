@@ -31,6 +31,18 @@ import { clubInk } from "@/lib/clubColours"
 // `trailing` present there's less horizontal room, so multiple coordinators
 // read better stacked. Off by default so every other existing caller of this
 // shared component is unaffected.
+// Large-text accessibility (BUG-066, 2026-09-24): names used to be
+// whiteSpace:nowrap, and the trailing row (names + Add to Calendar) had no
+// flexWrap. Together they made the row's minimum width = longest name +
+// the button, which pushed any flex:1 parent column wider than the card
+// (Show Time's AFL tile: "Susan Ellis-Crewe" pushed the pills ~30px right
+// of every other tile; at larger OS text sizes the pills are clipped off
+// the card edge entirely). Now the row wraps -- the button drops below,
+// still right-aligned via marginLeft:auto -- and a name only wraps at a
+// space when it alone is wider than the space available. Hyphens are
+// swapped for non-breaking hyphens so "Ellis-Crewe" never splits.
+const nameDisplay = (name) => String(name).replace(/-/g, "\u2011")
+
 export default function EventCoordinators({ eventId, eventTitle, names, colour = "var(--amber)", style, contextType = "event", trailing = null, stackNames = false }) {
   const list = (names || []).filter(Boolean)
   if (!list.length) return null
@@ -68,8 +80,8 @@ export default function EventCoordinators({ eventId, eventTitle, names, colour =
               ? { display: "flex", flexDirection: "column", gap: "0.05rem" }
               : { display: "flex", flexWrap: "wrap", columnGap: "0.3rem", rowGap: "0.05rem" }}>
               {list.map((name, i) => (
-                <span key={name} style={{ whiteSpace: "nowrap", fontWeight: 700, fontSize: "0.85rem", color: ink }}>
-                  {name}{!stackNames && i < list.length - 1 ? "," : ""}
+                <span key={name} style={{ fontWeight: 700, fontSize: "0.85rem", color: ink }}>
+                  {nameDisplay(name)}{!stackNames && i < list.length - 1 ? "," : ""}
                 </span>
               ))}
             </span>
@@ -79,9 +91,9 @@ export default function EventCoordinators({ eventId, eventTitle, names, colour =
   )
   if (!trailing) return <div style={style}>{body}</div>
   return (
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem", ...style }}>
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-start", justifyContent: "space-between", gap: "0.5rem", ...style }}>
       <div style={{ flex: "1 1 auto", minWidth: 0 }}>{body}</div>
-      <div style={{ flex: "none", marginTop: "0.15rem" }}>{trailing}</div>
+      <div style={{ flex: "none", marginLeft: "auto", marginTop: "0.15rem" }}>{trailing}</div>
     </div>
   )
 }
