@@ -19,7 +19,9 @@ import { useSameDateWarning } from "@/components/SameDateWarning"
 import { useRequestOnlyAcknowledge } from "@/components/RequestOnlyAcknowledge"
 import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
-import { byOwnThenName } from "@/lib/sortNames"
+import { byOwnThenName, ordinal } from "@/lib/sortNames"
+import { useWaitlistInfo } from "@/lib/useWaitlistInfo"
+import { waitlistLabel, waitlistPositionMap } from "@/lib/waitlist"
 import { resolveMemberName } from "@/lib/memberName"
 import { busSeatsUsed } from "@/lib/busSeats"
 import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/attendeeExport"
@@ -103,7 +105,7 @@ function CapacityBar({ booked, max, waitlist }) {
 
 // ── Booking Status Strip ───────────────────────────────────────────────────────
 // Always-visible bottom strip — shows booking state and tells the user what tapping does
-function BookingStrip({ myBooking, event, isFull, closed, blocked }) {
+function BookingStrip({ myBooking, myWaitlist, waitlistPosition, event, isFull, closed, blocked }) {
   const isConfirmed = myBooking?.status === "confirmed"
   const isWaitlist  = myBooking?.status === "waitlist"
   const seats       = myBooking?.seats || 1
@@ -138,7 +140,12 @@ function BookingStrip({ myBooking, event, isFull, closed, blocked }) {
     const textColour = badge.label === "Confirmed" ? badge.color : submitted ? "#0f766e" : badge.color
     return (
       <div style={{ ...base, background: bg, borderTop: `1px solid ${border}` }}>
-        <span style={{ color: textColour }}>{label}</span>
+        <span style={{ color: textColour }}>
+          {label}
+          {/* Split booking (some seats confirmed, the rest waitlisted) --
+              same as Show Time's "N confirmed + N waitlisted" strip. */}
+          {myWaitlist && <span style={{ color: "#d97706" }}>{` · +${myWaitlist.seats || 1} ${waitlistLabel(waitlistPosition).replace(/^On/, "on")}`}</span>}
+        </span>
         <span style={{ color: textColour, fontSize: "0.75rem" }}>Tap to modify or cancel →</span>
       </div>
     )
@@ -146,7 +153,7 @@ function BookingStrip({ myBooking, event, isFull, closed, blocked }) {
   if (isWaitlist) {
     return (
       <div style={{ ...base, background: "#fffbeb", borderTop: "1px solid #fde68a" }}>
-        <span style={{ color: "#d97706" }}>⏳ On waitlist · {seats} seat{seats !== 1 ? "s" : ""}</span>
+        <span style={{ color: "#d97706" }}>⏳ {waitlistLabel(waitlistPosition)} · {seats} seat{seats !== 1 ? "s" : ""}</span>
         <span style={{ color: "#d97706", fontSize: "0.75rem" }}>Tap to manage →</span>
       </div>
     )
@@ -1200,7 +1207,7 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
 }
 
 // ── Event Card ────────────────────────────────────────────────────────────────
-function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, onTogglePayment, togglingId, onCloseOutPayments, closingOut, onRemindPayment, remindingId, onToggleRefund, togglingRefundId }) {
+function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, isAdmin, onOpen, onEdit, onTogglePayment, togglingId, onCloseOutPayments, closingOut, onRemindPayment, remindingId, onToggleRefund, togglingRefundId }) {
   const { member } = useUser()
   const router = useRouter()
   const [showAttendees, setShowAttendees] = useState(false)
@@ -1256,7 +1263,13 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
   const attendeeName = b => b.member?.name || b.member?.username || b.contact?.name || ""
   const bySelfFirst = (a, b) => byOwnThenName(a.member_id === member?.id, b.member_id === member?.id, attendeeName(a), attendeeName(b))
   const confirmedBookings = (event.bookings?.filter(b => b.status === "confirmed") || []).sort(bySelfFirst)
-  const waitlistBookings  = (event.bookings?.filter(b => b.status === "waitlist") || []).sort(bySelfFirst)
+  // Waitlist is QUEUE order, not A-Z (BUG-067, 2026-09-26) -- matches Show
+  // Time and EventSlideOut's EC view, and the order lib/promoteWaitlist.js
+  // actually hands out seats in. Only admins see this list, and admins can
+  // read every waitlist row client-side, so the local order is complete.
+  const waitlistBookings  = event.bookings?.filter(b => b.status === "waitlist") || []
+  const waitlistPosById   = waitlistPositionMap(waitlistBookings)
+  waitlistBookings.sort((a, b) => (waitlistPosById.get(a.id) || 0) - (waitlistPosById.get(b.id) || 0))
   // Cancelled-but-was-paid bookings, split by whether the refund's been
   // issued yet (2026-07-14) -- ported from Movies/Book Club's Coordinator
   // panel, which had this and Social never did. event.bookings already
@@ -1277,7 +1290,11 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
   // in lib/modifyBooking.js / lib/promoteWaitlist.js / app/api/bookings and
   // app/api/coordinator for the matching capacity-math side of this.
   const booked  = confirmedBookings.reduce((s, b) => s + (b.seats || 1), 0) + (event.unassigned_seats_count || 0)
-  const waiting = waitlistBookings.length
+  // Seats waiting, from the server (BUG-067): a resident's browser can't
+  // see other residents' waitlist rows (bookings RLS), so counting the local
+  // list read 0 for them. Seats, not bookings -- same unit as Show Time and
+  // the event pop-up. Local count is only the fallback while it loads.
+  const waiting = waitlistInfo ? waitlistInfo.waitlist_seats : waitlistBookings.reduce((s, b) => s + (b.seats || 1), 0)
   const showNames = event.show_attendee_names !== false
   // Named additional attendees (workstream A), grouped by the booker.
   const partyByOwner = {}
@@ -1565,7 +1582,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
         <CapacityBar booked={booked} max={event.max_seats} waitlist={waiting} />
       </div>
       {/* Booking status strip — always visible */}
-      <BookingStrip myBooking={myBooking} event={event} isFull={booked >= event.max_seats && event.max_seats > 0} closed={closed} blocked={blocked} />
+      <BookingStrip myBooking={myBooking} myWaitlist={myWaitlist} waitlistPosition={waitlistInfo?.position || null} event={event} isFull={booked >= event.max_seats && event.max_seats > 0} closed={closed} blocked={blocked} />
 
       {/* Attendees accordion */}
       {event.max_seats > 0 && (
@@ -1576,7 +1593,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
               <strong style={{ color: "var(--text)" }}>{booked} seat{booked !== 1 ? "s" : ""}</strong>
               <span style={{ marginLeft: "0.4rem" }}>of {event.max_seats}</span>
               {isAdmin && unpaidSeats > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.4rem" }}>({unpaidSeats} unpaid)</span>}
-              {isAdmin && waiting > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.4rem" }}>· {waiting} waitlist</span>}
+              {isAdmin && waiting > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.4rem" }}>· {waiting} waiting</span>}
               {event.has_bus && <span style={{ color: "var(--text-dim)", marginLeft: "0.4rem" }}>· 🚌 {busSeats}{event.bus_max_seats != null ? `/${event.bus_max_seats}` : ""}</span>}
             </span>
             <span style={{ fontSize: "0.65rem", color: "var(--teal)" }}>{showAttendees ? "▲ Hide" : "▼ Attendees"}</span>
@@ -1981,6 +1998,7 @@ function EventCard({ event, coordinators, myBooking, isAdmin, onOpen, onEdit, on
                     return (
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
                         <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--special)" : "var(--text)" }}>
+                          {waitlistPosById.get(b.id) && <span style={{ color: "var(--amber-dark)", fontWeight: 700, marginRight: 5 }}>({ordinal(waitlistPosById.get(b.id))})</span>}
                           {label}
                           {isPrivate && !isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
                         </span>
@@ -2075,6 +2093,10 @@ export default function SocialEvents() {
   const [events,          setEvents]        = useState([])
   const [coordinatorMap,  setCoordinatorMap] = useState({})
   const [bookings,        setBookings]       = useState({})
+  const [myWaitlists,     setMyWaitlists]    = useState({})
+  const [loadCount,       setLoadCount]      = useState(0)
+  // Waitlist position + real waitlist seat totals, server-side (BUG-067).
+  const waitlistInfo = useWaitlistInfo(events.map(e => e.id), loadCount)
   const [loading,         setLoading]        = useState(true)
   const [pastOpen,        setPastOpen]       = useState(false)
   const [fullEvent,       setFullEvent]      = useState(null)
@@ -2134,8 +2156,18 @@ export default function SocialEvents() {
       .eq("member_id", member.id).neq("status", "cancelled")
 
     const byEvent = {}
-    ;(myBookings || []).forEach(b => { byEvent[b.event_id] = b })
+    // Confirmed wins over waitlist (BUG-067): a split booking has one row of
+    // each, and "last row wins" used to show whichever happened to come back
+    // last. The waitlist half is kept separately for the split strip.
+    const waitByEvent = {}
+    ;(myBookings || []).forEach(b => {
+      if (b.status === "waitlist") waitByEvent[b.event_id] = b
+      const existing = byEvent[b.event_id]
+      if (!existing || (existing.status !== "confirmed" && b.status === "confirmed")) byEvent[b.event_id] = b
+    })
     setBookings(byEvent)
+    setMyWaitlists(waitByEvent)
+    setLoadCount(c => c + 1)
     setLoading(false)
   }, [member?.id])
 
@@ -2376,7 +2408,7 @@ export default function SocialEvents() {
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "1.5rem" }}>
           {upcoming.map(e => (
             <EventCard key={e.id} event={e} coordinators={coordinatorMap[e.id] || []}
-              myBooking={bookings[e.id]} isAdmin={canManage}
+              myBooking={bookings[e.id]} myWaitlist={bookings[e.id]?.status === "confirmed" ? myWaitlists[e.id] : null} waitlistInfo={waitlistInfo[e.id]} isAdmin={canManage}
               onOpen={() => openEventSlideOut(e)}
               onEdit={() => { setEditEvent(e); setShowForm(true) }}
               onTogglePayment={handleTogglePayment} togglingId={togglingId}
@@ -2405,7 +2437,7 @@ export default function SocialEvents() {
               {past.map((e, i) => (
                 <div key={e.id} style={{ borderTop: i > 0 ? "1px solid var(--border)" : "none" }}>
                   <EventCard event={e} coordinators={coordinatorMap[e.id] || []}
-                    myBooking={bookings[e.id]} isAdmin={canManage}
+                    myBooking={bookings[e.id]} myWaitlist={bookings[e.id]?.status === "confirmed" ? myWaitlists[e.id] : null} waitlistInfo={waitlistInfo[e.id]} isAdmin={canManage}
                     onOpen={() => openEventSlideOut(e)}
                     onEdit={() => { setEditEvent(e); setShowForm(true) }}
                     onTogglePayment={handleTogglePayment} togglingId={togglingId}

@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
+import { fetchWaitlistInfo } from "@/lib/useWaitlistInfo"
+import { waitlistLabel } from "@/lib/waitlist"
 import { bookingStatusBadge } from "@/lib/payments"
 import { authedFetch } from "@/lib/getAuthToken"
 import { MoviesIcon, SocialIcon, SpecialEventsIcon } from "@/components/NavIcons"
@@ -132,7 +134,7 @@ function BookingCard({ group, waitlistPosition, onClick }) {
             fontSize: "0.7rem", fontWeight: 700,
             padding: "0.25rem 0.65rem", borderRadius: "20px", whiteSpace: "nowrap",
           }}>
-            {`⏳ ${waitlist} waitlisted${waitlistPosition ? ` (#${waitlistPosition})` : ''}`}
+            {`⏳ ${waitlistLabel(waitlistPosition)} · ${waitlist} seat${waitlist !== 1 ? "s" : ""}`}
           </div>
         )}
       </div>
@@ -206,21 +208,18 @@ export default function BookingsPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Batch-fetch waitlist positions whenever bookings change
+  // Batch-fetch waitlist positions whenever bookings change -- one server
+  // call (BUG-067). The old per-event browser count couldn't see other
+  // residents' waitlist rows (bookings RLS), so non-admins always read #1.
   useEffect(() => {
-    const waitlisted = bookings.filter(b => b.status === "waitlist" && b.booked_at)
-    if (waitlisted.length === 0) { setWaitlistPositions({}); return }
-    Promise.all(
-      waitlisted.map(b =>
-        supabase
-          .from("bookings")
-          .select("id", { count: "exact", head: true })
-          .eq("event_id", b.event_id)
-          .eq("status", "waitlist")
-          .lt("booked_at", b.booked_at)
-          .then(({ count }) => [b.event_id, (count ?? 0) + 1])
-      )
-    ).then(results => setWaitlistPositions(Object.fromEntries(results)))
+    const ids = [...new Set(bookings.filter(b => b.status === "waitlist").map(b => b.event_id))]
+    if (ids.length === 0) { setWaitlistPositions({}); return }
+    let cancelled = false
+    fetchWaitlistInfo(ids).then(info => {
+      if (cancelled) return
+      setWaitlistPositions(Object.fromEntries(ids.map(id => [id, info[id]?.position || null])))
+    })
+    return () => { cancelled = true }
   }, [bookings])
 
   async function openBooking(booking) {

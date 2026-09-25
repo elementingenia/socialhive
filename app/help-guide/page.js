@@ -1364,6 +1364,11 @@ export default function HelpGuidePage() {
               <Step>
                 <strong style={{ color: "#64748b" }}>Waitlisted</strong> — the event was full when
                 you registered. You will be notified automatically if a confirmed seat opens up.
+                Wherever your booking appears — Show Time, Social, Special Events, Groups &amp; Clubs,
+                Book a Space and My Bookings — it shows your place in the queue, e.g.{" "}
+                <strong>#2 on waitlist</strong>. Seats are offered strictly in that order, first come,
+                first served. If only some of your seats fitted, the confirmed seats and the waitlisted
+                ones are shown together, e.g. <strong>2 seats booked · +1 #1 on waitlist</strong>.
               </Step>
             </Subsection>
 
