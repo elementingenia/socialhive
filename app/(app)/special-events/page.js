@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
+import { fetchWaitlistInfo } from "@/lib/useWaitlistInfo"
+import { waitlistLabel } from "@/lib/waitlist"
 import PastEventsAccordion from "@/components/PastEventsAccordion"
 import { bbToHtml } from "@/components/RichEditor"
 import { BusIcon } from "@/components/NavIcons"
@@ -240,7 +242,7 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
               background: "var(--surface2)", color: "var(--text-dim)",
               borderRadius: "20px", padding: "0.25rem 0.75rem",
               fontSize: "0.78rem", fontWeight: 700,
-            }}>{`⏳ You're on the waitlist${waitlistPosition ? ` (#${waitlistPosition})` : ''}`}</div>
+            }}>{`⏳ ${waitlistLabel(waitlistPosition)} · ${myBooking?.seats || 1} seat${(myBooking?.seats || 1) !== 1 ? "s" : ""}`}</div>
           ) : (
             <div style={{
               display: "inline-flex", alignItems: "center",
@@ -399,20 +401,23 @@ export default function SpecialEventsHome() {
     if (ev) {
       const confirmed = ev.bookings?.filter(b => b.status === "confirmed") || []
       setBookedCount(confirmed.reduce((s, b) => s + (b.seats || 1), 0) + (ev.unassigned_seats_count || 0))
-      setWaitlistCount(ev.bookings?.filter(b => b.status === "waitlist").length || 0)
-      const myBk = ev.bookings?.find(b => b.member_id === member.id && b.status !== "cancelled") || null
+      setWaitlistCount(ev.bookings?.filter(b => b.status === "waitlist").reduce((s, b) => s + (b.seats || 1), 0) || 0)
+      // Confirmed wins over a waitlist row (split booking), same rule as
+      // every other hub's "my booking" (BUG-067).
+      const mine = ev.bookings?.filter(b => b.member_id === member.id && b.status !== "cancelled") || []
+      const myBk = mine.find(b => b.status === "confirmed") || mine[0] || null
       setMyBooking(myBk)
-      if (myBk?.status === "waitlist" && myBk?.booked_at) {
-        supabase
-          .from("bookings")
-          .select("id", { count: "exact", head: true })
-          .eq("event_id", ev.id)
-          .eq("status", "waitlist")
-          .lt("booked_at", myBk.booked_at)
-          .then(({ count }) => setWaitlistPosition((count ?? 0) + 1))
-      } else {
-        setWaitlistPosition(null)
-      }
+      // Position + seats waiting come from the server (BUG-067): the old
+      // browser-side count couldn't see other residents' waitlist rows
+      // (bookings RLS), so every non-admin resident read as "#1" and the
+      // "N waiting" figure undercounted.
+      setWaitlistPosition(null)
+      fetchWaitlistInfo([ev.id]).then(info => {
+        const w = info[ev.id]
+        if (!w) return
+        setWaitlistCount(w.waitlist_seats)
+        setWaitlistPosition(myBk?.status === "waitlist" ? w.position : null)
+      })
 
       const { data: ecs } = await supabase
         .from("event_coordinators")

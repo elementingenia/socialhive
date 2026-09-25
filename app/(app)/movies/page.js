@@ -7,6 +7,8 @@ import { posterFor, posterPosition, posterAlt } from '@/lib/showing'
 import { sydneyTodayStr, isEventPast } from '@/lib/date'
 import { bookingsClosed } from '@/lib/booking'
 import EventSlideOut from '@/components/EventSlideOut'
+import { fetchWaitlistInfo } from '@/lib/useWaitlistInfo'
+import { waitlistLabel } from '@/lib/waitlist'
 import PastEventsAccordion from '@/components/PastEventsAccordion'
 import EventCoordinators from '@/components/EventCoordinators'
 import FollowHubButton from '@/components/FollowHubButton'
@@ -111,13 +113,13 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen, c
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.1rem' }}>
                 <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--teal)' }}>✓ {myBooking.confirmed_seats} seat{myBooking.confirmed_seats !== 1 ? 's' : ''}</div>
                 {myBooking.waitlist_seats > 0 && (
-                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--amber-dark)' }}>⏳ +{myBooking.waitlist_seats} waitlist{myBooking.waitlist_position ? ` (#${myBooking.waitlist_position})` : ''}</div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--amber-dark)' }}>⏳ +{myBooking.waitlist_seats} {waitlistLabel(myBooking.waitlist_position).replace(/^On/, 'on')}</div>
                 )}
               </div>
             )}
             {isWaitlist && !isBooked && (
               <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--amber-dark)' }}>
-                ⏳ {myBooking.waitlist_seats} waitlisted{myBooking.waitlist_position ? ` (#${myBooking.waitlist_position})` : ''}
+                ⏳ {waitlistLabel(myBooking.waitlist_position)} · {myBooking.waitlist_seats} seat{myBooking.waitlist_seats !== 1 ? 's' : ''}
               </div>
             )}
             {!isBooked && !isWaitlist && (
@@ -485,14 +487,11 @@ export default function MoviesHomePage() {
       setNextBooking(nextRows.length ? nextRows : null)
       // Fetch waitlist position for user if they're waitlisted on next event
       const waitlistRow = nextRows.find(b => b.status === 'waitlist')
-      if (waitlistRow?.booked_at) {
-        supabase
-          .from('bookings')
-          .select('id', { count: 'exact', head: true })
-          .eq('event_id', nextEv.id)
-          .eq('status', 'waitlist')
-          .lt('booked_at', waitlistRow.booked_at)
-          .then(({ count }) => setNextWaitlistPosition((count ?? 0) + 1))
+      // Server-side (BUG-067): a browser count can't see other residents'
+      // waitlist rows (bookings RLS), so every non-admin read as "#1".
+      if (waitlistRow) {
+        setNextWaitlistPosition(null)
+        fetchWaitlistInfo([nextEv.id]).then(info => setNextWaitlistPosition(info[nextEv.id]?.position || null))
       } else {
         setNextWaitlistPosition(null)
       }

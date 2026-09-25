@@ -20,6 +20,8 @@ import { clubTextOn, clubInk } from "@/lib/clubColours"
 import { maxSeatsPerBooking, effectiveSeatCap } from "@/lib/modifyBooking"
 import { busSeatsUsed } from "@/lib/busSeats"
 import { useOwners } from "@/lib/useOwners"
+import { useWaitlistInfo } from "@/lib/useWaitlistInfo"
+import { waitlistLabel } from "@/lib/waitlist"
 import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
 import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/attendeeExport"
 
@@ -2199,17 +2201,19 @@ function BookingSection({ event, onRefresh, onClose }) {
   const myConfirmed = event.my_bookings?.find(b => b.status === "confirmed")
   const myWaitlist  = event.my_bookings?.find(b => b.status === "waitlist")
 
-  const [waitlistPos, setWaitlistPos] = useState(null)
-  useEffect(() => {
-    if (!myWaitlist?.created_at) { setWaitlistPos(null); return }
-    supabase
-      .from("bookings")
-      .select("id", { count: "exact", head: true })
-      .eq("event_id", event.id)
-      .eq("status", "waitlist")
-      .lt("created_at", myWaitlist.created_at)
-      .then(({ count }) => setWaitlistPos((count ?? 0) + 1))
-  }, [event.id, myWaitlist?.created_at])
+  // Waitlist position + real waitlist total (BUG-067, Iain 2026-09-26 --
+  // Fire Pit special event showed no position). This used to count
+  // earlier rows by `created_at`, a column bookings doesn't have, so it
+  // silently never produced a number in ANY hub; and even with the right
+  // column, a browser query can't see other residents' waitlist rows
+  // (bookings RLS, migration 020), so it would have read #1 for everyone.
+  // Now read from the service-role endpoint every hub shares -- same FIFO
+  // rule as lib/promoteWaitlist.js. Re-fetched whenever this viewer's own
+  // booking changes (book / split / cancel / promote).
+  const myBookingsKey = (event.my_bookings || []).map(b => `${b.status}:${b.seats || 1}`).sort().join("|")
+  const waitlistInfoAll = useWaitlistInfo([event.id], myBookingsKey)
+  const waitlistInfo = waitlistInfoAll[event.id] || null
+  const waitlistPos = myWaitlist ? (waitlistInfo?.position || null) : null
 
   // Unassigned seats (2026-09-04) consume real capacity with no booking row
   // of their own, so they must be folded into "booked" here just like every
@@ -2402,7 +2406,7 @@ function BookingSection({ event, onRefresh, onClose }) {
         <SplitDialog offer={splitOffer} onAccept={() => handleBook(true)} onDecline={() => setSplitOffer(null)} />
       )}
 
-      {!isBookclubEvent && max > 0 && <CapacityBar booked={booked} max={max} waitlist={event.waitlist_count || 0} />}
+      {!isBookclubEvent && max > 0 && <CapacityBar booked={booked} max={max} waitlist={waitlistInfo ? waitlistInfo.waitlist_seats : (event.waitlist_count || 0)} />}
 
       {!myConfirmed && !myWaitlist && (
         <div>
@@ -2506,7 +2510,7 @@ function BookingSection({ event, onRefresh, onClose }) {
                 : "var(--green)"
               return <StatusPill label={label} colour={colour} />
             })()}
-            {myWaitlist && <StatusPill label={`⏳ ${myWaitlist.seats} on waitlist${waitlistPos ? ` (#${waitlistPos})` : ""}`} colour="var(--amber-dark)" />}
+            {myWaitlist && <StatusPill label={`⏳ ${waitlistLabel(waitlistPos)} · ${myWaitlist.seats || 1} seat${(myWaitlist.seats || 1) !== 1 ? "s" : ""}`} colour="var(--amber-dark)" />}
           </div>
           {myConfirmed && bringApplicable && (() => {
             const catLabel = (id) => bringCats.find(c => c.id === id)?.label

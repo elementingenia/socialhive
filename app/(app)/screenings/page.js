@@ -18,6 +18,7 @@ import { sydneyTodayStr } from '@/lib/date'
 import AttendeeNamingPicker from '@/components/AttendeeNamingPicker'
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from '@/lib/formValidation'
 import { byOwnThenName, ordinal } from '@/lib/sortNames'
+import { waitlistLabel } from '@/lib/waitlist'
 import { useOwners } from '@/lib/useOwners'
 import { exportAttendeeListPdf } from '@/lib/attendeeExport'
 import { CopyLinkButton, AddToCalendarButton } from '@/components/EventShareActions'
@@ -654,7 +655,7 @@ function BookingStrip({ myBooking, isFull, closed, blocked }) {
   if (hasConfirmed && hasWaitlist) {
     return (
       <div style={{ ...base, background: '#f0fdf4', borderTop: '1px solid #bbf7d0', flexWrap: 'wrap' }}>
-        <span style={{ color: '#15803d' }}>✓ {confirmedSeats} confirmed + {waitlistSeats} waitlisted</span>
+        <span style={{ color: '#15803d' }}>✓ {confirmedSeats} confirmed <span style={{ color: '#d97706' }}>· +{waitlistSeats} {waitlistLabel(waitlistPos).replace(/^On/, 'on')}</span></span>
         <span style={{ color: '#15803d', fontSize: '0.75rem' }}>Tap to manage →</span>
       </div>
     )
@@ -670,7 +671,7 @@ function BookingStrip({ myBooking, isFull, closed, blocked }) {
   if (hasWaitlist) {
     return (
       <div style={{ ...base, background: '#fffbeb', borderTop: '1px solid #fde68a' }}>
-        <span style={{ color: '#d97706' }}>⏳ {waitlistPos ? `#${waitlistPos} on waitlist` : 'On waitlist'} · {waitlistSeats} seat{waitlistSeats !== 1 ? 's' : ''}</span>
+        <span style={{ color: '#d97706' }}>⏳ {waitlistLabel(waitlistPos)} · {waitlistSeats} seat{waitlistSeats !== 1 ? 's' : ''}</span>
         <span style={{ color: '#d97706', fontSize: '0.75rem' }}>Tap to manage →</span>
       </div>
     )

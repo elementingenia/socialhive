@@ -5,6 +5,8 @@ import { bookingsClosed } from "@/lib/booking"
 import { fmtSpaceEventDate, fmtSpaceEventTime } from "@/components/SharedSpaceEventRow"
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
+import { useWaitlistInfo } from "@/lib/useWaitlistInfo"
+import { waitlistLabel } from "@/lib/waitlist"
 
 // Standard "Next Event" tile, adapted for Space Bookings from Social's own
 // NextEventTile (app/(app)/social/page.js) -- Iain, 2026-08-23: "The
@@ -56,6 +58,10 @@ function CapacityBar({ booked, max }) {
 // myBooking: the viewer's own active booking on this event, or null.
 // bookedCount: sum of confirmed seats across all attendees.
 export default function NextSpaceEventTile({ event, coordinators = [], myBooking, bookedCount = 0, onOpen, isCoordinator = false, onEdit }) {
+  // Waitlist position, server-side like every other hub (BUG-067). Called
+  // before the no-event early return below so hook order never changes.
+  const waitlistInfo = useWaitlistInfo(myBooking?.status === "waitlist" && event?.id ? [event.id] : [], myBooking?.id)
+  const waitlistPosition = event?.id ? (waitlistInfo[event.id]?.position || null) : null
   if (!event) {
     return (
       <div style={{
@@ -176,7 +182,7 @@ export default function NextSpaceEventTile({ event, coordinators = [], myBooking
               background: "var(--surface2)", color: "var(--text-dim)",
               borderRadius: "20px", padding: "0.25rem 0.75rem",
               fontSize: "0.78rem", fontWeight: 700,
-            }}>⏳ You're on the waitlist</div>
+            }}>{`⏳ ${waitlistLabel(waitlistPosition)} · ${myBooking.seats || 1} seat${(myBooking.seats || 1) !== 1 ? "s" : ""}`}</div>
           ) : (
             <div style={{
               display: "inline-flex", alignItems: "center",
