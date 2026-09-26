@@ -32,7 +32,7 @@ import AttendeeNamingPicker from "@/components/AttendeeNamingPicker"
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from "@/lib/formValidation"
 import { byOwnThenName, ordinal } from "@/lib/sortNames"
 import { useWaitlistInfo } from "@/lib/useWaitlistInfo"
-import { waitlistLabel, waitlistPositionMap } from "@/lib/waitlist"
+import { waitlistLabel } from "@/lib/waitlist"
 import { resolveMemberName } from "@/lib/memberName"
 import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/attendeeExport"
 // Payment-management port (2026-09-22, Iain -- Club payment parity): same
@@ -156,9 +156,6 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
   const caps = clubCaps(club)
   const [attendeesOpen,   setAttendeesOpen]   = useState(false)
   const [attendees,       setAttendees]       = useState(null)
-  // Admin-only Waitlist list under Attendees, queue order + (1st)/(2nd) --
-  // parity with Social/Special Events' tile and Show Time (BUG-067).
-  const [waitlistRows,    setWaitlistRows]    = useState([])
   const [attendeesLoading,setAttendeesLoading]= useState(false)
   const [togglingId,      setTogglingId]      = useState(null)
   const [remindingId,     setRemindingId]     = useState(null)
@@ -188,20 +185,14 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
   const ecNames = activeECs.map(ec => ec.members?.name || ec.members?.username).filter(Boolean)
   const isEC = !!(member && activeECs.some(ec => ec.member_id === member.id))
   const canManageBooks = isAdmin || isEC || isOwner
+  // Waitlist list under Attendees, queue order + (1st)/(2nd) -- admin, EC
+  // and this club's Owner (Iain, 2026-09-26), same as Social/Special Events.
+  // Comes from the server's `queue`, which /api/events/waitlist only returns
+  // to someone who can manage this event -- a non-admin's browser can't read
+  // other residents' waitlist rows (bookings RLS).
+  const waitlistRows = canManageBooks ? (waitlistInfo?.queue || []) : []
   // Paid-event gate (2026-09-22 port) -- same shape as Social's isPaidEvent.
   const isPaidEvent = !!(event.payment_required && event.cost > 0)
-
-  async function loadWaitlist() {
-    if (!isAdmin) { setWaitlistRows([]); return }
-    const { data } = await supabase
-      .from("bookings")
-      .select("id, seats, booked_at, member_id, members(id, name, display_name, username, hide_name), contacts(id, name)")
-      .eq("event_id", event.id)
-      .eq("status", "waitlist")
-    const rows = (data || []).map(b => ({ ...b, status: "waitlist" }))
-    const pos = waitlistPositionMap(rows)
-    setWaitlistRows(rows.map(b => ({ ...b, position: pos.get(b.id) })).sort((a, b) => a.position - b.position))
-  }
 
   async function loadAttendees() {
     const { data } = await supabase
@@ -356,6 +347,12 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
       eventSubtitle: fmtDate(event.event_date),
       sections: [
         { heading: "Attendees", rows },
+        // Waitlist in queue order, same as Social/Special Events' export.
+        ...(waitlistRows.length ? [{ heading: "Waitlist", rows: waitlistRows.map(b => ({
+          name: b.member_id === member?.id ? "You" : (b.member?.name || b.member?.username || b.contact?.name || "Member"),
+          seats: b.seats || 1,
+          note: `${ordinal(b.position)} in queue`,
+        })) }] : []),
         ...(event.allow_personal_vehicles || event.has_bus ? transportSections : []),
       ],
       router,
@@ -411,7 +408,7 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
   async function toggleAttendees() {
     if (attendeesOpen) { setAttendeesOpen(false); return }
     setAttendeesLoading(true)
-    await Promise.all([loadAttendees(), loadPaymentData(), loadWaitlist()])
+    await Promise.all([loadAttendees(), loadPaymentData()])
     setAttendeesLoading(false)
     setAttendeesOpen(true)
   }
@@ -1076,15 +1073,15 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
             ) : (
               <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", fontStyle: "italic" }}>No attendees yet</div>
             )}
-            {isAdmin && waitlistRows.length > 0 && (
+            {canManageBooks && waitlistRows.length > 0 && (
               <>
                 <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--amber-dark)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "0.5rem", marginBottom: "0.15rem" }}>Waitlist</div>
                 {waitlistRows.map(b => {
                   const isOwn = b.member_id === member?.id
-                  const isPrivate = !!b.members?.hide_name
-                  // Admin-only block, so real name + (P) marker, no masking --
-                  // same rule as Social/Special Events' Waitlist list.
-                  const name = isOwn ? "You" : (b.members?.name || b.members?.username || b.contacts?.name || "Member")
+                  const isPrivate = !!b.member?.hide_name
+                  // Admin/EC/Owner-only block, so real name + (P) marker, no
+                  // masking -- same rule as Social/Special Events' Waitlist list.
+                  const name = isOwn ? "You" : (b.member?.name || b.member?.username || b.contact?.name || "Member")
                   return (
                     <div key={b.id} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
                       <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? colour : "var(--text)" }}>

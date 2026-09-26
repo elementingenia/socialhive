@@ -1232,9 +1232,15 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
   const confirmedBookings = (event.bookings?.filter(b => b.status === "confirmed") || []).sort(bySelfFirst)
   // Waitlist is QUEUE order, not A-Z (BUG-067, 2026-09-26) -- matches Show
   // Time and EventSlideOut's EC view, and the order lib/promoteWaitlist.js
-  // actually hands out seats in. Only admins see this list, and admins can
-  // read every waitlist row client-side, so the local order is complete.
-  const waitlistBookings  = event.bookings?.filter(b => b.status === "waitlist") || []
+  // actually hands out seats in. Admin, EC and Owner see the named list
+  // (Iain, 2026-09-26). The server's `queue` (only returned to someone who
+  // can manage this event) is the source of truth: a non-admin EC's browser
+  // can't read other residents' waitlist rows (bookings RLS), so the local
+  // event.bookings list is empty for them. Local rows are only the fallback
+  // while the server figures load.
+  const waitlistBookings  = waitlistInfo?.queue
+    ? [...waitlistInfo.queue]
+    : (event.bookings?.filter(b => b.status === "waitlist") || [])
   const waitlistPosById   = waitlistPositionMap(waitlistBookings)
   waitlistBookings.sort((a, b) => (waitlistPosById.get(a.id) || 0) - (waitlistPosById.get(b.id) || 0))
   // Cancelled-but-was-paid bookings, split by whether the refund's been
@@ -1540,7 +1546,7 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
               <strong style={{ color: "var(--text)" }}>{booked} seat{booked !== 1 ? "s" : ""}</strong>
               <span style={{ marginLeft: "0.4rem" }}>of {event.max_seats}</span>
               {isAdmin && unpaidSeats > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.4rem" }}>({unpaidSeats} unpaid)</span>}
-              {isAdmin && waiting > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.4rem" }}>· {waiting} waiting</span>}
+              {canManagePayments && waiting > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.4rem" }}>· {waiting} waiting</span>}
               {event.has_bus && <span style={{ color: "var(--text-dim)", marginLeft: "0.4rem" }}>· 🚌 {busSeats}{event.bus_max_seats != null ? `/${event.bus_max_seats}` : ""}</span>}
             </span>
             <span style={{ fontSize: "0.65rem", color: "var(--teal)" }}>{showAttendees ? "▲ Hide" : "▼ Attendees"}</span>
@@ -1929,15 +1935,16 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
               ) : (
                 <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", fontStyle: "italic" }}>No bookings yet</div>
               )}
-              {isAdmin && waitlistBookings.length > 0 && (
+              {canManagePayments && waitlistBookings.length > 0 && (
                 <>
                   <div style={{ fontSize: "0.68rem", fontWeight: 700, color: "var(--amber-dark)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: "0.5rem", marginBottom: "0.15rem" }}>Waitlist</div>
                   {waitlistBookings.map((b, i) => {
                     const isOwn     = b.member_id === member?.id
                     const isPrivate = !!b.member?.hide_name
-                    // Waitlist rows are always admin-visible only (this whole block is
-                    // {isAdmin && ...} gated below), so real name + (P) marker, no masking.
-                    const label = isOwn ? "You" : (b.member?.name || b.member?.username || "Member")
+                    // Waitlist rows are only visible to admin/EC/Owner (this whole
+                    // block is canManagePayments-gated), so real name + (P) marker,
+                    // no masking -- same as the pop-up's Coordinator view.
+                    const label = isOwn ? "You" : (b.member?.name || b.member?.username || b.contact?.name || "Member")
                     return (
                       <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
                         <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--terracotta)" : "var(--text)" }}>
@@ -1963,7 +1970,7 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
                     {refundPendingBookings.map(b => {
                       const isOwn     = b.member_id === member?.id
                       const isPrivate = !!b.member?.hide_name
-                      const label = isOwn ? "You" : (b.member?.name || b.member?.username || "Member")
+                      const label = isOwn ? "You" : (b.member?.name || b.member?.username || b.contact?.name || "Member")
                       const total = seatsCost(event, b.seats || 1)
                       const pending = togglingRefundId === b.id
                       return (
@@ -1994,7 +2001,7 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
                     {refundIssuedBookings.map(b => {
                       const isOwn     = b.member_id === member?.id
                       const isPrivate = !!b.member?.hide_name
-                      const label = isOwn ? "You" : (b.member?.name || b.member?.username || "Member")
+                      const label = isOwn ? "You" : (b.member?.name || b.member?.username || b.contact?.name || "Member")
                       const total = seatsCost(event, b.seats || 1)
                       const pending = togglingRefundId === b.id
                       return (

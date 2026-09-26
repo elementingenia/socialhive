@@ -927,6 +927,11 @@ export default function HelpGuidePage() {
                 position — <strong>(1st)</strong>, <strong>(2nd)</strong>, and so on — shown to the
                 left of their name.
               </Step>
+              <Step>
+                The same <strong>Waitlist</strong> list, in queue order, also appears when you tap{" "}
+                <strong>Attendees</strong> on an event card, and in the attendee PDF export — for
+                admins, the event's coordinators, and the hub's Owner.
+              </Step>
               <InfoBox>
                 💡 If Social Hive has an assigned <strong>Owner</strong>, they get this same Coordinator
                 view on every social event — not just the ones they're personally listed as
@@ -1116,7 +1121,9 @@ export default function HelpGuidePage() {
               <Step>
                 A waitlist-only attendee is listed in queue order with their position —{" "}
                 <strong>(1st)</strong>, <strong>(2nd)</strong>, and so on — shown to the left of
-                their name.
+                their name. The same <strong>Waitlist</strong> list shows under{" "}
+                <strong>Show attendees</strong> on the event card (and in the attendee PDF export)
+                for admins, the event's coordinators and the club's Owner.
               </Step>
               <InfoBox>
                 💡 An Owner doesn't need to be individually added as coordinator on every event to get
@@ -1495,7 +1502,8 @@ export default function HelpGuidePage() {
             <Subsection id="sub-special-ec" title="Coordinator panel" ecOnly>
               <Step>
                 An admin, or the Event Coordinator(s) assigned to a Special Event, can create and
-                edit that event and see who's booked — the same panel Social Hive uses. There's no
+                edit that event and see who's booked, including the waitlist in queue order on the
+                event card's Attendees list — the same panel Social Hive uses. There's no
                 separate Owner role for this hub: only admins and that event's own coordinators can
                 manage it.
               </Step>
