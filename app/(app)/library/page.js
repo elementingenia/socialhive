@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { authedFetch } from '@/lib/getAuthToken'
 import { computeFreeCost } from '@/lib/freeCost'
 import VoteScoreGrid from '@/components/VoteScoreGrid'
+import MovieScores from '@/components/MovieScores'
+import { communityAverages } from '@/lib/movieScores'
 import { sydneyTodayStr } from '@/lib/date'
 function parseGenres(g) {
   if (!g) return []
@@ -13,7 +15,7 @@ function parseGenres(g) {
 
 
 // ── Rapid-fire Rating Swiper ──────────────────────────────────────────────────
-function RatingSwiper({ movies, memberId, onDone }) {
+function RatingSwiper({ movies, memberId, avgVotes, onDone }) {
   const [idx, setIdx]         = useState(0)
   const [rated, setRated]     = useState(0)
   const [submitting, setSub]  = useState(false)
@@ -85,8 +87,8 @@ function RatingSwiper({ movies, memberId, onDone }) {
           {movie.poster_url
             ? <img src={movie.poster_url} alt={movie.title} style={{ width:90, objectFit:'cover', flexShrink:0 }} />
             : <div style={{ width:90, background:'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem', flexShrink:0 }}>🎬</div>}
-          <div style={{ flex:1, padding:'0.9rem 1rem' }}>
-            <div style={{ fontWeight:800, fontSize:'1rem', lineHeight:1.2, marginBottom:'0.25rem' }}>{movie.title}</div>
+          <div style={{ flex:1, minWidth:0, padding:'0.9rem 1rem' }}>
+            <div style={{ fontWeight:800, fontSize:'1rem', lineHeight:1.2, marginBottom:'0.25rem' }}>{movie.title}{movie.rating && <span style={{ fontWeight: 400, fontSize: '0.75em', verticalAlign: 'baseline', color: 'var(--text-dim)' }}> ({movie.rating})</span>}</div>
             {movie.year && <div style={{ fontSize:'0.78rem', color:'var(--text-dim)', marginBottom:'0.35rem' }}>{movie.year}{movie.runtime ? ` · ${movie.runtime}` : ''}</div>}
             {genres.length > 0 && (
               <div style={{ display:'flex', flexWrap:'wrap', gap:'0.25rem' }}>
@@ -95,8 +97,8 @@ function RatingSwiper({ movies, memberId, onDone }) {
                 ))}
               </div>
             )}
-            {movie.rating_imdb && <div style={{ fontSize:'0.75rem', color:'var(--amber-dark)', fontWeight:600, marginTop:'0.3rem' }}>★ {movie.rating_imdb}</div>}
           </div>
+          <MovieScores movie={movie} avgData={avgVotes?.[movie.id]} />
         </div>
         <div style={{ padding:'0.75rem 0.85rem 0.85rem', borderTop:'1px solid var(--border)' }}>
           <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'0.5rem', textAlign:'center' }}>
@@ -601,21 +603,7 @@ function MovieCard({ movie, myVote, avgData, isAdmin, freeCostData, onClick }) {
           </div>
         )}
       </div>
-      <div style={{ padding:'0.55rem 0.75rem', display:'flex', flexDirection:'column', alignItems:'flex-end', justifyContent:'center', gap:'0.2rem', flexShrink:0, minWidth:68 }}>
-        {avgData?.count>0 ? (
-          <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'flex-end' }}>
-            <span style={{ fontSize:'0.55rem', fontWeight:700, color:'var(--teal)', lineHeight:1, paddingTop:'0.1rem' }}>({avgData.count})</span>
-            <span style={{ fontSize:'1.25rem', fontWeight:800, color:'var(--teal)', lineHeight:1 }}>{avgData.avg.toFixed(1)}</span>
-          </div>
-        ) : <div style={{ fontSize:'0.65rem', color:'var(--text-dim)', textAlign:'right' }}>Not yet<br/>rated</div>}
-        {myVote && <div style={{ fontSize:'0.68rem', color:'var(--teal)', fontWeight:700 }}>you: {myVote}</div>}
-        <div style={{ display:'flex', gap:'0.3rem', alignItems:'center' }}>
-          {movie.rating_imdb && (movie.imdb_id
-            ? <a href={`https://www.imdb.com/title/${movie.imdb_id}/`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ fontSize:'0.65rem', color:'var(--amber-dark)', fontWeight:600, textDecoration:'none' }}>★ {movie.rating_imdb}</a>
-            : <span style={{ fontSize:'0.65rem', color:'var(--amber-dark)', fontWeight:600 }}>★ {movie.rating_imdb}</span>)}
-          {movie.rating_rt && <a href={`https://www.rottentomatoes.com/search?search=${encodeURIComponent(movie.title)}`} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()} style={{ fontSize:'0.65rem', color:'#fa320a', fontWeight:600, textDecoration:'none' }}>🍅 {movie.rating_rt}</a>}
-        </div>
-      </div>
+      <MovieScores movie={movie} avgData={avgData} myVote={myVote} />
     </div>
   )
 }
@@ -687,11 +675,9 @@ export default function LibraryPage() {
 
   const myVotes = Object.fromEntries(votes.filter(v=>v.member_id===member?.id).map(v=>[v.movie_id,v.score]))
   const unvoted = movies.filter(m => !myVotes[m.id])
-  const avgVotes = movies.reduce((acc,m) => {
-    const mv = votes.filter(v=>v.movie_id===m.id)
-    if (mv.length>0) acc[m.id] = { avg: mv.reduce((s,v)=>s+v.score,0)/mv.length, count:mv.length }
-    return acc
-  }, {})
+  // Only movies on this list (Object.values(avgVotes) feeds the community mean below).
+  const allAverages = communityAverages(votes)
+  const avgVotes = Object.fromEntries(movies.filter(m => allAverages[m.id]).map(m => [m.id, allAverages[m.id]]))
   // Community score: a Bayesian-shrunk weighted rating (the same shape IMDb's
   // classic "true Bayesian estimate" uses), not a raw average. A movie's own
   // average is pulled toward the whole community's average in proportion to
@@ -888,7 +874,7 @@ export default function LibraryPage() {
               <div style={{ fontWeight:700, fontSize:'0.95rem' }}>Rate Films</div>
               <button onClick={()=>setShowSwiper(false)} style={{ background:'none', border:'none', fontSize:'1.3rem', cursor:'pointer', color:'var(--text-dim)', lineHeight:1 }}>✕</button>
             </div>
-            <RatingSwiper movies={unvoted} memberId={member.id} onDone={()=>{ setSwiperDone(true); setShowSwiper(false) }} />
+            <RatingSwiper movies={unvoted} memberId={member.id} avgVotes={avgVotes} onDone={()=>{ setSwiperDone(true); setShowSwiper(false) }} />
           </div>
         </div>
       )}

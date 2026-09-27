@@ -15,6 +15,8 @@ import FollowHubButton from '@/components/FollowHubButton'
 import HubNotices from '@/components/HubNotices'
 import { ContactBar } from '@/components/OwnersManager'
 import VoteScoreGrid from '@/components/VoteScoreGrid'
+import MovieScores from '@/components/MovieScores'
+import { communityAverages } from '@/lib/movieScores'
 import ManageLink from '@/components/ManageLink'
 import { useUser } from '@/lib/UserContext'
 import { useOwners } from '@/lib/useOwners'
@@ -203,7 +205,7 @@ function MyBookingsCard({ bookings, onViewAll, onOpenEvent }) {
 }
 
 // ── Rapid-fire Rating Swiper ──────────────────────────────────────────────────
-function RatingSwiper({ movies, memberId, onDone }) {
+function RatingSwiper({ movies, memberId, avgVotes, onDone }) {
   const router = useRouter()
   const [idx, setIdx]         = useState(0)
   const [rated, setRated]     = useState(0)
@@ -312,6 +314,7 @@ function RatingSwiper({ movies, memberId, onDone }) {
               </div>
             )}
           </div>
+          <MovieScores movie={movie} avgData={avgVotes?.[movie.id]} />
         </div>
 
         {/* Score buttons */}
@@ -405,6 +408,7 @@ export default function MoviesHomePage() {
   const [nextBooking, setNextBooking] = useState(null)
   const [nextEventSeatsLeft, setNextEventSeatsLeft] = useState(null)
   const [unvoted, setUnvoted]     = useState([])
+  const [avgVotes, setAvgVotes]   = useState({})
   const [memberId, setMemberId]   = useState(null)
   const [swiperDone, setSwiperDone] = useState(false)
   const [session, setSession] = useState(null)
@@ -452,7 +456,7 @@ export default function MoviesHomePage() {
         .neq('status', 'cancelled'),
 
       supabase.from('movies')
-        .select('id, title, poster_url, genre, year, runtime, rating')
+        .select('id, title, poster_url, genre, year, runtime, rating, rating_imdb, rating_rt, imdb_id')
         .eq('we_own', false)
         .eq('is_viewing_suggestion', true)
         .order('added_at', { ascending: false })
@@ -498,7 +502,16 @@ export default function MoviesHomePage() {
     }
 
     const votedIds = new Set((votesData || []).map(v => v.movie_id))
-    setUnvoted((moviesData || []).filter(m => !votedIds.has(m.id)))
+    const toRate = (moviesData || []).filter(m => !votedIds.has(m.id))
+    setUnvoted(toRate)
+    // Community score for the Rate a Film card -- everyone's votes on the
+    // movies being offered (votes_read RLS allows any signed-in resident).
+    if (toRate.length) {
+      supabase.from('votes').select('movie_id, score').in('movie_id', toRate.map(m => m.id))
+        .then(({ data: allVotes }) => setAvgVotes(communityAverages(allVotes)))
+    } else {
+      setAvgVotes({})
+    }
     setLoading(false)
   }, [])
 
@@ -576,7 +589,7 @@ export default function MoviesHomePage() {
       <MyBookingsCard bookings={myBookings} onViewAll={() => router.push('/screenings')} onOpenEvent={id => openSlideOutForEvent(id)} />
 
       {!swiperDone && unvoted.length > 0 && memberId && (
-        <RatingSwiper movies={unvoted} memberId={memberId} onDone={() => setSwiperDone(true)} />
+        <RatingSwiper movies={unvoted} memberId={memberId} avgVotes={avgVotes} onDone={() => setSwiperDone(true)} />
       )}
 
       {/* Unified booking slide-over — same pattern as Social and Book Club */}
