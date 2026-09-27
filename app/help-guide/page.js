@@ -688,8 +688,12 @@ export default function HelpGuidePage() {
                 My Bookings page.
               </Step>
               <Step>
-                <strong>Rate a Film panel</strong> — if you have recently attended a screening and
-                have not yet rated the movie, a voting panel appears here. See "Rating films" below.
+                <strong>Rate a Film panel</strong> — if there are suggested movies you have not yet
+                rated, a voting panel appears here, one movie at a time. Each movie shows the same
+                scores as on the Suggestions page: the <strong>community score</strong> (average of
+                residents&apos; votes, with the number of votes in brackets, or &quot;Not yet
+                rated&quot;), plus the <strong>★ IMDb</strong> and <strong>🍅 Rotten Tomatoes</strong>{" "}
+                scores. See "Rating films" below.
               </Step>
             </Subsection>
 
