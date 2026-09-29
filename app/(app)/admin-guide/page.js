@@ -109,6 +109,7 @@ const RAW_SECTIONS = [
       { title: "Reset PIN — what it forces on next login", id: "sub-acc-pin" },
       { title: "Exporting the list — Export button", id: "sub-acc-export" },
       { title: "Admin badge — seeing who is Admin at a glance", id: "sub-acc-adminbadge" },
+      { title: "Info › Documents — editing a document", id: "sub-acc-docedit" },
     ],
   },
   {
@@ -877,6 +878,20 @@ export default function AdminGuidePage() {
                 Iain: "I have no way of seeing who is Admin. Lets have a fixed Contact Group called Admins
                 and add anyone set as Admin to it (but not have it as a category)" — the badge satisfies
                 this without adding a manually-maintained group anywhere.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-acc-docedit" title="Info › Documents — editing a document (added 2026-09-29)">
+              <Step>
+                On Info → Documents, every document card shows an <strong>Edit</strong> button (admin
+                only) next to <strong>Active/Hidden</strong> and <strong>Delete</strong>. It opens an{" "}
+                <strong>Edit Document</strong> sheet where you can change the <strong>Title</strong>{" "}
+                (required), <strong>Description</strong> and <strong>Category</strong>, then tap{" "}
+                <strong>Save Changes</strong>.
+              </Step>
+              <Step>
+                The file itself can't be swapped from here — to replace it, delete the document and
+                upload the new file. Committee Owners can still upload to Committee Meetings, but only
+                admins can edit, hide or delete a document once it's up.
               </Step>
             </Subsection>
           </Section>

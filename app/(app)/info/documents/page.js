@@ -33,7 +33,7 @@ function FileTypeBadge({ fileName }) {
 
 // ── Document card — primary content (open) always front and centre;         │
 // Status/Delete are small, secondary, admin-only actions below a divider ────
-function DocumentCard({ doc, isAdmin, badge, onToggleActive, onDelete }) {
+function DocumentCard({ doc, isAdmin, badge, onEdit, onToggleActive, onDelete }) {
   return (
     <div style={{
       background: "var(--surface)", borderRadius: 12,
@@ -61,7 +61,11 @@ function DocumentCard({ doc, isAdmin, badge, onToggleActive, onDelete }) {
         </div>
       </a>
       {isAdmin && (
-        <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.6rem", paddingTop: "0.6rem", borderTop: "1px solid var(--border)" }}>
+        <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "0.6rem", paddingTop: "0.6rem", borderTop: "1px solid var(--border)" }}>
+          <button onClick={onEdit} style={{
+            fontSize: "0.75rem", padding: "0.25rem 0.6rem", borderRadius: 6, border: "1px solid var(--border)",
+            cursor: "pointer", fontFamily: "inherit", background: "var(--surface2)", color: "var(--text)",
+          }}>Edit</button>
           <button onClick={onToggleActive} style={{
             fontSize: "0.75rem", padding: "0.25rem 0.6rem", borderRadius: 6, border: "1px solid var(--border)",
             cursor: "pointer", fontFamily: "inherit",
@@ -245,6 +249,78 @@ function AddDocumentForm({ categories, onUploaded, onClose }) {
   )
 }
 
+// ── Edit Document (admin only) — title, description, category. The file
+// itself is not replaceable here; delete and re-upload for that. ──────────────
+function EditDocumentForm({ doc, categories, onSaved, onClose }) {
+  const [form, setForm] = useState({
+    title: doc.title || "",
+    description: doc.description || "",
+    category_id: doc.category?.id || "",
+  })
+  const [saving, setSaving] = useState(false)
+  const [error, setError]   = useState("")
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  async function handleSave() {
+    setError("")
+    if (!form.title.trim()) { setError("Title is required"); return }
+    setSaving(true)
+    try {
+      const token = await getToken()
+      const res = await fetch("/api/info/documents", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          id: doc.id,
+          title: form.title.trim(),
+          description: form.description.trim(),
+          category_id: form.category_id || null,
+        }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || "Could not save changes")
+      }
+      onSaved()
+      onClose()
+    } catch (e) {
+      setError(e.message)
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      <div>
+        <label style={labelStyle}>Title <span style={{ color: "var(--danger)" }}>*</span></label>
+        <input value={form.title} onChange={e => set("title", e.target.value)}
+          style={{ ...inputStyle, border: `1.5px solid ${form.title.trim() ? "var(--green)" : "var(--danger)"}` }} />
+      </div>
+      <div>
+        <label style={labelStyle}>Description</label>
+        <textarea value={form.description} onChange={e => set("description", e.target.value)} rows={3}
+          style={{ ...inputStyle, resize: "vertical" }} />
+      </div>
+      <div>
+        <label style={labelStyle}>Category</label>
+        <CategorySelect categories={categories} value={form.category_id} onChange={v => set("category_id", v)} />
+      </div>
+      <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
+        <FileTypeBadge fileName={doc.file_name} />
+        <span style={{ wordBreak: "break-all" }}>{doc.file_name}</span>
+        <span>· to replace the file, delete and re-upload</span>
+      </div>
+      {error && <div style={{ color: "#b91c1c", fontSize: "0.83rem" }}>{error}</div>}
+      <button onClick={handleSave} disabled={saving} style={{
+        background: COLOUR, color: "#fff", border: "none", borderRadius: 10,
+        padding: "0.75rem", fontWeight: 700, fontSize: "0.95rem",
+        cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit",
+        opacity: saving ? 0.7 : 1,
+      }}>{saving ? "Saving…" : "Save Changes"}</button>
+    </div>
+  )
+}
+
 // ── Category management ───────────────────────────────────────────────────────
 function DocCategoryManager({ categories, setCategories, onSaved }) {
   const [catForm, setCatForm]     = useState("")
@@ -326,7 +402,8 @@ export default function DocumentsPage() {
   const [documents, setDocuments]   = useState([])
   const [activeFilter, setFilter]   = useState("all")
   const [loading, setLoading]       = useState(true)
-  const [sheet, setSheet]           = useState(null) // null | "add" | "categories"
+  const [sheet, setSheet]           = useState(null) // null | "add" | "categories" | "edit"
+  const [editingDoc, setEditingDoc] = useState(null)
 
   const load = useCallback(async () => {
     const [catRes, docRes] = await Promise.all([
@@ -405,6 +482,7 @@ export default function DocumentsPage() {
         filtered.map(doc => (
           <DocumentCard key={doc.id} doc={doc} isAdmin={isAdmin}
             badge={isAdmin && !doc.active ? "Hidden" : null}
+            onEdit={() => { setEditingDoc(doc); setSheet("edit") }}
             onToggleActive={() => toggleActive(doc)}
             onDelete={() => deleteDoc(doc)} />
         ))
@@ -412,6 +490,13 @@ export default function DocumentsPage() {
 
       <Sheet open={sheet === "add"} onClose={() => setSheet(null)} title="Add Document">
         <AddDocumentForm categories={categories} onUploaded={load} onClose={() => setSheet(null)} />
+      </Sheet>
+
+      <Sheet open={sheet === "edit" && !!editingDoc} onClose={() => { setSheet(null); setEditingDoc(null) }} title="Edit Document">
+        {editingDoc && (
+          <EditDocumentForm key={editingDoc.id} doc={editingDoc} categories={categories} onSaved={load}
+            onClose={() => { setSheet(null); setEditingDoc(null) }} />
+        )}
       </Sheet>
 
       <Sheet open={sheet === "categories"} onClose={() => setSheet(null)} title="Manage Categories">
