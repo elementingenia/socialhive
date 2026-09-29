@@ -3,15 +3,21 @@ import { NextResponse } from 'next/server'
 const TMDB_KEY = process.env.TMDB_API_KEY || '0e0ec3c6d62df378f31f7ddb78a83b49'
 const OMDB_KEY = process.env.OMDB_API_KEY || 'ed1ed939'
 
-function makeAdmin() {
-  return supabaseAdmin
-}
+// Self-service "Add to DVD Library" — any signed-in member, no admin gate.
+// Was app/api/admin/dvd-add/route.js (admin-only); relocated + the is_admin
+// check dropped per Element_Happenings_DVD_Barcode_Add_Scope_Answered.md
+// ("Entry point unchanged: + button on /dvd, visible to all members, no
+// admin gate"). Nothing else in the app referenced the old admin path, so
+// it's moved rather than duplicated. Logic otherwise unchanged: search is
+// client-side (title or scanned-barcode-resolved title, both via
+// /api/tmdb/search), this route re-fetches full details server-side by
+// tmdb_id rather than trusting client-supplied fields, dedupes, inserts
+// we_own=true.
 
 async function getMember(token) {
-  const db = makeAdmin()
-  const { data: { user } } = await db.auth.getUser(token)
+  const { data: { user } } = await supabaseAdmin.auth.getUser(token)
   if (!user) return null
-  const { data } = await db.from('members').select('id, is_admin').eq('auth_id', user.id).single()
+  const { data } = await supabaseAdmin.from('members').select('id').eq('auth_id', user.id).single()
   return data
 }
 
@@ -20,14 +26,15 @@ export async function POST(req) {
   if (!token) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
   const member = await getMember(token)
-  if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+  if (!member) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
-  const { tmdb_id } = await req.json()
+  const { tmdb_id, barcode } = await req.json()
   if (!tmdb_id) return NextResponse.json({ error: 'tmdb_id required' }, { status: 400 })
 
-  const db = makeAdmin()
+  const db = supabaseAdmin
 
-  // Duplicate check — already in DVD library
+  // Duplicate check — already in DVD library. Block, don't insert a
+  // duplicate row or bump a copy count — see scope doc answer #1.
   const { data: existing } = await db
     .from('movies')
     .select('id, title')
@@ -78,6 +85,9 @@ export async function POST(req) {
       rating,
       we_own:     true,
       enrichment_status: 'ok',
+      // Raw scanned digits, only present when this add came from a barcode
+      // scan that resolved cleanly — migration 116. NULL for manual-title adds.
+      barcode: barcode ? String(barcode).replace(/\D/g, '') || null : null,
     }
 
     const { data: movie, error } = await db.from('movies').insert(payload).select().single()

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import ExpandableText from '@/components/ExpandableText'
 import { useAdaptiveClamp } from '@/lib/useAdaptiveClamp'
 import { resolveMemberName } from '@/lib/memberName'
+import BarcodeScannerModal from '@/components/BarcodeScannerModal'
 
 function parseGenres(g) {
   if (!g) return []
@@ -414,8 +415,26 @@ function DvdCard({ movie, activeLoan, myLoan, onClick }) {
   )
 }
 
-// ── Add DVD Sheet (admin only) ────────────────────────────────────────────────
+// ── Add DVD Sheet (self-service — any signed-in member) ────────────────────────
+// Scan-first, manual fallback (Element_Happenings_DVD_Barcode_Add_Scope_Answered.md):
+//   step 'scan'      — camera opens immediately, default view. Its own
+//                       "Cancel — enter manually instead" / permission-denied
+//                       "Close" both drop straight to 'manual' with a plain
+//                       message — BarcodeScannerModal already does this
+//                       unchanged, see scope answer #4.
+//   step 'resolving' — barcode decoded, awaiting the UPC lookup.
+//   step 'miss'       — UPC lookup found no product for that barcode. One
+//                       "Scan again" offered (answer #2); a second miss (or
+//                       a TMDB search from a resolved title coming back
+//                       empty — same as a boxset/no-single-match case, answer
+//                       #5) drops straight to 'manual', no further prompt.
+//   step 'manual'     — title search, same TMDB flow as before this feature.
+// Candidates from either path land in the same `results` list/select/
+// duplicate-check/Add flow — unchanged from the original title-only version.
 function AddDvdSheet({ session, onAdded, onClose, addToast }) {
+  const [step,        setStep]        = useState('scan') // 'scan' | 'resolving' | 'miss' | 'manual'
+  const [rescanUsed,  setRescanUsed]  = useState(false)
+  const [scannedCode, setScannedCode] = useState(null)
   const [search,      setSearch]      = useState('')
   const [results,     setResults]     = useState([])
   const [searching,   setSearching]   = useState(false)
@@ -432,12 +451,54 @@ function AddDvdSheet({ session, onAdded, onClose, addToast }) {
     setSearching(false)
   }
 
+  // Fires once when BarcodeScannerModal decodes a barcode. Resolves it via
+  // UPCitemdb, then feeds whatever title comes back into the same TMDB
+  // search used by manual entry — a barcode-sourced result is NOT
+  // auto-picked, the candidate list still shows for the user to choose
+  // from or back out of (scope answer #3).
+  async function handleDetected(code) {
+    setScannedCode(code)
+    setStep('resolving')
+    try {
+      const res = await fetch('/api/dvd/barcode-lookup?code=' + encodeURIComponent(code))
+      const data = await res.json()
+      if (!data.title) { handleMiss(); return }
+      setSearching(true)
+      const tmdbRes = await fetch('/api/tmdb/search?q=' + encodeURIComponent(data.title))
+      const tmdbResults = await tmdbRes.json()
+      setSearching(false)
+      if (!tmdbResults.length) {
+        // Resolved a product title but TMDB found nothing plausible for it
+        // (e.g. a boxset's generic pack title) — silent fallback to manual,
+        // no special messaging, per scope answer #5.
+        setSearch(data.title)
+        setStep('manual')
+        return
+      }
+      setResults(tmdbResults)
+      setStep('manual') // reuse the manual step's results/select UI for the candidate list
+    } catch {
+      handleMiss()
+    }
+  }
+
+  function handleMiss() {
+    if (!rescanUsed) {
+      setRescanUsed(true)
+      setStep('miss')
+    } else {
+      addToast("No product found for that barcode — enter the title instead", 'error')
+      setStep('manual')
+    }
+  }
+
   async function handleSelect(r) {
     setSelected(r)
     setSearch(r.title + (r.year ? ` (${r.year})` : ''))
     setResults([])
     setIsDuplicate(false)
-    // Check if already in DVD Library
+    // Check if already in DVD Library — block, don't add a duplicate row
+    // or bump a copy count (scope answer #1).
     const { data } = await supabase.from('movies').select('id').eq('we_own', true).eq('tmdb_id', r.tmdb_id).maybeSingle()
     setIsDuplicate(!!data)
   }
@@ -445,10 +506,10 @@ function AddDvdSheet({ session, onAdded, onClose, addToast }) {
   async function handleAdd() {
     if (!selected) return
     setAdding(true)
-    const res = await fetch('/api/admin/dvd-add', {
+    const res = await fetch('/api/dvd/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session?.access_token },
-      body: JSON.stringify({ tmdb_id: selected.tmdb_id }),
+      body: JSON.stringify({ tmdb_id: selected.tmdb_id, barcode: scannedCode }),
     })
     const data = await res.json()
     setAdding(false)
@@ -469,50 +530,89 @@ function AddDvdSheet({ session, onAdded, onClose, addToast }) {
           <div style={{ fontWeight:700, fontSize:'1rem' }}>➕ Add DVD to Library</div>
           <button onClick={onClose} style={{ width:32, height:32, borderRadius:'50%', background:'var(--surface2)', border:'none', fontSize:'1.1rem', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', color:'var(--text-dim)' }}>✕</button>
         </div>
-        {/* Body */}
-        <div style={{ padding:'1rem 1.25rem 2rem', overflowY:'auto', flex:1, display:'flex', flexDirection:'column', gap:'0.75rem' }}>
-          <div style={{ position:'relative' }}>
-            <input value={search} onChange={e => doSearch(e.target.value)}
-              placeholder="Search movie title…"
-              style={{ width:'100%', padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
-            {searching && <div style={{ position:'absolute', right:'0.75rem', top:'50%', transform:'translateY(-50%)', fontSize:'0.75rem', color:'var(--text-dim)' }}>…</div>}
-            {results.length > 0 && !selected && (
-              <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', zIndex:50, overflow:'hidden', boxShadow:'0 4px 16px rgba(0,0,0,0.2)', marginTop:'0.25rem' }}>
-                {results.map(r => (
-                  <div key={r.tmdb_id} onClick={() => handleSelect(r)}
-                    style={{ display:'flex', alignItems:'center', gap:'0.65rem', padding:'0.65rem 0.85rem', cursor:'pointer', borderBottom:'1px solid var(--border)' }}>
-                    {r.poster_url ? <img src={r.poster_url} alt={r.title} style={{ width:32, height:46, objectFit:'cover', borderRadius:4 }} /> : <div style={{ width:32, height:46, background:'var(--surface2)', borderRadius:4 }} />}
-                    <div>
-                      <div style={{ fontWeight:700, fontSize:'0.9rem' }}>{r.title}</div>
-                      {r.year && <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{r.year}</div>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+
+        {/* Scan step — default view, full-screen camera overlay */}
+        {step === 'scan' && (
+          <BarcodeScannerModal onDetected={handleDetected} onClose={() => setStep('manual')} />
+        )}
+
+        {/* Resolving — brief, between decode and the candidate list */}
+        {step === 'resolving' && (
+          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'0.75rem', color:'var(--text-dim)', fontSize:'0.9rem' }}>
+            <div className="spinner" />
+            Looking up that barcode…
           </div>
-          {selected && (
-            <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'var(--surface2)', borderRadius:'12px', padding:'0.75rem', border:`1px solid ${isDuplicate ? 'var(--danger)' : 'var(--teal)'}` }}>
-                {selected.poster_url ? <img src={selected.poster_url} alt={selected.title} style={{ width:46, height:68, objectFit:'cover', borderRadius:6 }} /> : <div style={{ width:46, height:68, background:'var(--surface)', borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem' }}>💿</div>}
-                <div style={{ flex:1 }}>
-                  <div style={{ fontWeight:700, fontSize:'0.95rem' }}>{selected.title}</div>
-                  {selected.year && <div style={{ fontSize:'0.8rem', color:'var(--text-dim)' }}>{selected.year}</div>}
-                </div>
-                {isDuplicate && <span style={{ fontSize:'1.25rem' }}>⚠️</span>}
-              </div>
-              {isDuplicate && (
-                <div style={{ background:'#fef3c7', border:'1px solid #d97706', borderRadius:'10px', padding:'0.6rem 0.85rem', fontSize:'0.83rem', fontWeight:600, color:'#92400e' }}>
-                  Already in the DVD Library — no need to add it again.
+        )}
+
+        {/* Miss — one rescan offered, then manual (scope answer #2) */}
+        {step === 'miss' && (
+          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'1rem', padding:'1.5rem', textAlign:'center' }}>
+            <div style={{ fontSize:'2rem' }}>📷</div>
+            <div style={{ fontSize:'0.9rem', color:'var(--text)', fontWeight:600 }}>No product found for that barcode</div>
+            <div style={{ display:'flex', gap:'0.75rem', width:'100%', maxWidth:320 }}>
+              <button onClick={() => setStep('scan')}
+                style={{ flex:1, padding:'0.75rem', background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', fontSize:'0.88rem', fontWeight:700, cursor:'pointer' }}>
+                📷 Scan again
+              </button>
+              <button onClick={() => setStep('manual')}
+                style={{ flex:1, padding:'0.75rem', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'10px', fontSize:'0.88rem', fontWeight:600, cursor:'pointer', color:'var(--text)' }}>
+                Enter manually
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Manual — title search + candidate list. Also where a resolved
+            barcode's TMDB candidates land (setResults is shared state). */}
+        {step === 'manual' && (
+          <div style={{ padding:'1rem 1.25rem 2rem', overflowY:'auto', flex:1, display:'flex', flexDirection:'column', gap:'0.75rem' }}>
+            <button onClick={() => { setStep('scan'); setResults([]); setSelected(null); setIsDuplicate(false) }}
+              style={{ alignSelf:'flex-start', background:'none', border:'none', padding:0, color:'var(--teal)', fontSize:'0.82rem', fontWeight:600, cursor:'pointer' }}>
+              📷 Try scanning again
+            </button>
+            <div style={{ position:'relative' }}>
+              <input value={search} onChange={e => doSearch(e.target.value)}
+                placeholder="Search movie title…"
+                style={{ width:'100%', padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
+              {searching && <div style={{ position:'absolute', right:'0.75rem', top:'50%', transform:'translateY(-50%)', fontSize:'0.75rem', color:'var(--text-dim)' }}>…</div>}
+              {results.length > 0 && !selected && (
+                <div style={{ position:'absolute', top:'100%', left:0, right:0, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'10px', zIndex:50, overflow:'hidden', boxShadow:'0 4px 16px rgba(0,0,0,0.2)', marginTop:'0.25rem' }}>
+                  {results.map(r => (
+                    <div key={r.tmdb_id} onClick={() => handleSelect(r)}
+                      style={{ display:'flex', alignItems:'center', gap:'0.65rem', padding:'0.65rem 0.85rem', cursor:'pointer', borderBottom:'1px solid var(--border)' }}>
+                      {r.poster_url ? <img src={r.poster_url} alt={r.title} style={{ width:32, height:46, objectFit:'cover', borderRadius:4 }} /> : <div style={{ width:32, height:46, background:'var(--surface2)', borderRadius:4 }} />}
+                      <div>
+                        <div style={{ fontWeight:700, fontSize:'0.9rem' }}>{r.title}</div>
+                        {r.year && <div style={{ fontSize:'0.75rem', color:'var(--text-dim)' }}>{r.year}</div>}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-          )}
-          <button onClick={handleAdd} disabled={!selected || adding || isDuplicate}
-            style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'12px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:(!selected||adding||isDuplicate)?'not-allowed':'pointer', opacity:(!selected||adding||isDuplicate)?0.5:1 }}>
-            {adding ? 'Adding to Library…' : '💿 Add to DVD Library'}
-          </button>
-        </div>
+            {selected && (
+              <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'var(--surface2)', borderRadius:'12px', padding:'0.75rem', border:`1px solid ${isDuplicate ? 'var(--danger)' : 'var(--teal)'}` }}>
+                  {selected.poster_url ? <img src={selected.poster_url} alt={selected.title} style={{ width:46, height:68, objectFit:'cover', borderRadius:6 }} /> : <div style={{ width:46, height:68, background:'var(--surface)', borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem' }}>💿</div>}
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:'0.95rem' }}>{selected.title}</div>
+                    {selected.year && <div style={{ fontSize:'0.8rem', color:'var(--text-dim)' }}>{selected.year}</div>}
+                  </div>
+                  {isDuplicate && <span style={{ fontSize:'1.25rem' }}>⚠️</span>}
+                </div>
+                {isDuplicate && (
+                  <div style={{ background:'#fef3c7', border:'1px solid #d97706', borderRadius:'10px', padding:'0.6rem 0.85rem', fontSize:'0.83rem', fontWeight:600, color:'#92400e' }}>
+                    Already in the DVD Library — no need to add it again.
+                  </div>
+                )}
+              </div>
+            )}
+            <button onClick={handleAdd} disabled={!selected || adding || isDuplicate}
+              style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'12px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:(!selected||adding||isDuplicate)?'not-allowed':'pointer', opacity:(!selected||adding||isDuplicate)?0.5:1 }}>
+              {adding ? 'Adding to Library…' : '💿 Add to DVD Library'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -653,7 +753,13 @@ export default function DvdPage() {
             {sorted.length} title{sorted.length!==1?'s':''}
           </div>
           <div style={{ display:'flex', gap:'0.4rem', alignItems:'center' }}>
-            {member?.is_admin && (
+            {/* Self-service — any signed-in member, no admin gate. Was
+                member?.is_admin; changed per
+                Element_Happenings_DVD_Barcode_Add_Scope_Answered.md
+                ("no admin gate" was reconfirmed as part of that scoping
+                pass) — same gating pattern as the "Suggest for a Future
+                Screening" button further down this file (memberId truthy). */}
+            {member && (
               <button onClick={() => setShowAddDvd(true)}
                 style={{ padding:'0.3rem 0.75rem', borderRadius:'10px', border:'1.5px solid var(--teal)', background:'var(--teal)', color:'#fff', fontSize:'0.75rem', fontWeight:700, cursor:'pointer' }}>
                 + Add DVD
