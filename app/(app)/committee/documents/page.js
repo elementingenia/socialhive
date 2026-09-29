@@ -51,6 +51,10 @@ function FileTypeBadge({ fileName }) {
 // Flagged for Iain: if he'd rather this be ONLY documents that came
 // through a Committee post (nothing else, even if categorised the same
 // way), that's a one-line change -- say the word.
+function categoryNames(doc) {
+  return (doc.links || []).map(l => l.category?.name).filter(Boolean).sort((a, b) => a.localeCompare(b)).join(", ")
+}
+
 export default function CommitteeDocumentsPage() {
   const [docs, setDocs] = useState(null)
   const [search, setSearch] = useState("")
@@ -60,14 +64,24 @@ export default function CommitteeDocumentsPage() {
       const { data: meetingsCat } = await supabase
         .from("document_categories").select("id").eq("name", "Committee Meetings").maybeSingle()
 
+      // Categories come from document_category_links since migration 115 (a
+      // document can be in several) -- a document shows here if Committee
+      // Meetings is ANY of its categories, not just its first.
+      let meetingDocIds = []
+      if (meetingsCat?.id) {
+        const { data: links } = await supabase
+          .from("document_category_links").select("document_id").eq("category_id", meetingsCat.id)
+        meetingDocIds = (links || []).map(l => l.document_id)
+      }
+
       let query = supabase
         .from("documents")
-        .select("id, title, file_url, file_name, created_at, category:document_categories(id, name)")
+        .select("id, title, file_url, file_name, created_at, links:document_category_links(category:document_categories(name))")
         .eq("active", true)
         .order("created_at", { ascending: false })
 
-      query = meetingsCat?.id
-        ? query.or(`source_committee_post_id.not.is.null,category_id.eq.${meetingsCat.id}`)
+      query = meetingDocIds.length
+        ? query.or(`source_committee_post_id.not.is.null,id.in.(${meetingDocIds.join(",")})`)
         : query.not("source_committee_post_id", "is", null)
 
       const { data, error } = await query
@@ -112,7 +126,7 @@ export default function CommitteeDocumentsPage() {
               <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text)" }}>{d.title}</span>
             </div>
             <div style={{ marginTop: 4, fontSize: "0.75rem", color: "var(--text-dim)" }}>
-              {d.category?.name ? `${d.category.name} · ` : ""}{fmt(d.created_at)}
+              {categoryNames(d) ? `${categoryNames(d)} · ` : ""}{fmt(d.created_at)}
             </div>
           </a>
         ))

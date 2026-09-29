@@ -13,13 +13,65 @@ async function getAdminMember(token) {
   return data?.is_admin ? data : null
 }
 
-// Resolves a member for the upload path only: admin (any category), OR a
-// Committee hub Owner uploading specifically to "Committee Meetings"
+// ── Categories (multi, 2026-09-29, migration 115) ────────────────────────────
+// document_category_links is the source of truth. documents.category_id is
+// kept mirrored to the FIRST selected category for backward compatibility
+// only -- nothing should read it for filtering any more.
+//
+// Accepts category_ids (array) or the legacy single category_id, so an old
+// client mid-deploy still works.
+function readCategoryIds(src) {
+  let ids = src?.category_ids
+  if (typeof ids === 'string') { try { ids = JSON.parse(ids) } catch { ids = [ids] } }
+  if (!Array.isArray(ids)) ids = src?.category_id ? [src.category_id] : []
+  return [...new Set(ids.filter(x => typeof x === 'string' && x.trim()).map(x => x.trim()))]
+}
+
+// Returns null if every id is a real, active category; otherwise an error string.
+async function checkCategoryIds(ids) {
+  if (!ids.length) return null
+  const { data } = await supabaseAdmin
+    .from('document_categories').select('id').in('id', ids).eq('active', true)
+  return (data || []).length === ids.length ? null : 'Category not found'
+}
+
+async function setDocumentCategories(documentId, ids) {
+  const { error: delErr } = await supabaseAdmin
+    .from('document_category_links').delete().eq('document_id', documentId)
+  if (delErr) return delErr.message
+  if (ids.length) {
+    const { error: insErr } = await supabaseAdmin
+      .from('document_category_links')
+      .insert(ids.map(category_id => ({ document_id: documentId, category_id })))
+    if (insErr) return insErr.message
+  }
+  const { error: mirrorErr } = await supabaseAdmin
+    .from('documents').update({ category_id: ids[0] || null }).eq('id', documentId)
+  return mirrorErr ? mirrorErr.message : null
+}
+
+// A brand-new document whose category links couldn't be written is removed
+// again rather than left half-filed.
+async function insertDocumentWithCategories(row, ids) {
+  const { data: doc, error: dbErr } = await supabaseAdmin
+    .from('documents').insert({ ...row, category_id: ids[0] || null }).select().single()
+  if (dbErr) return { error: dbErr.message }
+  const linkErr = await setDocumentCategories(doc.id, ids)
+  if (linkErr) {
+    await supabaseAdmin.from('documents').delete().eq('id', doc.id)
+    return { error: linkErr }
+  }
+  return { doc }
+}
+
+// Resolves a member for the upload path only: admin (any categories), OR a
+// Committee hub Owner uploading ONLY to "Committee Meetings"
 // (Social_Hive_Committee_Notice_Board_Scope_v3_FINAL decision 5, 2026-09-07).
-// Everywhere else in this route (PATCH/DELETE, and every other category)
-// stays admin-only, unchanged -- a Committee Owner does not thereby gain
-// upload rights to General Documents or Policy Documents.
-async function getUploadMember(token, categoryId) {
+// With multi-category (2026-09-29) a Committee Owner's upload must have
+// exactly that one category -- adding any other category makes it
+// admin-only, so a Committee Owner can't use it as a back door into General
+// or Policy Documents. PATCH/DELETE stay admin-only, unchanged.
+async function getUploadMember(token, categoryIds) {
   if (!token) return null
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
   if (error || !user) return null
@@ -28,9 +80,9 @@ async function getUploadMember(token, categoryId) {
   if (!member) return null
   if (member.is_admin) return member
 
-  if (categoryId) {
+  if (categoryIds.length === 1) {
     const { data: category } = await supabaseAdmin
-      .from('document_categories').select('name').eq('id', categoryId).maybeSingle()
+      .from('document_categories').select('name').eq('id', categoryIds[0]).maybeSingle()
     if (category && category.name.toLowerCase() === 'committee meetings' && await isAreaOwner(member.id, 'hub', 'committee')) {
       return member
     }
@@ -65,7 +117,8 @@ export async function POST(req) {
     const body = await req.json().catch(() => ({}))
 
     if (body.action === 'sign') {
-      const { file_name: fileName, content_type: rawType, file_size: fileSize, category_id: categoryId } = body
+      const { file_name: fileName, content_type: rawType, file_size: fileSize } = body
+      const categoryIds = readCategoryIds(body)
       const declaredType = resolveContentType(rawType, fileName)
       if (declaredType.startsWith('image/')) {
         return NextResponse.json({ error: 'Image uploads use the direct path, not the signed-upload flow' }, { status: 400 })
@@ -73,8 +126,10 @@ export async function POST(req) {
       if (typeof fileSize === 'number' && fileSize > MAX_ATTACHMENT_BYTES) {
         return NextResponse.json({ error: `Files over ${MAX_ATTACHMENT_MB}MB are not supported.` }, { status: 400 })
       }
-      const member = await getUploadMember(token, categoryId)
+      const member = await getUploadMember(token, categoryIds)
       if (!member) return NextResponse.json({ error: 'Admins, or Committee Owners uploading to Committee Meetings, only' }, { status: 403 })
+      const catErr = await checkCategoryIds(categoryIds)
+      if (catErr) return NextResponse.json({ error: catErr }, { status: 400 })
 
       const ext = fileName?.split('.').pop() || 'pdf'
       const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
@@ -85,26 +140,28 @@ export async function POST(req) {
     }
 
     if (body.action === 'complete') {
-      const { path, file_name: fileName, content_type: rawType, title, description, category_id: categoryId, file_size: fileSize } = body
+      const { path, file_name: fileName, content_type: rawType, title, description, file_size: fileSize } = body
+      const categoryIds = readCategoryIds(body)
       if (!path || !title?.trim()) return NextResponse.json({ error: 'path and title required' }, { status: 400 })
 
-      const member = await getUploadMember(token, categoryId)
+      const member = await getUploadMember(token, categoryIds)
       if (!member) return NextResponse.json({ error: 'Admins, or Committee Owners uploading to Committee Meetings, only' }, { status: 403 })
+      const catErr = await checkCategoryIds(categoryIds)
+      if (catErr) return NextResponse.json({ error: catErr }, { status: 400 })
 
       const declaredType = resolveContentType(rawType, fileName)
       const { data: { publicUrl } } = supabaseAdmin.storage.from('community-docs').getPublicUrl(path)
 
-      const { data: doc, error: dbErr } = await supabaseAdmin.from('documents').insert({
+      const { doc, error: insErr } = await insertDocumentWithCategories({
         title: title.trim(),
         description: description?.trim() || null,
-        category_id: categoryId || null,
         file_url: publicUrl,
         file_name: fileName || null,
         file_type: declaredType,
         file_size: typeof fileSize === 'number' ? fileSize : null,
         uploaded_by: member.id,
-      }).select().single()
-      if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
+      }, categoryIds)
+      if (insErr) return NextResponse.json({ error: insErr }, { status: 500 })
       return NextResponse.json(doc)
     }
 
@@ -116,10 +173,15 @@ export async function POST(req) {
   const file        = formData.get('file')
   const title       = formData.get('title')?.trim()
   const description = formData.get('description')?.trim() || null
-  const categoryId  = formData.get('category_id') || null
+  const categoryIds = readCategoryIds({
+    category_ids: formData.getAll('category_ids').map(String),
+    category_id: formData.get('category_id') || null,
+  })
 
-  const member = await getUploadMember(token, categoryId)
+  const member = await getUploadMember(token, categoryIds)
   if (!member) return NextResponse.json({ error: 'Admins, or Committee Owners uploading to Committee Meetings, only' }, { status: 403 })
+  const catErr = await checkCategoryIds(categoryIds)
+  if (catErr) return NextResponse.json({ error: catErr }, { status: 400 })
 
   if (!title) return NextResponse.json({ error: 'Title required' }, { status: 400 })
   if (!file)  return NextResponse.json({ error: 'File required' }, { status: 400 })
@@ -161,26 +223,25 @@ export async function POST(req) {
   const { data: { publicUrl } } = supabaseAdmin.storage
     .from('community-docs').getPublicUrl(path)
 
-  const { data: doc, error: dbErr } = await supabaseAdmin.from('documents').insert({
+  const { doc, error: insErr } = await insertDocumentWithCategories({
     title,
     description,
-    category_id: categoryId || null,
     file_url: publicUrl,
     file_name: file.name,
     file_type: resolvedFileType,
     file_size: buffer.length,
     uploaded_by: member.id,
-  }).select().single()
+  }, categoryIds)
 
-  if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
+  if (insErr) return NextResponse.json({ error: insErr }, { status: 500 })
   return NextResponse.json(doc)
 }
 
-// PATCH — admin only. Toggle active, or edit title/description/category.
+// PATCH — admin only. Toggle active, or edit title/description/categories.
 // Fields are whitelisted: file_url/file_name/uploaded_by etc. are never
-// writable through here (previously the whole body was passed straight to
-// .update(), so any column could be overwritten).
-const EDITABLE_FIELDS = ['active', 'title', 'description', 'category_id']
+// writable through here. Categories go through document_category_links
+// (send category_ids: [] to clear them all).
+const EDITABLE_FIELDS = ['active', 'title', 'description']
 
 export async function PATCH(req) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
@@ -203,19 +264,27 @@ export async function PATCH(req) {
     const d = typeof updates.description === 'string' ? updates.description.trim() : ''
     updates.description = d || null
   }
-  if ('category_id' in updates) {
-    updates.category_id = updates.category_id || null
-    if (updates.category_id) {
-      const { data: cat } = await supabaseAdmin
-        .from('document_categories').select('id').eq('id', updates.category_id).eq('active', true).maybeSingle()
-      if (!cat) return NextResponse.json({ error: 'Category not found' }, { status: 400 })
-    }
-  }
   if ('active' in updates) updates.active = !!updates.active
-  if (Object.keys(updates).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
 
-  const { error } = await supabaseAdmin.from('documents').update(updates).eq('id', id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const touchesCategories = 'category_ids' in body || 'category_id' in body
+  const categoryIds = touchesCategories ? readCategoryIds(body) : null
+  if (touchesCategories) {
+    const catErr = await checkCategoryIds(categoryIds)
+    if (catErr) return NextResponse.json({ error: catErr }, { status: 400 })
+  }
+
+  if (Object.keys(updates).length === 0 && !touchesCategories) {
+    return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
+  }
+
+  if (Object.keys(updates).length) {
+    const { error } = await supabaseAdmin.from('documents').update(updates).eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  if (touchesCategories) {
+    const linkErr = await setDocumentCategories(id, categoryIds)
+    if (linkErr) return NextResponse.json({ error: linkErr }, { status: 500 })
+  }
   return NextResponse.json({ ok: true })
 }
 

@@ -1175,7 +1175,8 @@ export default function HelpGuidePage() {
             <Subsection id="sub-info-documents" title="Community documents">
               <Step>
                 Tap <strong>Documents</strong> (from the Info section) to browse shared community
-                files — meeting minutes, policies, forms and more — organised into categories. Use the
+                files — meeting minutes, policies, forms and more — organised into categories (a document can
+                appear under more than one). Use the
                 category filter or the <strong>Search</strong> box to find what you need, then tap a
                 document to view or download it.
               </Step>

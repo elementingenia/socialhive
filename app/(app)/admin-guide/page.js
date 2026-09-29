@@ -885,13 +885,21 @@ export default function AdminGuidePage() {
                 On Info → Documents, every document card shows an <strong>Edit</strong> button (admin
                 only) next to <strong>Active/Hidden</strong> and <strong>Delete</strong>. It opens an{" "}
                 <strong>Edit Document</strong> sheet where you can change the <strong>Title</strong>{" "}
-                (required), <strong>Description</strong> and <strong>Category</strong>, then tap{" "}
+                (required), <strong>Description</strong> and <strong>Categories</strong>, then tap{" "}
                 <strong>Save Changes</strong>.
               </Step>
               <Step>
+                A document can sit in <strong>more than one category</strong> (added 2026-09-29) — pick
+                as many as apply, on Add or Edit. It then shows under each of those filter chips, and
+                the card lists its categories next to <strong>Open ↗</strong>. New categories are still
+                created under <strong>Manage Categories</strong>, and a category can't be deleted while
+                any document is in it.
+              </Step>
+              <Step>
                 The file itself can't be swapped from here — to replace it, delete the document and
-                upload the new file. Committee Owners can still upload to Committee Meetings, but only
-                admins can edit, hide or delete a document once it's up.
+                upload the new file. Committee Owners can still upload to Committee Meetings (with that
+                as its only category), but only admins can edit, hide or delete a document once it's up.
+                Committee → Documents lists anything that has Committee Meetings among its categories.
               </Step>
             </Subsection>
           </Section>

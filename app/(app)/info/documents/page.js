@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import { useOwners } from "@/lib/useOwners"
-import { Sheet, COLOUR, inputStyle, labelStyle, getToken } from "@/components/ResidentEditPanel"
+import { Sheet, CategoryPicker, COLOUR, inputStyle, labelStyle, getToken } from "@/components/ResidentEditPanel"
 import { MAX_ATTACHMENT_BYTES, tooLargeMessage } from "@/lib/attachmentLimits"
 
 const secondaryButtonStyle = {
@@ -56,8 +56,11 @@ function DocumentCard({ doc, isAdmin, badge, onEdit, onToggleActive, onDelete })
             {doc.description}
           </p>
         )}
-        <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", color: COLOUR, fontWeight: 600 }}>
-          Open ↗
+        <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "baseline" }}>
+          <span style={{ color: COLOUR, fontWeight: 600 }}>Open ↗</span>
+          {doc.categories?.length > 0 && (
+            <span style={{ color: "var(--text-dim)" }}>· {doc.categories.map(c => c.name).join(", ")}</span>
+          )}
         </div>
       </a>
       {isAdmin && (
@@ -81,50 +84,18 @@ function DocumentCard({ doc, isAdmin, badge, onEdit, onToggleActive, onDelete })
   )
 }
 
-// ── Category single-select — existing categories only, no inline create ──────
-function CategorySelect({ categories, value, onChange, placeholder = "No category" }) {
-  const [open, setOpen] = useState(false)
-  const selected = categories.find(c => c.id === value)
-
-  return (
-    <div style={{ position: "relative" }}>
-      <button type="button"
-        onClick={() => setOpen(o => !o)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        style={{
-          ...inputStyle, textAlign: "left", display: "flex", justifyContent: "space-between",
-          alignItems: "center", cursor: "pointer",
-        }}>
-        <span style={{ color: selected ? "var(--text)" : "var(--text-dim)" }}>{selected ? selected.name : placeholder}</span>
-        <span style={{ color: "var(--text-dim)", fontSize: "0.7rem" }}>▼</span>
-      </button>
-      {open && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 20,
-          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 10,
-          boxShadow: "var(--shadow)", maxHeight: 220, overflowY: "auto",
-        }}>
-          <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => { onChange(""); setOpen(false) }} style={{
-            display: "block", width: "100%", textAlign: "left", padding: "0.6rem 0.85rem",
-            background: "none", border: "none", cursor: "pointer", fontFamily: "inherit",
-            fontSize: "0.88rem", color: "var(--text-dim)",
-          }}>{placeholder}</button>
-          {categories.map(c => (
-            <button key={c.id} type="button" onMouseDown={e => e.preventDefault()} onClick={() => { onChange(c.id); setOpen(false) }} style={{
-              display: "block", width: "100%", textAlign: "left", padding: "0.6rem 0.85rem",
-              background: "none", border: "none", borderTop: "1px solid var(--border)", cursor: "pointer",
-              fontFamily: "inherit", fontSize: "0.88rem", color: "var(--text)",
-            }}>{c.name}</button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
+// Categories picker for documents: the shared multi-select used on Contacts,
+// with inline create switched off (its create button posts to the CONTACT
+// categories endpoint -- document categories are added under Manage
+// Categories instead). Options listed A–Z per the dropdown standard.
+function DocCategoriesPicker({ categories, value, onChange }) {
+  const sorted = [...categories].sort((x, y) => x.name.localeCompare(y.name))
+  return <CategoryPicker categories={sorted} selectedIds={value} onChange={onChange} allowCreate={false} />
 }
 
 // ── Add Document ───────────────────────────────────────────────────────────────
 function AddDocumentForm({ categories, onUploaded, onClose }) {
-  const [form, setForm]     = useState({ title: "", description: "", category_id: "" })
+  const [form, setForm]     = useState({ title: "", description: "", category_ids: [] })
   const [file, setFile]     = useState(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError]   = useState("")
@@ -169,7 +140,7 @@ function AddDocumentForm({ categories, onUploaded, onClose }) {
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({
             action: "sign", file_name: file.name, content_type: file.type,
-            file_size: file.size, category_id: form.category_id,
+            file_size: file.size, category_ids: form.category_ids,
           }),
         })
         if (!signRes.ok) throw new Error(await readError(signRes, "Could not prepare the upload"))
@@ -185,7 +156,7 @@ function AddDocumentForm({ categories, onUploaded, onClose }) {
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body: JSON.stringify({
             action: "complete", path: signData.path, file_name: file.name, content_type: signData.content_type,
-            title: form.title.trim(), description: form.description.trim(), category_id: form.category_id,
+            title: form.title.trim(), description: form.description.trim(), category_ids: form.category_ids,
             file_size: file.size,
           }),
         })
@@ -195,7 +166,7 @@ function AddDocumentForm({ categories, onUploaded, onClose }) {
         fd.append("file", file)
         fd.append("title", form.title.trim())
         fd.append("description", form.description.trim())
-        fd.append("category_id", form.category_id)
+        form.category_ids.forEach(id => fd.append("category_ids", id))
         const res = await fetch("/api/info/documents", {
           method: "POST",
           headers: { "Authorization": `Bearer ${token}` },
@@ -225,8 +196,8 @@ function AddDocumentForm({ categories, onUploaded, onClose }) {
           style={{ ...inputStyle, resize: "vertical" }} />
       </div>
       <div>
-        <label style={labelStyle}>Category</label>
-        <CategorySelect categories={categories} value={form.category_id} onChange={v => set("category_id", v)} />
+        <label style={labelStyle}>Categories</label>
+        <DocCategoriesPicker categories={categories} value={form.category_ids} onChange={v => set("category_ids", v)} />
       </div>
       <div>
         <label style={labelStyle}>File <span style={{ color: "var(--danger)" }}>*</span></label>
@@ -249,13 +220,13 @@ function AddDocumentForm({ categories, onUploaded, onClose }) {
   )
 }
 
-// ── Edit Document (admin only) — title, description, category. The file
+// ── Edit Document (admin only) — title, description, categories. The file
 // itself is not replaceable here; delete and re-upload for that. ──────────────
 function EditDocumentForm({ doc, categories, onSaved, onClose }) {
   const [form, setForm] = useState({
     title: doc.title || "",
     description: doc.description || "",
-    category_id: doc.category?.id || "",
+    category_ids: (doc.categories || []).map(c => c.id),
   })
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState("")
@@ -274,7 +245,7 @@ function EditDocumentForm({ doc, categories, onSaved, onClose }) {
           id: doc.id,
           title: form.title.trim(),
           description: form.description.trim(),
-          category_id: form.category_id || null,
+          category_ids: form.category_ids,
         }),
       })
       if (!res.ok) {
@@ -302,8 +273,8 @@ function EditDocumentForm({ doc, categories, onSaved, onClose }) {
           style={{ ...inputStyle, resize: "vertical" }} />
       </div>
       <div>
-        <label style={labelStyle}>Category</label>
-        <CategorySelect categories={categories} value={form.category_id} onChange={v => set("category_id", v)} />
+        <label style={labelStyle}>Categories</label>
+        <DocCategoriesPicker categories={categories} value={form.category_ids} onChange={v => set("category_ids", v)} />
       </div>
       <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
         <FileTypeBadge fileName={doc.file_name} />
@@ -409,11 +380,17 @@ export default function DocumentsPage() {
     const [catRes, docRes] = await Promise.all([
       supabase.from("document_categories").select("id, name, display_order").eq("active", true).order("display_order"),
       supabase.from("documents")
-        .select("id, title, description, file_url, file_name, file_type, active, category:document_categories(id, name)")
+        .select("id, title, description, file_url, file_name, file_type, active, links:document_category_links(category:document_categories(id, name))")
         .order("created_at", { ascending: false }),
     ])
     setCategories(catRes.data || [])
-    setDocuments(docRes.data || [])
+    // A document can sit in several categories (migration 115); flatten the
+    // join rows to a plain, A–Z list per document.
+    setDocuments((docRes.data || []).map(d => ({
+      ...d,
+      categories: (d.links || []).map(l => l.category).filter(Boolean)
+        .sort((x, y) => x.name.localeCompare(y.name)),
+    })))
     setLoading(false)
   }, [])
 
@@ -443,7 +420,7 @@ export default function DocumentsPage() {
   // Admins see hidden documents too (flagged), so nothing admin-manageable
   // silently disappears — everyone else only ever sees active ones.
   const visible = documents.filter(d => d.active || isAdmin)
-  const filtered = activeFilter === "all" ? visible : visible.filter(d => d.category?.id === activeFilter)
+  const filtered = activeFilter === "all" ? visible : visible.filter(d => d.categories.some(c => c.id === activeFilter))
 
   if (loading) return (
     <div style={{ padding: "1.25rem 1rem" }}>
