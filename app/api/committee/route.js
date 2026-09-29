@@ -93,7 +93,7 @@ async function finishCommitteePost(member, { content, pinned, attachmentUrl, att
   let filedAsDocument = false
   if (attachmentUrl && docCategoryId) {
     const fallbackTitle = (attachmentName || "Document").replace(/\.[^.]+$/, "")
-    const { error: docErr } = await supa.from("documents").insert({
+    const { data: filedDoc, error: docErr } = await supa.from("documents").insert({
       title: docTitle || fallbackTitle,
       category_id: docCategoryId,
       file_url: attachmentUrl,
@@ -102,9 +102,16 @@ async function finishCommitteePost(member, { content, pinned, attachmentUrl, att
       file_size: attachmentFileSize,
       uploaded_by: member.id,
       source_committee_post_id: post.id,
-    })
+    }).select("id").single()
     if (docErr) console.error("committee post: failed to also file attachment in Documents:", docErr.message)
-    else filedAsDocument = true
+    else {
+      // Categories live in document_category_links since migration 115 --
+      // documents.category_id above is only a backward-compat mirror.
+      const { error: linkErr } = await supa.from("document_category_links")
+        .insert({ document_id: filedDoc.id, category_id: docCategoryId })
+      if (linkErr) console.error("committee post: filed document but failed to link its category:", linkErr.message)
+      filedAsDocument = true
+    }
   }
 
   const plain = content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()

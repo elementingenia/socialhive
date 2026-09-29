@@ -29,7 +29,7 @@ export async function DELETE(req) {
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
   const { count } = await supabaseAdmin
-    .from('documents').select('*', { count: 'exact', head: true }).eq('category_id', id)
+    .from('document_category_links').select('*', { count: 'exact', head: true }).eq('category_id', id)
   if ((count || 0) > 0) {
     return NextResponse.json({ error: `Category has ${count} document${count === 1 ? '' : 's'} assigned — remove them first` }, { status: 409 })
   }
