@@ -176,14 +176,43 @@ export async function POST(req) {
   return NextResponse.json(doc)
 }
 
-// PATCH — toggle active
+// PATCH — admin only. Toggle active, or edit title/description/category.
+// Fields are whitelisted: file_url/file_name/uploaded_by etc. are never
+// writable through here (previously the whole body was passed straight to
+// .update(), so any column could be overwritten).
+const EDITABLE_FIELDS = ['active', 'title', 'description', 'category_id']
+
 export async function PATCH(req) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
   const member = await getAdminMember(token)
   if (!member) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const { id, ...updates } = await req.json()
+  const body = await req.json().catch(() => ({}))
+  const { id } = body
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+  const updates = {}
+  for (const k of EDITABLE_FIELDS) if (k in body) updates[k] = body[k]
+
+  if ('title' in updates) {
+    const t = typeof updates.title === 'string' ? updates.title.trim() : ''
+    if (!t) return NextResponse.json({ error: 'Title is required' }, { status: 400 })
+    updates.title = t
+  }
+  if ('description' in updates) {
+    const d = typeof updates.description === 'string' ? updates.description.trim() : ''
+    updates.description = d || null
+  }
+  if ('category_id' in updates) {
+    updates.category_id = updates.category_id || null
+    if (updates.category_id) {
+      const { data: cat } = await supabaseAdmin
+        .from('document_categories').select('id').eq('id', updates.category_id).eq('active', true).maybeSingle()
+      if (!cat) return NextResponse.json({ error: 'Category not found' }, { status: 400 })
+    }
+  }
+  if ('active' in updates) updates.active = !!updates.active
+  if (Object.keys(updates).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
 
   const { error } = await supabaseAdmin.from('documents').update(updates).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
