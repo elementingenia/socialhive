@@ -112,7 +112,6 @@ function SignIn({ router, onForcePinChange }) {
       })
       if (authError) { setError('Sign-in failed. Please try again.'); setLoading(false) }
       else {
-        try { localStorage.setItem('shive_login_ts', Date.now().toString()) } catch {}
         // Account created by an admin with a handed-over PIN: they don't get
         // into the app until they've set a password only they know
         // (migration 067). Self-registered users never see this.
