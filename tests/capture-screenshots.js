@@ -45,7 +45,6 @@ async function shot(page, name, url, waitFor, action) {
   // Suppress nudge
   await p.addInitScript(() => {
     localStorage.setItem('shive_profile_nudge_permanent', '1')
-    localStorage.setItem('shive_login_ts', Date.now().toString())
   })
 
   await shot(p, '04-home',            '/home',              'text=Welcome')
