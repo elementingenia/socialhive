@@ -943,6 +943,12 @@ export default function AdminGuidePage() {
                 Profile; their personal choice is kept for when it's turned back on.
               </Step>
               <Step>
+                <strong>Who gets it:</strong> on the same card, choose <strong>Admins only</strong>{" "}
+                (the starting setting — a trial run kept in-house) or <strong>Community wide</strong>{" "}
+                (every resident). While it's Admins only, residents don't see the Weekly digest switch
+                in their Profile at all.
+              </Step>
+              <Step>
                 Once switched on, the <strong>weekly digest</strong> goes out every Sunday afternoon (about 4pm in
                 daylight saving, 3pm otherwise) to every active resident who has logged in at least
                 once, unless they've turned <strong>Weekly digest</strong> off in their own Profile.

@@ -193,7 +193,8 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
       setLoading(false)
     })
     fetch("/api/hub-settings").then(r => r.json())
-      .then(hs => setDigestAvailable(!!hs?.weekly_digest?.enabled))
+      .then(hs => setDigestAvailable(!!hs?.weekly_digest?.enabled &&
+        (hs.weekly_digest.audience === "community" || !!member?.is_admin)))
       .catch(() => setDigestAvailable(false))
   }, [open])
 

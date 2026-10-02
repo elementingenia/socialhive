@@ -2,7 +2,7 @@ import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { notify } from "@/lib/notify"
 import { sydneyTodayStr } from "@/lib/date"
-import { digestMessage, digestHasContent, digestRecipients } from "@/lib/digest"
+import { digestMessage, digestHasContent, digestRecipients, normaliseAudience } from "@/lib/digest"
 import { gatherDigest, pendingInvites } from "@/lib/digestData"
 
 export const dynamic = "force-dynamic"
@@ -38,8 +38,10 @@ export async function GET(req) {
   // off by migration 118). Off = no send at all; a dry run still reports
   // what WOULD go out, so an admin can check it before switching on.
   const { data: master } = await supa.from("hub_settings")
-    .select("enabled").eq("hub_type", "weekly_digest").maybeSingle()
+    .select("enabled, digest_audience").eq("hub_type", "weekly_digest").maybeSingle()
   const switchedOn = !!master?.enabled
+  // Audience (migration 119): 'admins' (default, in-house trial) or 'community'.
+  const audience = normaliseAudience(master?.digest_audience)
 
   const now = new Date()
   const digest = await gatherDigest(now)
@@ -51,14 +53,14 @@ export async function GET(req) {
   }
 
   const { data: members, error: mErr } = await supa.from("members")
-    .select("id, status, auth_id, is_test, weekly_digest")
+    .select("id, status, auth_id, is_test, weekly_digest, is_admin")
   if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 })
-  const recipients = digestRecipients(members || [])
+  const recipients = digestRecipients(members || [], audience)
   const invites = await pendingInvites(recipients, now)
 
   if (dryRun) {
     return NextResponse.json({
-      ok: true, dryRun: true, switchedOn, counts: digest.counts,
+      ok: true, dryRun: true, switchedOn, audience, counts: digest.counts,
       message: digestMessage(digest.counts),
       recipients: recipients.length,
       recipientsWithInvites: [...invites.keys()].filter(id => recipients.includes(id)).length,
