@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
+import { pickTmdbMatch } from '@/lib/tmdbMatch'
 const TMDB_KEY = process.env.TMDB_API_KEY || '0e0ec3c6d62df378f31f7ddb78a83b49'
 const OMDB_KEY = process.env.OMDB_API_KEY || 'ed1ed939'
 
@@ -56,17 +57,11 @@ async function enrichFromOmdb(imdbId) {
   }
 }
 
-async function enrichFromTmdb(title, isTV) {
+// Fetches full TMDB details for a known TMDB id (poster, overview, credits,
+// IMDb id) plus OMDb ratings. Shared by both lookup paths below.
+async function tmdbDetails(tmdbId, isTV) {
   const searchType = isTV ? 'tv' : 'movie'
-  const clean = cleanTitle(title)
-  const searchUrl = `https://api.themoviedb.org/3/search/${searchType}?api_key=${TMDB_KEY}&query=${encodeURIComponent(clean)}&language=en-AU`
-  const searchRes = await fetch(searchUrl)
-  if (!searchRes.ok) return { _apiError: true, reason: `TMDB search HTTP ${searchRes.status}` }
-  const searchData = await searchRes.json()
-  const result = searchData.results?.[0]
-  if (!result) return null
-
-  const detailUrl = `https://api.themoviedb.org/3/${searchType}/${result.id}?api_key=${TMDB_KEY}&language=en-AU&append_to_response=credits,external_ids`
+  const detailUrl = `https://api.themoviedb.org/3/${searchType}/${tmdbId}?api_key=${TMDB_KEY}&language=en-AU&append_to_response=credits,external_ids`
   const detailRes = await fetch(detailUrl)
   if (!detailRes.ok) return { _apiError: true, reason: `TMDB detail HTTP ${detailRes.status}` }
   const d = await detailRes.json()
@@ -89,6 +84,34 @@ async function enrichFromTmdb(title, isTV) {
   }
 
   return { poster_url: poster, plot: d.overview || null, runtime, director, actors, rating_imdb, rating, imdb_id, year: releaseYear || null }
+}
+
+// Title search. Picks the right result via lib/tmdbMatch.js (title + year,
+// most-voted, never unreleased) instead of blindly taking results[0] -- that
+// was the 2026-10-02 bug that linked "Up" to a 2026 film, "Doomsday" to
+// Avengers: Doomsday, etc. No confident match -> null -> no_match.
+async function enrichFromTmdb(title, isTV, year) {
+  const searchType = isTV ? 'tv' : 'movie'
+  const clean = cleanTitle(title)
+  const searchUrl = `https://api.themoviedb.org/3/search/${searchType}?api_key=${TMDB_KEY}&query=${encodeURIComponent(clean)}&language=en-AU`
+  const searchRes = await fetch(searchUrl)
+  if (!searchRes.ok) return { _apiError: true, reason: `TMDB search HTTP ${searchRes.status}` }
+  const searchData = await searchRes.json()
+  const result = pickTmdbMatch(searchData.results, { title: clean, year: isTV ? null : year })
+  if (!result) return null
+  return tmdbDetails(result.id, isTV)
+}
+
+// Exact lookup when we already hold the IMDb id -- used to fill a missing
+// poster without a title search that could pull in a different film's
+// details (it used to merge a title-search result over the OMDb data).
+async function enrichFromTmdbByImdb(imdbId) {
+  const res = await fetch(`https://api.themoviedb.org/3/find/${imdbId}?api_key=${TMDB_KEY}&external_source=imdb_id`)
+  if (!res.ok) return { _apiError: true, reason: `TMDB find HTTP ${res.status}` }
+  const f = await res.json()
+  if (f.movie_results?.[0]) return tmdbDetails(f.movie_results[0].id, false)
+  if (f.tv_results?.[0]) return tmdbDetails(f.tv_results[0].id, true)
+  return null
 }
 
 const delay = ms => new Promise(r => setTimeout(r, ms))
@@ -117,7 +140,7 @@ export async function GET(req) {
 
   const { data: movies, error: queryErr } = await supabaseAdmin
     .from('movies')
-    .select('id, title, imdb_id, poster_url, genre, enrichment_status')
+    .select('id, title, year, imdb_id, poster_url, genre, enrichment_status')
     .eq('we_own', true)
     .is('poster_url', null)
     .is('enrichment_status', null)
@@ -140,13 +163,18 @@ export async function GET(req) {
       if (movie.imdb_id) {
         data = await enrichFromOmdb(movie.imdb_id)
         if (!data?.poster_url) {
-          const tmdb = await enrichFromTmdb(movie.title, isTV)
+          // Same film by IMDb id -- only fill gaps, never replace what OMDb gave us.
+          const tmdb = await enrichFromTmdbByImdb(movie.imdb_id)
           if (tmdb?._apiError) { failReason = tmdb.reason }
-          else if (tmdb) data = { ...data, ...tmdb }
+          else if (tmdb) {
+            const merged = { ...(data || {}) }
+            for (const [k, v] of Object.entries(tmdb)) if (merged[k] == null && v != null) merged[k] = v
+            data = merged
+          }
         }
         await delay(150)
       } else {
-        const tmdb = await enrichFromTmdb(movie.title, isTV)
+        const tmdb = await enrichFromTmdb(movie.title, isTV, movie.year)
         if (tmdb?._apiError) failReason = tmdb.reason
         else data = tmdb
         await delay(250)
