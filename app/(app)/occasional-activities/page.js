@@ -191,7 +191,7 @@ export default function OccasionalActivitiesPage() {
           ? !!settings?.[area.key]?.live
           : !!settings?.[area.key]?.enabled
         return (
-          <div key={area.key} onClick={() => router.push(area.manageHref)} style={{
+          <div key={area.key} onClick={() => router.push(`${area.manageHref}?from=occasional`)} style={{
             display: "flex", alignItems: "center", gap: "0.9rem",
             background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px",
             padding: "1rem", marginBottom: "0.75rem", cursor: "pointer",
