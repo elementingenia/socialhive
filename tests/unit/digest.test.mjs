@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { digestWindow, digestMessage, digestHasContent, digestRecipients } from "../../lib/digest.js"
+import { digestWindow, digestMessage, digestHasContent, digestRecipients, normaliseAudience } from "../../lib/digest.js"
 
 let n = 0
 const t = (name, fn) => { fn(); n++ }
@@ -37,7 +37,25 @@ t("recipients filter", () => {
     { id: "f", status: "active", auth_id: "x", is_test: false },                         // column default -> on
     null,
   ]
-  assert.deepEqual(digestRecipients(ms), ["a", "f"])
+  assert.deepEqual(digestRecipients(ms, "community"), ["a", "f"])
+})
+t("admins-only audience", () => {
+  const ms = [
+    { id: "a", status: "active", auth_id: "x", is_test: false, is_admin: true },
+    { id: "b", status: "active", auth_id: "x", is_test: false, is_admin: false },
+    { id: "c", status: "active", auth_id: "x", is_test: false, is_admin: true, weekly_digest: false },
+  ]
+  assert.deepEqual(digestRecipients(ms, "admins"), ["a"])
+  assert.deepEqual(digestRecipients(ms, "community"), ["a", "b"])
+})
+t("missing audience defaults to admins", () => {
+  assert.deepEqual(digestRecipients([{ id: "b", status: "active", auth_id: "x", is_admin: false }]), [])
+})
+t("normaliseAudience", () => {
+  assert.equal(normaliseAudience("community"), "community")
+  assert.equal(normaliseAudience("admins"), "admins")
+  assert.equal(normaliseAudience(undefined), "admins")
+  assert.equal(normaliseAudience("everyone"), "admins")
 })
 
 console.log(`digest: ${n} passed`)

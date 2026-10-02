@@ -70,6 +70,28 @@ export default function OccasionalActivitiesPage() {
   // Admin-only server-side too (PATCH /api/hub-settings `enabled`).
   // No row yet (migration 118 not run) reads as Off -- same as the cron.
   const digestOn = !!settings?.weekly_digest?.enabled
+  // Audience (Iain, 2026-10-02): keep it in-house first, open up later.
+  const digestAudience = settings?.weekly_digest?.audience === "community" ? "community" : "admins"
+  async function setAudience(next) {
+    if (next === digestAudience) return
+    setDigestSaving(true); setDigestError(null)
+    try {
+      const res = await authedFetch("/api/hub-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hub_type: "weekly_digest", digest_audience: next }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || "Couldn't change who gets the digest")
+      }
+      setSettings(s => ({ ...(s || {}), weekly_digest: { ...(s?.weekly_digest || {}), audience: next } }))
+    } catch (err) {
+      setDigestError(err.message)
+    } finally {
+      setDigestSaving(false)
+    }
+  }
   async function toggleDigest() {
     setDigestSaving(true); setDigestError(null)
     try {
@@ -112,7 +134,7 @@ export default function OccasionalActivitiesPage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, color: "var(--teal)" }}>Weekly Digest</div>
             <div style={{ color: "var(--text-dim)", fontSize: "0.82rem" }}>
-              Sunday afternoon round-up sent to every resident who hasn't switched it off in their Profile.
+              Sunday afternoon round-up of what's on. Turn it on, then choose who gets it.
             </div>
           </div>
           <button type="button" role="switch" aria-checked={digestOn} aria-label="Weekly Digest on or off"
@@ -127,6 +149,33 @@ export default function OccasionalActivitiesPage() {
               background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.2)", transition: "left 0.2s",
             }} />
           </button>
+        </div>
+        <div style={{ marginTop: "0.8rem" }}>
+          <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.35rem" }}>Who gets it</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {[["admins", "Admins only"], ["community", "Community wide"]].map(([key, label]) => {
+              const active = digestAudience === key
+              return (
+                <button key={key} type="button" onClick={() => setAudience(key)}
+                  disabled={settings === null || digestSaving} aria-pressed={active}
+                  style={{
+                    flex: 1, padding: "0.55rem 0.5rem", borderRadius: 10, fontFamily: "inherit",
+                    fontSize: "0.88rem", fontWeight: 700, cursor: "pointer",
+                    border: `1px solid ${active ? "var(--teal)" : "var(--border)"}`,
+                    background: active ? "var(--teal)" : "var(--surface)",
+                    color: active ? "#fff" : "var(--text-dim)",
+                    opacity: settings === null || digestSaving ? 0.6 : 1,
+                  }}>
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>
+            {digestAudience === "admins"
+              ? "Only admins receive it — use this to trial it before opening up."
+              : "Every resident receives it, unless they've turned it off in their Profile."}
+          </div>
         </div>
         {digestError && <div style={{ color: "var(--danger)", fontSize: "0.82rem", marginTop: "0.5rem" }}>{digestError}</div>}
       </div>

@@ -62,11 +62,19 @@ export async function GET() {
       out[row.hub_type].archive_days = row.happenings_news_archive_days || 90
     }
   }
+  // Weekly Digest audience (migration 119) -- read separately so the main
+  // select above never depends on this column: if 119 hasn't run, every
+  // other hub's settings still load and the audience just reads 'admins'.
+  if (out.weekly_digest) {
+    const { data: wd } = await supa.from("hub_settings")
+      .select("digest_audience").eq("hub_type", "weekly_digest").maybeSingle()
+    out.weekly_digest.audience = wd?.digest_audience === "community" ? "community" : "admins"
+  }
   return Response.json(out)
 }
 
 export async function PATCH(req) {
-  const { hub_type, welcome_text, sub_messages, location_id, loan_cap, enabled, production_enabled, happenings_news_archive_days } = await req.json()
+  const { hub_type, welcome_text, sub_messages, location_id, loan_cap, enabled, production_enabled, happenings_news_archive_days, digest_audience } = await req.json()
   if (!hub_type) return Response.json({ error: "hub_type required" }, { status: 400 })
 
   // AUTH FROM THE TOKEN, not from the request body — the bearer token is the
@@ -124,6 +132,14 @@ export async function PATCH(req) {
       return Response.json({ error: "archive delay must be 30, 90, or 150 days" }, { status: 400 })
     }
     update.happenings_news_archive_days = Number(happenings_news_archive_days)
+  }
+  // Weekly Digest audience -- admin-only, weekly_digest row only.
+  if (digest_audience !== undefined) {
+    if (!member.is_admin) return Response.json({ error: "Admins only" }, { status: 403 })
+    if (hub_type !== "weekly_digest" || !["admins", "community"].includes(digest_audience)) {
+      return Response.json({ error: "digest_audience must be 'admins' or 'community' on weekly_digest" }, { status: 400 })
+    }
+    update.digest_audience = digest_audience
   }
   // null is meaningful here — it clears the hub's nominated venue.
   if (location_id !== undefined) update.location_id = location_id
