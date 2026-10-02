@@ -1,5 +1,6 @@
 "use client"
-import React from "react"
+import React, { useState, useEffect } from "react"
+import { authedFetch } from "@/lib/getAuthToken"
 import { usePathname, useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
 import { getActiveHub } from "@/lib/navUtils"
@@ -101,6 +102,19 @@ export default function BottomNav() {
 
   const activeHub = getActiveHub(pathname)
 
+  // Admins: count of interest suggestions waiting for review (backlog B3,
+  // Q2) shown as a badge on the Admin button. Re-checked on navigation.
+  const [adminBadge, setAdminBadge] = useState(0)
+  useEffect(() => {
+    if (!isAdmin) { setAdminBadge(0); return }
+    let alive = true
+    authedFetch("/api/admin/interests?count=1")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (alive && d) setAdminBadge(d.pendingCount || 0) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [isAdmin, pathname])
+
   // Clubs is the one data-driven hub: its sub-nav depends on WHICH club you're
   // in (its name, its colour) and whether that club actually has a catalogue —
   // so Dinner Club shows just Home + Dinner Club, Book Club adds Suggest.
@@ -192,7 +206,16 @@ export default function BottomNav() {
         return (
           <button key={path} onClick={() => handleDefaultNav(path)}
             style={btn(active, colour)} aria-current={active ? "page" : undefined}>
-            <Icon size={26} />
+            <span style={{ position: "relative", lineHeight: 0 }}>
+              <Icon size={26} />
+              {path === "/admin" && adminBadge > 0 && (
+                <span aria-label={`${adminBadge} interest suggestions waiting`} style={{
+                  position: "absolute", top: -4, right: -10, minWidth: 18, height: 18, padding: "0 4px",
+                  borderRadius: 9, background: "#e53e3e", color: "#fff", fontSize: "0.65rem", fontWeight: 700,
+                  lineHeight: "18px", textAlign: "center", boxSizing: "border-box",
+                }}>{adminBadge}</span>
+              )}
+            </span>
             {label}
           </button>
         )

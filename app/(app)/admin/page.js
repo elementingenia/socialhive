@@ -6,9 +6,10 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon, CommitteeIcon, UptakeIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon, CommitteeIcon, UptakeIcon, InterestsIcon } from '@/components/NavIcons'
 import OwnersManager from '@/components/OwnersManager'
 import UptakeStats from '@/components/UptakeStats'
+import InterestsAdmin from '@/components/InterestsAdmin'
 import ResidentEditForm, { Sheet, labelStyle } from '@/components/ResidentEditPanel'
 import { CLUB_COLOURS, nextClubColour } from '@/lib/clubColours'
 import ClubForm from '@/components/ClubForm'
@@ -57,6 +58,9 @@ const SECTIONS = [
   // has no live source of truth for that. See components/UptakeStats.js and
   // app/api/admin/uptake/route.js for the full evidence trail.
   { key: 'Uptake', label: 'Uptake', Icon: UptakeIcon },
+  // "Ask me about" chip list + resident suggestion review queue (backlog B3,
+  // 2026-10-02). Tile shows a count badge while suggestions are waiting (Q2).
+  { key: 'Interests', label: 'Interests', Icon: InterestsIcon },
 ]
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -1474,6 +1478,15 @@ export default function AdminPage() {
   const { member, loading } = useUser()
   const router = useRouter()
   const [tab, setTab] = useState(null)
+  const [interestsPending, setInterestsPending] = useState(0)
+
+  // Deep link: /admin?tab=Interests (the daily interests-review alert lands
+  // here). window.location rather than useSearchParams, which would need a
+  // Suspense boundary around the whole page.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t && SECTIONS.some(s => s.key === t && !s.href)) setTab(t)
+  }, [])
 
   // Reset to main admin page when footer Admin button re-tapped
   useEffect(() => {
@@ -1485,6 +1498,16 @@ export default function AdminPage() {
   useEffect(()=>{
     if (!loading && member && !member.is_admin) router.replace('/home')
   }, [member, loading, router])
+
+  // Pending interest suggestions -> badge on the Interests tile (Q2). Re-read
+  // whenever the grid is shown again, so it clears after reviewing.
+  useEffect(() => {
+    if (!member?.is_admin || tab) return
+    authedFetch('/api/admin/interests?count=1')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setInterestsPending(d.pendingCount || 0) })
+      .catch(() => {})
+  }, [member?.is_admin, tab])
 
   if (loading || !member) return null
   if (!member.is_admin) return null
@@ -1507,6 +1530,7 @@ export default function AdminPage() {
         {tab === 'Locations' && <LocationsTab />}
         {tab === 'Tools'     && <ToolsTab />}
         {tab === 'Uptake'    && <UptakeStats />}
+        {tab === 'Interests' && <InterestsAdmin onCountChange={setInterestsPending} />}
       </div>
     )
   }
@@ -1523,7 +1547,12 @@ export default function AdminPage() {
             <button key={s.key} onClick={() => s.href ? router.push(s.href) : setTab(s.key)}
               style={{ background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'14px', padding:'1rem 0.75rem', display:'flex', flexDirection:'column', alignItems:'center', gap:'0.35rem', cursor:'pointer', fontFamily:'inherit',
                 ...(spanFull ? { gridColumn:'1/-1' } : {}) }}>
-              <span style={{ color:'var(--text)', lineHeight:0 }}><s.Icon size={32} /></span>
+              <span style={{ color:'var(--text)', lineHeight:0, position:'relative' }}>
+                <s.Icon size={32} />
+                {s.key === 'Interests' && interestsPending > 0 && (
+                  <span aria-label={`${interestsPending} waiting for review`} style={{ position:'absolute', top:-6, right:-14, minWidth:20, height:20, padding:'0 5px', borderRadius:10, background:'#e53e3e', color:'#fff', fontSize:'0.7rem', fontWeight:700, lineHeight:'20px', textAlign:'center', boxSizing:'border-box' }}>{interestsPending}</span>
+                )}
+              </span>
               <span style={{ fontWeight:700, fontSize:'0.85rem', color:'var(--text)' }}>{s.label}</span>
             </button>
           )
