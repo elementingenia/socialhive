@@ -780,6 +780,14 @@ export default function AdminGuidePage() {
                 error), with a <strong>Stop</strong> button if you need to pause partway through; resuming
                 later continues rather than restarting from zero.
               </Step>
+              <Step>
+                <strong>How a title is matched.</strong> If the DVD already has an IMDb link, enrichment
+                uses that exact film. Otherwise it searches by title and only accepts a film with the
+                same title (and, when the DVD has a year, released within a year of it), never one that
+                hasn't come out yet, and picks the best-known one if several fit. If nothing fits
+                confidently it marks the title "not found" rather than guessing — those appear in the
+                Failure catalogue below and need sorting out by hand.
+              </Step>
             </Subsection>
             <Subsection id="sub-tools-fail" title="Failure catalogue">
               <Step>
