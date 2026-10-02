@@ -4,6 +4,7 @@ import { BusIcon } from "@/components/NavIcons"
 import { bookingsClosed } from "@/lib/booking"
 import { fmtSpaceEventDate, fmtSpaceEventTime } from "@/components/SharedSpaceEventRow"
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
+import InviteNeighbourButton from "@/components/InviteNeighbourButton"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 import { useWaitlistInfo } from "@/lib/useWaitlistInfo"
 import { waitlistLabel } from "@/lib/waitlist"
@@ -145,7 +146,7 @@ export default function NextSpaceEventTile({ event, coordinators = [], myBooking
               ) : null}
               {evWindow && (
                 <div style={{ marginBottom: "0.2rem", textAlign: "right" }}>
-                  <CopyLinkButton url={shareUrl} colour={COLOUR} />
+                  <InviteNeighbourButton event={event} colour={COLOUR} />{" "}<CopyLinkButton url={shareUrl} colour={COLOUR} />
                 </div>
               )}
             </>

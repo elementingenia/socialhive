@@ -26,6 +26,7 @@ import { resolveMemberName } from "@/lib/memberName"
 import { busSeatsUsed } from "@/lib/busSeats"
 import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/attendeeExport"
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
+import InviteNeighbourButton from "@/components/InviteNeighbourButton"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
 
@@ -1535,7 +1536,7 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
               ) : null}
               {evWindow && (
                 <div style={{ marginBottom: "0.2rem", textAlign: "right" }}>
-                  <CopyLinkButton url={shareUrl} colour="var(--special)" />
+                  <InviteNeighbourButton event={event} colour="var(--special)" />{" "}<CopyLinkButton url={shareUrl} colour="var(--special)" />
                 </div>
               )}
             </>

@@ -45,6 +45,8 @@ function typeIcon(type) {
     case "survey_opened":            return "📝"
     case "survey_results_published": return "📊"
     case "event_recap_prompt":       return "📰"
+    case "weekly_digest":            return "🗞️"
+    case "event_invite":             return "✉️"
     default:                  return "🔔"
   }
 }
@@ -77,6 +79,8 @@ function typeColour(type) {
     case "survey_opened":            return "var(--voting)"
     case "survey_results_published": return "var(--voting)"
     case "event_recap_prompt":       return "var(--happenings-news)"
+    case "weekly_digest":            return "var(--teal)"
+    case "event_invite":             return "var(--teal)"
     default:                  return "var(--text-dim)"
   }
 }
@@ -106,6 +110,10 @@ function targetForNotif(n) {
   if (n.type === "voting_opened") return "/voting"
   if (n.type === "survey_opened" || n.type === "survey_results_published") return "/surveys"
   if (n.type === "committee_post_added") return "/committee"
+  // Weekly Digest (2026-10-02): no event_id, always the Digest page.
+  // (event_invite needs no case -- it carries the event_id and falls through
+  // to eventDeepLink below, landing on the event itself.)
+  if (n.type === "weekly_digest") return "/digest"
   // Hub notices (2026-09-23): route back to the hub the message names.
   if (n.type === "hub_notice_posted") return hubNoticeHomeFromMessage(n.message)
   // Recap nudge (2026-10-02): the event has finished, so route via

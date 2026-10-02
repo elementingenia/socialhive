@@ -14,7 +14,7 @@ async function getMember(req) {
   // Try full select (post-migration); fall back to base columns if not yet migrated
   let { data, error } = await supabase
     .from("members")
-    .select("id, name, display_name, username, house_number, email, phone, avatar_url, bar_opt_in, hide_name, is_admin")
+    .select("id, name, display_name, username, house_number, email, phone, avatar_url, bar_opt_in, hide_name, is_admin, weekly_digest")
     .eq("auth_id", user.id).single()
 
   if (error) {
@@ -44,7 +44,7 @@ export async function PATCH(req) {
   // on, same as name. Must be at least 3 letters (isValidDisplayName --
   // spaces/digits/punctuation don't count), matching the DB-level NOT NULL
   // migration 083 backfills and enforces.
-  const allowed = ["name", "display_name", "house_number", "email", "phone", "bar_opt_in", "hide_name", "avatar_url"]
+  const allowed = ["name", "display_name", "house_number", "email", "phone", "bar_opt_in", "hide_name", "avatar_url", "weekly_digest"]
   const updates = Object.fromEntries(Object.entries(body).filter(([k]) => allowed.includes(k)))
   if (Object.keys(updates).length === 0)
     return NextResponse.json({ error: "No valid fields" }, { status: 400 })
@@ -54,11 +54,12 @@ export async function PATCH(req) {
       return NextResponse.json({ error: "Display name must be at least 3 letters." }, { status: 400 })
     updates.display_name = trimmed
   }
+  if ("weekly_digest" in updates) updates.weekly_digest = updates.weekly_digest !== false
 
   // Try full update; if new columns don't exist yet, retry with only base columns
   let { data, error } = await supabase
     .from("members").update(updates).eq("id", member.id)
-    .select("id, name, display_name, username, house_number, email, phone, avatar_url, bar_opt_in, hide_name").single()
+    .select("id, name, display_name, username, house_number, email, phone, avatar_url, bar_opt_in, hide_name, weekly_digest").single()
 
   if (error) {
     const baseOnly = ["name", "house_number", "avatar_url", "bar_opt_in"]

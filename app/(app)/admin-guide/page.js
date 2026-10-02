@@ -116,6 +116,7 @@ const RAW_SECTIONS = [
     id: "hidename", num: 10, title: "Private / Hide Name — Where It Actually Applies",
     subs: [
       { title: "What toggling it on does, and doesn't, hide", id: "sub-hide-name" },
+      { title: "Weekly digest and invites", id: "sub-hide-digest" },
     ],
   },
   {
@@ -926,6 +927,37 @@ export default function AdminGuidePage() {
                 It only affects attendee-list display — it does not remove them from search, from Contacts
                 (admins still see and can manage a "Private" entry there), or from any admin-facing list
                 anywhere else in the app.
+              </Step>
+              <Step>
+                It also keeps a Private resident out of the <strong>Invite a neighbour</strong> picker
+                for everyone except admins — to anyone else they'd only appear as "Resident", which is
+                no use for picking someone.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-hide-digest" title="Weekly digest and invites (added 2026-10-02)">
+              <Step>
+                <strong>Master switch:</strong> the digest only sends while it's turned on in{" "}
+                <strong>Admin → Occasional Activities → Weekly Digest</strong>. It starts{" "}
+                <strong>off</strong> — nothing goes to anyone until an admin switches it on. Turning it
+                off stops the next Sunday's send and hides each resident's own Weekly digest switch in
+                Profile; their personal choice is kept for when it's turned back on.
+              </Step>
+              <Step>
+                Once switched on, the <strong>weekly digest</strong> goes out every Sunday afternoon (about 4pm in
+                daylight saving, 3pm otherwise) to every active resident who has logged in at least
+                once, unless they've turned <strong>Weekly digest</strong> off in their own Profile.
+                It's on by default for every account, existing and new. There's no admin switch per
+                resident — it's the resident's own choice.
+              </Step>
+              <Step>
+                It only includes areas that are switched on: Committee, Voting, Surveys and
+                Happenings News each drop out of the digest while that area is hidden. A quiet week
+                with nothing on sends nothing. It can never send twice on the same day.
+              </Step>
+              <Step>
+                <strong>Invite a neighbour</strong> limits: a resident can only be invited once per
+                event (by anyone), and each person can send up to 10 invites per event. Test
+                accounts and residents who have never logged in can't be invited.
               </Step>
             </Subsection>
           </Section>
