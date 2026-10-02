@@ -149,6 +149,11 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
   const [house,    setHouse]    = useState("")
   const [phone,    setPhone]    = useState("")
   const [hideName, setHideName] = useState(false)
+  const [weeklyDigest, setWeeklyDigest] = useState(true)
+  // Only offer the resident's own switch while an admin has the digest
+  // turned on site-wide (Admin > Occasional Activities) -- a switch for
+  // something that never arrives would just confuse.
+  const [digestAvailable, setDigestAvailable] = useState(false)
   const [barOptIn, setBarOptIn] = useState(false)
   const [avatar,   setAvatar]   = useState(null)
   const [loading,  setLoading]  = useState(false)
@@ -181,11 +186,15 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
         setHouse(d.house_number || "")
         setPhone(d.phone || "")
         setHideName(!!d.hide_name)
+        setWeeklyDigest(d.weekly_digest !== false)
         setBarOptIn(!!d.bar_opt_in)
         setAvatar(d.avatar_url || null)
       }
       setLoading(false)
     })
+    fetch("/api/hub-settings").then(r => r.json())
+      .then(hs => setDigestAvailable(!!hs?.weekly_digest?.enabled))
+      .catch(() => setDigestAvailable(false))
   }, [open])
 
   const showToast = useCallback((msg, ok = true) => {
@@ -200,7 +209,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
     const res = await authedFetch("/api/profile", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), display_name: displayName.trim(), email: email.trim(), house_number: house.trim(), phone: phone.trim(), hide_name: hideName, bar_opt_in: barOptIn, avatar_url: avatar }),
+      body: JSON.stringify({ name: name.trim(), display_name: displayName.trim(), email: email.trim(), house_number: house.trim(), phone: phone.trim(), hide_name: hideName, weekly_digest: weeklyDigest, bar_opt_in: barOptIn, avatar_url: avatar }),
     })
     setSaving(false)
     if (res.ok) {
@@ -297,6 +306,9 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
               {/* Toggles */}
               <div style={{ borderTop: "1px solid var(--border)", marginTop: "0.75rem" }}>
                 <NotificationsToggle />
+                {digestAvailable && (
+                  <Toggle value={weeklyDigest} onChange={setWeeklyDigest} label="Weekly digest" description="A Sunday round-up of what's on this week at Element Happenings" />
+                )}
                 <Toggle value={hideName} onChange={setHideName} label="Hide my name" description="Show me as 'Resident' everywhere -- including your Display Name above -- except to admins/EC" />
                 {/* Bar access toggle parked (feature not in scope) — see lib/features.js */}
                 {BAR_ENABLED && (

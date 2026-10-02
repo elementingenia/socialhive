@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
+import { authedFetch } from "@/lib/getAuthToken"
 import { VotingIcon, SpecialEventsIcon, SurveysIcon, HappeningsNewsIcon } from "@/components/NavIcons"
 
 // Admin's single discovery entry point for hidden-by-default, occasional-use
@@ -51,6 +52,8 @@ export default function OccasionalActivitiesPage() {
   const { member, loading } = useUser()
   const router = useRouter()
   const [settings, setSettings] = useState(null)
+  const [digestSaving, setDigestSaving] = useState(false)
+  const [digestError, setDigestError] = useState(null)
 
   useEffect(() => {
     if (!loading && !member?.is_admin) router.replace("/home")
@@ -61,6 +64,31 @@ export default function OccasionalActivitiesPage() {
   }, [])
 
   if (loading || !member?.is_admin) return null
+
+  // Weekly Digest master switch (Iain, 2026-10-02). Unlike the areas above
+  // it has no hub or manage page of its own, so the switch lives right here.
+  // Admin-only server-side too (PATCH /api/hub-settings `enabled`).
+  // No row yet (migration 118 not run) reads as Off -- same as the cron.
+  const digestOn = !!settings?.weekly_digest?.enabled
+  async function toggleDigest() {
+    setDigestSaving(true); setDigestError(null)
+    try {
+      const res = await authedFetch("/api/hub-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hub_type: "weekly_digest", enabled: !digestOn }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || "Couldn't change the digest setting")
+      }
+      setSettings(s => ({ ...(s || {}), weekly_digest: { ...(s?.weekly_digest || {}), enabled: !digestOn } }))
+    } catch (err) {
+      setDigestError(err.message)
+    } finally {
+      setDigestSaving(false)
+    }
+  }
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "1.25rem 1rem 3rem" }}>
@@ -74,6 +102,34 @@ export default function OccasionalActivitiesPage() {
       <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", margin: "0 0 1.25rem" }}>
         Features that stay off Home most of the time — turn each on only while it's actually in use.
       </p>
+
+      <div style={{
+        background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px",
+        padding: "1rem", marginBottom: "0.75rem",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.9rem" }}>
+          <div style={{ fontSize: 28, lineHeight: 1, width: 32, textAlign: "center" }} aria-hidden>🗞️</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, color: "var(--teal)" }}>Weekly Digest</div>
+            <div style={{ color: "var(--text-dim)", fontSize: "0.82rem" }}>
+              Sunday afternoon round-up sent to every resident who hasn't switched it off in their Profile.
+            </div>
+          </div>
+          <button type="button" role="switch" aria-checked={digestOn} aria-label="Weekly Digest on or off"
+            disabled={settings === null || digestSaving} onClick={toggleDigest}
+            style={{
+              flexShrink: 0, width: 50, height: 28, borderRadius: 14, border: "none", position: "relative",
+              background: digestOn ? "var(--teal)" : "var(--border)", cursor: "pointer",
+              opacity: settings === null || digestSaving ? 0.6 : 1, transition: "background 0.2s",
+            }}>
+            <span style={{
+              position: "absolute", top: 3, left: digestOn ? 25 : 3, width: 22, height: 22, borderRadius: "50%",
+              background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.2)", transition: "left 0.2s",
+            }} />
+          </button>
+        </div>
+        {digestError && <div style={{ color: "var(--danger)", fontSize: "0.82rem", marginTop: "0.5rem" }}>{digestError}</div>}
+      </div>
 
       {AREAS.map(area => {
         // happenings_news is the one area here with two independent

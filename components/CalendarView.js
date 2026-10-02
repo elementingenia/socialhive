@@ -83,7 +83,8 @@ function getMondayOf(d) {
 // app/api/events/route.js for anonymous /cal requests). What a viewer can DO
 // with it (book, modify, manage) is gated elsewhere, not here (Iain,
 // 2026-08-04).
-function EventChip({ event, onTap, compact = false }) {
+// Exported (2026-10-02) for the Weekly Digest page -- same tile, not a copy.
+export function EventChip({ event, onTap, compact = false }) {
   const colour = eventColour(event)
   const booked = event.bookings_count || 0
   const max = event.max_seats || 0

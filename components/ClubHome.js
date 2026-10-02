@@ -42,6 +42,7 @@ import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/att
 import { paymentSummary, reconciliationIsStale, isPaid as isPaymentPaid, isSubmitted as isPaymentSubmitted, isPartial as isPaymentPartial, seatsCost, remainingBalance, wholeDollar, balancePhrase, isRemindedToday } from "@/lib/payments"
 import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
+import InviteNeighbourButton from "@/components/InviteNeighbourButton"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 import { isHtmlContent } from "@/lib/richText"
 
@@ -734,7 +735,7 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
         ) : null}
         {shareUrl && shareEvWindow && (
           <div style={{ marginTop: "0.15rem", textAlign: "right" }}>
-            <CopyLinkButton url={shareUrl} colour={colour} />
+            <InviteNeighbourButton event={event} colour={colour} />{" "}<CopyLinkButton url={shareUrl} colour={colour} />
           </div>
         )}
       </div>

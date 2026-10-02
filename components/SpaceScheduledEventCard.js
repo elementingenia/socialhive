@@ -6,6 +6,7 @@ import { bookingsClosed } from "@/lib/booking"
 import { byOwnThenName } from '@/lib/sortNames'
 import { fmtSpaceEventDate, fmtSpaceEventTime } from "@/components/SharedSpaceEventRow"
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
+import InviteNeighbourButton from "@/components/InviteNeighbourButton"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 
 // Full "system standard" event card for /spaces/scheduled -- Iain,
@@ -152,7 +153,7 @@ export default function SpaceScheduledEventCard({ event, onOpen, onEdit }) {
               ) : null}
               {evWindow && (
                 <div style={{ marginBottom: "0.2rem", textAlign: "right" }}>
-                  <CopyLinkButton url={shareUrl} colour={COLOUR} />
+                  <InviteNeighbourButton event={event} colour={COLOUR} />{" "}<CopyLinkButton url={shareUrl} colour={COLOUR} />
                 </div>
               )}
             </>

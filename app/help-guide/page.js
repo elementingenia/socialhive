@@ -60,6 +60,7 @@ const RAW_SECTIONS = [
     subs: [
       { title: "Updating your profile", id: "sub-profile-update" },
       { title: "Changing your PIN",     id: "sub-profile-pin" },
+      { title: "The weekly digest",     id: "sub-profile-digest" },
     ],
   },
   {
@@ -126,6 +127,7 @@ const RAW_SECTIONS = [
     id: "calendar", num: 9, title: "Community Calendar & Booking a Space",
     subs: [
       { title: "Finding an event",                           id: "sub-calendar-find" },
+      { title: "Inviting a neighbour",                       id: "sub-calendar-invite" },
       { title: "Booking a common space from the Calendar",  id: "sub-calendar-space" },
       { title: "The Space Bookings hub",                     id: "sub-calendar-spacehub" },
       { title: "Allow others to join",                       id: "sub-calendar-spacepromote" },
@@ -662,6 +664,21 @@ export default function HelpGuidePage() {
               <InfoBox>
                 💡 If you forget your PIN, contact your coordinator — they can reset it for you.
               </InfoBox>
+            </Subsection>
+
+            <Subsection id="sub-profile-digest" title="The weekly digest">
+              <Step>
+                Every Sunday afternoon you'll get a notification called <strong>This week at Element
+                Happenings</strong>. Tap it to see everything on in the coming week in one place:
+                events in every section, any new groups or clubs, Happenings News, Committee
+                updates, and any votes or surveys that are open. Any invites you've been sent show
+                at the top.
+              </Step>
+              <Step>
+                When the digest is running, it's switched on for everyone. If you'd rather not get it, open{" "}
+                <strong>Update Profile</strong> and turn off <strong>Weekly digest</strong>, then
+                tap Save. In a quiet week with nothing on, it isn't sent at all.
+              </Step>
             </Subsection>
           </Section>
 
@@ -1303,6 +1320,21 @@ export default function HelpGuidePage() {
                 Type any part of the event's name (for example "Melbourne Cup") and matching events
                 appear straight away, across every section, with their date. Tap one to open it and
                 book your place, exactly as you would from anywhere else in the app.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-calendar-invite" title="Inviting a neighbour">
+              <Step>
+                Think a neighbour would enjoy an event? On the event's tile, tap{" "}
+                <strong>✉️ Invite a neighbour</strong> (next to Copy Link). Type part of their name
+                or house number, tap their name, and tap <strong>Send invite</strong>. You can pick
+                more than one person.
+              </Step>
+              <Step>
+                They get a notification saying you think they'd enjoy it, with a link straight to
+                the event. People already booked, or already invited by someone else, don't appear
+                in the list. You can send up to 10 invites per event, and the button disappears
+                once the event is no longer taking bookings.
               </Step>
             </Subsection>
 

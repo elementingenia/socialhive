@@ -22,6 +22,7 @@ import { waitlistLabel } from '@/lib/waitlist'
 import { useOwners } from '@/lib/useOwners'
 import { exportAttendeeListPdf } from '@/lib/attendeeExport'
 import { CopyLinkButton, AddToCalendarButton } from '@/components/EventShareActions'
+import InviteNeighbourButton from '@/components/InviteNeighbourButton'
 import { buildShareUrl, resolveEventWindow } from '@/lib/eventShare'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -829,7 +830,7 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
                 ) : null}
                 {evWindow && (
                   <div style={{ marginTop: '0.15rem', textAlign: 'right' }}>
-                    <CopyLinkButton url={shareUrl} colour="var(--teal)" />
+                    <InviteNeighbourButton event={ev} colour="var(--teal)" />{" "}<CopyLinkButton url={shareUrl} colour="var(--teal)" />
                   </div>
                 )}
               </>
