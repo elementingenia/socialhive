@@ -2,6 +2,17 @@
 import { useUser } from "@/lib/UserContext"
 import { useOwners } from "@/lib/useOwners"
 import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+
+// Admin > Occasional Activities opens these manage screens with
+// ?from=occasional (Iain, 2026-10-02: Back should return to Occasional
+// Activities, not the hub's landing page). Reached from the hub's own
+// Manage link there's no param, so Back still goes to the hub. Read via
+// window.location.search on mount, same as movies/page.js and
+// social/events/page.js, to avoid useSearchParams' Suspense requirement.
+const ORIGINS = {
+  occasional: { href: "/occasional-activities", label: "Occasional Activities" },
+}
 
 // Shared access gate + breadcrumb chrome for an Owner's "Manage this area"
 // screen (Owner_SelfService_and_Library_Hub_Scope_v1, Part A.3). Deliberately
@@ -12,8 +23,14 @@ import { useRouter } from "next/navigation"
 // space_owners primitive lib/areaAuth.js checks server-side on every write
 // this screen's children (HubTextSection, ClubForm) actually trigger — this
 // client-side check is a UX gate, not the security boundary.
-export default function ManageAreaScreen({ contextType, contextKey, backHref, backLabel, title, colour = "var(--teal)", children }) {
+export default function ManageAreaScreen({ contextType, contextKey, backHref: hubBackHref, backLabel: hubBackLabel, title, colour = "var(--teal)", children }) {
   const router = useRouter()
+  const [origin, setOrigin] = useState(null)
+  useEffect(() => {
+    setOrigin(ORIGINS[new URLSearchParams(window.location.search).get("from")] || null)
+  }, [])
+  const backHref = origin?.href || hubBackHref
+  const backLabel = origin?.label || hubBackLabel
   const { member, isAdmin, loading: userLoading } = useUser()
   const { owners, loading: ownersLoading } = useOwners(contextType, contextKey)
   const isOwner = !!member?.id && owners.some(o => o.id === member.id)
