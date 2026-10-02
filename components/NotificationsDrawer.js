@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { authedFetch } from "@/lib/getAuthToken"
 import { useUI } from "@/lib/UIContext"
-import { eventDeepLink } from "@/lib/eventNav"
+import { eventDeepLink, recapPromptLink } from "@/lib/eventNav"
 import { hubNoticeHomeFromMessage } from "@/lib/hubNotices"
 
 const TOP_OFFSET = 72 // matches ProfileSlideOver
@@ -44,6 +44,7 @@ function typeIcon(type) {
     case "voting_opened":            return "🗳️"
     case "survey_opened":            return "📝"
     case "survey_results_published": return "📊"
+    case "event_recap_prompt":       return "📰"
     default:                  return "🔔"
   }
 }
@@ -75,6 +76,7 @@ function typeColour(type) {
     case "voting_opened":            return "var(--voting)"
     case "survey_opened":            return "var(--voting)"
     case "survey_results_published": return "var(--voting)"
+    case "event_recap_prompt":       return "var(--happenings-news)"
     default:                  return "var(--text-dim)"
   }
 }
@@ -106,6 +108,14 @@ function targetForNotif(n) {
   if (n.type === "committee_post_added") return "/committee"
   // Hub notices (2026-09-23): route back to the hub the message names.
   if (n.type === "hub_notice_posted") return hubNoticeHomeFromMessage(n.message)
+  // Recap nudge (2026-10-02): the event has finished, so route via
+  // recapPromptLink -- Show Time's /screenings can't open a past screening.
+  if (n.type === "event_recap_prompt") return recapPromptLink({
+    hubType: n.events?.hub_type,
+    eventId: n.event_id,
+    clubId: n.events?.club_id,
+    clubSlug: n.events?.club?.slug,
+  })
   return eventDeepLink({
     hubType: n.events?.hub_type,
     eventId: n.event_id,

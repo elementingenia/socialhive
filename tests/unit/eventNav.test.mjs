@@ -10,7 +10,7 @@
 // tests pin the corrected behaviour so that regression can't happen again
 // silently.
 
-import { eventDeepLink, eventDeepLinkFor } from '../../lib/eventNav.js'
+import { eventDeepLink, eventDeepLinkFor, recapPromptLink } from '../../lib/eventNav.js'
 
 let pass = 0, fail = 0
 const ok = (c, m) => { c ? pass++ : (fail++, console.log('  ✗', m)) }
@@ -40,6 +40,15 @@ eq(eventDeepLinkFor({ id: 5, hub_type: 'club', club_id: 'c1', club: { slug: 'bow
   '/clubs/bowlers-unite?event=5', 'eventDeepLinkFor pulls club_id/club.slug off the event, matching hubKeyOf()')
 eq(eventDeepLinkFor({ id: 12, hub_type: 'movie' }), '/screenings?event=12', 'eventDeepLinkFor: non-club event')
 eq(eventDeepLinkFor(null), null, 'eventDeepLinkFor: no event -> null')
+
+
+// ── recapPromptLink -- finished events (2026-10-02) ─────────────────────────
+eq(recapPromptLink({ hubType: 'movie', eventId: 42 }), '/movies?event=42', 'finished screening -> Show Time landing (opens past events), not /screenings')
+eq(recapPromptLink({ hubType: 'social', eventId: 7 }), '/social/events?event=7', 'social -> same as eventDeepLink')
+eq(recapPromptLink({ hubType: 'special', eventId: 8 }), '/special-events/events?event=8', 'special -> same as eventDeepLink')
+eq(recapPromptLink({ hubType: 'space', eventId: 9 }), '/spaces/scheduled?event=9', 'space -> same as eventDeepLink')
+eq(recapPromptLink({ hubType: 'club', eventId: 5, clubId: 'c1', clubSlug: 'book-club' }), '/clubs/book-club?event=5', 'club event -> its club page')
+eq(recapPromptLink({ hubType: 'movie', eventId: 5, clubId: 'c1', clubSlug: 'movie-buffs' }), '/clubs/movie-buffs?event=5', 'club wins over hub_type, even movie')
 
 console.log(`eventNav: ${pass} passed, ${fail} failed`)
 if (fail) process.exit(1)

@@ -858,6 +858,14 @@ export default function HelpGuidePage() {
                 event's Total Seats. Residents self-booking through the app still get the normal
                 per-booking cap.
               </Step>
+              <Step>
+                The morning after an event you coordinated finishes, you'll get a{" "}
+                <strong>📰 Share the highlights</strong> alert. Tap it to open the event, then tap{" "}
+                <strong>📰 Write a Happenings News post about this event</strong> in the Coordinator
+                panel to share a few photos and highlights with everyone. It's sent once per event,
+                and not at all if a recap has already been posted. (An event with no End Time counts
+                as finished at the end of its day.)
+              </Step>
             </Subsection>
           </Section>
 
@@ -993,6 +1001,14 @@ export default function HelpGuidePage() {
                 admin/Owner/coordinator, you can bring in as many seats as you need, up to the
                 event's Total Seats. Residents self-booking through the app still get the normal
                 per-booking cap.
+              </Step>
+              <Step>
+                The morning after an event you coordinated finishes, you'll get a{" "}
+                <strong>📰 Share the highlights</strong> alert. Tap it to open the event, then tap{" "}
+                <strong>📰 Write a Happenings News post about this event</strong> in the Coordinator
+                panel to share a few photos and highlights with everyone. It's sent once per event,
+                and not at all if a recap has already been posted. (An event with no End Time counts
+                as finished at the end of its day.)
               </Step>
             </Subsection>
           </Section>
@@ -1150,6 +1166,14 @@ export default function HelpGuidePage() {
                 admin/Owner/coordinator, you can bring in as many seats as you need, up to the
                 event's Total Seats. Residents self-booking through the app still get the normal
                 per-booking cap.
+              </Step>
+              <Step>
+                The morning after an event you coordinated finishes, you'll get a{" "}
+                <strong>📰 Share the highlights</strong> alert. Tap it to open the event, then tap{" "}
+                <strong>📰 Write a Happenings News post about this event</strong> in the Coordinator
+                panel to share a few photos and highlights with everyone. It's sent once per event,
+                and not at all if a recap has already been posted. (An event with no End Time counts
+                as finished at the end of its day.)
               </Step>
             </Subsection>
           </Section>
@@ -1526,6 +1550,14 @@ export default function HelpGuidePage() {
                 admin/Owner/coordinator, you can bring in as many seats as you need, up to the
                 event's Total Seats. Residents self-booking through the app still get the normal
                 per-booking cap.
+              </Step>
+              <Step>
+                The morning after an event you coordinated finishes, you'll get a{" "}
+                <strong>📰 Share the highlights</strong> alert. Tap it to open the event, then tap{" "}
+                <strong>📰 Write a Happenings News post about this event</strong> in the Coordinator
+                panel to share a few photos and highlights with everyone. It's sent once per event,
+                and not at all if a recap has already been posted. (An event with no End Time counts
+                as finished at the end of its day.)
               </Step>
             </Subsection>
           </Section>
