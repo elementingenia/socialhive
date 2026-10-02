@@ -132,6 +132,14 @@ const RAW_SECTIONS = [
       { title: "Home banner vs. Club notices", id: "sub-notices-ref" },
     ],
   },
+  {
+    id: "interests", num: 13, title: "Interests — \"Ask me about\" (Admin › Interests)",
+    subs: [
+      { title: "What residents see", id: "sub-int-what" },
+      { title: "Reviewing suggestions — Approve, Merge, Reject", id: "sub-int-review" },
+      { title: "Managing the list — Add, Rename, Retire", id: "sub-int-list" },
+    ],
+  },
 ]
 
 const SECTIONS = (() => {
@@ -1025,6 +1033,46 @@ export default function AdminGuidePage() {
                 that looks unfinished or doesn't seem to do anything, it isn't one of the two systems
                 above; flag it rather than assuming it's how to post something.
               </InfoBox>
+            </Subsection>
+          </Section>
+
+          <Section id="interests" num={13} title={'Interests — "Ask me about" (Admin › Interests)'}>
+            <Subsection id="sub-int-what" title="What residents see (added 2026-10-02)">
+              <Step>
+                Residents tick interests on their Profile under <strong>Ask me about</strong> (up to 8).
+                Approved interests show on their card in Info › Contacts as <em>Ask me about: …</em> and
+                are found by Contacts search.
+              </Step>
+              <Step>
+                A resident with <strong>Hide my name</strong> on has their interests locked and hidden
+                from everyone, admins included. Their picks are kept and reappear if they turn it off.
+                This is enforced on the server, not just on screen.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-int-review" title="Reviewing suggestions — Approve, Merge, Reject">
+              <Step>
+                A resident can type an interest that isn&apos;t on the list. It goes to{" "}
+                <strong>Admin › Interests</strong> under <strong>Waiting for review</strong>, showing who
+                suggested it and how many residents chose it. Until it&apos;s approved, only those
+                residents see it. A red number on the Admin button and the Interests tile shows how
+                many are waiting, and admins get one notification each morning (around 8am) when new
+                ones have arrived.
+              </Step>
+              <Step>
+                <strong>Approve</strong> adds it to the list as is. <strong>Merge into…</strong> moves
+                everyone who chose it onto an existing interest you pick (use this for near-duplicates
+                like &quot;Veggies&quot; → Gardening). <strong>Reject</strong> removes it from everyone
+                who chose it. In each case those residents get an in-app notice (no phone alert).
+              </Step>
+            </Subsection>
+            <Subsection id="sub-int-list" title="Managing the list — Add, Rename, Retire">
+              <Step>
+                <strong>Add</strong> puts a new interest straight on the list. <strong>Rename</strong>{" "}
+                changes the wording everywhere at once — residents keep their tick.{" "}
+                <strong>Retire</strong> hides an interest from Profile, Contacts and search but keeps
+                residents&apos; picks; <strong>Restore</strong> (under Retired) brings it back with
+                those picks intact.
+              </Step>
             </Subsection>
           </Section>
 

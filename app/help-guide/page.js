@@ -61,6 +61,7 @@ const RAW_SECTIONS = [
       { title: "Updating your profile", id: "sub-profile-update" },
       { title: "Changing your PIN",     id: "sub-profile-pin" },
       { title: "The weekly digest",     id: "sub-profile-digest" },
+      { title: "Ask me about — your interests", id: "sub-profile-interests" },
     ],
   },
   {
@@ -680,6 +681,31 @@ export default function HelpGuidePage() {
                 tap Save. In a quiet week with nothing on, it isn't sent at all.
               </Step>
             </Subsection>
+
+            <Subsection id="sub-profile-interests" title="Ask me about — your interests">
+              <Step>
+                Open <strong>Update Profile</strong> and find <strong>Ask me about</strong>. Tap any
+                interest you&apos;re happy for neighbours to ask you about — for example Gardening,
+                Bridge or Computers and phones — then tap <strong>Save Profile</strong>. Tap it again
+                to untick it. You can choose up to 8.
+              </Step>
+              <Step>
+                Your interests show on your card in <strong>Info › Contacts</strong>, and anyone
+                searching Contacts for that word will find you.
+              </Step>
+              <Step>
+                Not listed? Type it in the <strong>Suggest another</strong> box and tap{" "}
+                <strong>Suggest</strong>. It&apos;s sent to the admins straight away and shows on your
+                profile as <em>awaiting approval</em> — nobody else sees it until it&apos;s approved.
+                You&apos;ll get a notice when it&apos;s been added, combined with an existing interest,
+                or not added.
+              </Step>
+              <InfoBox>
+                💡 If <strong>Hide my name</strong> is on, your interests are locked and not shown to
+                anyone. Anything you&apos;ve already chosen is kept and appears again if you turn
+                Hide my name off.
+              </InfoBox>
+            </Subsection>
           </Section>
 
           {/* ── 3. MOVIES ── */}
@@ -1210,6 +1236,12 @@ export default function HelpGuidePage() {
                 A <strong>Sort</strong> option above the search box lets you list the contacts by{" "}
                 <strong>House #</strong> (lowest to highest — the default) or by <strong>Name</strong>{" "}
                 (A to Z), whichever is easier to scan for what you're looking for.
+              </Step>
+              <Step>
+                Some residents list things they&apos;re happy to help with, shown on their card as{" "}
+                <strong>Ask me about</strong>. Type an interest into the Search box — for example
+                &quot;bridge&quot; or &quot;gardening&quot; — to find everyone who listed it. To add your
+                own, see <em>Ask me about — your interests</em> under your profile.
               </Step>
             </Subsection>
 

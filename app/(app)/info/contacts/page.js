@@ -9,6 +9,8 @@ import { sydneyTodayStr } from "@/lib/date"
 import { isExternalContact, displayRecipientName } from "@/lib/categoryQuestions"
 import { resolveMemberName } from "@/lib/memberName"
 import AskQuestion from "@/components/AskQuestion"
+import { authedFetch } from "@/lib/getAuthToken"
+import { interestsLine } from "@/lib/interests"
 
 const secondaryButtonStyle = {
   padding: "0.5rem 0.9rem", borderRadius: 10, border: "1px solid var(--border)",
@@ -153,6 +155,14 @@ function ContactCard({ contact, badges = [], external = false, isResident = true
         // any hub colour -- see app/globals.css for the contrast check.
         <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--role-accent)", marginTop: "0.15rem" }}>
           {contact.title}
+        </div>
+      )}
+      {/* "Ask me about" (backlog B3). Approved chips only, never for a
+          Private resident -- both enforced server-side by
+          /api/interests/directory. Nothing rendered when empty. */}
+      {contact.interests?.length > 0 && (
+        <div style={{ fontSize: "0.78rem", color: "var(--text)", marginTop: "0.15rem", lineHeight: 1.35 }}>
+          <span style={{ color: "var(--text-dim)" }}>Ask me about: </span>{interestsLine(contact.interests)}
         </div>
       )}
       {contact.realName && (
@@ -520,6 +530,9 @@ export default function ContactsPage() {
   // lowest to highest)"), Name is the alternative. Not persisted across
   // visits -- always starts on the default each time the page loads.
   const [sortMode, setSortMode]     = useState("house")
+  // { member_id: ["Bridge", ...] } -- approved interests, Private residents
+  // already stripped server-side (backlog B3).
+  const [interests, setInterests]   = useState({})
 
   const load = useCallback(async () => {
     const [catRes, memberRes, contactRes, inviteRes] = await Promise.all([
@@ -535,6 +548,12 @@ export default function ContactsPage() {
     setContacts(contactRes.data || [])
     setInviteCode(inviteRes.data?.value || "")
     setLoading(false)
+    // Non-blocking: the directory works without it; cards just gain their
+    // "Ask me about" line once it arrives.
+    authedFetch("/api/interests/directory")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setInterests(d?.directory || {}))
+      .catch(() => {})
   }, [])
 
   useEffect(() => { load() }, [load])
@@ -612,6 +631,7 @@ export default function ContactsPage() {
         house_number: maskedForViewer ? null : m.house_number,
         phone: maskedForViewer ? null : (m.phone || null),
         title: maskedForViewer ? null : (linked?.title || null),
+        interests: maskedForViewer ? null : (interests[m.id] || null),
         categoryIds: [residentsId, ...((linked?.contact_category_members) || []).map(x => x.category_id)].filter(Boolean),
         isMember: true, member: m,
         // Every active member is implicitly a Resident (migration 029), so a
@@ -640,7 +660,7 @@ export default function ContactsPage() {
       badges: isAdmin && !c.active ? ["Hidden"] : [],
     }))
     return [...memberEntries, ...contactEntries].sort((a, b) => a.name.localeCompare(b.name))
-  }, [members, displayContacts, contactByMemberId, residentsId, isAdmin])
+  }, [members, displayContacts, contactByMemberId, residentsId, isAdmin, interests])
 
   // Mirrors the server-side gate in lib/questionRouting.js's askableCategories:
   // active + askable + at least one member with a login. The extra clause here
@@ -682,7 +702,7 @@ export default function ContactsPage() {
     if (!q) return categoryFiltered
     const digits = q.replace(/\D/g, "")
     return categoryFiltered.filter(e => {
-      const haystack = [e.name, e.searchName, e.title, e.email, e.isResident ? e.house_number : null]
+      const haystack = [e.name, e.searchName, e.title, e.email, e.isResident ? e.house_number : null, ...(e.interests || [])]
         .filter(Boolean).join(" ").toLowerCase()
       if (haystack.includes(q)) return true
       if (digits && e.phone && e.phone.replace(/\D/g, "").includes(digits)) return true

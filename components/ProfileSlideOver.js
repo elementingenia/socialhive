@@ -7,6 +7,7 @@ import { BAR_ENABLED } from "@/lib/features"
 import { isPushSupported, isIOS, isStandalone, getExistingSubscription, subscribeToPush, unsubscribeFromPush } from "@/lib/pushClient"
 import { formatPhoneInput } from "@/lib/phone"
 import { isValidDisplayName } from "@/lib/memberName"
+import InterestsPicker from "@/components/InterestsPicker"
 
 // Clearance below the sticky header so the avatar pill stays visible
 const TOP_OFFSET = 72 // px — covers both home (~68px) and sub-page (~43px) headers
@@ -156,6 +157,10 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
   const [digestAvailable, setDigestAvailable] = useState(false)
   const [barOptIn, setBarOptIn] = useState(false)
   const [avatar,   setAvatar]   = useState(null)
+  // "Ask me about" (backlog B3). Saved via its own route on Save; only sent
+  // when it actually changed, and never while Hide my name is on (D2).
+  const [interestIds,     setInterestIds]     = useState([])
+  const [interestsLoaded, setInterestsLoaded] = useState(null)
   const [loading,  setLoading]  = useState(false)
   const [saving,   setSaving]   = useState(false)
   const [toast,    setToast]    = useState(null)
@@ -212,6 +217,19 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name.trim(), display_name: displayName.trim(), email: email.trim(), house_number: house.trim(), phone: phone.trim(), hide_name: hideName, weekly_digest: weeklyDigest, bar_opt_in: barOptIn, avatar_url: avatar }),
     })
+    if (res.ok && !hideName && interestsLoaded &&
+        [...interestIds].sort().join() !== [...interestsLoaded].sort().join()) {
+      const ir = await authedFetch("/api/interests", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tag_ids: interestIds }),
+      })
+      if (!ir.ok) {
+        setSaving(false)
+        const err = await ir.json().catch(() => ({}))
+        showToast(err.error || "Profile saved, but your interests didn't -- try again", false)
+        return
+      }
+    }
     setSaving(false)
     if (res.ok) {
       refreshUser?.()
@@ -303,6 +321,13 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
                   <input value={phone} onChange={e => setPhone(formatPhoneInput(e.target.value))} style={inputStyle} placeholder="0400 000 000" type="tel" inputMode="numeric" maxLength={12} />
                 </div>
               </div>
+
+              <InterestsPicker
+                value={interestIds}
+                onChange={setInterestIds}
+                onLoaded={ids => { setInterestIds(ids); setInterestsLoaded(ids) }}
+                locked={hideName}
+              />
 
               {/* Toggles */}
               <div style={{ borderTop: "1px solid var(--border)", marginTop: "0.75rem" }}>

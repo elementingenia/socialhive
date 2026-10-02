@@ -377,6 +377,17 @@ export function UptakeIcon({ size = 26 }) {
   )
 }
 
+// Tag with a hole — Admin > Interests ("Ask me about" chips, backlog B3)
+export function InterestsIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 8 10 L 32 10 L 62 40 L 38 64 L 8 34 Z
+           M 15 22 a 5 5 0 1 0 10 0 a 5 5 0 1 0 -10 0 Z"/>
+    </svg>
+  )
+}
+
 // Ask-a-question / message icon (the same one used on the top-nav Questions
 // button) — stroke-based, its own 24×24 viewBox, deliberately not redrawn
 // into the 70×70 fill convention above so it stays pixel-identical to the
