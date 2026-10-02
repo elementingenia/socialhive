@@ -5,7 +5,7 @@
 // UTC date, which is the wrong calendar day for part or all of every Sydney
 // day). Run: node tests/unit/date.test.mjs
 
-import { sydneyTodayStr, sydneyNowTimeStr, sydneyDateStrPlusDays, isEventPast, isEventUpcoming, localDateFromStr } from '../../lib/date.js'
+import { sydneyTodayStr, sydneyNowTimeStr, sydneyDateStrPlusDays, isEventPast, isEventUpcoming, localDateFromStr, eventHasEnded } from '../../lib/date.js'
 
 let pass = 0, fail = 0
 const ok = (cond, msg) => { cond ? pass++ : (fail++, console.log('  ✗', msg)) }
@@ -66,6 +66,22 @@ const d = localDateFromStr('2026-08-09')
 ok(d instanceof Date && d.getFullYear() === 2026 && d.getMonth() === 7 && d.getDate() === 9, 'localDateFromStr parses Y/M/D components directly (no UTC-string parsing)')
 ok(localDateFromStr('') === null, 'localDateFromStr("") => null, no crash')
 ok(localDateFromStr(null) === null, 'localDateFromStr(null) => null, no crash')
+
+// eventHasEnded (2026-10-02, recap nudge) -- FINISHED, not just started.
+{
+  // 2026-10-02 19:30 Sydney (AEST, UTC+10)
+  const evening = new Date('2026-10-02T09:30:00Z')
+  ok(eventHasEnded({ event_date: '2026-10-01', event_time: '18:00' }, evening) === true, 'eventHasEnded: yesterday -> ended')
+  ok(eventHasEnded({ event_date: '2026-10-02', event_time: '17:00', event_end_time: '19:00' }, evening) === true, 'eventHasEnded: today, End Time passed -> ended')
+  ok(eventHasEnded({ event_date: '2026-10-02', event_time: '17:00', event_end_time: '19:30:00' }, evening) === true, 'eventHasEnded: End Time exactly now (HH:MM:SS) -> ended')
+  ok(eventHasEnded({ event_date: '2026-10-02', event_time: '18:00', event_end_time: '21:00' }, evening) === false, 'eventHasEnded: started but still running -> NOT ended (unlike isEventPast)')
+  ok(isEventPast({ event_date: '2026-10-02', event_time: '18:00' }, evening) === true, 'contrast: isEventPast is already true for that running event')
+  ok(eventHasEnded({ event_date: '2026-10-02', event_time: '09:00' }, evening) === false, 'eventHasEnded: today with no End Time -> not ended until the day is over')
+  ok(eventHasEnded({ event_date: '2026-10-03', event_time: '09:00', event_end_time: '10:00' }, evening) === false, 'eventHasEnded: tomorrow -> not ended')
+  // Sydney/UTC lag: 08:00 Sydney on the 3rd is still the 2nd in UTC.
+  ok(eventHasEnded({ event_date: '2026-10-02' }, new Date('2026-10-02T22:00:00Z')) === true, 'eventHasEnded: uses Sydney date, not UTC date')
+  ok(eventHasEnded(null) === false && eventHasEnded({}) === false, 'eventHasEnded: no event/date -> false, no crash')
+}
 
 console.log(`\nlib/date.js: ${pass} passed, ${fail} failed`)
 if (fail > 0) process.exit(1)

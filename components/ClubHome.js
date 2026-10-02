@@ -14,7 +14,7 @@ import { authedFetch } from "@/lib/getAuthToken"
 import { useOwners } from "@/lib/useOwners"
 import { clubCaps } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
-import { sydneyTodayStr, dateStrPlusDays } from "@/lib/date"
+import { sydneyTodayStr, dateStrPlusDays, isEventPast } from "@/lib/date"
 import { bookingsClosed } from "@/lib/booking"
 import EventCoordinators from "@/components/EventCoordinators"
 import PastEventsAccordion from "@/components/PastEventsAccordion"
@@ -3058,8 +3058,19 @@ export default function ClubHome({ club }) {
     if (!evId) return
     deepLinkHandled.current = true
     const match = events.find(ev => String(ev.id) === evId)
-    if (match) openSlideOut(match)
-    else showToast("This event isn't available anymore", "error")
+    if (match) { openSlideOut(match); return }
+    // Not in the upcoming list -- it may be a finished event (e.g. the
+    // post-event Happenings News recap nudge, 2026-10-02, which links the
+    // coordinator straight to the event). Open it by id, the same way the
+    // Past Events accordion does, but only if it's genuinely this club's,
+    // not cancelled (archived), and already in the past; otherwise it's a
+    // dead link as before.
+    supabase.from("events").select("id, club_id, archived, event_date, event_time")
+      .eq("id", evId).maybeSingle()
+      .then(({ data }) => {
+        if (data && data.club_id === club?.id && !data.archived && isEventPast(data)) openEventById(data.id)
+        else showToast("This event isn't available anymore", "error")
+      })
   }, [loading, events])
 
   async function signUp(event) {

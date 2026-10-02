@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { FormattedText } from '@/lib/textFormatter'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
@@ -550,6 +550,21 @@ export default function MoviesHomePage() {
       my_bookings: (myRows || []).map(b => ({ status: b.status, seats: b.seats || 1, payment_status: b.payment_status, booked_at: b.booked_at })),
     })
   }
+
+  // ?event=<id> deep link (2026-10-02) -- used by the post-event Happenings
+  // News recap nudge (lib/eventNav.js recapPromptLink). /screenings can only
+  // open UPCOMING screenings, so a finished one lands here instead, where
+  // openSlideOutForEvent opens any screening by id -- the same opener the
+  // Past Events accordion below already relies on. Waits for memberId (the
+  // opener needs it) and only runs once per page load.
+  const deepLinkHandled = useRef(false)
+  useEffect(() => {
+    if (loading || !memberId || deepLinkHandled.current) return
+    const evId = new URLSearchParams(window.location.search).get('event')
+    if (!evId) return
+    deepLinkHandled.current = true
+    openSlideOutForEvent(evId)
+  }, [loading, memberId])
 
   if (loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh' }}><div className="spinner" /></div>

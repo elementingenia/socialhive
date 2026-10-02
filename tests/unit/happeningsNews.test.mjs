@@ -7,6 +7,7 @@
 import {
   isHappeningsNewsLive, isValidArchiveDelay, isValidContentLength,
   isPostDueForArchive, originLabel, MAX_CONTENT_LENGTH, ARCHIVE_DELAY_OPTIONS,
+  recapPromptDue, recapPromptRecipients, recapPromptMessage, RECAP_PROMPT_LOOKBACK_DAYS,
 } from '../../lib/happeningsNewsTier.js'
 
 let pass = 0, fail = 0
@@ -72,6 +73,50 @@ ok(originLabel({ hubType: 'space' }) === 'Book a Space', 'space hub -> Book a Sp
 ok(originLabel({ hubType: 'club', clubName: 'Book Club' }) === 'Book Club', 'club event -> the specific club name, not the generic hub label')
 ok(originLabel({ hubType: 'unknown_future_hub' }) === 'unknown_future_hub', 'unmapped hub_type falls back to the raw value, not blank')
 ok(originLabel({}) === 'Happenings', 'no hub_type or club at all -> generic fallback, never blank')
+
+
+// ── recapPromptDue: post-event recap nudge (2026-10-02) ─────────────────────
+{
+  // 2026-10-02 09:00 AEST (Sydney is UTC+10 until DST starts 2026-10-04)
+  const now = new Date('2026-10-01T23:00:00Z')
+  const floor = '2026-09-29'
+  const base = { event_date: '2026-10-01', event_time: '18:00', event_end_time: '21:00', archived: false, recap_prompted_at: null, happenings_news_posts: [] }
+  ok(recapPromptDue(base, floor, now) === true, 'yesterday, ended, no post, not prompted -> due')
+  ok(recapPromptDue({ ...base, archived: true }, floor, now) === false, 'cancelled (archived) -> not due')
+  ok(recapPromptDue({ ...base, recap_prompted_at: '2026-10-01T22:00:00Z' }, floor, now) === false, 'already prompted -> not due (once-only)')
+  ok(recapPromptDue({ ...base, happenings_news_posts: [{ id: 'p1' }] }, floor, now) === false, 'post already exists -> not due')
+  ok(recapPromptDue({ ...base, happenings_news_posts: { id: 'p1' } }, floor, now) === false, 'post as single embedded object -> not due')
+  ok(recapPromptDue({ ...base, happenings_news_posts: null }, floor, now) === true, 'null embed = no post -> due')
+  ok(recapPromptDue({ ...base, event_date: '2026-09-28' }, floor, now) === false, 'older than the lookback floor -> not due (no flood on first run)')
+  ok(recapPromptDue({ ...base, event_date: '2026-09-29' }, floor, now) === true, 'exactly on the floor -> due')
+  ok(recapPromptDue({ ...base, event_date: '2026-10-03' }, floor, now) === false, 'future event -> not due')
+  ok(recapPromptDue({ ...base, event_date: '2026-10-02', event_end_time: null }, floor, now) === false, 'today with no End Time -> not finished until end of day')
+  ok(recapPromptDue({ ...base, event_date: '2026-10-02', event_time: '07:00', event_end_time: '08:30' }, floor, now) === true, 'today, End Time already passed -> due')
+  ok(recapPromptDue({ ...base, event_date: '2026-10-02', event_time: '08:00', event_end_time: '10:00' }, floor, now) === false, 'today, still running -> not due')
+  ok(recapPromptDue({ ...base, event_end_time: null }, floor, now) === true, 'yesterday with no End Time -> due')
+  ok(recapPromptDue(null, floor, now) === false, 'no event -> not due, not a crash')
+  ok(RECAP_PROMPT_LOOKBACK_DAYS === 3, 'lookback is 3 days')
+}
+
+// ── recapPromptRecipients: current coordinators only, de-duplicated ─────────
+{
+  const ev = { event_coordinators: [
+    { member_id: 'a', replaced_at: null },
+    { member_id: 'b', replaced_at: '2026-09-01T00:00:00Z' },
+    { member_id: 'a', replaced_at: null },
+    { member_id: 'c', replaced_at: null },
+    { member_id: null, replaced_at: null },
+  ] }
+  const r = recapPromptRecipients(ev)
+  ok(r.length === 2 && r.includes('a') && r.includes('c'), 'only current ECs, no duplicates, no nulls')
+  ok(recapPromptRecipients({}).length === 0, 'no coordinators -> nobody')
+  ok(recapPromptRecipients(null).length === 0, 'no event -> nobody, not a crash')
+}
+
+// ── recapPromptMessage ──────────────────────────────────────────────────────
+ok(recapPromptMessage('Trivia Night').includes('Trivia Night is a wrap'), 'message names the event')
+ok(recapPromptMessage(null).includes('Your event is a wrap'), 'missing title falls back, never "null"')
+ok(recapPromptMessage('X').includes('Happenings News'), 'message mentions Happenings News')
 
 console.log(`happeningsNews.test.mjs: ${pass} passed, ${fail} failed`)
 if (fail > 0) process.exit(1)
