@@ -96,8 +96,14 @@ export default function InterestsPicker({ value, onChange, onLoaded, locked }) {
                   style={{
                     minHeight: 36, padding: "0.35rem 0.75rem", borderRadius: 999, fontFamily: "inherit",
                     fontSize: "0.82rem", fontWeight: on ? 700 : 500, cursor: locked ? "not-allowed" : "pointer",
-                    border: `1.5px ${isPending ? "dashed" : "solid"} ${on ? "var(--teal)" : "var(--border)"}`,
-                    background: on ? "var(--teal)" : "var(--surface)", color: on ? "#fff" : "var(--text)",
+                    // Pending suggestions are amber, not teal (Iain, 2026-10-03:
+                    // "needs differentiating beyond the text") -- amber is the
+                    // app's existing "waiting on someone" colour. Dashed border
+                    // kept as a second cue. Text #78350f on --amber-light is
+                    // ~7:1 contrast and fixed, so it holds in dark mode too.
+                    border: `1.5px ${isPending ? "dashed" : "solid"} ${isPending ? "var(--amber-dark)" : on ? "var(--teal)" : "var(--border)"}`,
+                    background: isPending ? (on ? "var(--amber-light)" : "var(--surface)") : on ? "var(--teal)" : "var(--surface)",
+                    color: isPending ? (on ? "#78350f" : "var(--text)") : on ? "#fff" : "var(--text)",
                   }}>
                   {on ? "✓ " : ""}{t.label}{isPending ? " · awaiting approval" : ""}
                 </button>

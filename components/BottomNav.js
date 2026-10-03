@@ -43,10 +43,11 @@ const HUB_CONFIG = {
     colour: "#4e7aab",
     items: [
       { path: "/info/contacts",  label: "Contacts",  Icon: ContactsIcon  },
-      { path: "/info/documents", label: "Documents", Icon: DocumentsIcon },
       // Browse "Ask me about" by interest (2026-10-03). Same tag icon as
-      // Admin > Interests -- one canonical icon for the concept.
+      // Admin > Interests -- one canonical icon for the concept. Sits next
+      // to Contacts (Iain: "Contacts and Interests are together").
       { path: "/info/interests", label: "Interests", Icon: InterestsIcon },
+      { path: "/info/documents", label: "Documents", Icon: DocumentsIcon },
     ],
   },
   // Library Home was removed 2026-09-10 -- /booklibrary/books is now the
