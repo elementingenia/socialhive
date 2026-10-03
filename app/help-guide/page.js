@@ -1284,9 +1284,18 @@ export default function HelpGuidePage() {
               <Step>
                 Tap <strong>Documents</strong> (from the Info section) to browse shared community
                 files — meeting minutes, policies, forms and more — organised into categories (a document can
-                appear under more than one). Use the
-                category filter or the <strong>Search</strong> box to find what you need, then tap a
-                document to view or download it.
+                appear under more than one). The newest documents are always at the top.
+              </Step>
+              <Step>
+                To find something, type at least two letters into the <strong>Search documents</strong> box at
+                the top — it looks at document names, descriptions and categories. Or tap a category pill to see
+                just that category. Tap a document to view or download it.
+              </Step>
+              <Step>
+                <strong>New Features:</strong> when something new is added to the app, a short guide to it is
+                filed in the <strong>📁 New Features</strong> folder at the bottom of the list (or tap the{" "}
+                <strong>✨ New Features</strong> pill). You&apos;ll also get a notification — tap it to open that
+                guide straight away.
               </Step>
             </Subsection>
           </Section>
@@ -1381,7 +1390,8 @@ export default function HelpGuidePage() {
                 If you know roughly when something is happening but aren't sure which section of the
                 app it's in — Show Time, Social Hive, a Group or Club, or a Special Event — you don't
                 need to be on the Calendar at all. A small <strong>🔍</strong> button floats in the
-                bottom-right corner of every screen — tap it from wherever you are.
+                bottom-right corner of the screen — tap it from wherever you are. (It&apos;s hidden on the
+                Info pages, which have their own search.)
               </Step>
               <Step>
                 Type any part of the event's name (for example "Melbourne Cup") and matching events

@@ -43,6 +43,14 @@
     {
       "path": "/api/cron/interests-review-alert",
       "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/cron/new-features-announce",
+      "schedule": "30 21 * * *"
+    },
+    {
+      "path": "/api/cron/new-features-announce",
+      "schedule": "30 22 * * *"
     }
   ]
 }

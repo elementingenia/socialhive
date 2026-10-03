@@ -401,6 +401,18 @@ export function StreetsIcon({ size = 26 }) {
   )
 }
 
+// Four-point sparkle -- Admin > New Features (feature announcements,
+// migration 123). Same 70x70 fill convention as the icons above.
+export function NewFeaturesIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fill="currentColor"
+        d="M 30 6 L 36 26 L 56 32 L 36 38 L 30 58 L 24 38 L 4 32 L 24 26 Z
+           M 54 44 L 57 52 L 65 55 L 57 58 L 54 66 L 51 58 L 43 55 L 51 52 Z"/>
+    </svg>
+  )
+}
+
 // Ask-a-question / message icon (the same one used on the top-nav Questions
 // button) — stroke-based, its own 24×24 viewBox, deliberately not redrawn
 // into the 70×70 fill convention above so it stays pixel-identical to the

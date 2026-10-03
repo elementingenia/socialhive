@@ -1,10 +1,11 @@
 "use client"
 import { useState, useRef, useCallback } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { authedFetch } from "@/lib/getAuthToken"
 import { sydneyTodayStr, sydneyDateStrPlusDays } from "@/lib/date"
 import { SearchResultsList, eventMatchesQuery } from "@/components/CalendarView"
 import { eventDeepLinkFor } from "@/lib/eventNav"
+import { isInfoPath } from "@/lib/newFeatures"
 
 // Global "Find an event" button (Iain, 2026-09-22): Calendar's own Find
 // pill only exists inside Calendar's filter row, so it was invisible from
@@ -25,6 +26,7 @@ import { eventDeepLinkFor } from "@/lib/eventNav"
 // the first open.
 export default function FindButton() {
   const router = useRouter()
+  const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
   const [events, setEvents] = useState([])
@@ -72,6 +74,11 @@ export default function FindButton() {
   const results = words.length === 0 ? [] : events
     .filter(ev => eventMatchesQuery(ev, words))
     .sort((a, b) => a.event_date.localeCompare(b.event_date) || (a.event_time || "").localeCompare(b.event_time || ""))
+
+  // Hidden on Info and its pages (Contacts, Interests, Documents) -- Iain,
+  // 2026-10-03: Documents has its own search, and an events Find button
+  // there just confuses which search box does what.
+  if (isInfoPath(pathname)) return null
 
   return (
     <>
