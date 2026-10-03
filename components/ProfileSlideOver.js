@@ -8,6 +8,9 @@ import { isPushSupported, isIOS, isStandalone, getExistingSubscription, subscrib
 import { formatPhoneInput } from "@/lib/phone"
 import { isValidDisplayName } from "@/lib/memberName"
 import InterestsPicker from "@/components/InterestsPicker"
+import StreetPicker from "@/components/StreetPicker"
+import { useStreets } from "@/lib/useStreets"
+import { houseNumberInput, normaliseHouseNumber } from "@/lib/address"
 
 // Clearance below the sticky header so the avatar pill stays visible
 const TOP_OFFSET = 72 // px — covers both home (~68px) and sub-page (~43px) headers
@@ -148,6 +151,8 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
   const [displayName, setDisplayName] = useState("")
   const [email,    setEmail]    = useState("")
   const [house,    setHouse]    = useState("")
+  const [streetId, setStreetId] = useState(null)
+  const streets = useStreets()
   const [phone,    setPhone]    = useState("")
   const [hideName, setHideName] = useState(false)
   const [weeklyDigest, setWeeklyDigest] = useState(true)
@@ -189,6 +194,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
         setDisplayName(d.display_name || d.name || "")
         setEmail(d.email || "")
         setHouse(d.house_number || "")
+        setStreetId(d.street_id || null)
         setPhone(d.phone || "")
         setHideName(!!d.hide_name)
         setWeeklyDigest(d.weekly_digest !== false)
@@ -211,11 +217,13 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
   const handleSave = async () => {
     if (!name.trim()) { showToast("Your name is required", false); return }
     if (!isValidDisplayName(displayName)) { showToast("Display name needs at least 3 letters", false); return }
+    const houseCheck = normaliseHouseNumber(house)
+    if (!houseCheck.ok) { showToast(houseCheck.error, false); return }
     setSaving(true)
     const res = await authedFetch("/api/profile", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), display_name: displayName.trim(), email: email.trim(), house_number: house.trim(), phone: phone.trim(), hide_name: hideName, weekly_digest: weeklyDigest, bar_opt_in: barOptIn, avatar_url: avatar }),
+      body: JSON.stringify({ name: name.trim(), display_name: displayName.trim(), email: email.trim(), house_number: houseCheck.value, street_id: streetId, phone: phone.trim(), hide_name: hideName, weekly_digest: weeklyDigest, bar_opt_in: barOptIn, avatar_url: avatar }),
     })
     if (res.ok && !hideName && interestsLoaded &&
         [...interestIds].sort().join() !== [...interestsLoaded].sort().join()) {
@@ -312,10 +320,21 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
                   <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.3rem" }}>Email <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>(optional)</span></label>
                   <input value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} placeholder="your@email.com" type="email" />
                 </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.3rem" }}>House number <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>(optional)</span></label>
-                  <input value={house} onChange={e => setHouse(e.target.value)} style={inputStyle} placeholder="e.g. 14" />
+                {/* House number + street (migration 122, Iain 2026-10-03). Number
+                    is digits only; street is picked from the admin list, never
+                    typed -- house numbers here are scattered, so neighbours find
+                    each other by street. Side by side, wrapping on a narrow phone. */}
+                <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+                  <div style={{ flex: "0 0 7rem" }}>
+                    <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.3rem" }}>House number</label>
+                    <input value={house} onChange={e => setHouse(houseNumberInput(e.target.value))} style={inputStyle} placeholder="e.g. 14" inputMode="numeric" pattern="[0-9]*" />
+                  </div>
+                  <div style={{ flex: "1 1 10rem", minWidth: 0 }}>
+                    <StreetPicker streets={streets} value={streetId} onChange={setStreetId} style={inputStyle}
+                      label="Street" labelStyle={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.3rem" }} />
+                  </div>
                 </div>
+                <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "-0.35rem" }}>Optional. Numbers only{streets?.length ? " -- choose your street from the list." : "."}</div>
                 <div>
                   <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.3rem" }}>Phone <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>(optional)</span></label>
                   <input value={phone} onChange={e => setPhone(formatPhoneInput(e.target.value))} style={inputStyle} placeholder="0400 000 000" type="tel" inputMode="numeric" maxLength={12} />

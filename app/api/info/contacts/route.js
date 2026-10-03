@@ -2,6 +2,24 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { isValidDisplayName } from "@/lib/memberName"
 import { buildContactsDirectory } from "@/lib/directoryPrivacy"
+import { normaliseHouseNumber, resolveStreetId } from "@/lib/address"
+import { loadStreets, withStreetNames } from "@/lib/streetsServer"
+
+// House number (whole number only) + street (must be on Admin > Streets),
+// migration 122. Mutates `fields` in place; returns an error string or null.
+async function cleanAddress(fields) {
+  if (fields.house_number !== undefined) {
+    const h = normaliseHouseNumber(fields.house_number)
+    if (!h.ok) return h.error
+    fields.house_number = h.value
+  }
+  if (fields.street_id !== undefined) {
+    const st = resolveStreetId(fields.street_id, await loadStreets(supabaseAdmin))
+    if (!st.ok) return st.error
+    fields.street_id = st.value
+  }
+  return null
+}
 
 export const dynamic = "force-dynamic"
 async function getAdminMember(token) {
@@ -28,15 +46,19 @@ export async function GET(req) {
 
   const [{ data: members, error: e1 }, { data: contacts, error: e2 }] = await Promise.all([
     supabaseAdmin.from('members')
-      .select('id, name, display_name, username, email, house_number, phone, hide_name, is_admin, is_test')
+      .select('id, name, display_name, username, email, house_number, street_id, phone, hide_name, is_admin, is_test')
       .eq('status', 'active'),
     supabaseAdmin.from('contacts')
-      .select('id, name, title, phone, email, house_number, member_id, active, display_order, contact_category_members(category_id)')
+      .select('id, name, title, phone, email, house_number, street_id, member_id, active, display_order, contact_category_members(category_id)')
       .order('display_order'),
   ])
   if (e1 || e2) return NextResponse.json({ error: 'Could not load contacts.' }, { status: 500 })
 
-  return NextResponse.json(buildContactsDirectory({ members: members || [], contacts: contacts || [], viewer }))
+  return NextResponse.json(buildContactsDirectory({
+    members: await withStreetNames(supabaseAdmin, members || []),
+    contacts: await withStreetNames(supabaseAdmin, contacts || []),
+    viewer,
+  }))
 }
 
 // POST — add contact
@@ -45,16 +67,20 @@ export async function POST(req) {
   const member = await getAdminMember(token)
   if (!member) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
 
-  const { name, title, phone, email, house_number, category_ids } = await req.json()
+  const { name, title, phone, email, house_number, street_id, category_ids } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 })
   if (!category_ids?.length) return NextResponse.json({ error: 'At least one category required' }, { status: 400 })
+  const address = { house_number, street_id }
+  const addrErr = await cleanAddress(address)
+  if (addrErr) return NextResponse.json({ error: addrErr }, { status: 400 })
 
   const { data: contact, error } = await supabaseAdmin.from('contacts').insert({
     name: name.trim(),
     title: title?.trim() || null,
     phone: phone?.trim() || null,
     email: email?.trim() || null,
-    house_number: house_number?.trim() || null,
+    house_number: address.house_number ?? null,
+    street_id: address.street_id ?? null,
   }).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
@@ -126,7 +152,11 @@ export async function PATCH(req) {
   // (isValidDisplayName -- at least 3 letters) so an admin can't save a
   // value the DB's NOT NULL/backfill contract wouldn't have allowed at
   // signup either.
-  const MEMBER_OWNED = ['email', 'house_number', 'phone', 'name', 'display_name']
+  // street_id joins the set with migration 122 (Iain, 2026-10-03).
+  const MEMBER_OWNED = ['email', 'house_number', 'street_id', 'phone', 'name', 'display_name']
+
+  const addrErr = await cleanAddress(updates)
+  if (addrErr) return NextResponse.json({ error: addrErr }, { status: 400 })
 
   if (member_id && updates.display_name !== undefined) {
     const trimmed = typeof updates.display_name === 'string' ? updates.display_name.trim() : ''

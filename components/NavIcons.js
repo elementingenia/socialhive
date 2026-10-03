@@ -388,6 +388,19 @@ export function InterestsIcon({ size = 26 }) {
   )
 }
 
+// Street sign (Admin > Streets, migration 122) -- a post with two arrow
+// signs. Same 70x70 fill convention as the icons above.
+export function StreetsIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fill="currentColor"
+        d="M 31 6 L 39 6 L 39 64 L 31 64 Z
+           M 12 14 L 52 14 L 60 21 L 52 28 L 12 28 Z
+           M 58 34 L 18 34 L 10 41 L 18 48 L 58 48 Z"/>
+    </svg>
+  )
+}
+
 // Ask-a-question / message icon (the same one used on the top-nav Questions
 // button) — stroke-based, its own 24×24 viewBox, deliberately not redrawn
 // into the 70×70 fill convention above so it stays pixel-identical to the

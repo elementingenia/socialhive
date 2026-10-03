@@ -26,6 +26,7 @@ import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, V
 import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/attendeeExport"
 import { hubPathForEvent } from "@/lib/eventShare"
 import { loginHref } from "@/lib/safeNext"
+import { formatAddress } from "@/lib/address"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1251,7 +1252,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                       <div key={m.id}
                         onClick={() => { setSelectedResident(m); setResidentResults([]); setResidentQuery("") }}
                         style={{ padding: "8px 10px", fontSize: 13, cursor: "pointer", borderBottom: "1px solid var(--border)", background: "var(--surface)" }}>
-                        {m.name}{m.house_number ? ` (#${m.house_number})` : ""}{m.username && m.username !== m.name ? ` (${m.username})` : ""}{m.type === "contact" ? " · no app account" : ""}
+                        {m.name}{(m.house_number || m.street_name) ? ` (${formatAddress(m.house_number, m.street_name)})` : ""}{m.username && m.username !== m.name ? ` (${m.username})` : ""}{m.type === "contact" ? " · no app account" : ""}
                       </div>
                     ))}
                   </div>
@@ -1973,7 +1974,7 @@ function PartyRow({ index, row, allowGuests, members, excludeIds, onChange, brin
                         setOpen(false); setQuery("")
                       }}
                       style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 11px", background: "none", border: "none", borderBottom: "1px solid var(--border)", cursor: takenAlready ? "default" : "pointer", fontSize: 14, color: "var(--text)", fontFamily: "inherit", opacity: takenAlready ? 0.45 : 1 }}>
-                      {m.name}{m.house_number ? ` (#${m.house_number})` : ""}{m.type === "contact" ? " · no app account" : ""}{takenAlready ? " · Already booked" : ""}
+                      {m.name}{(m.house_number || m.street_name) ? ` (${formatAddress(m.house_number, m.street_name)})` : ""}{m.type === "contact" ? " · no app account" : ""}{takenAlready ? " · Already booked" : ""}
                     </button>
                   )
                 })}

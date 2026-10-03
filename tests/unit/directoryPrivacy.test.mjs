@@ -9,7 +9,7 @@ let pass = 0, fail = 0
 const ok = (cond, msg) => { cond ? pass++ : (fail++, console.log('  ✗', msg)) }
 
 const pub  = { id: 'p', name: 'Pat Public', display_name: 'Pat', username: 'PatP', email: 'pat@x', phone: '0400 000 001', house_number: '12', hide_name: false }
-const priv = { id: 'q', name: 'Quinn Private', display_name: 'Quinn', username: 'QuinnP', email: 'q@x', phone: '0400 000 002', house_number: '34', hide_name: true }
+const priv = { id: 'q', name: 'Quinn Private', display_name: 'Quinn', username: 'QuinnP', email: 'q@x', phone: '0400 000 002', house_number: '34', street_id: 'st1', street_name: 'Mosaic Street', hide_name: true }
 const resident = { id: 'r', is_admin: false }
 const admin = { id: 'a', is_admin: true }
 
@@ -26,6 +26,7 @@ ok(m.masked === true, 'masked flag set')
 ok(m.name === 'Resident' && m.display_name === 'Resident', 'name and display name replaced with "Resident"')
 ok(m.username === null, 'username removed (it usually spells the real name)')
 ok(m.email === null && m.phone === null && m.house_number === null, 'email, phone and house number removed')
+ok(m.street_id === null && m.street_name === null, 'street removed too (migration 122)')
 ok(m.id === 'q' && m.hide_name === true, 'id and hide_name kept so the page can still list the card')
 m = maskMemberRow(priv, admin)
 ok(m.masked === false && m.phone === '0400 000 002' && m.name === 'Quinn Private', 'admin gets the real values')
@@ -57,10 +58,12 @@ ok(d.members.find(x => x.id === 'q').phone === '0400 000 002', 'admins get real 
 // buildResidentPicker
 let list = buildResidentPicker({ members: [pub, priv], contacts: [standalone], viewer: resident })
 ok(list.find(x => x.id === 'q').house_number === null, 'picker hides a Private house number from a resident')
+ok(list.find(x => x.id === 'q').street_name === null, 'picker hides a Private street from a resident')
 ok(list.find(x => x.id === 'p').house_number === '12', 'picker keeps non-Private house numbers')
 ok(list.find(x => x.id === 'c2').type === 'contact', 'picker includes contacts')
 list = buildResidentPicker({ members: [pub, priv], contacts: [], viewer: resident, canManageEvent: true })
 ok(list.find(x => x.id === 'q').house_number === '34', 'event managers see Private house numbers in the walk-up picker')
+ok(list.find(x => x.id === 'q').street_name === 'Mosaic Street', 'event managers see the Private street too')
 ok(list.every(x => !('email' in x) && !('phone' in x)), 'picker never carries email or phone')
 ok(list.map(x => x.name).join() === 'Pat Public,Quinn Private', 'picker sorted A-Z')
 

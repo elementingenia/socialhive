@@ -3,6 +3,7 @@ import { useState, useMemo } from "react"
 import { Sheet } from "@/components/Sheet"
 import { authedFetch } from "@/lib/getAuthToken"
 import { canInviteToEvent } from "@/lib/eventInvites"
+import { formatAddress } from "@/lib/address"
 
 // Invite a Neighbour (Iain, 2026-10-02). Sits beside Copy Link on every
 // hub's event tile. Opens the app's standard bottom Sheet: live search
@@ -33,7 +34,7 @@ export default function InviteNeighbourButton({ event, colour = "var(--amber)" }
     const pickedIds = new Set(picked.map(p => p.id))
     return candidates
       .filter(c => !pickedIds.has(c.id))
-      .filter(c => c.name.toLowerCase().includes(q) || (c.house_number || "").toLowerCase().includes(q))
+      .filter(c => c.name.toLowerCase().includes(q) || formatAddress(c.house_number, c.street_name).toLowerCase().includes(q))
       .slice(0, 20)
   }, [query, candidates, picked])
 
@@ -166,7 +167,7 @@ export default function InviteNeighbourButton({ event, colour = "var(--amber)" }
                           textAlign: "left", cursor: "pointer", fontFamily: "inherit",
                         }}>
                         <span>{c.name}</span>
-                        {c.house_number && <span style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>#{c.house_number}</span>}
+                        {(c.house_number || c.street_name) && <span style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>{formatAddress(c.house_number, c.street_name)}</span>}
                       </button>
                     ))}
                   </div>

@@ -657,6 +657,12 @@ export default function HelpGuidePage() {
                 email address, and house number. If you want to add a profile photo, tap the avatar
                 area at the top of the profile screen to choose an image.
               </Step>
+              <Step>
+                Your <strong>House number</strong> is numbers only (e.g. 92). Next to it, choose your{" "}
+                <strong>Street</strong> from the list — it helps neighbours find your home, since house
+                numbers around the village aren&apos;t in order. If your street isn&apos;t on the list, ask
+                an admin to add it.
+              </Step>
             </Subsection>
 
             <Subsection id="sub-profile-pin" title="Changing your PIN">
@@ -1241,8 +1247,10 @@ export default function HelpGuidePage() {
               </Step>
               <Step>
                 A <strong>Sort</strong> option above the search box lets you list the contacts by{" "}
-                <strong>House #</strong> (lowest to highest — the default) or by <strong>Name</strong>{" "}
-                (A to Z), whichever is easier to scan for what you're looking for.
+                <strong>House #</strong> (lowest to highest — the default), by <strong>Street</strong>{" "}
+                (street A to Z, then house number — shown once streets are set up) or by{" "}
+                <strong>Name</strong> (A to Z), whichever is easier to scan for what you're looking for.
+                Searching for a street name finds everyone on it.
               </Step>
               <Step>
                 Tap <strong>More</strong> on a card to see the phone number and email. Tap{" "}

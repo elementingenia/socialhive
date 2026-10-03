@@ -6,10 +6,11 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon, CommitteeIcon, UptakeIcon, InterestsIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon, CommitteeIcon, UptakeIcon, InterestsIcon, StreetsIcon } from '@/components/NavIcons'
 import OwnersManager from '@/components/OwnersManager'
 import UptakeStats from '@/components/UptakeStats'
 import InterestsAdmin from '@/components/InterestsAdmin'
+import StreetsAdmin from '@/components/StreetsAdmin'
 import ResidentEditForm, { Sheet, labelStyle } from '@/components/ResidentEditPanel'
 import { CLUB_COLOURS, nextClubColour } from '@/lib/clubColours'
 import ClubForm from '@/components/ClubForm'
@@ -61,6 +62,10 @@ const SECTIONS = [
   // "Ask me about" chip list + resident suggestion review queue (backlog B3,
   // 2026-10-02). Tile shows a count badge while suggestions are waiting (Q2).
   { key: 'Interests', label: 'Interests', Icon: InterestsIcon },
+  // The community's street names (migration 122, Iain 2026-10-03). Residents
+  // pick theirs from this list next to their house number -- house numbers
+  // here are scattered, so people give directions by street.
+  { key: 'Streets', label: 'Streets', Icon: StreetsIcon },
 ]
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
@@ -1531,6 +1536,7 @@ export default function AdminPage() {
         {tab === 'Tools'     && <ToolsTab />}
         {tab === 'Uptake'    && <UptakeStats />}
         {tab === 'Interests' && <InterestsAdmin onCountChange={setInterestsPending} />}
+        {tab === 'Streets'   && <StreetsAdmin />}
       </div>
     )
   }
