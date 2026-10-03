@@ -1,6 +1,6 @@
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
-import { STATUS, buildDirectory } from "@/lib/interests"
+import { STATUS, KIND, buildDirectory, buildSkillNotes } from "@/lib/interests"
 import { maskMemberRow } from "@/lib/directoryPrivacy"
 import { withStreetNames } from "@/lib/streetsServer"
 
@@ -21,8 +21,8 @@ export async function GET(req) {
   if (!viewer) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const [{ data: tags, error: e1 }, { data: links, error: e2 }] = await Promise.all([
-    supa.from("interest_tags").select("id, label, status").in("status", [STATUS.APPROVED, STATUS.PENDING]),
-    supa.from("member_interests").select("member_id, tag_id"),
+    supa.from("interest_tags").select("id, label, status, kind").in("status", [STATUS.APPROVED, STATUS.PENDING]),
+    supa.from("member_interests").select("member_id, tag_id, note"),
   ])
   if (e1 || e2) return NextResponse.json({ error: "Could not load interests." }, { status: 500 })
 
@@ -38,12 +38,18 @@ export async function GET(req) {
   // Private/test/inactive residents are stripped from both.
   const directory = buildDirectory(members, links, tags)
   const pending = buildDirectory(members, links, tags, STATUS.PENDING)
+  // Skills (B7, migration 124): same rules, separate maps. skills = approved
+  // (Contacts "Can help with" line + search); skillsPending = Info page only;
+  // skillNotes = { member_id: { label: note } } for the Info > Skills list.
+  const skills = buildDirectory(members, links, tags, STATUS.APPROVED, KIND.SKILL)
+  const skillsPending = buildDirectory(members, links, tags, STATUS.PENDING, KIND.SKILL)
+  const skillNotes = buildSkillNotes(members, links, tags)
   // people (BUG-072): the name/house/phone Info > Interests shows for each
   // listed resident. The page used to read these straight from members in
   // the browser; migration 121 blocks that. Only residents who actually
   // appear in directory/pending are sent (Private ones never do), and
   // maskMemberRow is applied anyway as a second guard.
-  const listed = new Set([...Object.keys(directory || {}), ...Object.keys(pending || {})])
+  const listed = new Set([directory, pending, skills, skillsPending].flatMap(d => Object.keys(d || {})))
   const people = {}
   for (const m of await withStreetNames(supa, members || [])) {
     if (!listed.has(m.id) || m.status !== "active" || m.is_test) continue
@@ -51,5 +57,5 @@ export async function GET(req) {
     if (r.masked) continue
     people[m.id] = { id: r.id, name: r.name, display_name: r.display_name, house_number: r.house_number, street_name: r.street_name, phone: r.phone, hide_name: r.hide_name }
   }
-  return NextResponse.json({ directory, pending, people })
+  return NextResponse.json({ directory, pending, skills, skillsPending, skillNotes, people })
 }

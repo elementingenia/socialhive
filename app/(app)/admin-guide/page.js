@@ -133,8 +133,9 @@ const RAW_SECTIONS = [
     ],
   },
   {
-    id: "interests", num: 13, title: "Interests — \"Ask me about\" (Admin › Interests)",
+    id: "interests", num: 13, title: "Interests & Skills (Admin › Interests & Skills)",
     subs: [
+      { title: "Interests vs Skills", id: "sub-int-skills" },
       { title: "What residents see", id: "sub-int-what" },
       { title: "Reviewing suggestions — Approve, Merge, Reject", id: "sub-int-review" },
       { title: "Managing the list — Add, Rename, Retire", id: "sub-int-list" },
@@ -1053,12 +1054,33 @@ export default function AdminGuidePage() {
             </Subsection>
           </Section>
 
-          <Section id="interests" num={13} title={'Interests — "Ask me about" (Admin › Interests)'}>
+          <Section id="interests" num={13} title="Interests & Skills (Admin › Interests & Skills)">
+            <Subsection id="sub-int-skills" title="Interests vs Skills (added 2026-10-03)">
+              <Step>
+                Two separate lists on the same screen — use the <strong>Interests</strong> /{" "}
+                <strong>Skills</strong> switch at the top. An interest (&quot;Ask me about&quot;, up to 8
+                per resident) connects like-minded residents. A skill (&quot;I can help with&quot;, up to 5,
+                each with an optional short note) is an offer to help the community. Everything below —
+                the review queue, Add, Rename, Retire — works the same for both.
+              </Step>
+              <Step>
+                <strong>Make it a skill</strong> / <strong>Make it an interest</strong> moves a chip to the
+                other list; residents who chose it keep it. It&apos;s refused if the other list already has
+                that wording (merge instead) or if it would take anyone over that list&apos;s limit.
+              </Step>
+              <Step>
+                Keep licensed trades — electrical, plumbing, gas — off the Skills list, and reject them
+                if suggested: in NSW that work needs a licence, and listing it would advertise unlicensed
+                work. Skills are favours between neighbours: no payment, and residents see a line saying
+                they aren&apos;t checked or endorsed by the committee or Ingenia.
+              </Step>
+            </Subsection>
             <Subsection id="sub-int-what" title="What residents see (added 2026-10-02)">
               <Step>
                 Residents tick interests on their Profile under <strong>Ask me about</strong> (up to 8).
-                Approved interests show on their card in Info › Contacts as <em>Ask me about: …</em> and
-                are found by Contacts search.
+                Approved interests show in Info › Contacts, in the contact&apos;s expanded (More) view, as{" "}
+                <em>Ask me about: …</em>, and skills as <em>Can help with: …</em>. Both are found by
+                Contacts search, and both appear under Info › Interests (Search Skills / Search Interests).
               </Step>
               <Step>
                 A resident with <strong>Hide my name</strong> on has their interests locked and hidden
@@ -1069,7 +1091,7 @@ export default function AdminGuidePage() {
             <Subsection id="sub-int-review" title="Reviewing suggestions — Approve, Merge, Reject">
               <Step>
                 A resident can type an interest that isn&apos;t on the list. It goes to{" "}
-                <strong>Admin › Interests</strong> under <strong>Waiting for review</strong>, showing who
+                <strong>Admin › Interests &amp; Skills</strong> under <strong>Waiting for review</strong> (on whichever list it was suggested for), showing who
                 suggested it and how many residents chose it. Until it&apos;s approved it shows in
                 orange on the Info › Interests page (so neighbours can already find each other) but not on
                 Contacts cards or in Contacts search. A red number on the Admin button and the Interests tile shows how

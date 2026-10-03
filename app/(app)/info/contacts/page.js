@@ -91,16 +91,24 @@ function exportContactsCsv(entries, scopeLabel) {
 // on the compact line -- admins additionally get "Edit" alongside it, since
 // viewing details and editing them are different actions (2026-07-12,
 // clarified same day: Edit alone isn't a substitute for a quick "More").
-function ContactCard({ contact, badges = [], external = false, isResident = true, onEdit }) {
+function ContactCard({ contact, badges = [], external = false, isResident = true, onEdit, query = "" }) {
   // Title/Role is always visible under the name now (Iain, 2026-09-16) --
   // it's identity information (who this person is), not contact detail
   // like phone/email, so it no longer waits behind "More". "More" now only
   // ever reveals phone/email -- hasMore is scoped to those two alone.
-  const hasMore = !!(contact.phone || contact.email)
+  // Interests and skills also live behind "More" (Iain, 2026-10-03: only in
+  // the expanded view), so a card with either gets the toggle too.
+  const hasMore = !!(contact.phone || contact.email || contact.interests?.length || contact.skills?.length)
   // External contacts open with their details already showing. They can't be
   // messaged in the app, so the useful thing is their phone/email -- burying
   // it behind "More" would make a dimmed card a dead end (scope §7).
   const [expanded, setExpanded] = useState(external && hasMore)
+  // A search that matched one of this card's interests/skills opens it, so
+  // the reason it matched is visible (those lines live behind "More").
+  const q = query.trim().toLowerCase()
+  const matchesChip = q.length > 0 && [...(contact.interests || []), ...(contact.skills || [])]
+    .some(l => l.toLowerCase().includes(q))
+  useEffect(() => { if (matchesChip) setExpanded(true) }, [matchesChip])
   const isAdminView = !!onEdit
 
   return (
@@ -162,14 +170,6 @@ function ContactCard({ contact, badges = [], external = false, isResident = true
           {contact.title}
         </div>
       )}
-      {/* "Ask me about" (backlog B3). Approved chips only, never for a
-          Private resident -- both enforced server-side by
-          /api/interests/directory. Nothing rendered when empty. */}
-      {contact.interests?.length > 0 && (
-        <div style={{ fontSize: "0.78rem", color: "var(--text)", marginTop: "0.15rem", lineHeight: 1.35 }}>
-          <span style={{ color: "var(--text-dim)" }}>Ask me about: </span>{interestsLine(contact.interests)}
-        </div>
-      )}
       {contact.realName && (
         <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.15rem" }}>
           {contact.realName}
@@ -177,6 +177,20 @@ function ContactCard({ contact, badges = [], external = false, isResident = true
       )}
       {expanded && (
         <div style={{ marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+          {/* "Can help with" (skills, B7) and "Ask me about" (interests, B3):
+              expanded view only (Iain, 2026-10-03). Approved chips only, never
+              for a Private resident -- enforced server-side by
+              /api/interests/directory. Nothing rendered when empty. */}
+          {contact.skills?.length > 0 && (
+            <div style={{ fontSize: "0.8rem", color: "var(--text)", lineHeight: 1.35 }}>
+              <span style={{ color: "var(--text-dim)" }}>Can help with: </span>{interestsLine(contact.skills)}
+            </div>
+          )}
+          {contact.interests?.length > 0 && (
+            <div style={{ fontSize: "0.8rem", color: "var(--text)", lineHeight: 1.35 }}>
+              <span style={{ color: "var(--text-dim)" }}>Ask me about: </span>{interestsLine(contact.interests)}
+            </div>
+          )}
           {contact.phone && <PhoneActions phone={contact.phone} colour={COLOUR} />}
           {contact.email && (
             <a href={`mailto:${contact.email}`} style={{ fontSize: "0.85rem", color: COLOUR, textDecoration: "none", fontWeight: 600 }}>
@@ -546,6 +560,7 @@ export default function ContactsPage() {
   // { member_id: ["Bridge", ...] } -- approved interests, Private residents
   // already stripped server-side (backlog B3).
   const [interests, setInterests]   = useState({})
+  const [skills, setSkills]         = useState({})
 
   const load = useCallback(async () => {
     // Members + contacts come from the server, already masked for this
@@ -565,7 +580,7 @@ export default function ContactsPage() {
     // "Ask me about" line once it arrives.
     authedFetch("/api/interests/directory")
       .then(r => r.ok ? r.json() : null)
-      .then(d => setInterests(d?.directory || {}))
+      .then(d => { setInterests(d?.directory || {}); setSkills(d?.skills || {}) })
       .catch(() => {})
   }, [])
 
@@ -646,6 +661,7 @@ export default function ContactsPage() {
         phone: maskedForViewer ? null : (m.phone || null),
         title: maskedForViewer ? null : (linked?.title || null),
         interests: maskedForViewer ? null : (interests[m.id] || null),
+        skills: maskedForViewer ? null : (skills[m.id] || null),
         categoryIds: [residentsId, ...((linked?.contact_category_members) || []).map(x => x.category_id)].filter(Boolean),
         isMember: true, member: m,
         // Every active member is implicitly a Resident (migration 029), so a
@@ -675,7 +691,7 @@ export default function ContactsPage() {
       badges: isAdmin && !c.active ? ["Hidden"] : [],
     }))
     return [...memberEntries, ...contactEntries].sort((a, b) => a.name.localeCompare(b.name))
-  }, [members, displayContacts, contactByMemberId, residentsId, isAdmin, interests])
+  }, [members, displayContacts, contactByMemberId, residentsId, isAdmin, interests, skills])
 
   // Mirrors the server-side gate in lib/questionRouting.js's askableCategories:
   // active + askable + at least one member with a login. The extra clause here
@@ -717,7 +733,7 @@ export default function ContactsPage() {
     if (!q) return categoryFiltered
     const digits = q.replace(/\D/g, "")
     return categoryFiltered.filter(e => {
-      const haystack = [e.name, e.searchName, e.title, e.email, e.isResident ? formatAddress(e.house_number, e.street_name) : null, ...(e.interests || [])]
+      const haystack = [e.name, e.searchName, e.title, e.email, e.isResident ? formatAddress(e.house_number, e.street_name) : null, ...(e.interests || []), ...(e.skills || [])]
         .filter(Boolean).join(" ").toLowerCase()
       if (haystack.includes(q)) return true
       if (digits && e.phone && e.phone.replace(/\D/g, "").includes(digits)) return true
@@ -865,7 +881,7 @@ export default function ContactsPage() {
         </div>
       ) : (
         sortedFiltered.map(e => (
-          <ContactCard key={e.key} contact={e} badges={e.badges} external={e.external} isResident={e.isResident}
+          <ContactCard key={e.key} contact={e} badges={e.badges} external={e.external} isResident={e.isResident} query={search}
             onEdit={isAdmin ? () => setSheet(e.isMember ? { type: "resident", member: e.member } : { type: "contact", contact: e.contact }) : null} />
         ))
       )}
