@@ -5,6 +5,8 @@ import { authedFetch } from "@/lib/getAuthToken"
 import { useUI } from "@/lib/UIContext"
 import { eventDeepLink, recapPromptLink } from "@/lib/eventNav"
 import { hubNoticeHomeFromMessage } from "@/lib/hubNotices"
+import { featureDocLink } from "@/lib/newFeatures"
+import { isoToSydneyDateStr } from "@/lib/date"
 
 const TOP_OFFSET = 72 // matches ProfileSlideOver
 
@@ -46,6 +48,7 @@ function typeIcon(type) {
     case "survey_results_published": return "📊"
     case "event_recap_prompt":       return "📰"
     case "weekly_digest":            return "🗞️"
+    case "new_features":             return "✨"
     case "event_invite":             return "✉️"
     case "interest_review_pending":  return "🏷️"
     case "interest_approved":        return "🏷️"
@@ -84,6 +87,7 @@ function typeColour(type) {
     case "survey_results_published": return "var(--voting)"
     case "event_recap_prompt":       return "var(--happenings-news)"
     case "weekly_digest":            return "var(--teal)"
+    case "new_features":             return "var(--teal)"
     case "event_invite":             return "var(--teal)"
     case "interest_review_pending":  return "var(--amber-dark)"
     case "interest_approved":        return "var(--teal)"
@@ -122,6 +126,9 @@ function targetForNotif(n) {
   // (event_invite needs no case -- it carries the event_id and falls through
   // to eventDeepLink below, landing on the event itself.)
   if (n.type === "weekly_digest") return "/digest"
+  // New Features (migration 123): opens the PDF for the day it was sent --
+  // one PDF per day, so the notification's own Sydney date identifies it.
+  if (n.type === "new_features") return featureDocLink(isoToSydneyDateStr(n.created_at))
   // Interests (backlog B3): the admin alert opens Admin > Interests. The
   // resident outcome notices (approved/merged/rejected) have no page of
   // their own -- the result shows on the Profile slide-over -- so tick-only.

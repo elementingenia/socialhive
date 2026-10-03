@@ -148,6 +148,15 @@ const RAW_SECTIONS = [
       { title: "House numbers — numbers only", id: "sub-streets-numbers" },
     ],
   },
+  {
+    id: "newfeatures", num: 15, title: "New Features — Announcing What's New (Admin › New Features)",
+    subs: [
+      { title: "How an announcement gets made", id: "sub-nf-how" },
+      { title: "Approving, editing and rejecting", id: "sub-nf-approve" },
+      { title: "The on/off switch and who gets it", id: "sub-nf-switch" },
+      { title: "Where it ends up — Documents › New Features", id: "sub-nf-folder" },
+    ],
+  },
 ]
 
 const SECTIONS = (() => {
@@ -1126,6 +1135,51 @@ export default function AdminGuidePage() {
                 the app works for other communities too. The box only accepts digits, the server checks it
                 again, and the database itself refuses anything else. A leading zero is dropped
                 (007 becomes 7).
+              </Step>
+            </Subsection>
+          </Section>
+
+          <Section id="newfeatures" num={15} title="New Features — Announcing What's New (Admin › New Features)">
+            <Subsection id="sub-nf-how" title="How an announcement gets made (added 2026-10-03)">
+              <Step>
+                When something new for residents is delivered, a short write-up is drafted: the feature&apos;s
+                name, a one-line summary, what it does, up to six &quot;how to use it&quot; steps and where to
+                find it. Drafts are usually written at the end of each development session; an admin can also
+                add one with <strong>+ New</strong>. Admin-only tools and bug fixes aren&apos;t announced.
+              </Step>
+              <Step>
+                Nothing reaches residents until an admin taps <strong>Approve</strong>. Everything approved
+                goes out together the next morning at <strong>8:30am</strong>: one PDF covering that day&apos;s
+                features, filed in Documents › New Features, and one notification (also pushed to phones)
+                that opens it.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-nf-approve" title="Approving, editing and rejecting">
+              <Step>
+                Under <strong>Waiting</strong>, each item has <strong>Preview PDF</strong> (exactly how it
+                will look), <strong>Edit</strong>, <strong>Approve</strong> and <strong>Reject</strong>. An
+                approved item shows when it goes out and can be put <strong>Back to draft</strong> any time
+                before then. Rejected items are never announced.
+              </Step>
+              <Step>
+                The <strong>Sent</strong> list shows past announcements with a link to each PDF. Once sent,
+                an item can&apos;t be changed.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-nf-switch" title="The on/off switch and who gets it">
+              <Step>
+                <strong>Daily announcement</strong> must be On for anything to go out — while Off, approved
+                items simply wait. <strong>Who gets it</strong> is <strong>Admins only</strong> to start (a
+                trial run) or <strong>Community wide</strong> (every resident with a login). Both start Off and
+                Admins only.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-nf-folder" title="Where it ends up — Documents › New Features">
+              <Step>
+                The PDFs live in a built-in <strong>New Features</strong> category in Info › Documents. They
+                don&apos;t clutter the main list: they sit in a folder row at the bottom and under the{" "}
+                <strong>✨ New Features</strong> pill (always last). Search still finds them. The category is
+                built in, so it can&apos;t be deleted from Manage Categories.
               </Step>
             </Subsection>
           </Section>

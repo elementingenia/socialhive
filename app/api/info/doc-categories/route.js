@@ -28,6 +28,11 @@ export async function DELETE(req) {
   const { id } = await req.json()
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
+  // Built-in categories (system_key, migration 123 -- e.g. "New Features")
+  // are part of how the app works; never deletable from Manage Categories.
+  const { data: cat } = await supabaseAdmin.from('document_categories').select('*').eq('id', id).maybeSingle()
+  if (cat?.system_key) return NextResponse.json({ error: `"${cat.name}" is built in and can't be deleted` }, { status: 409 })
+
   const { count } = await supabaseAdmin
     .from('document_category_links').select('*', { count: 'exact', head: true }).eq('category_id', id)
   if ((count || 0) > 0) {

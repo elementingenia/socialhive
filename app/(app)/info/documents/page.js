@@ -1,10 +1,12 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import { useOwners } from "@/lib/useOwners"
 import { Sheet, CategoryPicker, COLOUR, inputStyle, labelStyle, getToken } from "@/components/ResidentEditPanel"
 import { MAX_ATTACHMENT_BYTES, tooLargeMessage } from "@/lib/attachmentLimits"
+import { NEW_FEATURES_KEY, NEW_FEATURES_NAME, visibleDocuments, orderPills, isInFolder } from "@/lib/newFeatures"
 
 const secondaryButtonStyle = {
   padding: "0.5rem 0.9rem", borderRadius: 10, border: "1px solid var(--border)",
@@ -347,10 +349,12 @@ function DocCategoryManager({ categories, setCategories, onSaved }) {
             padding: "0.5rem 0.7rem", background: "var(--surface2)", borderRadius: 8,
           }}>
             <span style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--text)" }}>{c.name}</span>
-            <button onClick={() => deleteCategory(c)} style={{
+            {c.system_key ? (
+              <span style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Built in</span>
+            ) : <button onClick={() => deleteCategory(c)} style={{
               background: "none", border: "none", color: "#991b1b", cursor: "pointer",
               fontSize: "0.78rem", fontWeight: 600, fontFamily: "inherit",
-            }}>Delete</button>
+            }}>Delete</button>}
           </div>
         ))}
       </div>
@@ -360,8 +364,19 @@ function DocCategoryManager({ categories, setCategories, onSaved }) {
 }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
-export default function DocumentsPage() {
+// New Features folder + search + explicit newest-first (Scope_Answered, Iain
+// 2026-10-03; helpers in lib/newFeatures.js):
+//  - "All" lists every document EXCEPT the New Features folder, which shows
+//    as one collapsed folder row at the bottom; tapping it = the pill.
+//  - The New Features pill always sits last.
+//  - Search (2+ letters) matches title, description, category and file name
+//    across everything, folder included, narrowed by the active pill.
+//  - ?nf=YYYY-MM-DD (a new_features notification/push) opens that day's PDF
+//    in the in-app viewer; ?folder=new-features opens the folder.
+function DocumentsPageInner() {
   const { isAdmin, member } = useUser()
+  const router = useRouter()
+  const params = useSearchParams()
   // Committee Owners can also upload here, scoped to the Committee Meetings
   // category only (decision 5, Social_Hive_Committee_Notice_Board_Scope_v3_
   // FINAL) -- the API (app/api/info/documents/route.js) is what actually
@@ -372,17 +387,19 @@ export default function DocumentsPage() {
   const [categories, setCategories] = useState([])
   const [documents, setDocuments]   = useState([])
   const [activeFilter, setFilter]   = useState("all")
+  const [query, setQuery]           = useState("")
   const [loading, setLoading]       = useState(true)
   const [sheet, setSheet]           = useState(null) // null | "add" | "categories" | "edit"
   const [editingDoc, setEditingDoc] = useState(null)
 
   const load = useCallback(async () => {
-    const [catRes, docRes] = await Promise.all([
-      supabase.from("document_categories").select("id, name, display_order").eq("active", true).order("display_order"),
-      supabase.from("documents")
-        .select("id, title, description, file_url, file_name, file_type, active, links:document_category_links(category:document_categories(id, name))")
-        .order("created_at", { ascending: false }),
-    ])
+    // system_key / feature_date arrive with migration 123 -- fall back to the
+    // old columns if it hasn't run, so Documents never goes blank.
+    let catRes = await supabase.from("document_categories").select("id, name, display_order, system_key").eq("active", true).order("display_order")
+    if (catRes.error) catRes = await supabase.from("document_categories").select("id, name, display_order").eq("active", true).order("display_order")
+    const docCols = "id, title, description, file_url, file_name, file_type, active, created_at, links:document_category_links(category:document_categories(id, name))"
+    let docRes = await supabase.from("documents").select(docCols + ", feature_date").order("created_at", { ascending: false })
+    if (docRes.error) docRes = await supabase.from("documents").select(docCols).order("created_at", { ascending: false })
     setCategories(catRes.data || [])
     // A document can sit in several categories (migration 115); flatten the
     // join rows to a plain, A–Z list per document.
@@ -395,6 +412,27 @@ export default function DocumentsPage() {
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  const folder = categories.find(c => c.system_key === NEW_FEATURES_KEY) || null
+  const folderId = folder?.id || null
+
+  // Deep links from a New Features notification (?nf=date) or ?folder.
+  const nf = params.get("nf")
+  const folderParam = params.get("folder")
+  useEffect(() => {
+    if (loading || !folderId) return
+    if (folderParam === "new-features") setFilter(folderId)
+    if (!nf) return
+    setFilter(folderId)
+    const doc = documents.find(d => d.feature_date === nf && d.active)
+      || documents.find(d => d.active && isInFolder(d, folderId))   // that day's gone? newest instead
+    // Replace first so the viewer's Close lands back on the folder, not on
+    // this ?nf link (which would reopen the PDF).
+    router.replace("/info/documents?folder=new-features")
+    if (doc) {
+      router.push(`/documents/view?url=${encodeURIComponent(doc.file_url)}&name=${encodeURIComponent(doc.file_name || doc.title + ".pdf")}`)
+    }
+  }, [loading, folderId, nf, folderParam, documents, router])
 
   async function toggleActive(doc) {
     const token = await getToken()
@@ -419,8 +457,14 @@ export default function DocumentsPage() {
 
   // Admins see hidden documents too (flagged), so nothing admin-manageable
   // silently disappears — everyone else only ever sees active ones.
-  const visible = documents.filter(d => d.active || isAdmin)
-  const filtered = activeFilter === "all" ? visible : visible.filter(d => d.categories.some(c => c.id === activeFilter))
+  const visible = useMemo(() => documents.filter(d => d.active || isAdmin), [documents, isAdmin])
+  const filtered = useMemo(
+    () => visibleDocuments({ docs: visible, filter: activeFilter, query, folderId }),
+    [visible, activeFilter, query, folderId])
+  const folderCount = useMemo(() => visible.filter(d => isInFolder(d, folderId)).length, [visible, folderId])
+  const searching = query.trim().length >= 2
+  const showFolderRow = activeFilter === "all" && !searching && !!folderId && folderCount > 0
+  const pills = orderPills(categories, folderId)
 
   if (loading) return (
     <div style={{ padding: "1.25rem 1rem" }}>
@@ -430,15 +474,31 @@ export default function DocumentsPage() {
 
   return (
     <div style={{ padding: "1.25rem 1rem 6rem" }}>
-      {categories.length > 0 && (
+      <div style={{ position: "relative", marginBottom: "0.75rem" }}>
+        <input type="search" value={query} onChange={e => setQuery(e.target.value)}
+          placeholder="Search documents" aria-label="Search documents"
+          style={{ ...inputStyle, paddingRight: query ? "2.6rem" : inputStyle.padding }} />
+        {query && (
+          <button type="button" onClick={() => setQuery("")} aria-label="Clear search" style={{
+            position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)",
+            background: "none", border: "none", fontSize: "1.2rem", color: "var(--text-dim)",
+            cursor: "pointer", padding: "0.25rem 0.5rem", fontFamily: "inherit",
+          }}>×</button>
+        )}
+        {query.trim().length === 1 && (
+          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: 4 }}>Type at least 2 letters to search</div>
+        )}
+      </div>
+
+      {pills.length > 0 && (
         <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginBottom: "1rem" }}>
-          {[{ id: "all", name: "All" }, ...categories].map(c => (
+          {[{ id: "all", name: "All" }, ...pills].map(c => (
             <button key={c.id} onClick={() => setFilter(c.id)} style={{
               padding: "0.35rem 0.9rem", borderRadius: 20, border: "none",
               fontFamily: "inherit", fontSize: "0.82rem", fontWeight: 600, cursor: "pointer",
               background: activeFilter === c.id ? COLOUR : "var(--surface2)",
               color: activeFilter === c.id ? "#fff" : "var(--text-dim)",
-            }}>{c.name}</button>
+            }}>{c.id === folderId ? `✨ ${c.name}` : c.name}</button>
           ))}
         </div>
       )}
@@ -450,10 +510,10 @@ export default function DocumentsPage() {
         </div>
       )}
 
-      {filtered.length === 0 ? (
+      {filtered.length === 0 && !showFolderRow ? (
         <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--text-dim)", fontSize: "0.9rem" }}>
           <div style={{ fontSize: "1.8rem", marginBottom: "0.5rem" }}>📄</div>
-          No documents yet
+          {searching ? `No documents match "${query.trim()}"` : "No documents yet"}
         </div>
       ) : (
         filtered.map(doc => (
@@ -463,6 +523,23 @@ export default function DocumentsPage() {
             onToggleActive={() => toggleActive(doc)}
             onDelete={() => deleteDoc(doc)} />
         ))
+      )}
+
+      {showFolderRow && (
+        <button type="button" onClick={() => setFilter(folderId)} style={{
+          width: "100%", display: "flex", alignItems: "center", gap: "0.75rem", textAlign: "left",
+          background: "var(--surface)", borderRadius: 12, border: "1px dashed var(--border)",
+          padding: "0.9rem 1rem", marginTop: "0.4rem", cursor: "pointer", fontFamily: "inherit",
+        }}>
+          <span style={{ fontSize: "1.5rem", lineHeight: 1 }} aria-hidden>📁</span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ display: "block", fontWeight: 700, fontSize: "0.95rem", color: "var(--text)" }}>{folder?.name || NEW_FEATURES_NAME}</span>
+            <span style={{ display: "block", fontSize: "0.8rem", color: "var(--text-dim)" }}>
+              {folderCount} {folderCount === 1 ? "document" : "documents"} — what's new in the app
+            </span>
+          </span>
+          <span style={{ color: COLOUR, fontWeight: 700, fontSize: "1.1rem" }} aria-hidden>›</span>
+        </button>
       )}
 
       <Sheet open={sheet === "add"} onClose={() => setSheet(null)} title="Add Document">
@@ -480,5 +557,14 @@ export default function DocumentsPage() {
         <DocCategoryManager categories={categories} setCategories={setCategories} onSaved={load} />
       </Sheet>
     </div>
+  )
+}
+
+// useSearchParams needs a Suspense boundary in the App Router.
+export default function DocumentsPage() {
+  return (
+    <Suspense fallback={null}>
+      <DocumentsPageInner />
+    </Suspense>
   )
 }

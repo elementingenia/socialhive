@@ -6,7 +6,7 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon, CommitteeIcon, UptakeIcon, InterestsIcon, StreetsIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon, CommitteeIcon, UptakeIcon, InterestsIcon, StreetsIcon, NewFeaturesIcon } from '@/components/NavIcons'
 import OwnersManager from '@/components/OwnersManager'
 import UptakeStats from '@/components/UptakeStats'
 import InterestsAdmin from '@/components/InterestsAdmin'
@@ -66,6 +66,9 @@ const SECTIONS = [
   // pick theirs from this list next to their house number -- house numbers
   // here are scattered, so people give directions by street.
   { key: 'Streets', label: 'Streets', Icon: StreetsIcon },
+  // Feature announcements (migration 123, Iain 2026-10-03, decision 4: its
+  // own tile). Drafts to approve, the 08:30 daily send switch and audience.
+  { key: 'NewFeatures', label: 'New Features', Icon: NewFeaturesIcon, href: '/new-features' },
 ]
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
