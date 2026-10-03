@@ -37,11 +37,16 @@ import { formatAddress } from "@/lib/address"
 // someone who already has a real account). Iain, 2026-07-23: a contact IS a
 // resident, not a guest — this directory is the single source both pickers
 // search against so that distinction is consistent everywhere.
-async function fetchResidentDirectory(eventId) {
+async function fetchResidentDirectory(eventId, purpose = "party") {
   // Server-side since BUG-072 (2026-10-03): the browser can no longer read
   // other residents' house numbers directly. Same list shape as before.
   try {
-    const res = await authedFetch(`/api/residents/directory${eventId ? `?event_id=${encodeURIComponent(eventId)}` : ""}`)
+    // purpose "walkup" = coordinator panel (Private residents included for
+    // managers); "party" = a resident's own booking (Private residents can't
+    // be added by someone else -- Iain, 2026-10-03).
+    const qs = new URLSearchParams({ purpose })
+    if (eventId) qs.set("event_id", eventId)
+    const res = await authedFetch(`/api/residents/directory?${qs}`)
     if (!res.ok) return []
     const d = await res.json()
     return d.residents || []
@@ -712,7 +717,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
 
   useEffect(() => {
     if (showAddBooking && allResidents.length === 0) {
-      fetchResidentDirectory(event.id).then(setAllResidents)
+      fetchResidentDirectory(event.id, "walkup").then(setAllResidents)
     }
   }, [showAddBooking])
 
@@ -861,7 +866,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
     const currentTotal = group.confirmedSeats + group.waitlistSeats
     setModifyNameParty(false)
     setModifySeats(currentTotal || 1)
-    if (allResidents.length === 0) fetchResidentDirectory(event.id).then(setAllResidents)
+    if (allResidents.length === 0) fetchResidentDirectory(event.id, "walkup").then(setAllResidents)
     const [{ data: attendeeRows }, takenIds] = await Promise.all([
       supabase.from("booking_attendees")
         .select("member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name), contact:contacts!contact_id(name)")

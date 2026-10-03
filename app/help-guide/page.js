@@ -711,6 +711,11 @@ export default function HelpGuidePage() {
                 or not added.
               </Step>
               <InfoBox>
+                💡 With <strong>Hide my name</strong> on, other residents can&apos;t add you to their
+                bookings — you book yourself in (an event&apos;s coordinator can still book you at the
+                door).
+              </InfoBox>
+              <InfoBox>
                 💡 If <strong>Hide my name</strong> is on, your interests are locked and not shown to
                 anyone. Anything you&apos;ve already chosen is kept and appears again if you turn
                 Hide my name off.
@@ -792,6 +797,12 @@ export default function HelpGuidePage() {
                 <strong>Join Waitlist</strong> — appears when the screening is full. Joins the waitlist;
                 you will be notified automatically if a seat opens up.
               </Step>
+              <InfoBox>
+                💡 Booking for more than one person? You can name the others when you book.
+                Neighbours who have <strong>Hide my name</strong> turned on don&apos;t appear in that
+                list and can&apos;t be added by someone else — they book themselves in, or the event&apos;s
+                coordinator can book them at the door.
+              </InfoBox>
             </Subsection>
 
             <Subsection id="sub-movies-afterbook" title="After you have booked">

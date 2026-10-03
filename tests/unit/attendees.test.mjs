@@ -3,7 +3,7 @@
 //
 //   npm run test:unit
 
-import { validateParty, validateBring, resolveBringCategoryIds, validateBringRequirement } from '../../lib/attendees.js'
+import { validateParty, validateBring, resolveBringCategoryIds, validateBringRequirement, privateResidentNamed } from '../../lib/attendees.js'
 
 let pass = 0, fail = 0
 const ok = (cond, msg) => { cond ? pass++ : (fail++, console.log('  ✗', msg)) }
@@ -146,6 +146,16 @@ ok(validateBringRequirement({ bring_required: true, bring_category_ids: null }).
 ok(validateBringRequirement({ bring_required: true, bring_category_ids: ['cat1'] }).ok === true, 'required + at least one category => ok')
 ok(validateBringRequirement({ bring_required: false, bring_category_ids: [] }).ok === true, 'optional + zero categories => ok, not applicable')
 ok(validateBringRequirement({ bring_required: false, bring_category_ids: ['cat1'] }).ok === true, 'optional + categories chosen => ok')
+
+// privateResidentNamed -- Private residents can't be added by someone else (2026-10-03)
+const PRIV = new Set(['p1', 'p2'])
+ok(privateResidentNamed({ attendees: [{ member_id: 'p1' }], privateMemberIds: PRIV, ownerId: 'me' })?.member_id === 'p1', 'naming a Private resident is caught')
+ok(privateResidentNamed({ attendees: [{ member_id: 'x' }, { guest_name: 'Bob' }], privateMemberIds: PRIV, ownerId: 'me' }) === null, 'non-Private residents and guests are fine')
+ok(privateResidentNamed({ attendees: [{ member_id: 'p1' }], privateMemberIds: PRIV, ownerId: 'p1' }) === null, 'a Private resident is never blocked from their own booking')
+ok(privateResidentNamed({ attendees: [{ member_id: 'p1' }], privateMemberIds: PRIV, ownerId: 'me', alreadyNamedIds: new Set(['p1']) }) === null, 'Modify keeping a Private resident named before the rule is allowed')
+ok(privateResidentNamed({ attendees: [{ member_id: 'p1' }, { member_id: 'p2' }], privateMemberIds: PRIV, ownerId: 'me', alreadyNamedIds: new Set(['p1']) })?.member_id === 'p2', 'but adding a NEW Private resident on Modify is caught')
+ok(privateResidentNamed({ attendees: [{ contact_id: 'p1' }], privateMemberIds: PRIV, ownerId: 'me' }) === null, 'contacts (no app login) are not affected')
+ok(privateResidentNamed({ attendees: undefined, privateMemberIds: PRIV, ownerId: 'me' }) === null, 'no attendees -> nothing to block')
 
 console.log(`\nlib/attendees.js validateParty: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

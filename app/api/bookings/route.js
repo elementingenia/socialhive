@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 import { promoteWaitlist } from '@/lib/promoteWaitlist'
 import { notify } from '@/lib/notify'
 import { bookingsClosed } from '@/lib/booking'
-import { validateParty, validateBring, resolveBringCategoryIds } from '@/lib/attendees'
+import { validateParty, validateBring, resolveBringCategoryIds, privateResidentNamed, PRIVATE_RESIDENT_ERROR } from '@/lib/attendees'
 import { fetchTakenResidentIds } from '@/lib/takenResidents'
 import { syncAttendees } from '@/lib/syncAttendees'
 import { effectiveSeatCap, planSeatModification } from '@/lib/modifyBooking'
@@ -19,6 +19,25 @@ async function getMember(token) {
   const { data: member } = await supabaseAdmin
     .from('members').select('id, name').eq('auth_id', user.id).single()
   return member
+}
+
+// Private residents can't be added to someone else's self-service booking
+// (Iain, 2026-10-03) -- see lib/attendees.js privateResidentNamed. Coordinator
+// walk-up (/api/coordinator) is deliberately exempt. keepExisting: on Modify,
+// Private residents this owner named before the rule existed stay allowed.
+async function checkPrivateNamed({ attendees, ownerId, eventId, keepExisting = false }) {
+  const ids = [...new Set((attendees || []).map(a => a?.member_id).filter(id => id && id !== ownerId))]
+  if (!ids.length) return null
+  const { data: priv } = await supabaseAdmin.from('members').select('id').in('id', ids).eq('hide_name', true)
+  const privateMemberIds = new Set((priv || []).map(m => m.id))
+  if (!privateMemberIds.size) return null
+  let alreadyNamedIds = new Set()
+  if (keepExisting) {
+    const { data: existing } = await supabaseAdmin.from('booking_attendees')
+      .select('member_id').eq('event_id', eventId).eq('owner_id', ownerId)
+    alreadyNamedIds = new Set((existing || []).map(r => r.member_id).filter(Boolean))
+  }
+  return privateResidentNamed({ attendees, privateMemberIds, ownerId, alreadyNamedIds })
 }
 
 // Seat-level FIFO waitlist promotion now lives in lib/promoteWaitlist.js,
@@ -86,6 +105,9 @@ export async function POST(req) {
     required: !!event.require_attendee_names,
   })
   if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
+  if (await checkPrivateNamed({ attendees: party.attendees, ownerId: member.id, eventId: event_id })) {
+    return NextResponse.json({ error: PRIVATE_RESIDENT_ERROR }, { status: 400 })
+  }
 
   // "Attendees bring something" is now per-EVENT, not implied by the club's
   // capability flag (Iain, 2026-08-07): applicable only when this event has
@@ -387,6 +409,9 @@ export async function PATCH(req) {
     required: !!event?.require_attendee_names,
   })
   if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
+  if (await checkPrivateNamed({ attendees: party.attendees, ownerId: member.id, eventId: event_id, keepExisting: true })) {
+    return NextResponse.json({ error: PRIVATE_RESIDENT_ERROR }, { status: 400 })
+  }
 
   const bringApplicable = Array.isArray(event?.bring_category_ids) && event.bring_category_ids.length > 0
   let patchAllowedCategoryIds = event?.bring_category_ids
