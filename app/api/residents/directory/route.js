@@ -16,7 +16,12 @@ export async function GET(req) {
   const { error, status, member: viewer } = await resolveMember(req)
   if (error) return NextResponse.json({ error }, { status })
 
-  const eventId = new URL(req.url).searchParams.get("event_id")
+  const params = new URL(req.url).searchParams
+  const eventId = params.get("event_id")
+  // "walkup" = coordinator panel (Private residents included for managers);
+  // anything else = a resident's own party picker (Private residents
+  // excluded -- they can't be added by someone else, Iain 2026-10-03).
+  const purpose = params.get("purpose") === "walkup" ? "walkup" : "party"
   let canManageEvent = !!viewer.is_admin
   if (!canManageEvent && eventId) canManageEvent = !(await requireEventManage(req, eventId)).error
 
@@ -31,6 +36,6 @@ export async function GET(req) {
   return NextResponse.json({ residents: buildResidentPicker({
     members: await withStreetNames(supa, members || []),
     contacts: await withStreetNames(supa, contacts || []),
-    viewer, canManageEvent,
+    viewer, canManageEvent, purpose,
   }) })
 }
