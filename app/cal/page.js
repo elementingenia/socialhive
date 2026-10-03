@@ -4,6 +4,8 @@ import { supabase } from "@/lib/supabase"
 import CalendarView from "@/components/CalendarView"
 import EventSlideOut from "@/components/EventSlideOut"
 import { sydneyTodayStr, sydneyDateStrPlusDays } from "@/lib/date"
+import { hubPathForEvent } from "@/lib/eventShare"
+import { loginHref, safeNextPath } from "@/lib/safeNext"
 
 // Sydney-local wall-clock formatting for the private-space-booking read-only
 // card below -- same conversion isoToSydneyHHMM/isoToSydneyDateStr do
@@ -21,7 +23,7 @@ function fmtSpaceWhen(startsAt, endsAt) {
 // small component rather than forced through EventSlideOut, which assumes
 // the `events` table's shape throughout (see app/api/spaces/share/route.js's
 // own comment for why private bookings are a separate case).
-function SpaceBookingCard({ booking }) {
+function SpaceBookingCard({ booking, signInHref }) {
   return (
     <div style={{ maxWidth: 480, margin: "24px auto", padding: "0 16px" }}>
       <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 14,
@@ -36,7 +38,7 @@ function SpaceBookingCard({ booking }) {
         <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 10 }}>
           This is a private space booking. Sign in to manage your own bookings.
         </div>
-        <a href="/login" style={{ display: "inline-block", marginTop: 12, padding: "9px 16px", background: "var(--amber)",
+        <a href={signInHref} style={{ display: "inline-block", marginTop: 12, padding: "9px 16px", background: "var(--amber)",
           color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 13, textDecoration: "none" }}>Sign In</a>
       </div>
     </div>
@@ -66,6 +68,11 @@ export default function PublicCalendarPage() {
   // matching this page's existing read-only precedent exactly rather than
   // inventing a new one.
   const [deepLink, setDeepLink] = useState(null) // { kind: 'event'|'sb', status: 'loading'|'ok'|'unavailable', data }
+  // Where Sign In / Go to App should land (Iain, 2026-10-03): the page the
+  // visitor was originally trying to reach (`next`, set by app/(app)/layout.js),
+  // otherwise the deep-linked event's own hub page. Without this, signing in
+  // from here always dropped them on /home and the event was lost.
+  const [returnTo, setReturnTo] = useState(null)
 
   // Auth state is used ONLY for the header's "Go to App" vs "Sign In" link --
   // a convenience for a visitor who happens to already have a session. It
@@ -119,6 +126,9 @@ export default function PublicCalendarPage() {
     const params = new URLSearchParams(window.location.search)
     const evId = params.get("event")
     const sbId = params.get("sb")
+    const passedNext = safeNextPath(params.get("next"))
+    if (passedNext) setReturnTo(passedNext)
+    else if (sbId) setReturnTo(`/spaces?sb=${encodeURIComponent(sbId)}`)
     if (evId) {
       setDeepLink({ kind: "event", status: "loading" })
       fetch(`/api/events/share?id=${encodeURIComponent(evId)}`)
@@ -144,7 +154,13 @@ export default function PublicCalendarPage() {
   // itself uses, exactly like tapping a day's event would -- viewable,
   // read-only (isAuthenticated={false} below, unconditionally on this page).
   useEffect(() => {
-    if (deepLink?.kind === "event" && deepLink.status === "ok") setSelected(deepLink.data)
+    if (deepLink?.kind === "event" && deepLink.status === "ok") {
+      setSelected(deepLink.data)
+      // No `next` passed (e.g. a /cal?event= link shared directly) -- fall
+      // back to the event's own hub page.
+      const base = hubPathForEvent(deepLink.data)
+      if (base) setReturnTo(prev => prev || `${base}?event=${encodeURIComponent(deepLink.data.id)}`)
+    }
   }, [deepLink])
 
   if (deepLink?.kind === "sb") {
@@ -155,7 +171,7 @@ export default function PublicCalendarPage() {
         ) : deepLink.status === "unavailable" ? (
           <DeepLinkUnavailable kind="booking" />
         ) : (
-          <SpaceBookingCard booking={deepLink.data} />
+          <SpaceBookingCard booking={deepLink.data} signInHref={loginHref(returnTo)} />
         )}
       </div>
     )
@@ -197,7 +213,7 @@ export default function PublicCalendarPage() {
         </div>
         {isAuthed ? (
           <a
-            href="/home"
+            href={returnTo || "/home"}
             style={{
               padding: "7px 14px",
               background: "var(--amber)",
@@ -210,7 +226,7 @@ export default function PublicCalendarPage() {
           >Go to App</a>
         ) : (
           <a
-            href="/login"
+            href={loginHref(returnTo)}
             style={{
               padding: "7px 14px",
               background: "var(--amber)",
