@@ -6,7 +6,8 @@ import { bookingsClosed } from '@/lib/booking'
 import { validateParty, validateBring, resolveBringCategoryIds } from '@/lib/attendees'
 import { fetchTakenResidentIds } from '@/lib/takenResidents'
 import { syncAttendees } from '@/lib/syncAttendees'
-import { maxSeatsPerBooking, planSeatModification } from '@/lib/modifyBooking'
+import { effectiveSeatCap, planSeatModification } from '@/lib/modifyBooking'
+import { isEventCoordinator } from '@/lib/areaAuth'
 import { amountOwing } from '@/lib/payments'
 import { busSeatsUsed, validateBusRequest, requestedBusSeats } from '@/lib/busSeats'
 import { eventNotifyRecipients } from '@/lib/questionRouting'
@@ -49,9 +50,22 @@ export async function POST(req) {
     return NextResponse.json({ error: "This event doesn't require a booking — everyone's welcome, no need to sign up." }, { status: 400 })
   }
 
-  // Cap reads the event's own max_seats_per_booking (falls back to 4) --
-  // previously hardcoded, see lib/modifyBooking.js (2026-08-08).
-  const requestedSeats = Math.min(maxSeatsPerBooking(event), Math.max(1, parseInt(body.seats) || 1))
+  // Everyone's live bookings -- read before the seat cap now, because an
+  // EC's cap depends on how many seats are actually free (2026-10-03).
+  const { data: allBookings } = await supabaseAdmin
+    .from('bookings').select('id, member_id, status, seats')
+    .eq('event_id', event_id).neq('status', 'cancelled')
+
+  const confirmedSeats = (allBookings || [])
+    .filter(b => b.status === 'confirmed')
+    .reduce((sum, b) => sum + (b.seats || 1), 0)
+
+  // Cap reads the event's own max_seats_per_booking (falls back to 4).
+  // This event's own EC may book past it for their own party, up to the
+  // seats actually free (Iain, 2026-10-03) -- see effectiveSeatCap.
+  const bookerIsEC = await isEventCoordinator(member.id, event_id)
+  const seatCap = effectiveSeatCap(event, { unlimitedCap: bookerIsEC, othersConfirmed: confirmedSeats })
+  const requestedSeats = Math.min(seatCap, Math.max(1, parseInt(body.seats) || 1))
 
   // Reservation cut-off (workstream B). Once past, no new bookings/waitlist
   // joins -- authoritative gate; the UI's "Bookings Closed" state mirrors it.
@@ -127,14 +141,6 @@ export async function POST(req) {
       }, { status: 409 })
     }
   }
-
-  const { data: allBookings } = await supabaseAdmin
-    .from('bookings').select('id, member_id, status, seats')
-    .eq('event_id', event_id).neq('status', 'cancelled')
-
-  const confirmedSeats = (allBookings || [])
-    .filter(b => b.status === 'confirmed')
-    .reduce((sum, b) => sum + (b.seats || 1), 0)
 
   const available = Math.max(0, event.max_seats - (event.unassigned_seats_count || 0) - confirmedSeats)
 
@@ -361,6 +367,9 @@ export async function PATCH(req) {
     event, requestedSeats: body.seats,
     oldConfirmed, oldWaitlisted: myWaitlist?.seats || 0,
     othersConfirmed, closed: bookingsClosed(event),
+    // This event's EC may grow their own booking past the per-booking
+    // cap, up to the seats free (2026-10-03).
+    unlimitedCap: await isEventCoordinator(member.id, event_id),
   })
   if (!plan.ok) {
     return NextResponse.json({ error: plan.error, ...(plan.code === 'bookings_closed' ? { bookings_closed: true } : {}) }, { status: 409 })

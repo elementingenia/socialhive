@@ -4,7 +4,7 @@
 //
 //   npm run test:unit
 
-import { maxSeatsPerBooking, effectiveSeatCap, planSeatModification } from '../../lib/modifyBooking.js'
+import { maxSeatsPerBooking, effectiveSeatCap, planSeatModification, freeSeatsForBooking } from '../../lib/modifyBooking.js'
 
 let pass = 0, fail = 0
 const ok = (cond, msg) => { cond ? pass++ : (fail++, console.log('  ✗', msg)) }
@@ -69,6 +69,23 @@ p = planSeatModification({ event: unlimitedEvent, requestedSeats: 12, oldConfirm
 ok(p.ok && p.seats === 12, 'unlimitedCap: true lets an EC/admin request well past the per-booking cap of 4')
 p = planSeatModification({ event: unlimitedEvent, requestedSeats: 50, oldConfirmed: 1, oldWaitlisted: 0, othersConfirmed: 0, unlimitedCap: true })
 ok(p.ok && p.seats === 30, 'unlimitedCap: true still clamps to the event\'s actual Total Seats (30), never unlimited')
+
+// 2026-10-03 (Iain): the lifted cap is max(per-booking cap, seats FREE for
+// this booking) -- never more than is actually available, never less than a
+// normal resident gets. Waitlist split still applies within that.
+ok(freeSeatsForBooking({ max_seats: 30, unassigned_seats_count: 2 }, 10) === 18, 'free seats = total - unassigned - others confirmed')
+ok(freeSeatsForBooking({ max_seats: 10 }, 12) === 0, 'free seats never negative')
+ok(effectiveSeatCap({ max_seats: 30, max_seats_per_booking: 4 }, { unlimitedCap: true, othersConfirmed: 20 }) === 10, 'EC cap = the 10 seats still free, not Total Seats')
+ok(effectiveSeatCap({ max_seats: 30, max_seats_per_booking: 4 }, { unlimitedCap: true, othersConfirmed: 28 }) === 4, 'EC never gets less than the normal per-booking cap when the event is nearly full')
+ok(effectiveSeatCap({ max_seats: 30, max_seats_per_booking: 4 }, { unlimitedCap: true, othersConfirmed: 30 }) === 4, 'full event: EC can still ask for the normal cap (goes to waitlist)')
+ok(effectiveSeatCap({ max_seats: 30, max_seats_per_booking: 4, unassigned_seats_count: 6 }, { unlimitedCap: true, othersConfirmed: 14 }) === 10, 'unassigned seats count against what is free')
+ok(effectiveSeatCap({ max_seats: 30, max_seats_per_booking: 4 }, { othersConfirmed: 0 }) === 4, 'resident (no unlimitedCap) unaffected by othersConfirmed')
+p = planSeatModification({ event: { max_seats: 20, max_seats_per_booking: 2 }, requestedSeats: 15, othersConfirmed: 10, unlimitedCap: true })
+ok(p.ok && p.seats === 10 && p.newConfirmed === 10 && p.newWaitlisted === 0, 'EC asking 15 with 10 free is clamped to 10, all confirmed')
+p = planSeatModification({ event: { max_seats: 20, max_seats_per_booking: 4 }, requestedSeats: 4, othersConfirmed: 18, unlimitedCap: true })
+ok(p.ok && p.seats === 4 && p.newConfirmed === 2 && p.newWaitlisted === 2, 'within the normal cap, waitlist split still applies for an EC')
+p = planSeatModification({ event: { max_seats: 20, max_seats_per_booking: 2 }, requestedSeats: 9, oldConfirmed: 3, othersConfirmed: 8, unlimitedCap: true })
+ok(p.ok && p.seats === 9 && p.newConfirmed === 9, 'EC growing own booking: free seats include the seats they already hold (20-8=12)')
 p = planSeatModification({ event: unlimitedEvent, requestedSeats: 12, oldConfirmed: 1, oldWaitlisted: 0, othersConfirmed: 0 })
 ok(p.ok && p.seats === 4, 'omitting unlimitedCap (self-service path) is unchanged -- still clamped to max_seats_per_booking')
 

@@ -1,11 +1,11 @@
 "use client"
 import { useState, useEffect, useMemo } from "react"
-import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import { authedFetch } from "@/lib/getAuthToken"
 import { resolveMemberName } from "@/lib/memberName"
 import { groupByInterest } from "@/lib/interests"
 import { COLOUR } from "@/components/ResidentEditPanel"
+import PhoneActions from "@/components/PhoneActions"
 
 // Info > Interests (Iain, 2026-10-03). Browse "Ask me about" by interest
 // instead of searching Contacts: one pill per interest that at least one
@@ -35,13 +35,11 @@ export default function InterestsBrowsePage() {
 
   useEffect(() => {
     let alive = true
-    Promise.all([
-      authedFetch("/api/interests/directory").then(r => (r.ok ? r.json() : Promise.reject(r))),
-      supabase.from("members").select("id, name, display_name, house_number, phone, hide_name").eq("status", "active"),
-    ]).then(([d, m]) => {
+    // Names/house/phone come with the directory from the server (BUG-072) --
+    // the browser can no longer read other residents' contact columns.
+    authedFetch("/api/interests/directory").then(r => (r.ok ? r.json() : Promise.reject(r))).then(d => {
       if (!alive) return
-      if (m.error) throw m.error
-      setMembers(Object.fromEntries((m.data || []).map(x => [x.id, x])))
+      setMembers(d.people || {})
       setPendingDir(d.pending || {})
       setDirectory(d.directory || {})
     }).catch(() => { if (alive) setError(true) })
@@ -118,17 +116,17 @@ export default function InterestsBrowsePage() {
                 </div>
               )}
               {people(openGroup.memberIds).map(({ m, name }) => (
-                <div key={m.id} style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap", padding: "0.5rem 0", borderTop: "1px solid var(--border)" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: "0.92rem", color: "var(--text)" }}>{name}</div>
+                <div key={m.id} style={{ padding: "0.5rem 0", borderTop: "1px solid var(--border)" }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 600, fontSize: "0.92rem", color: "var(--text)" }}>{name}</span>
                     {m.house_number && (
-                      <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>House #{m.house_number}</div>
+                      <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>· House #{m.house_number}</span>
                     )}
                   </div>
+                  {/* Own line under the name: the number + Call/Message don't
+                      fit beside a name at phone width (2026-10-03). */}
                   {m.phone && m.id !== me?.id && (
-                    <a href={`tel:${m.phone}`} style={{ fontSize: "0.88rem", color: COLOUR, textDecoration: "none", fontWeight: 700, whiteSpace: "nowrap" }}>
-                      📞 {m.phone}
-                    </a>
+                    <div style={{ marginTop: "0.35rem" }}><PhoneActions phone={m.phone} colour={COLOUR} /></div>
                   )}
                 </div>
               ))}

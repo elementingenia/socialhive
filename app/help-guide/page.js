@@ -899,11 +899,12 @@ export default function HelpGuidePage() {
                 have notices.)
               </Step>
               <Step>
-                Adding a walk-up booking or using <strong>Modify Seats</strong> on someone's booking
-                here is not held to the resident-facing per-booking seat limit — as the event's
-                admin/Owner/coordinator, you can bring in as many seats as you need, up to the
-                event's Total Seats. Residents self-booking through the app still get the normal
-                per-booking cap.
+                Adding a walk-up booking, using <strong>Modify Seats</strong> on someone's booking,
+                or booking for your own party as this event's coordinator is not held to the
+                resident-facing per-booking seat limit. You can book up to the number of seats still
+                free (never fewer than the normal limit). Ask for more than are free and the extra
+                seats go on the waitlist, the same as for everyone else. Residents booking for
+                themselves still get the normal per-booking limit.
               </Step>
               <Step>
                 The morning after an event you coordinated finishes, you'll get a{" "}
@@ -1043,11 +1044,12 @@ export default function HelpGuidePage() {
                 ever cancelled.
               </Step>
               <Step>
-                Adding a walk-up booking or using <strong>Modify Seats</strong> on someone's booking
-                here is not held to the resident-facing per-booking seat limit — as the event's
-                admin/Owner/coordinator, you can bring in as many seats as you need, up to the
-                event's Total Seats. Residents self-booking through the app still get the normal
-                per-booking cap.
+                Adding a walk-up booking, using <strong>Modify Seats</strong> on someone's booking,
+                or booking for your own party as this event's coordinator is not held to the
+                resident-facing per-booking seat limit. You can book up to the number of seats still
+                free (never fewer than the normal limit). Ask for more than are free and the extra
+                seats go on the waitlist, the same as for everyone else. Residents booking for
+                themselves still get the normal per-booking limit.
               </Step>
               <Step>
                 The morning after an event you coordinated finishes, you'll get a{" "}
@@ -1208,11 +1210,12 @@ export default function HelpGuidePage() {
                 the same passenger-list view Social Hive's Coordinator panel has.
               </Step>
               <Step>
-                Adding a walk-up booking or using <strong>Modify Seats</strong> on someone's booking
-                here is not held to the resident-facing per-booking seat limit — as the event's
-                admin/Owner/coordinator, you can bring in as many seats as you need, up to the
-                event's Total Seats. Residents self-booking through the app still get the normal
-                per-booking cap.
+                Adding a walk-up booking, using <strong>Modify Seats</strong> on someone's booking,
+                or booking for your own party as this event's coordinator is not held to the
+                resident-facing per-booking seat limit. You can book up to the number of seats still
+                free (never fewer than the normal limit). Ask for more than are free and the extra
+                seats go on the waitlist, the same as for everyone else. Residents booking for
+                themselves still get the normal per-booking limit.
               </Step>
               <Step>
                 The morning after an event you coordinated finishes, you'll get a{" "}
@@ -1242,6 +1245,11 @@ export default function HelpGuidePage() {
                 (A to Z), whichever is easier to scan for what you're looking for.
               </Step>
               <Step>
+                Tap <strong>More</strong> on a card to see the phone number and email. Tap{" "}
+                <strong>📞 Call</strong> to ring them, or <strong>💬 Message</strong> to send a text
+                (Message only appears for mobile numbers). Tap the email address to write an email.
+              </Step>
+              <Step>
                 Some residents list things they&apos;re happy to help with, shown on their card as{" "}
                 <strong>Ask me about</strong>. Type an interest into the Search box — for example
                 &quot;bridge&quot; or &quot;gardening&quot; — to find everyone who listed it, or use the{" "}
@@ -1255,7 +1263,7 @@ export default function HelpGuidePage() {
                 Tap <strong>Interests</strong> at the bottom of the Info screen. Each button is an
                 interest at least one neighbour has listed, with how many — for example{" "}
                 <strong>Gardening (6)</strong>. Tap one to see who, with their house number and a phone
-                number you can tap to call. Tap it again to close. Orange buttons are new suggestions the
+                number with <strong>Call</strong> and <strong>Message</strong> buttons. Tap it again to close. Orange buttons are new suggestions the
                 admins haven&apos;t approved yet — they work the same way.
               </Step>
               <InfoBox>
@@ -1641,11 +1649,12 @@ export default function HelpGuidePage() {
                 to a resident or contact.
               </Step>
               <Step>
-                Adding a walk-up booking or using <strong>Modify Seats</strong> on someone's booking
-                here is not held to the resident-facing per-booking seat limit — as the event's
-                admin/Owner/coordinator, you can bring in as many seats as you need, up to the
-                event's Total Seats. Residents self-booking through the app still get the normal
-                per-booking cap.
+                Adding a walk-up booking, using <strong>Modify Seats</strong> on someone's booking,
+                or booking for your own party as this event's coordinator is not held to the
+                resident-facing per-booking seat limit. You can book up to the number of seats still
+                free (never fewer than the normal limit). Ask for more than are free and the extra
+                seats go on the waitlist, the same as for everyone else. Residents booking for
+                themselves still get the normal per-booking limit.
               </Step>
               <Step>
                 The morning after an event you coordinated finishes, you'll get a{" "}
