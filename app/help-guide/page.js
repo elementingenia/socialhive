@@ -697,7 +697,9 @@ export default function HelpGuidePage() {
               <Step>
                 Not listed? Type it in the <strong>Suggest another</strong> box and tap{" "}
                 <strong>Suggest</strong>. It&apos;s sent to the admins straight away and shows on your
-                profile as <em>awaiting approval</em> — nobody else sees it until it&apos;s approved.
+                profile as <em>awaiting approval</em> (in orange). It also appears in orange on the{" "}
+                <strong>Info › Interests</strong> page straight away, but isn&apos;t shown on Contacts cards
+                until it&apos;s approved.
                 You&apos;ll get a notice when it&apos;s been added, combined with an existing interest,
                 or not added.
               </Step>
@@ -1252,7 +1254,8 @@ export default function HelpGuidePage() {
                 Tap <strong>Interests</strong> at the bottom of the Info screen. Each button is an
                 interest at least one neighbour has listed, with how many — for example{" "}
                 <strong>Gardening (6)</strong>. Tap one to see who, with their house number and a phone
-                number you can tap to call. Tap it again to close.
+                number you can tap to call. Tap it again to close. Orange buttons are new suggestions the
+                admins haven&apos;t approved yet — they work the same way.
               </Step>
               <InfoBox>
                 💡 Only neighbours who have added interests to their profile appear here. Anyone with{" "}

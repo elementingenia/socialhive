@@ -118,4 +118,12 @@ t("groupByInterest dedupes a member and tolerates junk", () => {
 })
 t("groupByInterest empty directory", () => assert.deepEqual(groupByInterest(undefined), []))
 
+t("buildDirectory pending mode returns only pending chips, Private still stripped", () => {
+  const members = [{ id: "a", status: "active" }, { id: "p", status: "active", hide_name: true }]
+  const tags = [{ id: "g", label: "Gardening", status: "approved" }, { id: "c", label: "Cinema", status: "pending" }]
+  const links = [{ member_id: "a", tag_id: "g" }, { member_id: "a", tag_id: "c" }, { member_id: "p", tag_id: "c" }]
+  assert.deepEqual(buildDirectory(members, links, tags), { a: ["Gardening"] })
+  assert.deepEqual(buildDirectory(members, links, tags, "pending"), { a: ["Cinema"] })
+})
+
 console.log(`interests: ${n} passed`)

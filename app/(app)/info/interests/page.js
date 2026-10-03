@@ -28,6 +28,7 @@ const pillBase = {
 export default function InterestsBrowsePage() {
   const { member: me } = useUser()
   const [directory, setDirectory] = useState(null)   // null = still loading
+  const [pendingDir, setPendingDir] = useState({})
   const [members, setMembers] = useState({})
   const [error, setError] = useState(false)
   const [open, setOpen] = useState(null)              // label of the open pill
@@ -41,6 +42,7 @@ export default function InterestsBrowsePage() {
       if (!alive) return
       if (m.error) throw m.error
       setMembers(Object.fromEntries((m.data || []).map(x => [x.id, x])))
+      setPendingDir(d.pending || {})
       setDirectory(d.directory || {})
     }).catch(() => { if (alive) setError(true) })
     return () => { alive = false }
@@ -49,10 +51,17 @@ export default function InterestsBrowsePage() {
   // Only residents we can actually name; drop interests left with nobody.
   const groups = useMemo(() => {
     if (!directory) return []
-    return groupByInterest(directory)
+    // Approved and unapproved (amber) together, A-Z. Labels can't collide:
+    // migration 120's live-label unique index covers approved + pending.
+    const tagged = [
+      ...groupByInterest(directory).map(g => ({ ...g, pending: false })),
+      ...groupByInterest(pendingDir).map(g => ({ ...g, pending: true })),
+    ]
+    return tagged
       .map(g => ({ ...g, memberIds: g.memberIds.filter(id => members[id]) }))
       .filter(g => g.memberIds.length > 0)
-  }, [directory, members])
+      .sort((a, b) => a.label.localeCompare(b.label, "en", { sensitivity: "base" }))
+  }, [directory, pendingDir, members])
 
   const people = (ids) => ids
     .map(id => members[id])
@@ -65,6 +74,7 @@ export default function InterestsBrowsePage() {
     <div style={{ padding: "1rem", maxWidth: 640, margin: "0 auto" }}>
       <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", lineHeight: 1.5, marginBottom: "0.85rem" }}>
         Neighbours who are happy to be asked about something. Tap an interest to see who.
+        {groups.some(g => g.pending) && " Orange ones are new suggestions not yet approved."}
       </div>
 
       {error ? (
@@ -81,11 +91,16 @@ export default function InterestsBrowsePage() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem" }}>
             {groups.map(g => {
               const on = g.label === open
+              // Unapproved suggestions: same amber treatment as on Profile
+              // (PR #180) -- dashed amber border, amber fill when open.
+              const look = g.pending
+                ? { border: "1.5px dashed var(--amber-dark)", background: on ? "var(--amber-light)" : "var(--surface)", color: on ? "#78350f" : "var(--text)" }
+                : { background: on ? COLOUR : "var(--surface)", color: on ? "#fff" : "var(--text)" }
               return (
                 <button key={g.label} type="button" aria-expanded={on}
+                  aria-label={g.pending ? `${g.label}, ${g.memberIds.length}, new and not yet approved` : undefined}
                   onClick={() => setOpen(on ? null : g.label)}
-                  style={{ ...pillBase, fontWeight: on ? 700 : 600,
-                    background: on ? COLOUR : "var(--surface)", color: on ? "#fff" : "var(--text)" }}>
+                  style={{ ...pillBase, fontWeight: on ? 700 : 600, ...look }}>
                   {g.label} ({g.memberIds.length})
                 </button>
               )
@@ -97,6 +112,11 @@ export default function InterestsBrowsePage() {
               <div style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text)", marginBottom: "0.4rem" }}>
                 Ask about {openGroup.label}
               </div>
+              {openGroup.pending && (
+                <div style={{ fontSize: "0.78rem", color: "var(--amber-dark)", marginTop: "-0.2rem", marginBottom: "0.4rem" }}>
+                  New suggestion, not yet approved by the admins.
+                </div>
+              )}
               {people(openGroup.memberIds).map(({ m, name }) => (
                 <div key={m.id} style={{ display: "flex", alignItems: "center", gap: "0.6rem", flexWrap: "wrap", padding: "0.5rem 0", borderTop: "1px solid var(--border)" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>

@@ -1053,8 +1053,9 @@ export default function AdminGuidePage() {
               <Step>
                 A resident can type an interest that isn&apos;t on the list. It goes to{" "}
                 <strong>Admin › Interests</strong> under <strong>Waiting for review</strong>, showing who
-                suggested it and how many residents chose it. Until it&apos;s approved, only those
-                residents see it. A red number on the Admin button and the Interests tile shows how
+                suggested it and how many residents chose it. Until it&apos;s approved it shows in
+                orange on the Info › Interests page (so neighbours can already find each other) but not on
+                Contacts cards or in Contacts search. A red number on the Admin button and the Interests tile shows how
                 many are waiting, and admins get one notification each morning (around 8am) when new
                 ones have arrived.
               </Step>
