@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import {
   MAX_INTERESTS, normaliseLabel, labelKey, validateLabel, resolveSuggestion,
   validateSelection, buildDirectory, interestsLine, pendingToAlert,
-  adminAlertMessage, reviewOutcomeMessage, sortByLabel,
+  adminAlertMessage, reviewOutcomeMessage, sortByLabel, groupByInterest,
 } from "../../lib/interests.js"
 
 let n = 0
@@ -107,5 +107,15 @@ t("outcome unknown", () => assert.equal(reviewOutcomeMessage("other", "a"), null
 t("sortByLabel case-insensitive", () => assert.deepEqual(
   sortByLabel([{ label: "bridge" }, { label: "Art" }, { label: "Cooking" }]).map(r => r.label),
   ["Art", "bridge", "Cooking"]))
+
+t("groupByInterest inverts, A-Z, no empties", () => {
+  const g = groupByInterest({ m1: ["Golf", "Bridge"], m2: ["Bridge"], m3: [] })
+  assert.deepEqual(g, [{ label: "Bridge", memberIds: ["m1", "m2"] }, { label: "Golf", memberIds: ["m1"] }])
+})
+t("groupByInterest dedupes a member and tolerates junk", () => {
+  const g = groupByInterest({ m1: ["Bridge", "bridge "], m2: null })
+  assert.deepEqual(g, [{ label: "Bridge", memberIds: ["m1"] }])
+})
+t("groupByInterest empty directory", () => assert.deepEqual(groupByInterest(undefined), []))
 
 console.log(`interests: ${n} passed`)

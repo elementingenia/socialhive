@@ -102,9 +102,10 @@ const RAW_SECTIONS = [
     ],
   },
   {
-    id: "info", num: 6, title: "Info — Contacts & Documents",
+    id: "info", num: 6, title: "Info — Contacts, Interests & Documents",
     subs: [
       { title: "Finding a contact",     id: "sub-info-contacts" },
+      { title: "Finding someone by interest", id: "sub-info-interests" },
       { title: "Community documents",   id: "sub-info-documents" },
     ],
   },
@@ -1222,7 +1223,7 @@ export default function HelpGuidePage() {
           </Section>
 
           {/* ── 6. INFO ── */}
-          <Section id="info" num={secNum("info")} title="Info — Contacts & Documents">
+          <Section id="info" num={secNum("info")} title="Info — Contacts, Interests & Documents">
             <Subsection id="sub-info-contacts" title="Finding a contact">
               <Step>
                 Tap <strong>Info</strong> from Home to browse community contacts — committee members,
@@ -1240,9 +1241,23 @@ export default function HelpGuidePage() {
               <Step>
                 Some residents list things they&apos;re happy to help with, shown on their card as{" "}
                 <strong>Ask me about</strong>. Type an interest into the Search box — for example
-                &quot;bridge&quot; or &quot;gardening&quot; — to find everyone who listed it. To add your
-                own, see <em>Ask me about — your interests</em> under your profile.
+                &quot;bridge&quot; or &quot;gardening&quot; — to find everyone who listed it, or use the{" "}
+                <strong>Interests</strong> tab (below). To add your own, see{" "}
+                <em>Ask me about — your interests</em> under your profile.
               </Step>
+            </Subsection>
+
+            <Subsection id="sub-info-interests" title="Finding someone by interest">
+              <Step>
+                Tap <strong>Interests</strong> at the bottom of the Info screen. Each button is an
+                interest at least one neighbour has listed, with how many — for example{" "}
+                <strong>Gardening (6)</strong>. Tap one to see who, with their house number and a phone
+                number you can tap to call. Tap it again to close.
+              </Step>
+              <InfoBox>
+                💡 Only neighbours who have added interests to their profile appear here. Anyone with{" "}
+                <strong>Hide my name</strong> on is never shown.
+              </InfoBox>
             </Subsection>
 
             <Subsection id="sub-info-documents" title="Community documents">
