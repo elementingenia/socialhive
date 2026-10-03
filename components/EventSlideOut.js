@@ -36,17 +36,17 @@ import { loginHref } from "@/lib/safeNext"
 // someone who already has a real account). Iain, 2026-07-23: a contact IS a
 // resident, not a guest — this directory is the single source both pickers
 // search against so that distinction is consistent everywhere.
-async function fetchResidentDirectory() {
-  const [{ data: members }, { data: contacts }] = await Promise.all([
-    supabase.from("members").select("id, name, username, house_number").eq("status", "active").eq("is_test", false).order("name"),
-    supabase.from("contacts").select("id, name, house_number").eq("active", true).is("member_id", null).order("name"),
-  ])
-  const list = [
-    ...(members || []).map(m => ({ id: m.id, name: m.name, username: m.username, house_number: m.house_number, type: "member" })),
-    ...(contacts || []).map(c => ({ id: c.id, name: c.name, username: null, house_number: c.house_number, type: "contact" })),
-  ]
-  list.sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-  return list
+async function fetchResidentDirectory(eventId) {
+  // Server-side since BUG-072 (2026-10-03): the browser can no longer read
+  // other residents' house numbers directly. Same list shape as before.
+  try {
+    const res = await authedFetch(`/api/residents/directory${eventId ? `?event_id=${encodeURIComponent(eventId)}` : ""}`)
+    if (!res.ok) return []
+    const d = await res.json()
+    return d.residents || []
+  } catch {
+    return []
+  }
 }
 
 // Every resident/contact already attached to a live booking for this event
@@ -711,7 +711,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
 
   useEffect(() => {
     if (showAddBooking && allResidents.length === 0) {
-      fetchResidentDirectory().then(setAllResidents)
+      fetchResidentDirectory(event.id).then(setAllResidents)
     }
   }, [showAddBooking])
 
@@ -860,7 +860,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
     const currentTotal = group.confirmedSeats + group.waitlistSeats
     setModifyNameParty(false)
     setModifySeats(currentTotal || 1)
-    if (allResidents.length === 0) fetchResidentDirectory().then(setAllResidents)
+    if (allResidents.length === 0) fetchResidentDirectory(event.id).then(setAllResidents)
     const [{ data: attendeeRows }, takenIds] = await Promise.all([
       supabase.from("booking_attendees")
         .select("member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name), contact:contacts!contact_id(name)")
@@ -879,7 +879,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       ? { kind: "resident", member_id: null, contact_id: a.contact_id, member_name: a.contact?.name || "Resident", guest_name: "", is_bus_passenger: !!a.is_bus_passenger }
       : { kind: "guest", member_id: null, contact_id: null, member_name: "", guest_name: a.guest_name || "", is_bus_passenger: !!a.is_bus_passenger })))
     setModifyTarget({
-      ownerId, ownerContactId, currentTotal,
+      ownerId, ownerContactId, currentTotal, confirmedSeats: group.confirmedSeats,
       name: group.member?.name || group.member?.username || group.contact?.name || "Resident",
       alreadySplit: group.waitlistSeats > 0,
     })
@@ -989,9 +989,12 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   // per-booking limit exists to stop one resident hogging seats via
   // self-service, not to constrain the EC managing walk-ups/modifications
   // for their own event. Still can't exceed the event's actual Total
-  // Seats (effectiveSeatCap's unlimitedCap branch), per Iain's explicit
+  // Seats -- superseded 2026-10-03, see below -- per Iain's explicit
   // ceiling. See lib/modifyBooking.js for the full reasoning.
-  const maxPerBooking = effectiveSeatCap(event, { unlimitedCap: true })
+  // 2026-10-03 (Iain): the lifted cap is now the seats actually free (never
+  // less than the normal per-booking cap) instead of the whole Total Seats.
+  const panelConfirmedSeats = bookings.filter(b => b.status === "confirmed").reduce((s, b) => s + (b.seats || 1), 0)
+  const maxPerBooking = effectiveSeatCap(event, { unlimitedCap: true, othersConfirmed: panelConfirmedSeats })
   const bookedMemberIds  = new Set(bookings.map(b => b.members?.id).filter(Boolean))
   const bookedContactIds = new Set(bookings.map(b => b.contacts?.id).filter(Boolean))
   const refundPending = data?.refund_pending || []
@@ -1680,7 +1683,9 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                     </div>
                   )}
                   {modifyTarget && (modifyTarget.ownerId ? modifyTarget.ownerId === member?.id : modifyTarget.ownerContactId === contact?.id) && (() => {
-                    const seatMax = modifyTarget.alreadySplit ? modifyTarget.currentTotal : maxPerBooking
+                    const seatMax = modifyTarget.alreadySplit
+                      ? modifyTarget.currentTotal
+                      : effectiveSeatCap(event, { unlimitedCap: true, othersConfirmed: panelConfirmedSeats - (modifyTarget.confirmedSeats || 0) })
                     const need = Math.max(0, modifySeats - 1)
                     const modifyPartyValid = requireAddNaming
                       ? (modifyParty.length === need && modifyParty.every(isAddRowFilled))
@@ -2028,7 +2033,7 @@ function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange,
 }
 
 // ── Booking Form ──────────────────────────────────────────────────────────────
-function BookingSection({ event, onRefresh, onClose }) {
+function BookingSection({ event, isEC = false, onRefresh, onClose }) {
   const [seats, setSeats] = useState(1)
   const [loading, setLoading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -2095,7 +2100,7 @@ function BookingSection({ event, onRefresh, onClose }) {
 
   useEffect(() => {
     if (event.hub_type !== "bookclub" && (event.max_seats_per_booking || 1) > 1 && members.length === 0) {
-      fetchResidentDirectory().then(setMembers)
+      fetchResidentDirectory(event.id).then(setMembers)
     }
   }, [event.id])
 
@@ -2228,9 +2233,15 @@ function BookingSection({ event, onRefresh, onClose }) {
     ?? (event.bookings?.filter(b => b.status === 'confirmed').reduce((s, b) => s + (b.seats || 1), 0) || 0))
     + (event.unassigned_seats_count || 0)
   const max = event.max_seats || 0
-  const maxPerBooking   = maxSeatsPerBooking(event)
   const isMovieEvent    = event.hub_type === "movie"
   const availableSeats = Math.max(0, max - booked)
+  // This event's own EC may book past the per-booking cap for their own
+  // party, up to the seats actually free (Iain, 2026-10-03). Mirrors the
+  // server (POST/PATCH /api/bookings). "booked" above already includes
+  // unassigned seats, so othersConfirmed is the confirmed seats only.
+  const confirmedOnly = Math.max(0, booked - (event.unassigned_seats_count || 0))
+  const maxPerBooking = effectiveSeatCap(event, { unlimitedCap: isEC, othersConfirmed: confirmedOnly })
+  const perBookingCap = maxSeatsPerBooking(event)
   const closed = bookingsClosed(event)
 
   const [modifySeats, setModifySeats] = useState(
@@ -2442,7 +2453,11 @@ function BookingSection({ event, onRefresh, onClose }) {
               {!isBookclubEvent && (
                 <>
                   <SeatSelector value={seats} min={1} max={maxPerBooking} onChange={setSeats} />
-                  {isMovieEvent && maxPerBooking > 1 && (
+                  {isEC && maxPerBooking > perBookingCap ? (
+                    <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>
+                      As this event&apos;s coordinator you can book up to {maxPerBooking} seats (the seats still free).
+                    </div>
+                  ) : isMovieEvent && maxPerBooking > 1 && (
                     <div style={{ fontSize: 12, color: "var(--text-dim)", marginBottom: 8 }}>Max {maxPerBooking} seats per booking</div>
                   )}
                 </>
@@ -2643,7 +2658,9 @@ function BookingSection({ event, onRefresh, onClose }) {
         // and rebook instead), and can't grow at all once bookings have
         // closed -- either way the picker's own max clamps the UI so growth
         // can't even be requested; shrinking down to 1 is always allowed.
-        const modifyMax = (myWaitlist || closed) ? currentTotal : maxPerBooking
+        const modifyMax = (myWaitlist || closed)
+          ? currentTotal
+          : effectiveSeatCap(event, { unlimitedCap: isEC, othersConfirmed: Math.max(0, confirmedOnly - (myConfirmed?.seats || 0)) })
         return (
         <div>
           <SeatSelector value={modifySeats} min={1} max={modifyMax} onChange={setModifySeats} />
@@ -2964,7 +2981,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
               {/* Booking section */}
               <div style={{ borderTop: "1px solid var(--border)", paddingTop: 16, marginTop: 4 }}>
                 {isAuthenticated ? (
-                  <BookingSection event={event} onRefresh={refreshAll} onClose={onClose} />
+                  <BookingSection event={event} isEC={!!isEC} onRefresh={refreshAll} onClose={onClose} />
                 ) : (
                   <LoginPrompt event={event} />
                 )}

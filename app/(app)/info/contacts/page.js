@@ -11,6 +11,7 @@ import { resolveMemberName } from "@/lib/memberName"
 import AskQuestion from "@/components/AskQuestion"
 import { authedFetch } from "@/lib/getAuthToken"
 import { interestsLine } from "@/lib/interests"
+import PhoneActions from "@/components/PhoneActions"
 
 const secondaryButtonStyle = {
   padding: "0.5rem 0.9rem", borderRadius: 10, border: "1px solid var(--border)",
@@ -172,11 +173,7 @@ function ContactCard({ contact, badges = [], external = false, isResident = true
       )}
       {expanded && (
         <div style={{ marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-          {contact.phone && (
-            <a href={`tel:${contact.phone}`} style={{ fontSize: "0.85rem", color: COLOUR, textDecoration: "none", fontWeight: 600 }}>
-              📞 {contact.phone}
-            </a>
-          )}
+          {contact.phone && <PhoneActions phone={contact.phone} colour={COLOUR} />}
           {contact.email && (
             <a href={`mailto:${contact.email}`} style={{ fontSize: "0.85rem", color: COLOUR, textDecoration: "none", fontWeight: 600 }}>
               ✉ {contact.email}
@@ -535,17 +532,17 @@ export default function ContactsPage() {
   const [interests, setInterests]   = useState({})
 
   const load = useCallback(async () => {
-    const [catRes, memberRes, contactRes, inviteRes] = await Promise.all([
+    // Members + contacts come from the server, already masked for this
+    // viewer (BUG-072) -- the browser can no longer read other residents'
+    // phone/email/house number directly.
+    const [catRes, dirRes, inviteRes] = await Promise.all([
       supabase.from("contact_categories").select("id, name, display_order, askable").eq("active", true).order("display_order"),
-      supabase.from("members").select("id, name, display_name, username, email, house_number, phone, hide_name, is_admin, is_test").eq("status", "active"),
-      supabase.from("contacts")
-        .select("id, name, title, phone, email, house_number, member_id, active, contact_category_members(category_id)")
-        .order("display_order"),
+      authedFetch("/api/info/contacts").then(r => (r.ok ? r.json() : null)).catch(() => null),
       supabase.from("settings").select("value").eq("key", "invite_token").single(),
     ])
     setCategories(catRes.data || [])
-    setMembers(memberRes.data || [])
-    setContacts(contactRes.data || [])
+    setMembers(dirRes?.members || [])
+    setContacts(dirRes?.contacts || [])
     setInviteCode(inviteRes.data?.value || "")
     setLoading(false)
     // Non-blocking: the directory works without it; cards just gain their

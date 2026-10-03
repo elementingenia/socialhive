@@ -1,6 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { isValidDisplayName } from "@/lib/memberName"
+import { buildContactsDirectory } from "@/lib/directoryPrivacy"
+
+export const dynamic = "force-dynamic"
 async function getAdminMember(token) {
   if (!token) return null
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
@@ -8,6 +11,32 @@ async function getAdminMember(token) {
   const { data } = await supabaseAdmin
     .from('members').select('id, is_admin').eq('auth_id', user.id).single()
   return data?.is_admin ? data : null
+}
+
+// GET — Info > Contacts directory, masked server-side (BUG-072). The page
+// used to read members + contacts straight from the browser and hide
+// Private residents on screen only; migration 121 now blocks the browser
+// from reading phone/email/house_number, so this is the only source.
+export async function GET(req) {
+  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+  if (!token) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  const { data: { user }, error: ue } = await supabaseAdmin.auth.getUser(token)
+  if (ue || !user) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+  const { data: viewer } = await supabaseAdmin
+    .from('members').select('id, is_admin').eq('auth_id', user.id).maybeSingle()
+  if (!viewer) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
+
+  const [{ data: members, error: e1 }, { data: contacts, error: e2 }] = await Promise.all([
+    supabaseAdmin.from('members')
+      .select('id, name, display_name, username, email, house_number, phone, hide_name, is_admin, is_test')
+      .eq('status', 'active'),
+    supabaseAdmin.from('contacts')
+      .select('id, name, title, phone, email, house_number, member_id, active, display_order, contact_category_members(category_id)')
+      .order('display_order'),
+  ])
+  if (e1 || e2) return NextResponse.json({ error: 'Could not load contacts.' }, { status: 500 })
+
+  return NextResponse.json(buildContactsDirectory({ members: members || [], contacts: contacts || [], viewer }))
 }
 
 // POST — add contact

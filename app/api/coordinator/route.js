@@ -457,7 +457,12 @@ export async function PATCH(req) {
     // above), and an EC bringing a walk-up party is exactly the case
     // Iain asked to exempt from the per-booking limit, capped only by
     // how many seats the event actually has.
-    const seats = Math.min(effectiveSeatCap(ev, { unlimitedCap: true }), Math.max(1, parseInt(rawSeats) || 1))
+    // 2026-10-03 (Iain): still lifted past the per-booking cap, but now only
+    // up to the seats actually free -- never the whole Total Seats.
+    const { data: confRowsForCap } = await supa
+      .from("bookings").select("seats").eq("event_id", event_id).eq("status", "confirmed")
+    const confirmedForCap = (confRowsForCap || []).reduce((s, b) => s + (b.seats || 1), 0)
+    const seats = Math.min(effectiveSeatCap(ev, { unlimitedCap: true, othersConfirmed: confirmedForCap }), Math.max(1, parseInt(rawSeats) || 1))
 
     // Named party for this walk-up booking (2026-07-23), same identity rules
     // as self-service naming -- a resident (member or contact) or, only if
