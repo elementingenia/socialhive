@@ -103,7 +103,7 @@ const RAW_SECTIONS = [
     ],
   },
   {
-    id: "info", num: 6, title: "Info — Contacts, Interests & Documents",
+    id: "info", num: 6, title: "Info — Contacts, Interests & Skills, Documents",
     subs: [
       { title: "Finding a contact",     id: "sub-info-contacts" },
       { title: "Finding someone by skill or interest", id: "sub-info-interests" },
@@ -706,7 +706,7 @@ export default function HelpGuidePage() {
                 Not listed? Type it in the <strong>Suggest another</strong> box and tap{" "}
                 <strong>Suggest</strong>. It&apos;s sent to the admins straight away and shows on your
                 profile as <em>awaiting approval</em> (in orange). It also appears in orange on the{" "}
-                <strong>Info › Interests</strong> page (under <strong>Search Interests</strong>) straight away, but isn&apos;t shown on Contacts cards
+                <strong>Info › Interests &amp; Skills</strong> page (under <strong>Search Interests</strong>) straight away, but isn&apos;t shown on Contacts cards
                 until it&apos;s approved.
                 You&apos;ll get a notice when it&apos;s been added, combined with an existing interest,
                 or not added.
@@ -1270,7 +1270,7 @@ export default function HelpGuidePage() {
           </Section>
 
           {/* ── 6. INFO ── */}
-          <Section id="info" num={secNum("info")} title="Info — Contacts, Interests & Documents">
+          <Section id="info" num={secNum("info")} title="Info — Contacts, Interests & Skills, Documents">
             <Subsection id="sub-info-contacts" title="Finding a contact">
               <Step>
                 Tap <strong>Info</strong> from Home to browse community contacts — committee members,
@@ -1297,13 +1297,13 @@ export default function HelpGuidePage() {
                 (<strong>Can help with</strong>) and is happy to talk about (<strong>Ask me about</strong>).
                 Type a skill or interest into the Search box — for example &quot;bridge&quot; or
                 &quot;handyman&quot; — to find everyone who listed it; their cards open to show why they
-                matched. Or use the <strong>Interests</strong> tab (below).
+                matched. Or use the <strong>Interests &amp; Skills</strong> tab (below).
               </Step>
             </Subsection>
 
             <Subsection id="sub-info-interests" title="Finding someone by skill or interest">
               <Step>
-                Tap <strong>Interests</strong> at the bottom of the Info screen, then{" "}
+                Tap <strong>Interests &amp; Skills</strong> at the bottom of the Info screen, then{" "}
                 <strong>Search Skills</strong> (neighbours who can help with something) or{" "}
                 <strong>Search Interests</strong> (neighbours who share an interest). Each button is a
                 skill or interest at least one neighbour has listed, with how many — for example{" "}

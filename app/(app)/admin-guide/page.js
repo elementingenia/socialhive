@@ -1080,7 +1080,7 @@ export default function AdminGuidePage() {
                 Residents tick interests on their Profile under <strong>Ask me about</strong> (up to 8).
                 Approved interests show in Info › Contacts, in the contact&apos;s expanded (More) view, as{" "}
                 <em>Ask me about: …</em>, and skills as <em>Can help with: …</em>. Both are found by
-                Contacts search, and both appear under Info › Interests (Search Skills / Search Interests).
+                Contacts search, and both appear under Info › Interests &amp; Skills (Search Skills / Search Interests).
               </Step>
               <Step>
                 A resident with <strong>Hide my name</strong> on has their interests locked and hidden
@@ -1093,7 +1093,7 @@ export default function AdminGuidePage() {
                 A resident can type an interest that isn&apos;t on the list. It goes to{" "}
                 <strong>Admin › Interests &amp; Skills</strong> under <strong>Waiting for review</strong> (on whichever list it was suggested for), showing who
                 suggested it and how many residents chose it. Until it&apos;s approved it shows in
-                orange on the Info › Interests page (so neighbours can already find each other) but not on
+                orange on the Info › Interests &amp; Skills page (so neighbours can already find each other) but not on
                 Contacts cards or in Contacts search. A red number on the Admin button and the Interests tile shows how
                 many are waiting, and admins get one notification each morning (around 8am) when new
                 ones have arrived.
@@ -1127,7 +1127,7 @@ export default function AdminGuidePage() {
               <Step>
                 Until at least one street is added, residents don&apos;t see a Street option at all. Once
                 streets exist, addresses show as e.g. <strong>92 Mosaic Street</strong> on Contacts cards,
-                Info › Interests, the resident pickers (walk-up booking, Invite a Neighbour) and the Contacts
+                Info › Interests &amp; Skills, the resident pickers (walk-up booking, Invite a Neighbour) and the Contacts
                 export, which gains a <strong>Street</strong> column. Contacts also gets a{" "}
                 <strong>Street</strong> sort (street A–Z, then house number).
               </Step>
