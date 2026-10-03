@@ -133,10 +133,10 @@ function CapacityBar({ booked, max, waitlist }) {
   )
 }
 
-function SeatSelector({ value, min, max, onChange }) {
+function SeatSelector({ value, min, max, onChange, label = "Seats:" }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 12 }}>
-      <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>Seats:</span>
+      <span style={{ fontSize: 14, fontWeight: 600, color: "var(--text)" }}>{label}</span>
       <div style={{ display: "flex", alignItems: "center", gap: 0, borderRadius: 10, overflow: "hidden", border: "1px solid var(--border)" }}>
         <button onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min}
           style={{ width: 44, height: 44, border: "none", background: "var(--surface2)", fontSize: 20, cursor: value <= min ? "default" : "pointer", color: value <= min ? "#ccc" : "var(--text)", fontWeight: 700 }}>−</button>
@@ -144,6 +144,97 @@ function SeatSelector({ value, min, max, onChange }) {
         <button onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max}
           style={{ width: 44, height: 44, border: "none", background: "var(--surface2)", fontSize: 20, cursor: value >= max ? "default" : "pointer", color: value >= max ? "#ccc" : "var(--text)", fontWeight: 700 }}>+</button>
       </div>
+    </div>
+  )
+}
+
+// Coordinator transport allocation (Iain, 2026-10-04) -- bus / a car /
+// driving / own way, for a whole booking. Used by the walk-up form and by
+// each booking row in the Coordinator View. Rules and capacity are enforced
+// server-side (lib/transportAllocation.js); this mirrors them so the
+// coordinator sees "full" before pressing Save.
+//   value: { mode, vehicle_offer_id, seats_offered }
+//   cars: carSections from buildCarSections (offerId, driverKey, driverName, seatsOffered, passengers)
+//   ownerKey: "m:<id>"/"c:<id>" of the booking owner (null for a new walk-up)
+//   currentOfferId: the car this booking is currently in (its seats free up on a move)
+//   partySize / unnamedCount: named people in the booking / seats still unnamed
+//   busLeft: bus seats free for this booking (null = uncapped)
+function TransportPicker({ event, colour, value, onChange, cars = [], ownerKey = null, currentOfferId = null, partySize = 1, unnamedCount = 0, busLeft = null, drivingNote = null }) {
+  const mode = value?.mode || "none"
+  const otherCars = cars.filter(c => c.driverKey !== ownerKey)
+  const carLeft = c => c.seatsOffered - c.passengers.length + (c.offerId === currentOfferId ? partySize : 0)
+  const options = [
+    { v: "none", label: "Own way" },
+    ...(event.has_bus ? [{ v: "bus", label: "🚌 Bus" }] : []),
+    ...(event.allow_personal_vehicles && otherCars.length > 0 ? [{ v: "car", label: "🧍 In a car" }] : []),
+    ...(event.allow_personal_vehicles ? [{ v: "driver", label: "🚗 Driving" }] : []),
+  ]
+  const btn = active => ({
+    flex: "1 1 auto", padding: "8px 10px", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+    border: `1px solid ${active ? colour : "var(--border)"}`, background: active ? colour : "var(--surface)",
+    color: active ? clubTextOn(colour) : "var(--text)",
+  })
+  const minDriverSeats = Math.max(0, partySize - 1)
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>Getting there</div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {options.map(o => (
+          <button key={o.v} type="button" onClick={() => onChange({
+              mode: o.v,
+              vehicle_offer_id: o.v === "car" ? (value?.vehicle_offer_id || null) : null,
+              seats_offered: o.v === "driver" ? Math.max(minDriverSeats, value?.seats_offered ?? minDriverSeats) : undefined,
+            })}
+            style={btn(mode === o.v)}>{o.label}</button>
+        ))}
+      </div>
+
+      {mode === "bus" && busLeft != null && (
+        <div style={{ fontSize: 12, marginTop: 6, color: busLeft < partySize ? "var(--danger)" : "var(--text-dim)" }}>
+          {busLeft < partySize ? `Bus is full -- needs ${partySize}, ${busLeft} left.` : `${busLeft} bus seat${busLeft === 1 ? "" : "s"} left.`}
+        </div>
+      )}
+
+      {mode === "car" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+          {otherCars.map(c => {
+            const left = carLeft(c)
+            const fits = left >= partySize
+            const active = value?.vehicle_offer_id === c.offerId
+            return (
+              <button key={c.offerId} type="button" disabled={!fits}
+                onClick={() => onChange({ ...value, vehicle_offer_id: c.offerId })}
+                style={{ ...btn(active), textAlign: "left", opacity: fits ? 1 : 0.55, cursor: fits ? "pointer" : "not-allowed" }}>
+                {c.driverName}'s car · {Math.max(0, left)} seat{left === 1 ? "" : "s"} left{fits ? "" : " -- too full"}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {mode === "driver" && (
+        <div style={{ marginTop: 8 }}>
+          <SeatSelector label="Spare seats:" value={value?.seats_offered ?? minDriverSeats} min={minDriverSeats} max={10}
+            onChange={n => onChange({ ...value, seats_offered: n })} />
+          {partySize > 1 && (
+            <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: -6 }}>
+              The other {partySize - 1} in this booking ride with the driver.
+            </div>
+          )}
+        </div>
+      )}
+
+      {mode !== "none" && partySize > 1 && mode !== "driver" && (
+        <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 6 }}>Applies to all {partySize} people in this booking.</div>
+      )}
+      {mode !== "none" && unnamedCount > 0 && (
+        <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 6 }}>
+          Name every seat first ({unnamedCount} unnamed) -- the driver needs to know who is coming.
+        </div>
+      )}
+      {drivingNote && mode !== "driver" && (
+        <div style={{ fontSize: 12, color: "var(--amber-dark)", marginTop: 6 }}>{drivingNote}</div>
+      )}
     </div>
   )
 }
@@ -395,6 +486,12 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   // (pre-existing behaviour) without naming who they're for.
   const [addNameParty,        setAddNameParty]        = useState(false)
   const [addParty,            setAddParty]            = useState([])
+  // Transport allocation (Iain, 2026-10-04): on a walk-up, and per booking row.
+  const [addTransport,        setAddTransport]        = useState({ mode: "none" })
+  const [transportEditKey,    setTransportEditKey]    = useState(null)
+  const [transportDraft,      setTransportDraft]      = useState({ mode: "none" })
+  const [transportSaving,     setTransportSaving]     = useState(false)
+  const [carTick,             setCarTick]             = useState(0)
   // Unassigned seats (2026-09-04) -- additive named entries, admin/EC only,
   // for headcount that never gets a real booking row (walk-ins who won't be
   // tracked as a resident/contact at all). See migration 095.
@@ -680,7 +777,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
         }
         setPartyByOwner(map)
       })
-  }, [event.id])
+  }, [event.id, refreshKey, carTick])
 
   // Personal vehicle offers (migration 109/110) -- driver/passenger status
   // per booking OWNER for the attendee list, flagged as missing by Iain in
@@ -713,7 +810,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       setCarSections(carSections)
       setCarPeopleKeys(carPeopleKeys)
     })
-  }, [event.id])
+  }, [event.id, refreshKey, carTick])
 
   useEffect(() => {
     if (showAddBooking && allResidents.length === 0) {
@@ -739,7 +836,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       return copy
     })
   }, [addSeats])
-  useEffect(() => { setAddNameParty(false); setAddParty([]) }, [selectedResident])
+  useEffect(() => { setAddNameParty(false); setAddParty([]); setAddTransport({ mode: "none" }) }, [selectedResident])
 
   const addPartyNeed = Math.max(0, addSeats - 1)
   // Mirrors BookingSection's requireNaming/partyValid (below) -- when the
@@ -932,6 +1029,23 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
     }
   }
 
+  async function saveTransport(member, contact, label) {
+    setTransportSaving(true)
+    try {
+      const { ok, error } = await patchAction({
+        action: "set_transport",
+        ...(member?.id ? { member_id: member.id } : { contact_id: contact?.id }),
+        mode: transportDraft.mode,
+        vehicle_offer_id: transportDraft.vehicle_offer_id || null,
+        seats_offered: transportDraft.seats_offered,
+      })
+      if (!ok) { showToast(error || "Couldn't set transport", "error"); return }
+      showToast(`Transport updated for ${label}`)
+      setTransportEditKey(null)
+      load(); onRefresh(); setCarTick(t => t + 1)
+    } finally { setTransportSaving(false) }
+  }
+
   async function submitAddBooking(forceWaitlist = false) {
     if (!selectedResident) return
     if (!addPartyValid) return
@@ -946,15 +1060,17 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           seats: addSeats, mark_paid: addMarkPaid,
           ...((requireAddNaming || addNameParty) ? { attendees: addPartyToAttendees(addParty) } : {}),
           ...(forceWaitlist ? { force_status: "waitlist" } : {}),
+          ...(!forceWaitlist && addTransport.mode !== "none" ? { transport: addTransport } : {}),
         }),
       })
       const d = await res.json()
       if (!res.ok) { showToast(d.error || "Failed to add booking", "error"); return }
       if (d.status === "insufficient_capacity") { setInsufficientCapacity({ available: d.available }); return }
-      showToast(`${selectedResident.name} added${d.status === "waitlist" ? " to waitlist" : ""}`)
+      if (d.transport_error) showToast(`${selectedResident.name} added, but transport wasn't set: ${d.transport_error}`, "error")
+      else showToast(`${selectedResident.name} added${d.status === "waitlist" ? " to waitlist" : ""}`)
       setSelectedResident(null); setResidentQuery(""); setResidentResults([])
-      setAddSeats(1); setInsufficientCapacity(null); setShowAddBooking(false)
-      load(); onRefresh()
+      setAddSeats(1); setInsufficientCapacity(null); setShowAddBooking(false); setAddTransport({ mode: "none" })
+      load(); onRefresh(); setCarTick(t => t + 1)
     } finally { setAddSubmitting(false) }
   }
 
@@ -1019,6 +1135,15 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   // For MVP: show "Refund Due" for bookings where payment_status = 'pending' (meaning they were confirmed but now awaiting refund decision)
 
   const paymentRequired = data?.payment_required
+  const busTaken = confirmed.filter(b => b.bus_passenger).length
+    + Object.values(partyByOwner).flat().filter(p => p.bus).length
+  const busLeftFor = ownUsage => (event.bus_max_seats == null ? null : Math.max(0, event.bus_max_seats - (busTaken - ownUsage)))
+  const showTransport = !!(event.has_bus || event.allow_personal_vehicles)
+  // Walk-up: named people = owner + filled party rows.
+  const addNamedCount = 1 + addParty.filter(isAddRowFilled).length
+  const addUnnamed = Math.max(0, addSeats - addNamedCount)
+  const addTransportBlocked = addTransport.mode !== "none" && (addUnnamed > 0
+    || (addTransport.mode === "car" && !addTransport.vehicle_offer_id))
   // Bookings pending refund decision = those where payment was received but booking may need refund
   // We'll show refund section for bookings with payment_status = 'confirmed' that EC wants to cancel
 
@@ -1042,8 +1167,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       {/* Community bus (2026-08-19): transparency for the driver -- a running
           count here, the actual names live per-attendee below (🚌 markers). */}
       {!!event.has_bus && (() => {
-        const busCount = confirmed.filter(b => b.bus_passenger).length
-          + Object.values(partyByOwner).flat().filter(p => p.bus).length
+        const busCount = busTaken
         return (
           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--text-dim)", marginBottom: 14 }}>
             <BusIcon size={13} />
@@ -1320,6 +1444,13 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                   </div>
                 )}
 
+                {showTransport && (
+                  <TransportPicker event={event} colour={colour} value={addTransport} onChange={setAddTransport}
+                    cars={carSections}
+                    ownerKey={selectedResident.type === "contact" ? `c:${selectedResident.id}` : `m:${selectedResident.id}`}
+                    partySize={addNamedCount} unnamedCount={addUnnamed} busLeft={busLeftFor(0)} />
+                )}
+
                 {paymentRequired && (
                   <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
                     {[{ v: false, label: "Unpaid", colour: "var(--amber-dark)", fill: "var(--amber)" },
@@ -1345,9 +1476,9 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                   </div>
                 )}
 
-                <button onClick={() => submitAddBooking(false)} disabled={addSubmitting || !addPartyValid}
+                <button onClick={() => submitAddBooking(false)} disabled={addSubmitting || !addPartyValid || addTransportBlocked}
                   style={{ width: "100%", padding: "10px 0", background: colour, color: clubTextOn(colour), border: "none", borderRadius: 8,
-                    fontSize: 14, fontWeight: 700, cursor: (addSubmitting || !addPartyValid) ? "not-allowed" : "pointer", opacity: (addSubmitting || !addPartyValid) ? 0.7 : 1 }}>
+                    fontSize: 14, fontWeight: 700, cursor: (addSubmitting || !addPartyValid || addTransportBlocked) ? "not-allowed" : "pointer", opacity: (addSubmitting || !addPartyValid || addTransportBlocked) ? 0.7 : 1 }}>
                   {addSubmitting ? "Adding…" : "Add Booking"}
                 </button>
               </div>
@@ -1550,6 +1681,24 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                           </div>
                         )
                       })()}
+                      {showTransport && confirmedSeats > 0 && carOwnerKey && transportEditKey !== carOwnerKey && (
+                        <button type="button"
+                          onClick={() => {
+                            const party = partyByOwner[carOwnerKey] || []
+                            const isBus = !!firstConf?.bus_passenger || party.some(p => p.bus)
+                            const ridingSection = carStatus?.role === "riding"
+                              ? carSections.find(sec => sec.offerId === carStatus.offerId) : null
+                            setTransportDraft(
+                              carStatus?.role === "driving" ? { mode: "driver", seats_offered: carStatus.seatsOffered }
+                              : ridingSection ? { mode: "car", vehicle_offer_id: ridingSection.offerId }
+                              : isBus ? { mode: "bus" } : { mode: "none" })
+                            setTransportEditKey(carOwnerKey)
+                          }}
+                          style={{ marginTop: 6, fontSize: 12, fontWeight: 600, color: clubInk(colour), background: "none",
+                            border: `1px solid ${colour}60`, borderRadius: 8, padding: "4px 10px", cursor: "pointer", fontFamily: "inherit" }}>
+                          🚌🚗 Set transport
+                        </button>
+                      )}
                     </div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0, alignItems: "center" }}>
                       {paymentRequired && confirmedSeats > 0 && firstConf && computeIsSubmitted(firstConf) && (
@@ -1591,6 +1740,38 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                       )}
                     </div>
                   </div>
+                  {transportEditKey === carOwnerKey && carOwnerKey && (() => {
+                    const party = partyByOwner[carOwnerKey] || []
+                    const ownBus = (firstConf?.bus_passenger ? 1 : 0) + party.filter(p => p.bus).length
+                    const partySize = 1 + party.length
+                    const currentOffer = carStatus?.role === "riding" ? carStatus.offerId || null : null
+                    const label = isOwnBooking ? "your booking" : name
+                    const draftBlocked = transportDraft.mode !== "none" && (partySize < confirmedSeats
+                      || (transportDraft.mode === "car" && !transportDraft.vehicle_offer_id))
+                    return (
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
+                        <TransportPicker event={event} colour={colour} value={transportDraft} onChange={setTransportDraft}
+                          cars={carSections} ownerKey={carOwnerKey} currentOfferId={currentOffer}
+                          partySize={partySize} unnamedCount={Math.max(0, confirmedSeats - partySize)}
+                          busLeft={busLeftFor(ownBus)}
+                          drivingNote={drivingSection && drivingSection.passengers.length > 0
+                            ? `${name} is driving others. Changing this takes everyone out of their car, and they'll be told.` : null} />
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button type="button" onClick={() => saveTransport(member, contact, label)} disabled={transportSaving || draftBlocked}
+                            style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "none", background: colour, color: clubTextOn(colour),
+                              fontSize: 13, fontWeight: 700, fontFamily: "inherit",
+                              cursor: (transportSaving || draftBlocked) ? "not-allowed" : "pointer", opacity: (transportSaving || draftBlocked) ? 0.6 : 1 }}>
+                            {transportSaving ? "Saving…" : "Save transport"}
+                          </button>
+                          <button type="button" onClick={() => setTransportEditKey(null)} disabled={transportSaving}
+                            style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)",
+                              color: "var(--text)", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })()}
                   {paymentRequired && firstConf && payRecordingId === firstConf.id && (() => {
                     const bal = remainingBalance(firstConf, event, confirmedSeats)
                     const enteredAmt = payRecordAmount === "" ? null : (parseFloat(payRecordAmount) || 0)

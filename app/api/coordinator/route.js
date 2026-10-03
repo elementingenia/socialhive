@@ -9,6 +9,7 @@ import { syncAttendees } from "@/lib/syncAttendees"
 import { effectiveSeatCap, planSeatModification } from "@/lib/modifyBooking"
 import { requireEventManage } from "@/lib/areaAuth"
 import { amountOwing, derivePaymentStatus, paymentReminderPhrase } from "@/lib/payments"
+import { applyTransport } from "@/lib/applyTransport"
 
 // force-dynamic + the shared no-store supabaseAdmin (lib/supabaseAdmin.js) keep
 // this GET route reading LIVE data. Without it, Next's fetch cache once dropped a
@@ -523,6 +524,24 @@ export async function PATCH(req) {
     else if (seats <= available) bookingStatus = "confirmed"
     else return NextResponse.json({ status: "insufficient_capacity", available })
 
+    // Transport on a walk-up (Iain, 2026-10-04): bus / a car / driving.
+    // Checked BEFORE the booking row is written, so a full bus or car
+    // rejects the whole walk-up rather than saving a booking with the
+    // transport silently dropped. See lib/transportAllocation.js.
+    const transport = body.transport && body.transport.mode && body.transport.mode !== "none" ? body.transport : null
+    if (transport) {
+      if (bookingStatus !== "confirmed") {
+        return NextResponse.json({ error: "Transport can only be set on a confirmed booking, not one on the waitlist." }, { status: 409 })
+      }
+      const pre = await applyTransport({
+        eventId: event_id, owner: { memberId: member_id || null, contactId: contact_id || null },
+        mode: transport.mode, vehicleOfferId: transport.vehicle_offer_id || null, seatsOffered: transport.seats_offered,
+        actingMemberId: member.id, validateOnly: true,
+        preview: { confirmed: true, seats, attendees: party.attendees || [] },
+      })
+      if (!pre.ok) return NextResponse.json({ error: pre.error }, { status: pre.status || 409 })
+    }
+
     const payment_status = !ev.payment_required ? "not_required"
       : bookingStatus === "confirmed" ? (mark_paid ? "confirmed" : "pending")
       : "pending"
@@ -548,13 +567,29 @@ export async function PATCH(req) {
       await syncAttendees(event_id, { ownerId: member_id || null, ownerContactId: contact_id || null }, party.attendees)
     }
 
-    // No account to notify/push for a contact-owned booking.
-    if (member_id) {
-      await notify(member_id, event_id, "booking_added",
-        `You were added to ${ev.title || "an event"} (${seats} seat${seats !== 1 ? "s" : ""}) by an Event Coordinator.`)
+    let transportError = null
+    if (transport) {
+      const applied = await applyTransport({
+        eventId: event_id, owner: { memberId: member_id || null, contactId: contact_id || null },
+        mode: transport.mode, vehicleOfferId: transport.vehicle_offer_id || null, seatsOffered: transport.seats_offered,
+        actingMemberId: member.id, skipOwnerNotify: true,
+      })
+      // The booking itself is saved either way; only a race (someone took
+      // the last bus/car seat in the last second) lands here.
+      if (!applied.ok) transportError = applied.error
     }
 
-    return NextResponse.json({ ok: true, status: bookingStatus })
+    // No account to notify/push for a contact-owned booking.
+    if (member_id) {
+      const how = !transport || transportError ? ""
+        : transport.mode === "bus" ? " You're on the bus."
+        : transport.mode === "car" ? " You have a seat in a car -- see the event for details."
+        : " You're listed as driving your own car."
+      await notify(member_id, event_id, "booking_added",
+        `You were added to ${ev.title || "an event"} (${seats} seat${seats !== 1 ? "s" : ""}) by an Event Coordinator.${how}`)
+    }
+
+    return NextResponse.json({ ok: true, status: bookingStatus, ...(transportError ? { transport_error: transportError } : {}) })
   }
 
   // ── Cancel a booking on behalf of a user ──────────────────────────────────
@@ -702,6 +737,22 @@ export async function PATCH(req) {
     }
 
     return NextResponse.json({ ok: true, seats: plan.seats, confirmed: plan.newConfirmed, waitlisted: plan.newWaitlisted })
+  }
+
+  // ── Set a booking's transport (bus / a car / driving / own way) ─────────────
+  // Coordinator allocation (Iain, 2026-10-04). Whole booking party at once;
+  // the coordinator's choice moves people out of any current bus seat or
+  // car; capacity limits still apply. Rules in lib/transportAllocation.js.
+  if (action === "set_transport") {
+    const { member_id: ownerId, contact_id: ownerContactId, mode, vehicle_offer_id, seats_offered } = body
+    if (!ownerId && !ownerContactId) return NextResponse.json({ error: "member_id or contact_id required" }, { status: 400 })
+    if (ownerId && ownerContactId) return NextResponse.json({ error: "Provide only one of member_id or contact_id" }, { status: 400 })
+    const result = await applyTransport({
+      eventId: event_id, owner: { memberId: ownerId || null, contactId: ownerContactId || null },
+      mode, vehicleOfferId: vehicle_offer_id || null, seatsOffered: seats_offered, actingMemberId: member.id,
+    })
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status || 400 })
+    return NextResponse.json({ ok: true })
   }
 
   // ── Update EC-editable event fields ──────────────────────────────────────────

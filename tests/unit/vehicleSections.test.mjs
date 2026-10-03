@@ -139,5 +139,31 @@ const baseEvent = { has_bus: false, bus_driver_id: null, bus_driver: null, allow
   ok(ownWay.rows.some(r => r.name === 'Plus One' && r.note === 'Named attendee'), 'a named resident attendee with no bus/car ends up in Own Way')
 }
 
+// ── Contact drivers + a driver's own party (coordinator allocation, 2026-10-04) ──
+{
+  let p2 = 0, f2 = 0
+  const ok2 = (c, m) => { c ? p2++ : (f2++, console.log('  ✗', m)) }
+  const offers = [{ id: 'o-c', member_id: null, contact_id: 'lyn', seats_offered: 2, driver: null, driver_contact: { name: 'Lyn' } }]
+  const passengers = [{
+    id: 'px', vehicle_offer_id: 'o-c', party_owner_member_id: null, party_owner_contact_id: 'lyn',
+    member_id: 'geoff', contact_id: null, guest_name: null,
+    passenger_member: { name: 'Geoff' }, passenger_contact: null,
+    vehicle_offer: { member_id: null, contact_id: 'lyn', driver: null, driver_contact: { name: 'Lyn' } },
+  }, {
+    id: 'py', vehicle_offer_id: 'o-c', party_owner_member_id: 'sue', party_owner_contact_id: null,
+    member_id: 'sue', contact_id: null, guest_name: null,
+    passenger_member: { name: 'Sue' }, passenger_contact: null,
+    vehicle_offer: { member_id: null, contact_id: 'lyn', driver: null, driver_contact: { name: 'Lyn' } },
+  }]
+  const { carByOwner, carSections, carPeopleKeys } = buildCarSections(offers, passengers, (m, fb) => m?.name || fb)
+  ok2(carByOwner['c:lyn']?.role === 'driving', 'contact driver keyed c: and stays "driving" even with own party riding')
+  ok2(carSections[0].driverName === 'Lyn' && carSections[0].driverKey === 'c:lyn', 'contact driver named from driver_contact')
+  ok2(carByOwner['m:sue']?.role === 'riding' && carByOwner['m:sue'].driverName === 'Lyn' && carByOwner['m:sue'].offerId === 'o-c', 'rider gets contact driver name + offerId')
+  ok2(carPeopleKeys.has('c:lyn') && carPeopleKeys.has('m:geoff'), 'contact driver and their passenger in carPeopleKeys')
+  ok2(carSections[0].passengers.length === 2, 'both passengers listed under the contact driver')
+  console.log(`vehicleSections (contact drivers): ${p2} passed, ${f2} failed`)
+  if (f2) process.exit(1)
+}
+
 console.log(`\nlib/vehicleSections.js: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
