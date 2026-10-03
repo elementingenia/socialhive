@@ -11,7 +11,7 @@ import { BAR_ENABLED } from "@/lib/features"
 import {
   HomeIcon, MoviesIcon, CalendarIcon, SuggestionsIcon, DVDIcon,
   BookClubIcon, SocialIcon, AdminIcon, BookingsIcon, BarIcon,
-  InfoIcon, DocumentsIcon, ContactsIcon, ClubsIcon, SpaceIcon, SpecialEventsIcon,
+  InfoIcon, DocumentsIcon, ContactsIcon, InterestsIcon, ClubsIcon, SpaceIcon, SpecialEventsIcon,
   CommitteeIcon,
 } from "@/components/NavIcons"
 
@@ -44,6 +44,9 @@ const HUB_CONFIG = {
     items: [
       { path: "/info/contacts",  label: "Contacts",  Icon: ContactsIcon  },
       { path: "/info/documents", label: "Documents", Icon: DocumentsIcon },
+      // Browse "Ask me about" by interest (2026-10-03). Same tag icon as
+      // Admin > Interests -- one canonical icon for the concept.
+      { path: "/info/interests", label: "Interests", Icon: InterestsIcon },
     ],
   },
   // Library Home was removed 2026-09-10 -- /booklibrary/books is now the
