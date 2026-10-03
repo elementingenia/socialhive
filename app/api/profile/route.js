@@ -2,6 +2,8 @@ import { supabaseAdmin as supabase } from "@/lib/supabaseAdmin"
 export const dynamic = "force-dynamic"
 import { NextResponse } from "next/server"
 import { isValidDisplayName } from "@/lib/memberName"
+import { normaliseHouseNumber, resolveStreetId } from "@/lib/address"
+import { loadStreets, withStreetNames } from "@/lib/streetsServer"
 
 
 async function getMember(req) {
@@ -14,7 +16,7 @@ async function getMember(req) {
   // Try full select (post-migration); fall back to base columns if not yet migrated
   let { data, error } = await supabase
     .from("members")
-    .select("id, name, display_name, username, house_number, email, phone, avatar_url, bar_opt_in, hide_name, is_admin, weekly_digest")
+    .select("id, name, display_name, username, house_number, street_id, email, phone, avatar_url, bar_opt_in, hide_name, is_admin, weekly_digest")
     .eq("auth_id", user.id).single()
 
   if (error) {
@@ -30,7 +32,8 @@ async function getMember(req) {
 export async function GET(req) {
   const member = await getMember(req)
   if (!member) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  return NextResponse.json(member)
+  const [withName] = await withStreetNames(supabase, [member])
+  return NextResponse.json(withName)
 }
 
 export async function PATCH(req) {
@@ -44,7 +47,7 @@ export async function PATCH(req) {
   // on, same as name. Must be at least 3 letters (isValidDisplayName --
   // spaces/digits/punctuation don't count), matching the DB-level NOT NULL
   // migration 083 backfills and enforces.
-  const allowed = ["name", "display_name", "house_number", "email", "phone", "bar_opt_in", "hide_name", "avatar_url", "weekly_digest"]
+  const allowed = ["name", "display_name", "house_number", "street_id", "email", "phone", "bar_opt_in", "hide_name", "avatar_url", "weekly_digest"]
   const updates = Object.fromEntries(Object.entries(body).filter(([k]) => allowed.includes(k)))
   if (Object.keys(updates).length === 0)
     return NextResponse.json({ error: "No valid fields" }, { status: 400 })
@@ -55,11 +58,23 @@ export async function PATCH(req) {
     updates.display_name = trimmed
   }
   if ("weekly_digest" in updates) updates.weekly_digest = updates.weekly_digest !== false
+  // House number: whole number only; street: must be on the admin list
+  // (migration 122, Iain 2026-10-03). The DB enforces the number rule too.
+  if ("house_number" in updates) {
+    const h = normaliseHouseNumber(updates.house_number)
+    if (!h.ok) return NextResponse.json({ error: h.error }, { status: 400 })
+    updates.house_number = h.value
+  }
+  if ("street_id" in updates) {
+    const st = resolveStreetId(updates.street_id, await loadStreets(supabase))
+    if (!st.ok) return NextResponse.json({ error: st.error }, { status: 400 })
+    updates.street_id = st.value
+  }
 
   // Try full update; if new columns don't exist yet, retry with only base columns
   let { data, error } = await supabase
     .from("members").update(updates).eq("id", member.id)
-    .select("id, name, display_name, username, house_number, email, phone, avatar_url, bar_opt_in, hide_name, weekly_digest").single()
+    .select("id, name, display_name, username, house_number, street_id, email, phone, avatar_url, bar_opt_in, hide_name, weekly_digest").single()
 
   if (error) {
     const baseOnly = ["name", "house_number", "avatar_url", "bar_opt_in"]
@@ -73,5 +88,6 @@ export async function PATCH(req) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
-  return NextResponse.json(data)
+  const [withName] = await withStreetNames(supabase, [data])
+  return NextResponse.json(withName)
 }

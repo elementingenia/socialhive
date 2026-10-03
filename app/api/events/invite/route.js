@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { resolveMember } from "@/lib/areaAuth"
 import { notify } from "@/lib/notify"
 import { resolveMemberName } from "@/lib/memberName"
+import { withStreetNames } from "@/lib/streetsServer"
 import { eventDeepLink } from "@/lib/eventNav"
 import { canInviteToEvent, planInvites, inviteMessage, INVITE_CAP_PER_SENDER } from "@/lib/eventInvites"
 
@@ -23,7 +24,7 @@ async function loadContext(eventId, member) {
   if (!event) return { error: "Event not found", status: 404 }
 
   const [{ data: members }, { data: bookings }, { data: invites }] = await Promise.all([
-    supa.from("members").select("id, name, display_name, hide_name, house_number, status, auth_id, is_test"),
+    supa.from("members").select("id, name, display_name, hide_name, house_number, street_id, status, auth_id, is_test"),
     supa.from("bookings").select("member_id").eq("event_id", eventId).neq("status", "cancelled"),
     supa.from("event_invites").select("to_member_id, from_member_id").eq("event_id", eventId),
   ])
@@ -53,9 +54,8 @@ export async function GET(req) {
   if (!canInviteToEvent(ctx.event)) return NextResponse.json({ open: false, candidates: [], remaining: 0 })
 
   const blocked = new Set([...ctx.ineligibleIds, ...ctx.bookedIds, ...ctx.alreadyInvitedIds, member.id])
-  const candidates = ctx.members
-    .filter(m => !blocked.has(m.id))
-    .map(m => ({ id: m.id, name: resolveMemberName(m, { canManage: !!member.is_admin }), house_number: m.house_number || null }))
+  const candidates = (await withStreetNames(supa, ctx.members.filter(m => !blocked.has(m.id))))
+    .map(m => ({ id: m.id, name: resolveMemberName(m, { canManage: !!member.is_admin }), house_number: m.house_number || null, street_name: m.street_name || null }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
   return NextResponse.json({

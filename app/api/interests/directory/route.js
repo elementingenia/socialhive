@@ -2,6 +2,7 @@ import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { STATUS, buildDirectory } from "@/lib/interests"
 import { maskMemberRow } from "@/lib/directoryPrivacy"
+import { withStreetNames } from "@/lib/streetsServer"
 
 // Info > Contacts "Ask me about" lines + search (backlog B3). Returns
 // { member_id: ["Bridge", "Gardening"] } for approved chips (directory)
@@ -27,7 +28,7 @@ export async function GET(req) {
 
   const memberIds = [...new Set((links || []).map(l => l.member_id))]
   const { data: members, error: e3 } = memberIds.length
-    ? await supa.from("members").select("id, status, is_test, hide_name, name, display_name, house_number, phone").in("id", memberIds)
+    ? await supa.from("members").select("id, status, is_test, hide_name, name, display_name, house_number, street_id, phone").in("id", memberIds)
     : { data: [] }
   if (e3) return NextResponse.json({ error: "Could not load interests." }, { status: 500 })
 
@@ -44,11 +45,11 @@ export async function GET(req) {
   // maskMemberRow is applied anyway as a second guard.
   const listed = new Set([...Object.keys(directory || {}), ...Object.keys(pending || {})])
   const people = {}
-  for (const m of members || []) {
+  for (const m of await withStreetNames(supa, members || [])) {
     if (!listed.has(m.id) || m.status !== "active" || m.is_test) continue
     const r = maskMemberRow(m, viewer)
     if (r.masked) continue
-    people[m.id] = { id: r.id, name: r.name, display_name: r.display_name, house_number: r.house_number, phone: r.phone, hide_name: r.hide_name }
+    people[m.id] = { id: r.id, name: r.name, display_name: r.display_name, house_number: r.house_number, street_name: r.street_name, phone: r.phone, hide_name: r.hide_name }
   }
   return NextResponse.json({ directory, pending, people })
 }

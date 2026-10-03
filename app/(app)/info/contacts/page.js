@@ -12,6 +12,9 @@ import AskQuestion from "@/components/AskQuestion"
 import { authedFetch } from "@/lib/getAuthToken"
 import { interestsLine } from "@/lib/interests"
 import PhoneActions from "@/components/PhoneActions"
+import StreetPicker from "@/components/StreetPicker"
+import { useStreets } from "@/lib/useStreets"
+import { formatAddress, houseNumberInput, normaliseHouseNumber } from "@/lib/address"
 
 const secondaryButtonStyle = {
   padding: "0.5rem 0.9rem", borderRadius: 10, border: "1px solid var(--border)",
@@ -59,9 +62,10 @@ function csvEscape(val) {
 // what's handed in, so the export matches the screen exactly rather than
 // re-deriving its own separate order.
 function exportContactsCsv(entries, scopeLabel) {
-  const header = ["House #", "Name", "Phone", "Email"]
+  const header = ["House #", "Street", "Name", "Phone", "Email"]
   const rows = entries.map(e => [
     e.isResident ? (e.house_number || "") : "",
+    e.isResident ? (e.street_name || "") : "",
     e.realName ? `${e.name} (${e.realName})` : e.name,
     e.phone || "",
     e.email || "",
@@ -110,8 +114,8 @@ function ContactCard({ contact, badges = [], external = false, isResident = true
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
         <div style={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: "0.4rem", flexWrap: "wrap" }}>
           <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text)" }}>{contact.name}</span>
-          {isResident && contact.house_number && (
-            <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>· #{contact.house_number}</span>
+          {isResident && (contact.house_number || contact.street_name) && (
+            <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>· {formatAddress(contact.house_number, contact.street_name)}</span>
           )}
           {badges.map(b => (
             <span key={b} style={{
@@ -186,17 +190,19 @@ function ContactCard({ contact, badges = [], external = false, isResident = true
 }
 
 // ── Add / Edit a standalone (non-resident) contact ────────────────────────────
-const EMPTY = { name: "", title: "", phone: "", email: "", house_number: "", category_ids: [] }
+const EMPTY = { name: "", title: "", phone: "", email: "", house_number: "", street_id: null, category_ids: [] }
 
 function ContactForm({ contact, categories, setCategories, members, onSaved, onClose }) {
   const isEdit = !!contact
   const [form, setForm] = useState(() => contact ? {
     name: contact.name, title: contact.title || "", phone: contact.phone || "",
     email: contact.email || "", house_number: contact.house_number || "",
+    street_id: contact.street_id || null,
     category_ids: (contact.contact_category_members || []).map(m => m.category_id),
   } : EMPTY)
   const [saving, setSaving] = useState(false)
   const [error, setError]   = useState("")
+  const streets = useStreets()
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const nameMatchesMember = form.name.trim() && !isEdit &&
@@ -206,6 +212,8 @@ function ContactForm({ contact, categories, setCategories, members, onSaved, onC
     setError("")
     if (!form.name.trim()) { setError("Name is required"); return }
     if (!form.category_ids.length) { setError("At least one category is required"); return }
+    const houseCheck = normaliseHouseNumber(form.house_number)
+    if (!houseCheck.ok) { setError(houseCheck.error); return }
     setSaving(true)
     const token = await getToken()
     const payload = {
@@ -213,7 +221,8 @@ function ContactForm({ contact, categories, setCategories, members, onSaved, onC
       title: form.title.trim() || null,
       phone: form.phone.trim() || null,
       email: form.email.trim() || null,
-      house_number: form.house_number.trim() || null,
+      house_number: houseCheck.value,
+      street_id: form.street_id || null,
       category_ids: form.category_ids,
     }
     const res = await fetch("/api/info/contacts", {
@@ -282,9 +291,16 @@ function ContactForm({ contact, categories, setCategories, members, onSaved, onC
         <label style={labelStyle}>Email</label>
         <input value={form.email} onChange={e => set("email", e.target.value)} type="email" style={inputStyle} />
       </div>
-      <div>
-        <label style={labelStyle}>House #</label>
-        <input value={form.house_number} onChange={e => set("house_number", e.target.value)} style={inputStyle} />
+      {/* House # + street (migration 122) -- numbers only, street from the
+          Admin > Streets list. Only shown on the card for a Resident. */}
+      <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+        <div style={{ flex: "0 0 7rem" }}>
+          <label style={labelStyle}>House #</label>
+          <input value={form.house_number} onChange={e => set("house_number", houseNumberInput(e.target.value))} inputMode="numeric" pattern="[0-9]*" style={inputStyle} />
+        </div>
+        <div style={{ flex: "1 1 10rem", minWidth: 0 }}>
+          <StreetPicker streets={streets} value={form.street_id} onChange={v => set("street_id", v)} style={inputStyle} label="Street" labelStyle={labelStyle} />
+        </div>
       </div>
 
       {error && <div style={{ color: "#b91c1c", fontSize: "0.83rem" }}>{error}</div>}
@@ -626,6 +642,7 @@ export default function ContactsPage() {
         searchName: maskedForViewer ? null : [m.name, m.display_name].filter(Boolean).join(" "),
         email: maskedForViewer ? null : m.email,
         house_number: maskedForViewer ? null : m.house_number,
+        street_name: maskedForViewer ? null : (m.street_name || null),
         phone: maskedForViewer ? null : (m.phone || null),
         title: maskedForViewer ? null : (linked?.title || null),
         interests: maskedForViewer ? null : (interests[m.id] || null),
@@ -640,6 +657,7 @@ export default function ContactsPage() {
     })
     const contactEntries = displayContacts.map(c => ({
       key: `c-${c.id}`, name: c.name, email: c.email, house_number: c.house_number,
+      street_name: c.street_name || null,
       phone: c.phone, title: c.title,
       categoryIds: (c.contact_category_members || []).map(x => x.category_id),
       isMember: false, contact: c,
@@ -699,7 +717,7 @@ export default function ContactsPage() {
     if (!q) return categoryFiltered
     const digits = q.replace(/\D/g, "")
     return categoryFiltered.filter(e => {
-      const haystack = [e.name, e.searchName, e.title, e.email, e.isResident ? e.house_number : null, ...(e.interests || [])]
+      const haystack = [e.name, e.searchName, e.title, e.email, e.isResident ? formatAddress(e.house_number, e.street_name) : null, ...(e.interests || [])]
         .filter(Boolean).join(" ").toLowerCase()
       if (haystack.includes(q)) return true
       if (digits && e.phone && e.phone.replace(/\D/g, "").includes(digits)) return true
@@ -715,9 +733,13 @@ export default function ContactsPage() {
   // themselves. `entries` is already name-sorted (see its own useMemo
   // above), so "By Name" just returns `filtered` as-is rather than
   // re-sorting something that's already in the right order.
+  // "Street" (migration 122, Iain 2026-10-03): street A-Z, then house
+  // number within the street -- the order a neighbour walks it. Anyone
+  // without a street falls to the end, in house-number order.
+  const hasStreets = useMemo(() => entries.some(e => e.isResident && e.street_name), [entries])
   const sortedFiltered = useMemo(() => {
     if (sortMode === "name") return filtered
-    return [...filtered].sort((a, b) => {
+    const byHouse = (a, b) => {
       const an = parseInt(a.isResident ? a.house_number : "", 10)
       const bn = parseInt(b.isResident ? b.house_number : "", 10)
       const aValid = !isNaN(an)
@@ -726,8 +748,19 @@ export default function ContactsPage() {
       if (aValid) return -1
       if (bValid) return 1
       return a.name.localeCompare(b.name)
-    })
-  }, [filtered, sortMode])
+    }
+    if (sortMode === "street" && hasStreets) {
+      return [...filtered].sort((a, b) => {
+        const as = a.isResident ? (a.street_name || "") : ""
+        const bs = b.isResident ? (b.street_name || "") : ""
+        if (as && bs) return as.localeCompare(bs, "en", { sensitivity: "base" }) || byHouse(a, b)
+        if (as) return -1
+        if (bs) return 1
+        return byHouse(a, b)
+      })
+    }
+    return [...filtered].sort(byHouse)
+  }, [filtered, sortMode, hasStreets])
 
   const initializing = loading || activeFilter === null
 
@@ -792,7 +825,7 @@ export default function ContactsPage() {
           row of primary filters. */}
       <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", marginBottom: "0.6rem" }}>
         <span style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontWeight: 600 }}>Sort:</span>
-        {[{ key: "house", label: "House #" }, { key: "name", label: "Name" }].map(opt => (
+        {[{ key: "house", label: "House #" }, ...(hasStreets ? [{ key: "street", label: "Street" }] : []), { key: "name", label: "Name" }].map(opt => (
           <button key={opt.key} onClick={() => setSortMode(opt.key)} style={{
             padding: "0.25rem 0.7rem", borderRadius: 20, border: "none",
             fontFamily: "inherit", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer",
@@ -809,7 +842,7 @@ export default function ContactsPage() {
         {isAdmin && (
           <button
             onClick={() => exportContactsCsv(sortedFiltered, exportScopeLabel)}
-            title="Download the list currently shown (House #, Name, Phone, Email) as a CSV"
+            title="Download the list currently shown (House #, Street, Name, Phone, Email) as a CSV"
             style={exportButtonStyle}>
             ⬇ Export
           </button>

@@ -1,4 +1,5 @@
 "use client"
+import { formatAddress } from "@/lib/address"
 import { useState, useEffect, useMemo } from "react"
 import { useUser } from "@/lib/UserContext"
 import { authedFetch } from "@/lib/getAuthToken"
@@ -119,8 +120,8 @@ export default function InterestsBrowsePage() {
                 <div key={m.id} style={{ padding: "0.5rem 0", borderTop: "1px solid var(--border)" }}>
                   <div style={{ display: "flex", alignItems: "baseline", gap: "0.4rem", flexWrap: "wrap" }}>
                     <span style={{ fontWeight: 600, fontSize: "0.92rem", color: "var(--text)" }}>{name}</span>
-                    {m.house_number && (
-                      <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>· House #{m.house_number}</span>
+                    {(m.house_number || m.street_name) && (
+                      <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>· {formatAddress(m.house_number, m.street_name)}</span>
                     )}
                   </div>
                   {/* Own line under the name: the number + Call/Message don't

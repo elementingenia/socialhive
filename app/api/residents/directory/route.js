@@ -2,6 +2,7 @@ import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { requireEventManage, resolveMember } from "@/lib/areaAuth"
 import { buildResidentPicker } from "@/lib/directoryPrivacy"
+import { withStreetNames } from "@/lib/streetsServer"
 
 // Resident pickers in EventSlideOut (walk-up booking, "who else is
 // coming?"). Moved server-side for BUG-072 (2026-10-03): the browser used
@@ -20,12 +21,16 @@ export async function GET(req) {
   if (!canManageEvent && eventId) canManageEvent = !(await requireEventManage(req, eventId)).error
 
   const [{ data: members, error: e1 }, { data: contacts, error: e2 }] = await Promise.all([
-    supa.from("members").select("id, name, username, house_number, hide_name")
+    supa.from("members").select("id, name, username, house_number, street_id, hide_name")
       .eq("status", "active").eq("is_test", false).order("name"),
-    supa.from("contacts").select("id, name, house_number")
+    supa.from("contacts").select("id, name, house_number, street_id")
       .eq("active", true).is("member_id", null).order("name"),
   ])
   if (e1 || e2) return NextResponse.json({ error: "Could not load residents." }, { status: 500 })
 
-  return NextResponse.json({ residents: buildResidentPicker({ members: members || [], contacts: contacts || [], viewer, canManageEvent }) })
+  return NextResponse.json({ residents: buildResidentPicker({
+    members: await withStreetNames(supa, members || []),
+    contacts: await withStreetNames(supa, contacts || []),
+    viewer, canManageEvent,
+  }) })
 }

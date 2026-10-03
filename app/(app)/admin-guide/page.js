@@ -140,6 +140,14 @@ const RAW_SECTIONS = [
       { title: "Managing the list — Add, Rename, Retire", id: "sub-int-list" },
     ],
   },
+  {
+    id: "streets", num: 14, title: "Streets — House Numbers & Street Names (Admin › Streets)",
+    subs: [
+      { title: "Why there's a street list", id: "sub-streets-why" },
+      { title: "Adding, renaming and deleting streets", id: "sub-streets-manage" },
+      { title: "House numbers — numbers only", id: "sub-streets-numbers" },
+    ],
+  },
 ]
 
 const SECTIONS = (() => {
@@ -816,7 +824,7 @@ export default function AdminGuidePage() {
                 from here: real <strong>Name</strong>, <strong>Display Name</strong> (what shows to other
                 residents everywhere else in the app — the two can differ, e.g. to fix a typo or an
                 unhelpful display name without touching the legal/real name), <strong>title</strong>,{" "}
-                <strong>email</strong>, <strong>house number</strong>, <strong>phone</strong>, which{" "}
+                <strong>email</strong>, <strong>house number</strong> and <strong>street</strong> (see Section 14), <strong>phone</strong>, which{" "}
                 <strong>Contacts categories</strong> they're tagged under, and — the two fields that change
                 behaviour elsewhere in the app rather than just display — <strong>Admin rights</strong>{" "}
                 (grants or revokes <code>is_admin</code>; you cannot change this on your own account from
@@ -867,7 +875,7 @@ export default function AdminGuidePage() {
               <Step>
                 An <strong>⬇ Export</strong> button sits next to the search bar on Info → Contacts,
                 admin-only. It downloads a CSV of exactly the list you're currently looking at —{" "}
-                <strong>House #, Name, Phone, Email</strong> — respecting whichever category chip and search
+                <strong>House #, Street, Name, Phone, Email</strong> — respecting whichever category chip and search
                 text are active at the time. Filter to a category first (or leave "All Categories" selected)
                 and the export matches it exactly; there's no separate "export everything" option.
               </Step>
@@ -876,7 +884,7 @@ export default function AdminGuidePage() {
                 straight into Excel, Numbers, or Google Sheets once downloaded, the same as any other CSV.
               </Step>
               <Step>
-                The export also follows whichever <strong>Sort</strong> order (House # or Name) is
+                The export also follows whichever <strong>Sort</strong> order (House #, Street or Name) is
                 currently selected on screen — a resident-facing control above the search box, added
                 2026-08-30, not admin-only — so the downloaded file's row order always matches what
                 you were just looking at.
@@ -1073,6 +1081,51 @@ export default function AdminGuidePage() {
                 <strong>Retire</strong> hides an interest from Profile, Contacts and search but keeps
                 residents&apos; picks; <strong>Restore</strong> (under Retired) brings it back with
                 those picks intact.
+              </Step>
+            </Subsection>
+          </Section>
+
+          <Section id="streets" num={14} title="Streets — House Numbers & Street Names (Admin › Streets)">
+            <Subsection id="sub-streets-why" title="Why there's a street list (added 2026-10-03)">
+              <Step>
+                House numbers around the village don&apos;t run in any order, so residents give directions
+                by street. <strong>Admin › Streets</strong> holds the community&apos;s street names. Residents
+                pick theirs from this list on their Profile, next to their house number — they can&apos;t
+                type a street of their own, so every address reads the same way.
+              </Step>
+              <Step>
+                Until at least one street is added, residents don&apos;t see a Street option at all. Once
+                streets exist, addresses show as e.g. <strong>92 Mosaic Street</strong> on Contacts cards,
+                Info › Interests, the resident pickers (walk-up booking, Invite a Neighbour) and the Contacts
+                export, which gains a <strong>Street</strong> column. Contacts also gets a{" "}
+                <strong>Street</strong> sort (street A–Z, then house number).
+              </Step>
+              <Step>
+                A Private (Hide my name) resident&apos;s street is hidden exactly like their house number.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-streets-manage" title="Adding, renaming and deleting streets">
+              <Step>
+                <strong>Add</strong> types a new name onto the list (duplicates are refused, ignoring
+                capitals and extra spaces). <strong>Rename</strong> fixes a name for everyone on that street
+                in one go. Each street shows how many people are on it.
+              </Step>
+              <Step>
+                <strong>Delete</strong> only works for a street nobody is on — otherwise you&apos;re told how
+                many people are still there, so nobody&apos;s address quietly disappears. Rename it instead,
+                or move those residents first (from their card in Info › Contacts).
+              </Step>
+              <Step>
+                Admins can set a resident&apos;s street from their card in <strong>Info › Contacts</strong>,
+                same as the house number — whichever was saved last wins.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-streets-numbers" title="House numbers — numbers only">
+              <Step>
+                House numbers are whole numbers only (no letters or street names), with no upper limit so
+                the app works for other communities too. The box only accepts digits, the server checks it
+                again, and the database itself refuses anything else. A leading zero is dropped
+                (007 becomes 7).
               </Step>
             </Subsection>
           </Section>

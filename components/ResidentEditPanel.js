@@ -4,6 +4,9 @@ import { supabase } from "@/lib/supabase"
 import { getAuthToken } from "@/lib/getAuthToken"
 import { formatPhoneInput } from "@/lib/phone"
 import { isValidDisplayName } from "@/lib/memberName"
+import StreetPicker from "@/components/StreetPicker"
+import { useStreets } from "@/lib/useStreets"
+import { houseNumberInput, normaliseHouseNumber } from "@/lib/address"
 
 export const COLOUR = "#4e7aab"
 
@@ -345,6 +348,8 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
   const [displayName, setDisplayName] = useState(member.display_name || member.name || "")
   const [email, setEmail]     = useState(member.email || "")
   const [house, setHouse]     = useState(member.house_number || "")
+  const [streetId, setStreetId] = useState(member.street_id || null)
+  const streets = useStreets()
   const [phone, setPhone]     = useState(member.phone || "")
   const [categoryIds, setCategoryIds] = useState(linkedCategoryIds)
   const [isAdminFlag, setIsAdminFlag] = useState(member.is_admin)
@@ -403,6 +408,8 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
       setError("Display name must be at least 3 letters.")
       return
     }
+    const houseCheck = normaliseHouseNumber(house)
+    if (!houseCheck.ok) { setError(houseCheck.error); return }
     setSaving(true); setError("")
     const token = await getToken()
     const res = await fetch("/api/info/contacts", {
@@ -414,7 +421,8 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
         display_name: displayName.trim(),
         title: title.trim() || null,
         email: email.trim() || null,
-        house_number: house.trim() || null,
+        house_number: houseCheck.value,
+        street_id: streetId || null,
         phone: phone.trim() || null,
         category_ids: [residentsId, ...categoryIds.filter(id => id !== residentsId)],
         ...(isSelf ? {} : { is_admin: isAdminFlag }),
@@ -452,17 +460,20 @@ export default function ResidentEditForm({ member, linkedCategoryIds, linkedTitl
         <label style={labelStyle}>Email</label>
         <input value={email} onChange={e => setEmail(e.target.value)} type="email" style={inputStyle} />
       </div>
-      {/* House # and Phone share a row -- two short fields have no business
-          taking two full rows in a sheet this long (vertical space). */}
-      <div style={{ display: "flex", gap: "0.6rem" }}>
-        <div style={{ flex: 1 }}>
+      {/* House # + Street share a row (migration 122, 2026-10-03); Phone has
+          its own. Number is digits only, street comes from Admin > Streets. */}
+      <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
+        <div style={{ flex: "0 0 7rem" }}>
           <label style={labelStyle}>House #</label>
-          <input value={house} onChange={e => setHouse(e.target.value)} style={inputStyle} />
+          <input value={house} onChange={e => setHouse(houseNumberInput(e.target.value))} inputMode="numeric" pattern="[0-9]*" style={inputStyle} />
         </div>
-        <div style={{ flex: 1 }}>
-          <label style={labelStyle}>Phone</label>
-          <input value={phone} onChange={e => setPhone(formatPhoneInput(e.target.value))} type="tel" inputMode="numeric" maxLength={12} placeholder="0400 000 000" style={inputStyle} />
+        <div style={{ flex: "1 1 10rem", minWidth: 0 }}>
+          <StreetPicker streets={streets} value={streetId} onChange={setStreetId} style={inputStyle} label="Street" labelStyle={labelStyle} />
         </div>
+      </div>
+      <div>
+        <label style={labelStyle}>Phone</label>
+        <input value={phone} onChange={e => setPhone(formatPhoneInput(e.target.value))} type="tel" inputMode="numeric" maxLength={12} placeholder="0400 000 000" style={inputStyle} />
       </div>
       <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "-0.5rem" }}>
         The resident can also change these themselves in their profile — whichever was saved last wins.
