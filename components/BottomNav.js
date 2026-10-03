@@ -46,7 +46,7 @@ const HUB_CONFIG = {
       // Browse "Ask me about" by interest (2026-10-03). Same tag icon as
       // Admin > Interests -- one canonical icon for the concept. Sits next
       // to Contacts (Iain: "Contacts and Interests are together").
-      { path: "/info/interests", label: "Interests", Icon: InterestsIcon },
+      { path: "/info/interests", label: "Interests & Skills", Icon: InterestsIcon },
       { path: "/info/documents", label: "Documents", Icon: DocumentsIcon },
     ],
   },
@@ -154,6 +154,9 @@ export default function BottomNav() {
     color: active ? colour : "var(--text-dim)",
     fontWeight: active ? 700 : 400,
     fontSize: "0.68rem", fontFamily: "inherit",
+    // Longer labels ("Interests & Skills", 2026-10-04) wrap to two lines on a
+    // narrow phone -- keep wrapped text centred and compact.
+    textAlign: "center", lineHeight: 1.15,
     borderTop: active ? "2px solid " + colour : "2px solid transparent",
     transition: "color 0.15s, border-color 0.15s",
     minHeight: 60,
