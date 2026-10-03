@@ -10,6 +10,7 @@ import ProfileSlideOver from "@/components/ProfileSlideOver"
 import PinModal from "@/components/PinModal"
 import NotificationsDrawer from "@/components/NotificationsDrawer"
 import FindButton from "@/components/FindButton"
+import { loginHref } from "@/lib/safeNext"
 
 const INACTIVITY_DAYS = 14
 const INACTIVITY_MS   = INACTIVITY_DAYS * 24 * 60 * 60 * 1000
@@ -160,12 +161,18 @@ export default function AppLayout({ children }) {
         // ?event=/&sb= deep link is redirected there instead of /login,
         // carrying the same param through, rather than inventing a second
         // anonymous-visitor surface per hub.
+        //
+        // Return-to-event (Iain, 2026-10-03): the page they were trying to
+        // reach travels along as `next`, so signing in from /cal or /login
+        // brings them back here instead of dumping them on /home.
         const params = new URLSearchParams(window.location.search)
         const evId = params.get("event")
         const sbId = params.get("sb")
-        if (evId) { router.replace(`/cal?event=${encodeURIComponent(evId)}`); return }
-        if (sbId) { router.replace(`/cal?sb=${encodeURIComponent(sbId)}`); return }
-        router.replace("/login")
+        const here = window.location.pathname + window.location.search
+        const next = encodeURIComponent(here)
+        if (evId) { router.replace(`/cal?event=${encodeURIComponent(evId)}&next=${next}`); return }
+        if (sbId) { router.replace(`/cal?sb=${encodeURIComponent(sbId)}&next=${next}`); return }
+        router.replace(loginHref(here))
         return
       }
 
@@ -180,7 +187,7 @@ export default function AppLayout({ children }) {
         const now = new Date()
         if (lastActive && now - lastActive > INACTIVITY_MS) {
           await supabase.auth.signOut()
-          router.replace("/login?reason=inactive")
+          router.replace(loginHref(window.location.pathname + window.location.search, { reason: "inactive" }))
           return
         }
         const fiveMin = 5 * 60 * 1000

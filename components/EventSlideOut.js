@@ -24,6 +24,8 @@ import { useWaitlistInfo } from "@/lib/useWaitlistInfo"
 import { waitlistLabel } from "@/lib/waitlist"
 import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
 import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/attendeeExport"
+import { hubPathForEvent } from "@/lib/eventShare"
+import { loginHref } from "@/lib/safeNext"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -2691,7 +2693,12 @@ function BookingSection({ event, onRefresh, onClose }) {
 
 // ── Login Prompt (for public calendar) ───────────────────────────────────────
 // ── Expandable text (book summary — cap at N lines) ──────────────────────────
-function LoginPrompt() {
+// Sign In / Register carry the event's own hub URL as `next`, so after
+// signing in the resident lands back on this event (Iain, 2026-10-03)
+// instead of /home.
+function LoginPrompt({ event }) {
+  const base = hubPathForEvent(event)
+  const next = base && event?.id ? `${base}?event=${encodeURIComponent(event.id)}` : null
   return (
     <div style={{ background: "var(--amber-light)", borderRadius: 12, padding: 20, textAlign: "center", border: "1px solid var(--amber)" }}>
       <div style={{ fontSize: 32, marginBottom: 8 }}>🔒</div>
@@ -2699,9 +2706,9 @@ function LoginPrompt() {
       <div style={{ fontSize: 13, color: "var(--text-dim)", lineHeight: 1.5, marginBottom: 16 }}>
         Residents of Fullerton Cove can register and book events.
       </div>
-      <a href="/login" style={{ display: "block", padding: "12px 0", background: "var(--amber)", color: "#fff",
+      <a href={loginHref(next)} style={{ display: "block", padding: "12px 0", background: "var(--amber)", color: "#fff",
         borderRadius: 10, fontWeight: 700, fontSize: 15, textDecoration: "none" }}>Sign In</a>
-      <a href="/login?register=1" style={{ display: "block", marginTop: 8, padding: "11px 0", background: "transparent",
+      <a href={loginHref(next, { register: "1" })} style={{ display: "block", marginTop: 8, padding: "11px 0", background: "transparent",
         color: "var(--amber-dark)", borderRadius: 10, fontWeight: 600, fontSize: 14, textDecoration: "none",
         border: "1px solid var(--amber)" }}>Register as a Resident</a>
     </div>
@@ -2959,7 +2966,7 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
                 {isAuthenticated ? (
                   <BookingSection event={event} onRefresh={refreshAll} onClose={onClose} />
                 ) : (
-                  <LoginPrompt />
+                  <LoginPrompt event={event} />
                 )}
               </div>
 

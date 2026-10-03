@@ -2,6 +2,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { afterLoginPath, safeNextPath } from '@/lib/safeNext'
 
 // Separate component so useSearchParams is inside Suspense
 function InactivityNotice({ onNotice }) {
@@ -23,7 +24,17 @@ export default function Login() {
   // Set when an admin-created account signs in for the first time. While it is
   // set the tab switcher is hidden, so the change cannot be skipped.
   const [forcePin, setForcePin] = useState(null)
+  // Where to return after sign-in (Iain, 2026-10-03). Set by /cal, the event
+  // panel's Sign In buttons and the app's logged-out redirect. Read from
+  // window.location rather than useSearchParams so this page doesn't need a
+  // Suspense boundary of its own. `register=1` opens the Register tab.
+  const [next, setNext] = useState(null)
   const router = useRouter()
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    setNext(safeNextPath(p.get('next')))
+    if (p.get('register') === '1') setTab('register')
+  }, [])
 
   return (
     <div style={{
@@ -44,6 +55,11 @@ export default function Login() {
       </div>
 
       <Suspense fallback={null}><InactivityNotice onNotice={setNotice} /></Suspense>
+      {next && !notice && (
+        <div style={{ fontSize:'0.85rem', color:'var(--text-dim)', marginBottom:'0.75rem', textAlign:'center', maxWidth:400 }}>
+          Sign in and we'll take you straight back to where you were.
+        </div>
+      )}
       {notice && (
         <div style={{ background:'#fef3c7', border:'1px solid #d97706', borderRadius:'10px', padding:'0.75rem 1rem', marginBottom:'1rem', fontSize:'0.85rem', color:'#92400e', textAlign:'center', maxWidth:400, width:'100%' }}>
           ⏱ {notice}
@@ -77,7 +93,7 @@ export default function Login() {
         </div>
         )}
 
-        {!forcePin && tab === 'signin' && <SignIn router={router}
+        {!forcePin && tab === 'signin' && <SignIn router={router} next={next}
           onForcePinChange={(u) => { setForcePin(u); setTab('change'); setNotice(null) }} />}
         {!forcePin && tab === 'register' && <Register onSuccess={() => setTab('signin')} />}
         {(forcePin || tab === 'change') && (
@@ -89,7 +105,7 @@ export default function Login() {
   )
 }
 
-function SignIn({ router, onForcePinChange }) {
+function SignIn({ router, next, onForcePinChange }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -125,7 +141,7 @@ function SignIn({ router, onForcePinChange }) {
           setLoading(false)
           return
         }
-        router.replace('/home')
+        router.replace(afterLoginPath(next))
       }
     } catch { setError('Network error. Please try again.'); setLoading(false) }
   }

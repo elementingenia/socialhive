@@ -130,6 +130,7 @@ const RAW_SECTIONS = [
     subs: [
       { title: "Finding an event",                           id: "sub-calendar-find" },
       { title: "Inviting a neighbour",                       id: "sub-calendar-invite" },
+      { title: "Opening an event link someone sent you",     id: "sub-calendar-sharedlink" },
       { title: "Booking a common space from the Calendar",  id: "sub-calendar-space" },
       { title: "The Space Bookings hub",                     id: "sub-calendar-spacehub" },
       { title: "Allow others to join",                       id: "sub-calendar-spacepromote" },
@@ -1385,6 +1386,19 @@ export default function HelpGuidePage() {
                 the event. People already booked, or already invited by someone else, don't appear
                 in the list. You can send up to 10 invites per event, and the button disappears
                 once the event is no longer taking bookings.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-calendar-sharedlink" title="Opening an event link someone sent you">
+              <Step>
+                Tap the link. On an Android phone with Element Happenings installed, it opens
+                straight in the app. On an iPhone it opens in Safari: Apple doesn't let links open
+                home-screen apps.
+              </Step>
+              <Step>
+                If you aren't signed in there, you'll still see the event. Tap{" "}
+                <strong>Sign In</strong>, enter your username and password, and you'll be taken
+                straight back to that event, ready to book.
               </Step>
             </Subsection>
 
