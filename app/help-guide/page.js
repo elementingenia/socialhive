@@ -1045,6 +1045,16 @@ export default function HelpGuidePage() {
                 current passenger list.
               </Step>
               <Step>
+                <strong>Putting people on the bus or in a car.</strong> When adding a walk-up booking,
+                pick <strong>Own way</strong>, <strong>🚌 Bus</strong>, <strong>🧍 In a car</strong>{" "}
+                (then choose whose car) or <strong>🚗 Driving</strong> (then set their spare seats)
+                under <strong>Getting there</strong>. For a booking that's already made, tap{" "}
+                <strong>🚌🚗 Set transport</strong> under the resident's name, choose, and tap{" "}
+                <strong>Save transport</strong>. The choice covers everyone in that booking, and every
+                seat must be named first. If they were already on the bus or in another car they are
+                moved, and residents with the app are told. Bus and car seat limits still apply.
+              </Step>
+              <Step>
                 On a paid event, tap the <strong>Unpaid / Paid</strong> switch next to a resident's
                 name to record their payment. Rather than just flipping a flag, this opens a small
                 form asking for the <strong>amount received</strong> (pre-filled with the full amount
@@ -1249,6 +1259,16 @@ export default function HelpGuidePage() {
               <Step>
                 On a bus-enabled event, a 🚌 marker and running seat count show exactly who's riding —
                 the same passenger-list view Social Hive's Coordinator panel has.
+              </Step>
+              <Step>
+                <strong>Putting people on the bus or in a car.</strong> When adding a walk-up booking,
+                pick <strong>Own way</strong>, <strong>🚌 Bus</strong>, <strong>🧍 In a car</strong>{" "}
+                (then choose whose car) or <strong>🚗 Driving</strong> (then set their spare seats)
+                under <strong>Getting there</strong>. For a booking that's already made, tap{" "}
+                <strong>🚌🚗 Set transport</strong> under the resident's name, choose, and tap{" "}
+                <strong>Save transport</strong>. The choice covers everyone in that booking, and every
+                seat must be named first. If they were already on the bus or in another car they are
+                moved, and residents with the app are told. Bus and car seat limits still apply.
               </Step>
               <Step>
                 Adding a walk-up booking, using <strong>Modify Seats</strong> on someone's booking,
