@@ -3,6 +3,7 @@ import {
   MAX_INTERESTS, normaliseLabel, labelKey, validateLabel, resolveSuggestion,
   validateSelection, buildDirectory, interestsLine, pendingToAlert,
   adminAlertMessage, reviewOutcomeMessage, sortByLabel, groupByInterest,
+  KIND, MAX_SKILLS, NOTE_MAX, kindOf, normaliseNote, buildSkillNotes,
 } from "../../lib/interests.js"
 
 let n = 0
@@ -45,7 +46,7 @@ t("approved beats retired if both somehow match", () => {
 })
 t("new label normalised", () => {
   const r = resolveSuggestion(" Model  trains ", TAGS)
-  assert.deepEqual(r, { action: "create", label: "Model trains" })
+  assert.deepEqual(r, { action: "create", label: "Model trains", kind: "interest" })
 })
 t("invalid -> error", () => assert.equal(resolveSuggestion("!", TAGS).action, "error"))
 
@@ -96,8 +97,8 @@ t("pendingToAlert", () => {
   assert.deepEqual(pendingToAlert(rows).map(r => r.id), [1])
 })
 t("alert none", () => assert.equal(adminAlertMessage(0, 3), null))
-t("alert singular", () => assert.equal(adminAlertMessage(1, 1), "1 new interest suggestion to review in Admin › Interests."))
-t("alert plural with total", () => assert.equal(adminAlertMessage(2, 5), "2 new interest suggestions to review in Admin › Interests (5 waiting in total)."))
+t("alert singular", () => assert.equal(adminAlertMessage(1, 1), "1 new suggestion to review in Admin › Interests & Skills."))
+t("alert plural with total", () => assert.equal(adminAlertMessage(2, 5), "2 new suggestions to review in Admin › Interests & Skills (5 waiting in total)."))
 
 t("outcome approved", () => assert.match(reviewOutcomeMessage("approved", "Ukulele"), /approved/))
 t("outcome merged", () => assert.equal(reviewOutcomeMessage("merged", "Veggies", "Gardening"), 'Your interest suggestion "Veggies" was added as "Gardening".'))
@@ -125,5 +126,62 @@ t("buildDirectory pending mode returns only pending chips, Private still strippe
   assert.deepEqual(buildDirectory(members, links, tags), { a: ["Gardening"] })
   assert.deepEqual(buildDirectory(members, links, tags, "pending"), { a: ["Cinema"] })
 })
+
+// ── Skills (B7, migration 124) ──────────────────────────────────────────────
+const MIX = [
+  { id: "pi", label: "Photography", status: "approved" },                 // pre-124 row: interest
+  { id: "ps", label: "Photography", status: "approved", kind: "skill" },
+  { id: "hs", label: "Handyman", status: "pending", kind: "skill" },
+  { id: "rs", label: "Electrician", status: "retired", kind: "skill" },
+]
+t("kindOf defaults to interest", () => { assert.equal(kindOf({}), "interest"); assert.equal(kindOf({ kind: "skill" }), "skill") })
+t("resolve is per kind: skill picks the skill chip", () => {
+  const r = resolveSuggestion("photography", MIX, KIND.SKILL); assert.equal(r.action, "select"); assert.equal(r.tag.id, "ps")
+})
+t("resolve is per kind: interest picks the interest chip", () => {
+  assert.equal(resolveSuggestion("photography", MIX).tag.id, "pi")
+})
+t("resolve joins a pending skill, not across kinds", () => {
+  assert.equal(resolveSuggestion("handyman", MIX, KIND.SKILL).action, "join")
+  assert.equal(resolveSuggestion("handyman", MIX, KIND.INTEREST).action, "create")
+})
+t("retired skill unavailable only for skills", () => {
+  assert.equal(resolveSuggestion("electrician", MIX, KIND.SKILL).action, "unavailable")
+  assert.equal(resolveSuggestion("electrician", MIX).action, "create")
+})
+t("new skill carries kind", () => assert.equal(resolveSuggestion("Ukulele lessons", MIX, KIND.SKILL).kind, "skill"))
+t("caps are per kind", () => {
+  const rows = [
+    ...Array.from({ length: 8 }, (_, i) => ({ id: `i${i}`, label: `I${i}`, status: "approved" })),
+    ...Array.from({ length: MAX_SKILLS + 1 }, (_, i) => ({ id: `s${i}`, label: `S${i}`, status: "approved", kind: "skill" })),
+  ]
+  const m = new Map(rows.map(r => [r.id, r]))
+  const eight = rows.slice(0, 8).map(r => r.id), skills = rows.slice(8).map(r => r.id)
+  assert.equal(validateSelection([...eight, ...skills.slice(0, MAX_SKILLS)], m, []).ids.length, 8 + MAX_SKILLS)
+  assert.match(validateSelection([...eight, ...skills], m, []).error, /skills/)
+})
+t("note normalised / blank / too long", () => {
+  assert.deepEqual(normaliseNote("  Small  jobs "), { note: "Small jobs" })
+  assert.deepEqual(normaliseNote("   "), { note: null })
+  assert.deepEqual(normaliseNote(undefined), { note: null })
+  assert.ok(normaliseNote("x".repeat(NOTE_MAX + 1)).error)
+  assert.ok(normaliseNote(5).error)
+})
+t("directory splits by kind", () => {
+  const members = [{ id: "a", status: "active" }]
+  const links = [{ member_id: "a", tag_id: "pi" }, { member_id: "a", tag_id: "ps" }]
+  assert.deepEqual(buildDirectory(members, links, MIX), { a: ["Photography"] })
+  assert.deepEqual(buildDirectory(members, links, MIX, "approved", "skill"), { a: ["Photography"] })
+  assert.deepEqual(buildDirectory(members, [links[0]], MIX, "approved", "skill"), {})
+})
+t("skill notes: skills only, Private stripped, blanks omitted", () => {
+  const members = [{ id: "a", status: "active" }, { id: "p", status: "active", hide_name: true }]
+  const links = [
+    { member_id: "a", tag_id: "ps", note: "Events only" }, { member_id: "a", tag_id: "pi", note: "ignored" },
+    { member_id: "a", tag_id: "hs", note: null }, { member_id: "p", tag_id: "ps", note: "hidden" },
+  ]
+  assert.deepEqual(buildSkillNotes(members, links, MIX), { a: { Photography: "Events only" } })
+})
+t("outcome wording for skills", () => assert.equal(reviewOutcomeMessage("rejected", "X y", null, "skill"), 'Your skill suggestion "X y" wasn\'t added to the list.'))
 
 console.log(`interests: ${n} passed`)

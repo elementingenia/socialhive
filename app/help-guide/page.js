@@ -62,6 +62,7 @@ const RAW_SECTIONS = [
       { title: "Changing your PIN",     id: "sub-profile-pin" },
       { title: "The weekly digest",     id: "sub-profile-digest" },
       { title: "Ask me about — your interests", id: "sub-profile-interests" },
+      { title: "I can help with — your skills", id: "sub-profile-skills" },
     ],
   },
   {
@@ -105,7 +106,7 @@ const RAW_SECTIONS = [
     id: "info", num: 6, title: "Info — Contacts, Interests & Documents",
     subs: [
       { title: "Finding a contact",     id: "sub-info-contacts" },
-      { title: "Finding someone by interest", id: "sub-info-interests" },
+      { title: "Finding someone by skill or interest", id: "sub-info-interests" },
       { title: "Community documents",   id: "sub-info-documents" },
     ],
   },
@@ -698,14 +699,14 @@ export default function HelpGuidePage() {
                 to untick it. You can choose up to 8.
               </Step>
               <Step>
-                Your interests show on your card in <strong>Info › Contacts</strong>, and anyone
-                searching Contacts for that word will find you.
+                Your interests show on your card in <strong>Info › Contacts</strong> when someone taps{" "}
+                <strong>More</strong>, and anyone searching Contacts for that word will find you.
               </Step>
               <Step>
                 Not listed? Type it in the <strong>Suggest another</strong> box and tap{" "}
                 <strong>Suggest</strong>. It&apos;s sent to the admins straight away and shows on your
                 profile as <em>awaiting approval</em> (in orange). It also appears in orange on the{" "}
-                <strong>Info › Interests</strong> page straight away, but isn&apos;t shown on Contacts cards
+                <strong>Info › Interests</strong> page (under <strong>Search Interests</strong>) straight away, but isn&apos;t shown on Contacts cards
                 until it&apos;s approved.
                 You&apos;ll get a notice when it&apos;s been added, combined with an existing interest,
                 or not added.
@@ -719,6 +720,29 @@ export default function HelpGuidePage() {
                 💡 If <strong>Hide my name</strong> is on, your interests are locked and not shown to
                 anyone. Anything you&apos;ve already chosen is kept and appears again if you turn
                 Hide my name off.
+              </InfoBox>
+            </Subsection>
+
+            <Subsection id="sub-profile-skills" title="I can help with — your skills">
+              <Step>
+                Skills are different from interests: an interest is something you enjoy talking about; a
+                skill is something you&apos;re happy to <em>help</em> a neighbour with. In{" "}
+                <strong>Update Profile</strong>, find <strong>I can help with</strong> and tap any skill
+                you can offer — for example Computer and phone help, Small handyman jobs or Pet minding.
+                You can choose up to 5.
+              </Step>
+              <Step>
+                Each skill you tick gets an optional <strong>note</strong> box — say how you can help, for
+                example &quot;Small jobs only, happy to visit&quot;. Then tap <strong>Save Profile</strong>.
+              </Step>
+              <Step>
+                Not listed? Type it in the box under the skills and tap <strong>Suggest</strong>. It goes
+                to the admins for approval, the same way as a new interest.
+              </Step>
+              <InfoBox>
+                💡 Skills are neighbours offering a hand. They aren&apos;t checked or endorsed by the
+                committee or Ingenia, and there&apos;s no payment involved — arrange things directly with
+                each other. Hide my name locks and hides your skills, the same as your interests.
               </InfoBox>
             </Subsection>
           </Section>
@@ -1269,19 +1293,21 @@ export default function HelpGuidePage() {
                 (Message only appears for mobile numbers). Tap the email address to write an email.
               </Step>
               <Step>
-                Some residents list things they&apos;re happy to help with, shown on their card as{" "}
-                <strong>Ask me about</strong>. Type an interest into the Search box — for example
-                &quot;bridge&quot; or &quot;gardening&quot; — to find everyone who listed it, or use the{" "}
-                <strong>Interests</strong> tab (below). To add your own, see{" "}
-                <em>Ask me about — your interests</em> under your profile.
+                Tapping <strong>More</strong> also shows what a resident can help with{" "}
+                (<strong>Can help with</strong>) and is happy to talk about (<strong>Ask me about</strong>).
+                Type a skill or interest into the Search box — for example &quot;bridge&quot; or
+                &quot;handyman&quot; — to find everyone who listed it; their cards open to show why they
+                matched. Or use the <strong>Interests</strong> tab (below).
               </Step>
             </Subsection>
 
-            <Subsection id="sub-info-interests" title="Finding someone by interest">
+            <Subsection id="sub-info-interests" title="Finding someone by skill or interest">
               <Step>
-                Tap <strong>Interests</strong> at the bottom of the Info screen. Each button is an
-                interest at least one neighbour has listed, with how many — for example{" "}
-                <strong>Gardening (6)</strong>. Tap one to see who, with their house number and a phone
+                Tap <strong>Interests</strong> at the bottom of the Info screen, then{" "}
+                <strong>Search Skills</strong> (neighbours who can help with something) or{" "}
+                <strong>Search Interests</strong> (neighbours who share an interest). Each button is a
+                skill or interest at least one neighbour has listed, with how many — for example{" "}
+                <strong>Gardening (6)</strong>. Skills also show each person&apos;s note. Tap one to see who, with their house number and a phone
                 number with <strong>Call</strong> and <strong>Message</strong> buttons. Tap it again to close. Orange buttons are new suggestions the
                 admins haven&apos;t approved yet — they work the same way.
               </Step>

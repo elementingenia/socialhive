@@ -61,7 +61,8 @@ const SECTIONS = [
   { key: 'Uptake', label: 'Uptake', Icon: UptakeIcon },
   // "Ask me about" chip list + resident suggestion review queue (backlog B3,
   // 2026-10-02). Tile shows a count badge while suggestions are waiting (Q2).
-  { key: 'Interests', label: 'Interests', Icon: InterestsIcon },
+  // Relabelled for Skills (B7, 2026-10-03); key unchanged so /admin?tab=Interests links still work.
+  { key: 'Interests', label: 'Interests & Skills', Icon: InterestsIcon },
   // The community's street names (migration 122, Iain 2026-10-03). Residents
   // pick theirs from this list next to their house number -- house numbers
   // here are scattered, so people give directions by street.

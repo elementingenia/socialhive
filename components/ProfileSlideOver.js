@@ -162,10 +162,17 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
   const [digestAvailable, setDigestAvailable] = useState(false)
   const [barOptIn, setBarOptIn] = useState(false)
   const [avatar,   setAvatar]   = useState(null)
-  // "Ask me about" (backlog B3). Saved via its own route on Save; only sent
-  // when it actually changed, and never while Hide my name is on (D2).
+  // "Ask me about" (B3) and "I can help with" (B7). Saved via their own route
+  // on Save; only sent when something actually changed, and never while Hide
+  // my name is on (D2/S8). PUT /api/interests replaces BOTH lists at once, so
+  // it is only ever sent once both have loaded -- sending one list alone
+  // would wipe the other.
   const [interestIds,     setInterestIds]     = useState([])
   const [interestsLoaded, setInterestsLoaded] = useState(null)
+  const [skillIds,        setSkillIds]        = useState([])
+  const [skillsLoaded,    setSkillsLoaded]    = useState(null)
+  const [skillNotes,      setSkillNotes]      = useState({})
+  const [notesLoaded,     setNotesLoaded]     = useState({})
   const [loading,  setLoading]  = useState(false)
   const [saving,   setSaving]   = useState(false)
   const [toast,    setToast]    = useState(null)
@@ -225,16 +232,22 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: name.trim(), display_name: displayName.trim(), email: email.trim(), house_number: houseCheck.value, street_id: streetId, phone: phone.trim(), hide_name: hideName, weekly_digest: weeklyDigest, bar_opt_in: barOptIn, avatar_url: avatar }),
     })
-    if (res.ok && !hideName && interestsLoaded &&
-        [...interestIds].sort().join() !== [...interestsLoaded].sort().join()) {
+    const same = (a, b) => [...a].sort().join() === [...b].sort().join()
+    const noteOf = (n, id) => (n[id] || "").trim()
+    const notesChanged = skillIds.some(id => noteOf(skillNotes, id) !== noteOf(notesLoaded, id))
+    if (res.ok && !hideName && interestsLoaded && skillsLoaded &&
+        (!same(interestIds, interestsLoaded) || !same(skillIds, skillsLoaded) || notesChanged)) {
       const ir = await authedFetch("/api/interests", {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tag_ids: interestIds }),
+        body: JSON.stringify({
+          tag_ids: [...interestIds, ...skillIds],
+          notes: Object.fromEntries(skillIds.map(id => [id, noteOf(skillNotes, id)])),
+        }),
       })
       if (!ir.ok) {
         setSaving(false)
         const err = await ir.json().catch(() => ({}))
-        showToast(err.error || "Profile saved, but your interests didn't -- try again", false)
+        showToast(err.error || "Profile saved, but your interests and skills didn't -- try again", false)
         return
       }
     }
@@ -342,9 +355,19 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
               </div>
 
               <InterestsPicker
+                kind="interest"
                 value={interestIds}
                 onChange={setInterestIds}
                 onLoaded={ids => { setInterestIds(ids); setInterestsLoaded(ids) }}
+                locked={hideName}
+              />
+              <InterestsPicker
+                kind="skill"
+                value={skillIds}
+                onChange={setSkillIds}
+                onLoaded={(ids, notes) => { setSkillIds(ids); setSkillsLoaded(ids); setSkillNotes(notes); setNotesLoaded(notes) }}
+                notes={skillNotes}
+                onNotesChange={setSkillNotes}
                 locked={hideName}
               />
 
