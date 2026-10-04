@@ -45,6 +45,8 @@ import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActi
 import InviteNeighbourButton from "@/components/InviteNeighbourButton"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 import { isHtmlContent } from "@/lib/richText"
+import BusDriverField from "@/components/BusDriverField"
+import { busDriverLabel } from "@/lib/busDriver"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -71,6 +73,28 @@ function fmtTime(str) {
   return `${h % 12 || 12}:${String(m).padStart(2, "0")}${h >= 12 ? "pm" : "am"}`
 }
 
+
+// Seats booked / left / % full -- same bar as Social, Special Events and
+// Show Time tiles (Iain, 2026-10-04: Groups & Clubs tiles never had it).
+function CapacityBar({ booked, max, waitlist }) {
+  if (!max || max <= 0) return null
+  const pct    = Math.min(100, (booked / max) * 100)
+  const left   = Math.max(0, max - booked)
+  const colour = pct >= 85 ? "var(--danger)" : pct >= 55 ? "var(--amber)" : "var(--green)"
+  return (
+    <div style={{ marginBottom: 6 }}>
+      <div style={{ height: 6, background: "var(--surface2)", borderRadius: 4, overflow: "hidden", marginBottom: 4 }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: colour, borderRadius: 4, minWidth: pct > 0 ? 4 : 0 }} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.72rem", color: "var(--text-dim)" }}>
+        <span>{booked}/{max} seats{waitlist > 0 && ` · ${waitlist} waiting`}</span>
+        <span style={{ color: left === 0 ? "var(--danger)" : colour, fontWeight: 600 }}>
+          {left === 0 ? "Full" : `${left} left`}
+        </span>
+      </div>
+    </div>
+  )
+}
 
 function Toast({ msg, type }) {
   if (!msg) return null
@@ -147,7 +171,7 @@ function BookingStrip({ isJoined, isWaitlisted = false, seats = 1, waitlistSeats
 }
 
 // ── Book Club Event Card ─────────────────────────────────────────────────────
-function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = null, onOpen, onEdit = null, colour = "var(--purple)", showToast, club }) {
+function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = null, seatCount = null, onOpen, onEdit = null, colour = "var(--purple)", showToast, club }) {
   const router = useRouter()
   const { member, isAdmin } = useUser()
   // Club Owner gets the same manage/EC-view options an admin has, scoped to
@@ -738,6 +762,12 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
             <InviteNeighbourButton event={event} colour={colour} />{" "}<CopyLinkButton url={shareUrl} colour={colour} />
           </div>
         )}
+        {/* Bus driver -- same line as Social's tile */}
+        {event.has_bus && busDriverLabel(event) && (
+          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.2rem", display: "flex", alignItems: "center", gap: 5 }}>
+            <BusIcon size={14} /> <span>{busDriverLabel(event)}</span>
+          </div>
+        )}
       </div>
 
       <div style={{ padding: "0.9rem 1rem 0.6rem" }}>
@@ -773,6 +803,13 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
               colour={colour}
             />
           </div>
+        )}
+
+        {/* Seats booked / left -- not on "open, all welcome" events
+            (no capacity), same rule as the Show attendees row below. */}
+        {event.booking_required !== false && (
+          <CapacityBar booked={seatCount?.confirmed || 0} max={event.max_seats}
+            waitlist={waitlistInfo?.waitlist_seats ?? (seatCount?.waitlist || 0)} />
         )}
 
         {/* Show attendees row -- meaningless on an "open, all welcome"
@@ -1806,6 +1843,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
   const [busDriver, setBusDriver] = useState(event?.bus_driver_id || null)
+  const [busDriverMode, setBusDriverMode] = useState(event?.bus_driver_name && !event?.bus_driver_id ? "other" : "resident")
+  const [busDriverName, setBusDriverName] = useState(event?.bus_driver_name || "")
 
   const [saveError, setSaveError] = useState(null)
   // Mandatory-field tracking (Iain, 2026-08-04) -- this form's Save button
@@ -1985,7 +2024,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       location:        form.location || null,
       location_id:     form.location_id || null,
       has_bus:         form.location_type === "offsite" ? !!form.has_bus : false,
-      bus_driver_id:   form.location_type === "offsite" && form.has_bus ? (busDriver || null) : null,
+      bus_driver_id:   form.location_type === "offsite" && form.has_bus && busDriverMode === "resident" ? (busDriver || null) : null,
+      bus_driver_name: form.location_type === "offsite" && form.has_bus && busDriverMode === "other" ? (busDriverName.trim() || null) : null,
       bus_max_seats:   form.location_type === "offsite" && form.has_bus && form.bus_max_seats !== "" ? Number(form.bus_max_seats) : null,
       allow_personal_vehicles: form.location_type === "offsite" ? !!form.allow_personal_vehicles : false,
       max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
@@ -2223,14 +2263,17 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         <>
           <div style={{ marginBottom: 12 }}>
             <Toggle value={form.has_bus} colour={colour}
-              onChange={v => { set("has_bus", v); if (!v) setBusDriver(null) }}
+              onChange={v => { set("has_bus", v); if (!v) { setBusDriver(null); setBusDriverName("") } }}
               label="Community bus" />
           </div>
           {form.has_bus && (
             <div style={{ marginBottom: 12 }}>
               <label style={labelStyle}>Bus Driver (optional)</label>
-              <CoordPicker members={members} value={busDriver} onChange={setBusDriver} valid colour={colour}
-                placeholder="Search for bus driver…" />
+              <BusDriverField mode={busDriverMode} onModeChange={setBusDriverMode}
+                name={busDriverName} onNameChange={setBusDriverName} colour={colour} inputStyle={inputStyle}>
+                <CoordPicker members={members} value={busDriver} onChange={setBusDriver} valid colour={colour}
+                  placeholder="Search for bus driver…" />
+              </BusDriverField>
             </div>
           )}
           {form.has_bus && (
@@ -2841,7 +2884,7 @@ export default function ClubHome({ club }) {
   async function openEventById(id) {
     const { data } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, username), image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver_name, booking_required, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, display_name, username), image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("id", id).single()
     if (!data) return
     setSlideOutEvent(toSlideOutShape(data, myBookings[id]))
@@ -2904,7 +2947,7 @@ export default function ClubHome({ club }) {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, username), image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver_name, booking_required, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, display_name, username), image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("club_id", club.id)
       .eq("archived", false)
       .order("event_date", { ascending: true })
@@ -3220,6 +3263,7 @@ export default function ClubHome({ club }) {
             booking={myBookings[act.parent.id]}
             myWaitlist={myBookings[act.parent.id]?.status === "confirmed" ? myWaitlists[act.parent.id] : null}
             waitlistInfo={waitlistInfo[act.parent.id]}
+            seatCount={seatCounts[act.parent.id]}
             onOpen={() => openSlideOut(act.parent)}
             onEdit={!showForm ? () => { setEditEvent(act.parent); setShowForm(true) } : null}
             colour={colour}

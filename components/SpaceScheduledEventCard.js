@@ -1,5 +1,6 @@
 "use client"
 import { useState } from "react"
+import { busDriverLabel } from "@/lib/busDriver"
 import EventCoordinators from "@/components/EventCoordinators"
 import { BusIcon } from "@/components/NavIcons"
 import { bookingsClosed } from "@/lib/booking"
@@ -160,9 +161,9 @@ export default function SpaceScheduledEventCard({ event, onOpen, onEdit }) {
           )
         })()}
 
-        {event.has_bus && event.bus_driver && (
+        {event.has_bus && busDriverLabel(event) && (
           <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 5 }}>
-            <BusIcon size={14} /> <span>{event.bus_driver.display_name || event.bus_driver.name || event.bus_driver.username}</span>
+            <BusIcon size={14} /> <span>{busDriverLabel(event)}</span>
           </div>
         )}
 
