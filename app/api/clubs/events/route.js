@@ -7,6 +7,7 @@ import { needsSpaceValidation, fetchLocation } from "@/lib/eventClash"
 import { findAnyRoomConflict } from "@/lib/spaceBookings"
 import { notifyRequestOnlySpace } from "@/lib/notifyRequestOnlySpace"
 import { validateBringRequirement } from "@/lib/attendees"
+import { normaliseBusDriver } from "@/lib/busDriver"
 
 // Club event create/edit — moved server-side (2026-07-23) as part of the Event
 // Clash / Space Booking scope (Social_Hive_Event_Clash_Space_Booking_Scope.md,
@@ -71,7 +72,7 @@ async function validateSpace(payload, excludeEventId, viewerId, canManage) {
 
 const FIELDS = ["club_id", "event_date", "event_time", "event_end_time", "title", "is_public", "show_attendee_names",
   "description", "welcome_message", "book_id", "kit_return_date", "book_return_date", "reservation_cutoff", "max_seats",
-  "location_type", "location", "location_id", "has_bus", "bus_driver_id", "bus_max_seats", "allow_personal_vehicles", "max_seats_per_booking", "allow_nonresident_guests", "require_attendee_names", "booking_required", "payment_required", "cost",
+  "location_type", "location", "location_id", "has_bus", "bus_driver_id", "bus_driver_name", "bus_max_seats", "allow_personal_vehicles", "max_seats_per_booking", "allow_nonresident_guests", "require_attendee_names", "booking_required", "payment_required", "cost",
   "payment_due_by", "bring_category_ids", "bring_required", "theme_name", "book_snapshot"]
 
 // "Open, all welcome" events (Iain, 2026-09-11 — Groups & Clubs dry run):
@@ -97,6 +98,8 @@ function buildPayload(body, isInsert) {
   const payload = {}
   for (const k of FIELDS) if (k in body) payload[k] = body[k]
   if (isInsert) { payload.hub_type = "club"; payload.archived = false }
+  // Bus driver: resident OR a named "Other", never both (migration 125).
+  if ("has_bus" in payload) Object.assign(payload, normaliseBusDriver(payload))
   return enforceOpenEventRules(payload)
 }
 

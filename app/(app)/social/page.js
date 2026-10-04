@@ -1,5 +1,6 @@
 "use client"
 import EventCoordinators from "@/components/EventCoordinators"
+import { busDriverLabel } from "@/lib/busDriver"
 import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
@@ -184,9 +185,9 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
         <EventCoordinators eventId={event.id} eventTitle={event.title} names={ecNames}
           colour="var(--terracotta)" style={{ marginBottom: "0.2rem" }} />
 
-        {event.has_bus && event.bus_driver && (
+        {event.has_bus && busDriverLabel(event) && (
           <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 5 }}>
-            <BusIcon size={14} /> <span>{event.bus_driver.name || event.bus_driver.username}</span>
+            <BusIcon size={14} /> <span>{busDriverLabel(event)}</span>
           </div>
         )}
 
@@ -384,7 +385,7 @@ export default function SocialHome() {
     const [eventsRes, myBookingsRes, hubRes] = await Promise.all([
       supabase
         .from("events")
-        .select("id, title, event_date, event_time, description, max_seats, cost, payment_required, has_bus, location_type, location, reservation_cutoff, image_url, image_focal_x, image_focal_y, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, booked_at)")
+        .select("id, title, event_date, event_time, description, max_seats, cost, payment_required, has_bus, location_type, location, reservation_cutoff, image_url, image_focal_x, image_focal_y, bus_driver_name, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, booked_at)")
         .eq("hub_type", "social").eq("archived", false)
         .gte("event_date", todayStr)
         .order("event_date", { ascending: true })

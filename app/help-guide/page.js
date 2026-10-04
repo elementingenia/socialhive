@@ -1155,6 +1155,11 @@ export default function HelpGuidePage() {
                 the same booking flow as Social Hive. After booking, you'll see{" "}
                 <strong>Modify Seats</strong> and <strong>Cancel Booking</strong> options.
               </Step>
+              <Step>
+                Each event card shows a seat bar — how many seats are booked (e.g.{" "}
+                <strong>8/20 seats</strong>), how many are left, and how many are waiting — the same
+                bar as Social Hive and Special Events.
+              </Step>
               <InfoBox>
                 💡 Some club events are marked <strong>Open — All Welcome</strong> instead. These don't
                 need a booking at all — just come along, no sign-up or seat count required.
@@ -1183,6 +1188,13 @@ export default function HelpGuidePage() {
                 💡 The bus has its own seat limit and no waitlist — once full, the checkbox disables and
                 shows <strong>Bus is full</strong>, but your event booking still goes ahead.
               </InfoBox>
+              <Step>
+                <strong>Setting the bus driver (coordinators and admins).</strong> On the event form,
+                under <strong>Bus Driver</strong>, choose <strong>Resident</strong> to pick a resident,
+                or <strong>Other</strong> to type a name — for example the Community Manager. The
+                driver's name shows next to the 🚌 on the event card. Social Hive and Special Events
+                work the same way.
+              </Step>
             </Subsection>
 
             <Subsection id="sub-clubs-bookclub" title="Book Club — current pick, suggestions & voting">

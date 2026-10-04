@@ -1,5 +1,7 @@
 "use client"
 import EventCoordinators from "@/components/EventCoordinators"
+import BusDriverField from "@/components/BusDriverField"
+import { busDriverLabel } from "@/lib/busDriver"
 import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
@@ -565,6 +567,8 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
 
   const [coordinators, setCoordinators] = useState([])
   const [busDriver,    setBusDriver]    = useState(null)
+  const [busDriverMode, setBusDriverMode] = useState(event?.bus_driver_name && !event?.bus_driver_id ? "other" : "resident")
+  const [busDriverName, setBusDriverName] = useState(event?.bus_driver_name || "")
   const [ecError,      setEcError]      = useState(null)
   const [saving,       setSaving]       = useState(false)
   const [error,        setError]        = useState(null)
@@ -670,7 +674,8 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
       max_seats:             Number(form.max_seats),
       max_seats_per_booking: Number(form.max_seats_per_booking),
       coordinator_ids:       coordinators.map(m => m.id),
-      bus_driver_id:         form.has_bus ? busDriver?.id || null : null,
+      bus_driver_id:         form.has_bus && busDriverMode === "resident" ? busDriver?.id || null : null,
+      bus_driver_name:       form.has_bus && busDriverMode === "other" ? (busDriverName.trim() || null) : null,
       bus_max_seats:         form.has_bus && form.bus_max_seats !== "" ? Number(form.bus_max_seats) : null,
       allow_personal_vehicles: !!form.allow_personal_vehicles,
       has_dining:            form.has_dining,
@@ -1060,14 +1065,17 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
           {form.location_type === "offsite" && (
             <>
               <div style={FIELD}>
-                <Toggle value={form.has_bus} onChange={v => { set("has_bus", v); if (!v) setBusDriver(null) }} label="Community bus" />
+                <Toggle value={form.has_bus} onChange={v => { set("has_bus", v); if (!v) { setBusDriver(null); setBusDriverName("") } }} label="Community bus" />
               </div>
               {form.has_bus && (
                 <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
                   <label style={LABEL}>Bus Driver (optional)</label>
-                  <MemberPicker members={members} value={busDriver} onChange={setBusDriver}
-                    placeholder="Search for bus driver…"
-                    excludeIds={coordinators.map(m => m.id)} />
+                  <BusDriverField mode={busDriverMode} onModeChange={setBusDriverMode}
+                    name={busDriverName} onNameChange={setBusDriverName} colour="var(--terracotta)" inputStyle={INPUT}>
+                    <MemberPicker members={members} value={busDriver} onChange={setBusDriver}
+                      placeholder="Search for bus driver…"
+                      excludeIds={coordinators.map(m => m.id)} />
+                  </BusDriverField>
                 </div>
               )}
               {form.has_bus && (
@@ -1503,9 +1511,9 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
         })()}
 
         {/* Bus driver */}
-        {event.has_bus && event.bus_driver && (
+        {event.has_bus && busDriverLabel(event) && (
           <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginBottom: "0.2rem", display: "flex", alignItems: "center", gap: 5 }}>
-            <BusIcon size={14} /> <span>{event.bus_driver.name || event.bus_driver.username}</span>
+            <BusIcon size={14} /> <span>{busDriverLabel(event)}</span>
           </div>
         )}
 
@@ -2079,7 +2087,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, bus_max_seats, allow_personal_vehicles, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, payment_reminded_at, refund_due, refund_paid_at, member_id, contact_id, bus_passenger, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
+      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, bus_driver_name, bus_max_seats, allow_personal_vehicles, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, display_name, username), bookings(id, status, seats, payment_status, amount_paid, payment_reminded_at, refund_due, refund_paid_at, member_id, contact_id, bus_passenger, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
       .eq("hub_type", "social")
       .eq("archived", false)
       .order("event_date", { ascending: true })
@@ -2292,7 +2300,7 @@ export default function SocialEvents() {
   async function openEventSlideOut(event) {
     const { data } = await supabase
       .from("events")
-      .select("*, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, bus_passenger, booked_at, members(name, username)), booking_attendees(owner_id, member_id, guest_name, is_bus_passenger, member:members!member_id(name, hide_name))")
+      .select("*, bus_driver:members!bus_driver_id(name, display_name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, bus_passenger, booked_at, members(name, username)), booking_attendees(owner_id, member_id, guest_name, is_bus_passenger, member:members!member_id(name, hide_name))")
       .eq("id", event.id).single()
     if (data) {
       const allBookings = (data.bookings || []).filter(b => b.status !== "cancelled")

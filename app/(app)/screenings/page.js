@@ -1,5 +1,6 @@
 'use client'
 import { useRouter } from "next/navigation"
+import { busDriverLabel } from "@/lib/busDriver"
 import EventCoordinators from "@/components/EventCoordinators"
 import { useLocations } from "@/lib/useLocations"
 import EventImagePicker from "@/components/EventImagePicker"
@@ -798,9 +799,9 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
                 ● {freeCostData.isFree ? (freeCostData.reasons[0] || 'Free') : 'Cost'}
               </span>
             )}
-            {ev.has_bus && ev.bus_driver && (
+            {ev.has_bus && busDriverLabel(ev) && (
               <span style={{ fontSize: '0.72rem', color: 'var(--teal)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                <BusIcon size={12} /> {ev.bus_driver.name || ev.bus_driver.username}
+                <BusIcon size={12} /> {busDriverLabel(ev)}
               </span>
             )}
           </div>

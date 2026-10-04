@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect, useRef, useMemo } from "react"
+import { busDriverLabel } from "@/lib/busDriver"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
 import { HUB_COLOURS } from "@/lib/navUtils"
@@ -3069,9 +3070,9 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
           <ECNames coordinators={coordinators} colour={colour} />
 
           {/* Bus driver — sits directly with Coordinator, social offsite only */}
-          {event.has_bus && event.bus_driver && (
+          {event.has_bus && busDriverLabel(event) && (
             <div style={{ fontSize: 13, color: "var(--text-dim)", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-              <BusIcon size={14} /> <span>{event.bus_driver.name || event.bus_driver.username}</span>
+              <BusIcon size={14} /> <span>{busDriverLabel(event)}</span>
             </div>
           )}
 
