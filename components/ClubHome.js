@@ -2162,7 +2162,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
         <label style={labelStyle}>Date <span style={{ color: "var(--danger)" }}>*</span>
           {invalidFields.includes("event_date") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
         </label>
-        <input type="date" autoFocus value={form.event_date} onChange={e => set("event_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
+        <input type="date" value={form.event_date} onChange={e => set("event_date", e.target.value)} onClick={e => e.currentTarget.showPicker?.()}
           style={{ ...inputStyle, ...(invalidFields.includes("event_date") ? INVALID_FIELD_STYLE : { border: "1.5px solid var(--green)" }) }} />
       </div>
 
