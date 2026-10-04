@@ -3,7 +3,7 @@ import {
   STATUS, DEFAULT_THRESHOLD, EXPIRY_DAYS, normaliseText, nameKey, validateProposal, duplicateMessage,
   parseThreshold, validateThreshold, expiresAt, isExpired, daysLeft, isReady, shouldAlertThreshold,
   visibleToResident, adminBucket, closedLabel, slugify, uniqueSlug, countLine,
-  declinedMessage, clubCreatedMessage,
+  declinedMessage, clubCreatedMessage, newProposalBroadcastMessage,
 } from "../../lib/groupProposals.js"
 
 let n = 0
@@ -91,6 +91,12 @@ t("decline vs close wording", () => {
 t("club created wording", () => {
   assert.match(clubCreatedMessage("Walkers", true), /Owner/)
   assert.match(clubCreatedMessage("Walkers", false), /member/)
+})
+
+t("broadcast wording names the group and the action", () => {
+  const m = newProposalBroadcastMessage("Morning Walkers")
+  assert.match(m, /"Morning Walkers"/)
+  assert.match(m, /I'd join/)
 })
 
 console.log(`groupProposals: ${n} passed`)
