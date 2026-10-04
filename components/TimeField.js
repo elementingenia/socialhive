@@ -4,9 +4,7 @@
 // the space-clash overlap maths simple). Styled selects, no native controls,
 // matching the app's standing form-control convention.
 import { useEffect } from "react"
-
-const ALL_HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"))
-const MINUTES = ["00", "30"]
+import { ALL_HOURS, MINUTES, availableHours, usableMinutes as usableMinutesFor } from "@/lib/timeFieldOptions"
 
 // `invalid` (Iain, 2026-08-04) draws the same solid red border + light red
 // fill as every other mandatory field (lib/formValidation.js's
@@ -14,12 +12,14 @@ const MINUTES = ["00", "30"]
 // div, which is invisible behind their own opaque backgrounds. Takes
 // priority over `colour` when both are passed.
 //
-// `minHour` (Iain, 2026-08-07) — pass the event's Start hour (0-23) when
-// this TimeField is an End Time picker, so the Hour dropdown only offers
-// hours strictly after it (e.g. start 18:30 -> end hour options 19-23).
-// Every End Time site in the app should pass this. If the currently
-// selected value becomes invalid because the start hour moved past it,
-// the field auto-clears rather than silently keeping an impossible value.
+// `minTime` (Iain, 2026-10-05; replaced `minHour` from 2026-08-07) — pass the
+// Start time ("HH:MM") when this TimeField is an End Time picker. End must be
+// strictly after start, but the start hour itself is still offered when a
+// later half-hour exists in it (start 09:00 -> end 09:30 is allowed; the old
+// minHour rule dropped hour 09 entirely). Every End Time site in the app
+// should pass this. If the current value becomes invalid because the start
+// moved past it, the field auto-clears rather than keeping an impossible value.
+// Option logic lives in lib/timeFieldOptions.js (unit-tested).
 //
 // `hourFloor`/`hourCeil` (Iain, 2026-08-17, space-booking hours): pass an
 // inclusive hour range (e.g. 8 and 22 for 8am-10pm) to HIDE hours outside
@@ -39,25 +39,20 @@ const MINUTES = ["00", "30"]
 // starts times) can never let a real double-booking through, worst case it
 // over-greys one valid combination that the resident can route around.
 export default function TimeField({
-  value, onChange, colour = "var(--border)", invalid = false, minHour = null,
+  value, onChange, colour = "var(--border)", invalid = false, minTime = null,
   hourFloor = null, hourCeil = null, disabledSlots = null,
 }) {
   const [h, m] = String(value || "").split(":")
   const hour = ALL_HOURS.includes(h) ? h : ""
   const minute = MINUTES.includes(m) ? m : "00"
 
-  const HOURS = ALL_HOURS.filter(hh => {
-    if (minHour != null && Number(hh) <= Number(minHour)) return false
-    if (hourFloor != null && Number(hh) < hourFloor) return false
-    if (hourCeil != null && Number(hh) > hourCeil) return false
-    return true
-  })
+  const bounds = { minTime, hourFloor, hourCeil }
+  const HOURS = availableHours(bounds)
 
-  // The ceiling hour (e.g. 22 for a 10pm cutoff) only has ":00" as a usable
-  // minute -- ":30" would run past the limit.
+  // The ceiling hour (e.g. 22 for a 10pm cutoff) only has ":00", and the
+  // start hour only offers minutes after the start minute.
   function usableMinutes(hh) {
-    if (hourCeil != null && Number(hh) === hourCeil) return ["00"]
-    return MINUTES
+    return usableMinutesFor(hh, bounds)
   }
 
   function isHourFullyBooked(hh) {
@@ -66,8 +61,8 @@ export default function TimeField({
   }
 
   useEffect(() => {
-    if (hour && !HOURS.includes(hour)) onChange("")
-    // Deliberately scoped to [minHour, hourFloor, hourCeil]: this must fire
+    if (hour && (!HOURS.includes(hour) || !usableMinutes(hour).includes(minute))) onChange("")
+    // Deliberately scoped to [minTime, hourFloor, hourCeil]: this must fire
     // when the bounds that make the current selection invalid change, not on
     // every keystroke that changes `hour`/`onChange` themselves (that would
     // fight the user's own input). react-hooks/exhaustive-deps isn't
@@ -76,7 +71,7 @@ export default function TimeField({
     // used to live here referenced a rule ESLint can't resolve, which
     // silently broke `npm run lint` (and therefore CI) for every PR since
     // 2026-08-07 (PR #61). Don't re-add one.
-  }, [minHour, hourFloor, hourCeil])
+  }, [minTime, hourFloor, hourCeil])
 
   function setHour(newH) {
     if (!newH) { onChange(""); return }

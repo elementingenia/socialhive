@@ -601,7 +601,7 @@ export default function SpaceBookingForm({
               <label style={LABEL}>End</label>
               <TimeField
                 value={endTime} onChange={setEndTime} colour={endTime && endTime > startTime ? "var(--green)" : "var(--danger)"}
-                minHour={startTime ? Number(startTime.split(":")[0]) : null}
+                minTime={startTime || null}
                 hourFloor={SPACE_HOUR_FLOOR} hourCeil={SPACE_HOUR_CEIL} disabledSlots={endDisabledSlots}
               />
             </div>
