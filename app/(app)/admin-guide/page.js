@@ -1058,8 +1058,7 @@ export default function AdminGuidePage() {
             <Subsection id="sub-int-skills" title="Interests vs Skills (added 2026-10-03)">
               <Step>
                 Two separate lists on the same screen — use the <strong>Interests</strong> /{" "}
-                <strong>Skills</strong> switch at the top. An interest (&quot;Ask me about&quot;, up to 8
-                per resident) connects like-minded residents. A skill (&quot;I can help with&quot;, up to 5,
+                <strong>Skills</strong> switch at the top. An interest (&quot;Ask me about&quot;) connects like-minded residents. A skill (&quot;I can help with&quot;,
                 each with an optional short note) is an offer to help the community. Everything below —
                 the review queue, Add, Rename, Retire — works the same for both.
               </Step>
@@ -1077,7 +1076,7 @@ export default function AdminGuidePage() {
             </Subsection>
             <Subsection id="sub-int-what" title="What residents see (added 2026-10-02)">
               <Step>
-                Residents tick interests on their Profile under <strong>Ask me about</strong> (up to 8).
+                Residents tick interests on their Profile under <strong>Ask me about</strong> (as many as they like).
                 Approved interests show in Info › Contacts, in the contact&apos;s expanded (More) view, as{" "}
                 <em>Ask me about: …</em>, and skills as <em>Can help with: …</em>. Both are found by
                 Contacts search, and both appear under Info › Interests &amp; Skills (Search Skills / Search Interests).

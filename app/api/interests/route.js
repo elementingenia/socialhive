@@ -1,7 +1,7 @@
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import {
-  STATUS, KIND, MAX_INTERESTS, MAX_SKILLS, MAX_BY_KIND, kindOf, normaliseKind, kindNoun,
+  STATUS, KIND, kindOf, normaliseKind, kindNoun,
   resolveSuggestion, validateSelection, normaliseNote, sortByLabel,
 } from "@/lib/interests"
 
@@ -52,8 +52,6 @@ export async function GET(req) {
     tags: sortByLabel((tags || []).map(t => ({ ...t, kind: kindOf(t) }))),
     mine: await myPicks(me.id),
     locked: !!me.hide_name,
-    max: MAX_INTERESTS,
-    maxSkills: MAX_SKILLS,
   })
 }
 
@@ -142,12 +140,6 @@ export async function POST(req) {
   if (tag && current.includes(tag.id)) {
     return NextResponse.json({ ok: true, outcome: "already", tag: { ...tag, kind }, mine: await myPicks(me.id) })
   }
-  // Cap counts what the resident can see (approved + pending), per list.
-  const visibleCount = (await myPicks(me.id)).filter(t => t.kind === kind).length
-  if (visibleCount >= MAX_BY_KIND[kind]) {
-    return NextResponse.json({ error: `You can choose up to ${MAX_BY_KIND[kind]} ${kindNoun(kind)}s. Untick one first.` }, { status: 400 })
-  }
-
   if (r.action === "create") {
     const { data: created, error } = await supa.from("interest_tags")
       .insert({ label: r.label, status: STATUS.PENDING, suggested_by: me.id, kind })

@@ -696,7 +696,7 @@ export default function HelpGuidePage() {
                 Open <strong>Update Profile</strong> and find <strong>Ask me about</strong>. Tap any
                 interest you&apos;re happy for neighbours to ask you about — for example Gardening,
                 Bridge or Computers and phones — then tap <strong>Save Profile</strong>. Tap it again
-                to untick it. You can choose up to 8.
+                to untick it. Choose as many as you like.
               </Step>
               <Step>
                 Your interests show on your card in <strong>Info › Contacts</strong> when someone taps{" "}
@@ -729,7 +729,7 @@ export default function HelpGuidePage() {
                 skill is something you&apos;re happy to <em>help</em> a neighbour with. In{" "}
                 <strong>Update Profile</strong>, find <strong>I can help with</strong> and tap any skill
                 you can offer — for example Computer and phone help, Small handyman jobs or Pet minding.
-                You can choose up to 5.
+                Choose as many as you like.
               </Step>
               <Step>
                 Each skill you tick gets an optional <strong>note</strong> box — say how you can help, for

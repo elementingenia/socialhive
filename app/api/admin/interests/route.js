@@ -1,7 +1,7 @@
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { notify } from "@/lib/notify"
-import { STATUS, KIND, MAX_BY_KIND, kindOf, normaliseKind, kindNoun, labelKey, normaliseLabel, validateLabel, reviewOutcomeMessage, sortByLabel } from "@/lib/interests"
+import { STATUS, KIND, kindOf, normaliseKind, kindNoun, labelKey, normaliseLabel, validateLabel, reviewOutcomeMessage, sortByLabel } from "@/lib/interests"
 
 // Admin > Interests (backlog B3, migration 120). Admins only (Q4).
 //   GET  [?count=1]  -> pending queue + approved + retired, or just the
@@ -177,21 +177,6 @@ export async function PATCH(req) {
     }
     const clash = await liveClash(tag.label, to, tag.id)
     if (clash) return NextResponse.json({ error: `"${clash.label}" already exists as a ${kindNoun(to)}.` }, { status: 409 })
-    const who = await holders(tag.id)
-    if (who.length) {
-      const { data: theirs } = await supa.from("member_interests")
-        .select("member_id, tag:interest_tags!tag_id(kind, status)").in("member_id", who)
-      const count = {}
-      for (const r of theirs || []) {
-        if (r.tag && kindOf(r.tag) === to && [STATUS.APPROVED, STATUS.PENDING].includes(r.tag.status)) {
-          count[r.member_id] = (count[r.member_id] || 0) + 1
-        }
-      }
-      const over = who.filter(m => (count[m] || 0) >= MAX_BY_KIND[to]).length
-      if (over) {
-        return NextResponse.json({ error: `Can't move it: ${over} resident${over === 1 ? " already has" : "s already have"} the maximum of ${MAX_BY_KIND[to]} ${kindNoun(to)}s.` }, { status: 409 })
-      }
-    }
     const { error } = await supa.from("interest_tags").update({ kind: to }).eq("id", tag.id)
     if (error) return NextResponse.json({ error: "Could not update." }, { status: 500 })
     return NextResponse.json({ ok: true })

@@ -1,9 +1,9 @@
 import assert from "node:assert/strict"
 import {
-  MAX_INTERESTS, normaliseLabel, labelKey, validateLabel, resolveSuggestion,
+  normaliseLabel, labelKey, validateLabel, resolveSuggestion,
   validateSelection, buildDirectory, interestsLine, pendingToAlert,
   adminAlertMessage, reviewOutcomeMessage, sortByLabel, groupByInterest,
-  KIND, MAX_SKILLS, NOTE_MAX, kindOf, normaliseNote, buildSkillNotes,
+  KIND, NOTE_MAX, kindOf, normaliseNote, buildSkillNotes,
 } from "../../lib/interests.js"
 
 let n = 0
@@ -60,11 +60,10 @@ t("pending ok only if already linked", () => {
 t("retired refused", () => assert.ok(validateSelection(["x"], byId, ["x"]).error))
 t("rejected refused", () => assert.ok(validateSelection(["r"], byId, ["r"]).error))
 t("unknown refused", () => assert.ok(validateSelection(["zz"], byId, []).error))
-t("cap enforced", () => {
-  const many = Array.from({ length: MAX_INTERESTS + 1 }, (_, i) => `t${i}`)
+t("no cap on interests", () => {
+  const many = Array.from({ length: 30 }, (_, i) => `t${i}`)
   const m = new Map(many.map(id => [id, { id, label: id, status: "approved" }]))
-  assert.ok(validateSelection(many, m, []).error)
-  assert.equal(validateSelection(many.slice(0, MAX_INTERESTS), m, []).ids.length, MAX_INTERESTS)
+  assert.equal(validateSelection(many, m, []).ids.length, 30)
 })
 t("non-array refused", () => assert.ok(validateSelection("g", byId, []).error))
 t("plain object map works", () => assert.deepEqual(validateSelection(["g"], { g: TAGS[0] }, []).ids, ["g"]))
@@ -150,15 +149,13 @@ t("retired skill unavailable only for skills", () => {
   assert.equal(resolveSuggestion("electrician", MIX).action, "create")
 })
 t("new skill carries kind", () => assert.equal(resolveSuggestion("Ukulele lessons", MIX, KIND.SKILL).kind, "skill"))
-t("caps are per kind", () => {
+t("no cap on either list together", () => {
   const rows = [
-    ...Array.from({ length: 8 }, (_, i) => ({ id: `i${i}`, label: `I${i}`, status: "approved" })),
-    ...Array.from({ length: MAX_SKILLS + 1 }, (_, i) => ({ id: `s${i}`, label: `S${i}`, status: "approved", kind: "skill" })),
+    ...Array.from({ length: 20 }, (_, i) => ({ id: `i${i}`, label: `I${i}`, status: "approved" })),
+    ...Array.from({ length: 20 }, (_, i) => ({ id: `s${i}`, label: `S${i}`, status: "approved", kind: "skill" })),
   ]
   const m = new Map(rows.map(r => [r.id, r]))
-  const eight = rows.slice(0, 8).map(r => r.id), skills = rows.slice(8).map(r => r.id)
-  assert.equal(validateSelection([...eight, ...skills.slice(0, MAX_SKILLS)], m, []).ids.length, 8 + MAX_SKILLS)
-  assert.match(validateSelection([...eight, ...skills], m, []).error, /skills/)
+  assert.equal(validateSelection(rows.map(r => r.id), m, []).ids.length, 40)
 })
 t("note normalised / blank / too long", () => {
   assert.deepEqual(normaliseNote("  Small  jobs "), { note: "Small jobs" })
