@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { authedFetch } from "@/lib/getAuthToken"
-import { KIND, MAX_INTERESTS, MAX_SKILLS, LABEL_MAX, NOTE_MAX, validateLabel, sortByLabel } from "@/lib/interests"
+import { KIND, LABEL_MAX, NOTE_MAX, validateLabel, sortByLabel } from "@/lib/interests"
 
 // One Profile chip section, for either list (same engine, backlog B7):
 //   kind="interest" -> "Ask me about"   (B3)
@@ -25,19 +25,18 @@ export const SKILLS_DISCLAIMER = "Neighbours offering a hand. Not checked or end
 const COPY = {
   interest: {
     title: "Ask me about",
-    help: max => `Tick things you're happy for neighbours to ask you about. They show on your card in Contacts. Up to ${max}.`,
+    help: "Tick things you're happy for neighbours to ask you about. They show on your card in Contacts.",
     placeholder: "Not listed? Suggest another",
   },
   skill: {
     title: "I can help with",
-    help: max => `Tick anything you're happy to help neighbours with. Add a short note if you like. Up to ${max}.`,
+    help: "Tick anything you're happy to help neighbours with. Add a short note if you like.",
     placeholder: "Not listed? Suggest a skill",
   },
 }
 
 export default function InterestsPicker({ kind = KIND.INTEREST, value, onChange, onLoaded, locked, notes = {}, onNotesChange }) {
   const isSkill = kind === KIND.SKILL
-  const max = isSkill ? MAX_SKILLS : MAX_INTERESTS
   const copy = COPY[isSkill ? "skill" : "interest"]
   const [tags, setTags] = useState([])        // approved chips of this kind
   const [pending, setPending] = useState([])  // my pending suggestions of this kind
@@ -63,7 +62,6 @@ export default function InterestsPicker({ kind = KIND.INTEREST, value, onChange,
   }, [kind])
 
   const selected = new Set(value || [])
-  const atCap = selected.size >= max
   const chips = [...tags, ...pending]
   const labelOf = Object.fromEntries(chips.map(t => [t.id, t.label]))
 
@@ -71,8 +69,7 @@ export default function InterestsPicker({ kind = KIND.INTEREST, value, onChange,
     if (locked) return
     setMsg(null)
     if (selected.has(id)) onChange((value || []).filter(x => x !== id))
-    else if (!atCap) onChange([...(value || []), id])
-    else setMsg({ ok: false, text: `You can choose up to ${max}. Untick one first.` })
+    else onChange([...(value || []), id])
   }
 
   async function suggest() {
@@ -104,7 +101,7 @@ export default function InterestsPicker({ kind = KIND.INTEREST, value, onChange,
       <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", margin: "0.2rem 0 0.55rem", lineHeight: 1.4 }}>
         {locked
           ? "Locked while 'Hide my name' is on. Anything you've chosen is kept and comes back if you turn it off."
-          : copy.help(max)}
+          : copy.help}
         {isSkill && !locked && <><br />{SKILLS_DISCLAIMER}</>}
       </div>
 
