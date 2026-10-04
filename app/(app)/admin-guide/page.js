@@ -1222,7 +1222,7 @@ export default function AdminGuidePage() {
                 stays hidden from everyone except the person who proposed it until an admin approves it.
               </Step>
               <Step>
-                Once approved it appears under <strong>Proposed groups</strong> on the Groups &amp; Clubs page,
+                Once approved, every resident is notified (also pushed to phones) and it appears under <strong>Proposed groups</strong> on the Groups &amp; Clubs page,
                 where any resident can tap <strong>I&apos;d join</strong> (once each, and they can take it back).
                 The proposer counts as the first person. When the number reaches the threshold, admins get a
                 second notification: it&apos;s ready to become a club.

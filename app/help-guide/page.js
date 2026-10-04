@@ -1135,7 +1135,7 @@ export default function HelpGuidePage() {
                 <strong>Send proposal</strong>. An admin checks it first.
               </Step>
               <Step>
-                Once approved, it shows under <strong>Proposed groups</strong> at the bottom of the page.
+                Once approved, every resident gets a notification about it, and it shows under <strong>Proposed groups</strong> at the bottom of the page.
                 Neighbours tap <strong>I&apos;d join</strong> if they&apos;re keen (tap{" "}
                 <strong>✓ You&apos;d join</strong> again to take your name off). When enough people would join,
                 an admin creates the club: you become its Owner and everyone who tapped I&apos;d join is added

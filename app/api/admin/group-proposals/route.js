@@ -1,11 +1,12 @@
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { notify } from "@/lib/notify"
+import { notifyAllActiveMembers } from "@/lib/notifyAudience"
 import { nextClubColour } from "@/lib/clubColours"
 import {
   STATUS, THRESHOLD_SETTING_KEY, normaliseText, validateProposal, duplicateMessage,
   parseThreshold, validateThreshold, adminBucket, closedLabel, daysLeft, uniqueSlug,
-  approvedMessage, declinedMessage, clubCreatedMessage,
+  approvedMessage, declinedMessage, clubCreatedMessage, newProposalBroadcastMessage,
 } from "@/lib/groupProposals"
 
 // Admin > Group Proposals (backlog B1, migration 126). Admins only.
@@ -13,7 +14,7 @@ import {
 //                     threshold, or just the count needing action (badge)
 //   PATCH {action, id?, ...}
 //     edit         {id, name, description}  -- tidy wording before/while live
-//     approve      {id}                     -- pending -> live
+//     approve      {id}                     -- pending -> live, broadcast to all residents
 //     decline      {id, reason?}            -- pending/live -> declined
 //     create_club  {id}                     -- live -> created: new club,
 //                                              proposer = Owner, supporters joined
@@ -144,7 +145,14 @@ export async function PATCH(req) {
       .update({ status: STATUS.LIVE, live_at: now, reviewed_by: admin.id, reviewed_at: now }).eq("id", p.id)
     if (error) return NextResponse.json({ error: "Could not approve." }, { status: 500 })
     if (p.proposed_by) await notify(p.proposed_by, null, "group_proposal_approved", approvedMessage(p.name), "/clubs", admin.id)
-    return NextResponse.json({ ok: true })
+    // Broadcast to every resident so they know to consider it (Iain,
+    // 2026-10-05: "else how do people know to consider it?"). Sent on
+    // approval, never on submission, so nobody hears about a proposal that
+    // might be declined. The proposer (own message above) and the approving
+    // admin are left out.
+    const broadcast = await notifyAllActiveMembers(supa, null, "group_proposal_new", newProposalBroadcastMessage(p.name),
+      { excludeMemberId: [p.proposed_by, admin.id].filter(Boolean), url: "/clubs" })
+    return NextResponse.json({ ok: true, notified: broadcast })
   }
 
   if (action === "decline") {
