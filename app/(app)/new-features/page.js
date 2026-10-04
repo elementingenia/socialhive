@@ -99,6 +99,11 @@ function FeatureCard({ f, busy, onEdit, onAction, onPreview }) {
         {approved
           ? <button type="button" disabled={busy} onClick={() => onAction("unapprove")} style={pill("var(--surface)", "var(--text)", "1px solid var(--border)")}>Back to draft</button>
           : <button type="button" disabled={busy} onClick={() => onAction("approve")} style={pill("var(--teal)")}>Approve</button>}
+        {/* Iain, 2026-10-05: small changes don't need announcing -- accept the
+            write-up without it ever going into a PDF or notification. */}
+        <button type="button" disabled={busy} onClick={() => onAction("approve_no_post")}
+          title="Accept this, but don't include it in an announcement"
+          style={pill("var(--surface)", "var(--teal)", "1px solid var(--teal)")}>Approve — don&apos;t post</button>
         <button type="button" disabled={busy} onClick={() => onAction("reject")} style={pill("var(--surface)", "#991b1b", "1px solid #fca5a5")}>Reject</button>
       </div>
     </div>
@@ -257,13 +262,24 @@ export default function NewFeaturesAdminPage() {
 
       {history.length > 0 && (
         <>
-          <h2 style={{ fontSize: "1.05rem", fontWeight: 800, margin: "1.5rem 0 0.6rem" }}>Sent</h2>
+          <h2 style={{ fontSize: "1.05rem", fontWeight: 800, margin: "1.5rem 0 0.6rem" }}>History</h2>
           {history.map(f => (
             <div key={f.id} style={{ ...card, padding: "0.75rem 1rem" }}>
               <div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 0, fontWeight: 700 }}>{f.title}</div>
-                <div style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>{featureDateLabel(f.announced_on)}</div>
+                {f.status === "approved_no_post" ? (
+                  <span style={{
+                    fontSize: "0.75rem", fontWeight: 700, padding: "0.2rem 0.55rem", borderRadius: 999,
+                    background: "var(--surface2)", color: "var(--text-dim)",
+                  }}>Not posted</span>
+                ) : (
+                  <div style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>Sent {featureDateLabel(f.announced_on)}</div>
+                )}
               </div>
+              {f.status === "approved_no_post" && (
+                <button type="button" disabled={busyId === f.id} onClick={() => call("PATCH", { id: f.id, action: "unapprove" }, f.id)}
+                  style={{ ...pill("none", "var(--teal)"), padding: "0.3rem 0", marginTop: 4 }}>Back to draft</button>
+              )}
               {f.document?.file_url && (
                 <button type="button"
                   onClick={() => router.push(`/documents/view?url=${encodeURIComponent(f.document.file_url)}&name=${encodeURIComponent((f.document.title || "New Features") + ".pdf")}`)}

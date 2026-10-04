@@ -9,7 +9,9 @@ import { sydneyTodayStr } from "@/lib/date"
 //   GET ?preview=<id>        -> that draft rendered as the real PDF template
 //   POST {fields}            -> new draft
 //   PATCH {id, fields}       -> edit a draft or approved item
-//   PATCH {id, action}       -> approve | unapprove | reject
+//   PATCH {id, action}       -> approve | approve_no_post | unapprove | reject
+//     approve_no_post (Iain, 2026-10-05): accepted but never posted -- small
+//     changes that would only be noise. The cron only picks 'approved'.
 //   PATCH {settings:{enabled?, audience?}} -> master switch / audience
 // Nothing here sends anything -- only the daily 08:30 cron
 // (app/api/cron/new-features-announce) announces approved items.
@@ -44,7 +46,7 @@ export async function GET(req) {
     supa.from("hub_settings").select("enabled, digest_audience").eq("hub_type", NEW_FEATURES_KEY).maybeSingle(),
     supa.from("feature_announcements").select(FIELDS).in("status", ["draft", "approved"]).order("created_at"),
     supa.from("feature_announcements").select(FIELDS + ", document:documents(file_url, title)")
-      .eq("status", "announced").order("announced_on", { ascending: false }).limit(30),
+      .in("status", ["announced", "approved_no_post"]).order("updated_at", { ascending: false }).limit(30),
   ])
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({
@@ -90,7 +92,10 @@ export async function PATCH(req) {
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 })
   const { data: row } = await supa.from("feature_announcements").select(FIELDS).eq("id", id).maybeSingle()
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 })
-  if (!["draft", "approved"].includes(row.status)) {
+  // A "not posted" item can still be put back to draft (nothing was sent).
+  const editable = ["draft", "approved"].includes(row.status)
+    || (row.status === "approved_no_post" && action === "unapprove")
+  if (!editable) {
     return NextResponse.json({ error: "Already announced or rejected — it can't be changed" }, { status: 409 })
   }
   const now = new Date().toISOString()
@@ -100,6 +105,8 @@ export async function PATCH(req) {
     const err = validateDraft(row)
     if (err) return NextResponse.json({ error: err }, { status: 400 })
     update = { status: "approved", approved_by: admin.id, approved_at: now }
+  } else if (action === "approve_no_post") {
+    update = { status: "approved_no_post", approved_by: admin.id, approved_at: now }
   } else if (action === "unapprove") {
     update = { status: "draft", approved_by: null, approved_at: null }
   } else if (action === "reject") {
