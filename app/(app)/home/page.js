@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { authedFetch } from "@/lib/getAuthToken"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import { useUser } from "@/lib/UserContext"
-import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon, SpecialEventsIcon, CommitteeIcon, SurveysIcon, HappeningsNewsIcon } from "@/components/NavIcons"
+import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon, SpecialEventsIcon, CommitteeIcon, SurveysIcon, HappeningsNewsIcon, HeartIcon } from "@/components/NavIcons"
 import { BAR_ENABLED, SPACE_BOOKINGS_ENABLED } from "@/lib/features"
 import AskQuestion from "@/components/AskQuestion"
 import { isHtmlContent } from "@/lib/richText"
@@ -436,7 +436,17 @@ function HappeningsNewsTile() {
           <div style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}>No recaps posted yet — check back after the next event.</div>
         ) : (
           <>
-            <div style={{ fontWeight: 700, fontSize: "0.92rem", marginBottom: "0.25rem" }}>{post.event?.title || "Recent event"}</div>
+            <div style={{ fontWeight: 700, fontSize: "0.92rem", marginBottom: "0.25rem" }}>
+              {post.event?.title || "Recent event"}
+              {/* Heart count only on Home (2026-10-05) -- hearting happens on the post itself. */}
+              {post.heart_count > 0 && (
+                <span aria-label={`${post.heart_count} ${post.heart_count === 1 ? "heart" : "hearts"}`}
+                  style={{ marginLeft: 8, color: "var(--happenings-news)", fontWeight: 700, fontSize: "0.8rem", whiteSpace: "nowrap",
+                    display: "inline-flex", alignItems: "center", gap: 3, verticalAlign: "middle" }}>
+                  <HeartIcon size={14} filled /> {post.heart_count}
+                </span>
+              )}
+            </div>
             <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.4 }}>{snippet}</div>
           </>
         )}

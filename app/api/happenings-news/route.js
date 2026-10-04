@@ -2,6 +2,8 @@ import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { requireHappeningsNewsCreate } from "@/lib/happeningsNewsAuth"
 import { isValidContentLength, MAX_CONTENT_LENGTH, originLabel } from "@/lib/happeningsNewsTier"
+import { resolveMember } from "@/lib/areaAuth"
+import { summariseHearts, heartsFor } from "@/lib/happeningsNewsHearts"
 
 export const dynamic = "force-dynamic"
 
@@ -64,7 +66,30 @@ export async function GET(req) {
     .limit(limit)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ posts: (data || []).map(shapePost) })
+
+  // Hearts (2026-10-05): count for everyone, plus whether THIS viewer has
+  // hearted each post. Auth is optional here -- the Home tile fetches
+  // without a token and only needs the count, so a missing/invalid token
+  // just means heartedByMe is always false.
+  const rows = data || []
+  let viewerId = null
+  if (req.headers.get("authorization")) {
+    const r = await resolveMember(req)
+    viewerId = r.member?.id || null
+  }
+  let summary = {}
+  if (rows.length) {
+    const { data: hearts } = await supa.from("happenings_news_hearts")
+      .select("post_id, member_id").in("post_id", rows.map(r => r.id))
+    summary = summariseHearts(hearts, viewerId)
+  }
+
+  return NextResponse.json({
+    posts: rows.map(row => {
+      const h = heartsFor(summary, row.id)
+      return { ...shapePost(row), heart_count: h.count, hearted_by_me: h.heartedByMe }
+    }),
+  })
 }
 
 // POST — create a post. Text only; photos are uploaded afterward via
