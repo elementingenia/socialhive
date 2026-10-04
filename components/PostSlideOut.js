@@ -8,6 +8,8 @@ import { QuestionIcon } from "@/components/NavIcons"
 import ImageCarouselModal from "@/components/ImageCarouselModal"
 import HappeningsNewsComposer from "@/components/HappeningsNewsComposer"
 import { MAX_CONTENT_LENGTH } from "@/lib/happeningsNewsTier"
+import HeartButton from "@/components/HeartButton"
+import HeartNames from "@/components/HeartNames"
 
 // Full-post view -- "a modal like the booking form slides out with the full
 // post, including a grid of the images" (Iain, 2026-09-21). Same shell
@@ -29,7 +31,7 @@ function fmtDateTime(iso) {
     " at " + d.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })
 }
 
-export default function PostSlideOut({ postId, onClose, onChanged }) {
+export default function PostSlideOut({ postId, onClose, onChanged, onHeartChanged }) {
   const { member, isAdmin } = useUser()
   const [open, setOpen] = useState(false)
   const [post, setPost] = useState(undefined) // undefined = loading, null = not found
@@ -54,7 +56,9 @@ export default function PostSlideOut({ postId, onClose, onChanged }) {
   }, [postId])
 
   async function load() {
-    const res = await fetch(`/api/happenings-news/${postId}`)
+    // authedFetch (2026-10-05) so the server knows who's viewing: whether
+    // they've hearted this post and whether they may see who hearted.
+    const res = await authedFetch(`/api/happenings-news/${postId}`)
     const json = await res.json().catch(() => ({}))
     setPost(res.ok ? json : null)
     setDraft(json?.content || "")
@@ -184,6 +188,17 @@ export default function PostSlideOut({ postId, onClose, onChanged }) {
                 </div>
               ) : (
                 <p style={{ fontSize: "0.92rem", lineHeight: 1.6, color: "var(--text)", whiteSpace: "pre-wrap", marginBottom: 14 }}>{post.content}</p>
+              )}
+
+              {/* Hearts (2026-10-05): positive-only acknowledgement, no
+                  notification. Count for everyone; names for the author,
+                  admins and this event's Owner/EC only. */}
+              {!editing && (
+                <div style={{ marginBottom: 14 }}>
+                  <HeartButton postId={post.id} count={post.heart_count || 0} hearted={!!post.hearted_by_me} size="lg"
+                    onChange={({ count, hearted }) => { setPost(p => ({ ...p, heart_count: count, hearted_by_me: hearted })); onHeartChanged?.() }} />
+                  {post.can_see_heart_names && <HeartNames key={post.heart_count} postId={post.id} count={post.heart_count || 0} />}
+                </div>
               )}
 
               {error && <div style={{ color: "var(--terracotta)", fontSize: "0.82rem", marginBottom: 10 }}>{error}</div>}

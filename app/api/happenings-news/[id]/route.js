@@ -1,6 +1,8 @@
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { requireHappeningsNewsManage } from "@/lib/happeningsNewsAuth"
+import { resolveMember, requireEventManage } from "@/lib/areaAuth"
+import { summariseHearts, heartsFor, canSeeHeartNames } from "@/lib/happeningsNewsHearts"
 import { isValidContentLength, MAX_CONTENT_LENGTH, PHOTOS_BUCKET } from "@/lib/happeningsNewsTier"
 
 export const dynamic = "force-dynamic"
@@ -21,7 +23,24 @@ export async function GET(req, { params }) {
   if (!row) return NextResponse.json({ error: "Post not found" }, { status: 404 })
 
   const photos = (row.happenings_news_photos || []).sort((a, b) => a.position - b.position)
+
+  // Hearts (2026-10-05). Auth optional: without a token the viewer just
+  // can't heart or see names. can_see_heart_names only decides whether the
+  // UI offers the names list -- GET .../hearts enforces it again server-side.
+  let viewer = null
+  if (req.headers.get("authorization")) viewer = (await resolveMember(req)).member || null
+  const { data: heartRows } = await supa.from("happenings_news_hearts").select("post_id, member_id").eq("post_id", id)
+  const h = heartsFor(summariseHearts(heartRows, viewer?.id || null), id)
+  let canSeeNames = false
+  if (viewer) {
+    const quick = canSeeHeartNames({ viewerId: viewer.id, isAdmin: viewer.is_admin, posterId: row.member_id, canManageEvent: false })
+    canSeeNames = quick || !(await requireEventManage(req, row.event_id)).error
+  }
+
   return NextResponse.json({
+    heart_count: h.count,
+    hearted_by_me: h.heartedByMe,
+    can_see_heart_names: canSeeNames,
     id: row.id,
     event_id: row.event_id,
     content: row.content,

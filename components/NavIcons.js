@@ -419,6 +419,16 @@ export function NewFeaturesIcon({ size = 26 }) {
 // header's real icon. Canonical home per the project's reuse-the-canonical-
 // asset rule (2026-07-27) — Header.js and every coordinator/contact display
 // import it from here rather than keeping their own copy.
+// Heart -- Happenings News "heart this post" (2026-10-05). Outline when not
+// hearted, solid when hearted; stroke/fill follow currentColor.
+export function HeartIcon({ size = 22, filled = false }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/>
+    </svg>
+  )
+}
+
 export function QuestionIcon({ size = 22 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

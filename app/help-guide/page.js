@@ -161,6 +161,12 @@ const RAW_SECTIONS = [
       { title: "Coordinator panel (EC only)",   id: "sub-special-ec" },
     ],
   },
+  {
+    id: "news", num: 13, title: "Happenings News",
+    subs: [
+      { title: "Reading recaps and leaving a heart", id: "sub-news-hearts" },
+    ],
+  },
 ]
 
 // Bar section parked (feature not in scope) — see lib/features.js. Filtered
@@ -1770,6 +1776,30 @@ export default function HelpGuidePage() {
             </Subsection>
           </Section>
 
+
+          {/* ── HAPPENINGS NEWS ── */}
+          <Section id="news" num={secNum("news")} title="Happenings News">
+            <Step>
+              Happenings News is where event coordinators share photos and highlights after an event.
+              It only appears on Home while an admin has it switched on.
+            </Step>
+            <Subsection id="sub-news-hearts" title="Reading recaps and leaving a heart">
+              <Step>
+                Tap the <strong>Happenings News</strong> tile on Home to see every recap, newest first.
+                Tap a recap to read it in full and see its photos.
+              </Step>
+              <Step>
+                If you enjoyed a recap, tap the <strong>heart</strong>. It fills in to show you&apos;ve
+                hearted it, and the number next to it goes up. Tap it again to take your heart back.
+                You can heart a recap from the list or from inside the recap.
+              </Step>
+              <Step>
+                Everyone can see how many hearts a recap has. Only the person who wrote it, admins,
+                and the event&apos;s Owner or coordinator can tap <strong>See who hearted</strong> to
+                see the names. Nobody gets a notification when you heart something.
+              </Step>
+            </Subsection>
+          </Section>
 
           {/* Footer */}
           <div style={{

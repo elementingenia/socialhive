@@ -5,13 +5,15 @@ import { useUser } from "@/lib/UserContext"
 import { HappeningsNewsIcon } from "@/components/NavIcons"
 import PostSlideOut from "@/components/PostSlideOut"
 import ManageLink from "@/components/ManageLink"
+import HeartButton from "@/components/HeartButton"
+import { authedFetch } from "@/lib/getAuthToken"
 
 // Happenings News hub -- the flat chronological feed (Iain, 2026-09-21:
 // "news posts should be sorted in date and time order, not grouped in any
 // other way"). Row layout deliberately matches Show Time's Suggestions page
 // (app/(app)/library/page.js's MovieCard: fixed-size image or placeholder
 // on the left, text in the middle) -- the exact layout Iain asked for.
-function PostRow({ post, onOpen }) {
+function PostRow({ post, onOpen, onHeart }) {
   return (
     <div onClick={onOpen} style={{
       background: "var(--surface)", borderRadius: 12, border: "1px solid var(--border)",
@@ -38,8 +40,12 @@ function PostRow({ post, onOpen }) {
           display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
           {post.content}
         </div>
-        <div style={{ color: "var(--text-dim)", fontSize: "0.68rem", marginTop: "0.2rem" }}>
-          {post.poster_name} · {new Date(post.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
+        {/* Poster/date and the heart share one row (vertical space). */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, marginTop: "0.1rem" }}>
+          <div style={{ color: "var(--text-dim)", fontSize: "0.68rem", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {post.poster_name} · {new Date(post.created_at).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
+          </div>
+          <HeartButton postId={post.id} count={post.heart_count || 0} hearted={!!post.hearted_by_me} size="sm" onChange={onHeart} />
         </div>
       </div>
     </div>
@@ -56,7 +62,9 @@ export default function HappeningsNewsPage() {
   useEffect(() => { load() }, [])
 
   async function load() {
-    const json = await fetch("/api/happenings-news").then(r => r.json()).catch(() => ({}))
+    // authedFetch (2026-10-05) so each post comes back with this viewer's
+    // own hearted_by_me.
+    const json = await authedFetch("/api/happenings-news").then(r => r.json()).catch(() => ({}))
     setPosts(json.posts || [])
   }
 
@@ -91,12 +99,13 @@ export default function HappeningsNewsPage() {
         </div>
       ) : (
         <div style={{ marginTop: "0.75rem" }}>
-          {posts.map(post => <PostRow key={post.id} post={post} onOpen={() => openPost(post.id)} />)}
+          {posts.map(post => <PostRow key={post.id} post={post} onOpen={() => openPost(post.id)}
+            onHeart={({ count, hearted }) => setPosts(ps => ps.map(p => p.id === post.id ? { ...p, heart_count: count, hearted_by_me: hearted } : p))} />)}
         </div>
       )}
 
       {activePostId && (
-        <PostSlideOut postId={activePostId} onClose={closePost} onChanged={() => { load(); closePost() }} />
+        <PostSlideOut postId={activePostId} onClose={closePost} onChanged={() => { load(); closePost() }} onHeartChanged={load} />
       )}
     </div>
   )
