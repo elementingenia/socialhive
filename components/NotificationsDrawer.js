@@ -51,6 +51,11 @@ function typeIcon(type) {
     case "new_features":             return "✨"
     case "event_invite":             return "✉️"
     case "interest_review_pending":  return "🏷️"
+    case "group_proposal_review":       return "💡"
+    case "group_proposal_ready":        return "💡"
+    case "group_proposal_approved":     return "💡"
+    case "group_proposal_declined":     return "💡"
+    case "group_proposal_club_created": return "🎉"
     case "interest_approved":        return "🏷️"
     case "interest_merged":          return "🏷️"
     case "interest_rejected":        return "🏷️"
@@ -90,6 +95,11 @@ function typeColour(type) {
     case "new_features":             return "var(--teal)"
     case "event_invite":             return "var(--teal)"
     case "interest_review_pending":  return "var(--amber-dark)"
+    case "group_proposal_review":       return "var(--amber-dark)"
+    case "group_proposal_ready":        return "var(--purple)"
+    case "group_proposal_approved":     return "var(--purple)"
+    case "group_proposal_declined":     return "var(--text-dim)"
+    case "group_proposal_club_created": return "var(--purple)"
     case "interest_approved":        return "var(--teal)"
     case "interest_merged":          return "var(--teal)"
     case "interest_rejected":        return "var(--text-dim)"
@@ -134,6 +144,11 @@ function targetForNotif(n) {
   // their own -- the result shows on the Profile slide-over -- so tick-only.
   if (n.type === "interest_review_pending") return "/admin?tab=Interests"
   if (n.type?.startsWith("interest_")) return null
+  // Propose a group (B1): admin alerts open Admin > Group Proposals; the
+  // resident notices open Groups & Clubs (a created club shows under
+  // My Groups & Clubs, since supporters are auto-joined).
+  if (n.type === "group_proposal_review" || n.type === "group_proposal_ready") return "/admin?tab=Proposals"
+  if (n.type?.startsWith("group_proposal_")) return "/clubs"
   // Hub notices (2026-09-23): route back to the hub the message names.
   if (n.type === "hub_notice_posted") return hubNoticeHomeFromMessage(n.message)
   // Recap nudge (2026-10-02): the event has finished, so route via

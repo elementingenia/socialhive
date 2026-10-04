@@ -158,6 +158,15 @@ const RAW_SECTIONS = [
       { title: "Where it ends up — Documents › New Features", id: "sub-nf-folder" },
     ],
   },
+  {
+    id: "proposals", num: 16, title: "Group Proposals — New Groups Suggested by Residents (Admin › Group Proposals)",
+    subs: [
+      { title: "How a proposal becomes a club", id: "sub-gp-flow" },
+      { title: "Approving, editing and declining", id: "sub-gp-review" },
+      { title: "Creating the club", id: "sub-gp-create" },
+      { title: "The threshold and the 60-day limit", id: "sub-gp-threshold" },
+    ],
+  },
 ]
 
 const SECTIONS = (() => {
@@ -1201,6 +1210,51 @@ export default function AdminGuidePage() {
                 don&apos;t clutter the main list: they sit in a folder row at the bottom and under the{" "}
                 <strong>✨ New Features</strong> pill (always last). Search still finds them. The category is
                 built in, so it can&apos;t be deleted from Manage Categories.
+              </Step>
+            </Subsection>
+          </Section>
+
+          <Section id="proposals" num={16} title="Group Proposals — New Groups Suggested by Residents (Admin › Group Proposals)">
+            <Subsection id="sub-gp-flow" title="How a proposal becomes a club (added 2026-10-04)">
+              <Step>
+                Any resident can tap <strong>+ Propose a group</strong> on the Groups &amp; Clubs page and give
+                it a name and a short description. Every admin is notified (also pushed to phones). The proposal
+                stays hidden from everyone except the person who proposed it until an admin approves it.
+              </Step>
+              <Step>
+                Once approved it appears under <strong>Proposed groups</strong> on the Groups &amp; Clubs page,
+                where any resident can tap <strong>I&apos;d join</strong> (once each, and they can take it back).
+                The proposer counts as the first person. When the number reaches the threshold, admins get a
+                second notification: it&apos;s ready to become a club.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-gp-review" title="Approving, editing and declining">
+              <Step>
+                Under <strong>Waiting for approval</strong>, tap <strong>Approve</strong> to show it to everyone,
+                <strong> Edit wording</strong> to tidy the name or description first, or <strong>Decline…</strong>
+                with an optional reason. The proposer is told the outcome in their notifications. A live
+                proposal can be taken down with <strong>Close…</strong>; the proposer can also withdraw their own.
+                A name that matches an existing club or another open proposal is refused.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-gp-create" title="Creating the club">
+              <Step>
+                Proposals that have enough support sit under <strong>Ready to create</strong>. Tap{" "}
+                <strong>Create club…</strong> then <strong>Create club</strong>. The new club takes the
+                proposal&apos;s name and description and the next free colour. The proposer becomes its Owner,
+                and everyone who tapped I&apos;d join is added as a member and notified.
+              </Step>
+              <Step>
+                From there the Owner runs it with the usual <strong>⚙ Manage</strong> tools. Admins can change
+                anything else (colour, event options, more Owners) in <strong>Admin › Groups &amp; Clubs</strong>.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-gp-threshold" title="The threshold and the 60-day limit">
+              <Step>
+                <strong>People needed before a club can be created</strong> sits at the top of the screen. It
+                starts at 5 and can be set from 2 to 50. A live proposal that hasn&apos;t become a club 60 days
+                after it was approved disappears from the Groups &amp; Clubs page and moves to{" "}
+                <strong>Closed</strong> as Expired.
               </Step>
             </Subsection>
           </Section>

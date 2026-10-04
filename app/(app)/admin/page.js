@@ -10,6 +10,7 @@ import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon
 import OwnersManager from '@/components/OwnersManager'
 import UptakeStats from '@/components/UptakeStats'
 import InterestsAdmin from '@/components/InterestsAdmin'
+import GroupProposalsAdmin from '@/components/GroupProposalsAdmin'
 import StreetsAdmin from '@/components/StreetsAdmin'
 import ResidentEditForm, { Sheet, labelStyle } from '@/components/ResidentEditPanel'
 import { CLUB_COLOURS, nextClubColour } from '@/lib/clubColours'
@@ -63,6 +64,11 @@ const SECTIONS = [
   // 2026-10-02). Tile shows a count badge while suggestions are waiting (Q2).
   // Relabelled for Skills (B7, 2026-10-03); key unchanged so /admin?tab=Interests links still work.
   { key: 'Interests', label: 'Interests & Skills', Icon: InterestsIcon },
+  // Propose a group (backlog B1, migration 126, Iain 2026-10-04): approve
+  // resident proposals, create the club once enough people would join, and
+  // set that threshold. Badge = proposals needing action (to approve or ready
+  // to create). Deep link /admin?tab=Proposals from the admin alerts.
+  { key: 'Proposals', label: 'Group Proposals', Icon: ClubsIcon },
   // The community's street names (migration 122, Iain 2026-10-03). Residents
   // pick theirs from this list next to their house number -- house numbers
   // here are scattered, so people give directions by street.
@@ -1488,6 +1494,7 @@ export default function AdminPage() {
   const router = useRouter()
   const [tab, setTab] = useState(null)
   const [interestsPending, setInterestsPending] = useState(0)
+  const [proposalsAction, setProposalsAction] = useState(0)
 
   // Deep link: /admin?tab=Interests (the daily interests-review alert lands
   // here). window.location rather than useSearchParams, which would need a
@@ -1516,6 +1523,10 @@ export default function AdminPage() {
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d) setInterestsPending(d.pendingCount || 0) })
       .catch(() => {})
+    authedFetch('/api/admin/group-proposals?count=1')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setProposalsAction(d.actionCount || 0) })
+      .catch(() => {})
   }, [member?.is_admin, tab])
 
   if (loading || !member) return null
@@ -1540,6 +1551,7 @@ export default function AdminPage() {
         {tab === 'Tools'     && <ToolsTab />}
         {tab === 'Uptake'    && <UptakeStats />}
         {tab === 'Interests' && <InterestsAdmin onCountChange={setInterestsPending} />}
+        {tab === 'Proposals' && <GroupProposalsAdmin onCountChange={setProposalsAction} />}
         {tab === 'Streets'   && <StreetsAdmin />}
       </div>
     )
@@ -1559,6 +1571,9 @@ export default function AdminPage() {
                 ...(spanFull ? { gridColumn:'1/-1' } : {}) }}>
               <span style={{ color:'var(--text)', lineHeight:0, position:'relative' }}>
                 <s.Icon size={32} />
+                {s.key === 'Proposals' && proposalsAction > 0 && (
+                  <span aria-label={`${proposalsAction} waiting for action`} style={{ position:'absolute', top:-6, right:-14, minWidth:20, height:20, padding:'0 5px', borderRadius:10, background:'#e53e3e', color:'#fff', fontSize:'0.7rem', fontWeight:700, lineHeight:'20px', textAlign:'center', boxSizing:'border-box' }}>{proposalsAction}</span>
+                )}
                 {s.key === 'Interests' && interestsPending > 0 && (
                   <span aria-label={`${interestsPending} waiting for review`} style={{ position:'absolute', top:-6, right:-14, minWidth:20, height:20, padding:'0 5px', borderRadius:10, background:'#e53e3e', color:'#fff', fontSize:'0.7rem', fontWeight:700, lineHeight:'20px', textAlign:'center', boxSizing:'border-box' }}>{interestsPending}</span>
                 )}

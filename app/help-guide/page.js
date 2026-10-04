@@ -94,6 +94,7 @@ const RAW_SECTIONS = [
     id: "clubs", num: 5, title: "Groups & Clubs — including Book Club",
     subs: [
       { title: "Groups & Clubs home",                     id: "sub-clubs-home" },
+      { title: "Proposing a new group",                    id: "sub-clubs-propose" },
       { title: "A club's page — welcome, contact & Ask a Question", id: "sub-clubs-page" },
       { title: "Signing up for a meeting or activity",     id: "sub-clubs-signup" },
       { title: "Bringing something",                       id: "sub-clubs-bring" },
@@ -1124,6 +1125,21 @@ export default function HelpGuidePage() {
                 Two tabs sit at the top: <strong>My Groups & Clubs</strong> (the ones you've joined —
                 shown by default) and <strong>All Groups & Clubs</strong> (everything on offer). Tap a
                 club's tile to open its page.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-clubs-propose" title="Proposing a new group">
+              <Step>
+                Want a group that doesn&apos;t exist yet? Tap <strong>+ Propose a group</strong> at the top of
+                Groups &amp; Clubs, give it a name and say what it would do, then tap{" "}
+                <strong>Send proposal</strong>. An admin checks it first.
+              </Step>
+              <Step>
+                Once approved, it shows under <strong>Proposed groups</strong> at the bottom of the page.
+                Neighbours tap <strong>I&apos;d join</strong> if they&apos;re keen (tap{" "}
+                <strong>✓ You&apos;d join</strong> again to take your name off). When enough people would join,
+                an admin creates the club: you become its Owner and everyone who tapped I&apos;d join is added
+                as a member. A proposal stays up for 60 days. You can withdraw your own at any time.
               </Step>
             </Subsection>
 
