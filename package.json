@@ -19,6 +19,7 @@
     "@zxing/library": "^0.23.0",
     "next": "14.2.35",
     "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^3.11.174",
     "react": "^18",
     "react-dom": "^18",
     "sharp": "^0.35.3",
