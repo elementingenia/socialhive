@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { ClubsIcon } from "@/components/NavIcons"
 import { useMyClubs } from "@/lib/useMyClubs"
+import GroupProposals, { ProposeForm } from "@/components/GroupProposals"
 
 // Clubs hub. Defaults to the clubs you've JOINED (Iain 2026-07-18), with an
 // All toggle. Each club opens the generic /clubs/[slug] page. Joining only
@@ -13,6 +14,11 @@ export default function ClubsHome() {
   const [clubs, setClubs] = useState(null)
   const { myClubIds } = useMyClubs()
   const [scope, setScope] = useState("mine") // "mine" | "all"
+  // Propose a group (backlog B1): form at the top, list of proposals under
+  // the clubs. refreshKey reloads that list after a proposal is sent.
+  const [proposing, setProposing] = useState(false)
+  const [proposalSent, setProposalSent] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
     supabase.from("clubs").select("id, name, slug, description, colour")
@@ -54,10 +60,27 @@ export default function ClubsHome() {
         <h1 style={{ fontSize: "1.4rem", fontWeight: 800, color: "var(--text)", margin: 0 }}>Groups & Clubs</h1>
       </div>
 
-      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem" }}>
+      <div style={{ display: "flex", gap: "0.5rem", marginBottom: "1rem", flexWrap: "wrap" }}>
         {pill("mine", "My Groups & Clubs")}
         {pill("all", "All Groups & Clubs")}
+        {!proposing && (
+          <button onClick={() => { setProposing(true); setProposalSent(false) }} style={{
+            padding: "0.35rem 0.9rem", borderRadius: 20, fontFamily: "inherit", fontWeight: 700, fontSize: "0.82rem",
+            cursor: "pointer", border: "1.5px dashed var(--purple)", background: "var(--surface)", color: "var(--purple)",
+          }}>+ Propose a group</button>
+        )}
       </div>
+
+      {proposing && (
+        <ProposeForm onCancel={() => setProposing(false)}
+          onDone={() => { setProposing(false); setProposalSent(true); setRefreshKey(k => k + 1) }} />
+      )}
+      {proposalSent && (
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "0.75rem 1rem", marginBottom: "1rem", fontSize: "0.88rem", color: "var(--text)", display: "flex", justifyContent: "space-between", gap: "0.5rem", alignItems: "flex-start" }}>
+          <span>Thanks! Your proposal has gone to the admins. Once they approve it, everyone will see it under Proposed groups.</span>
+          <button type="button" aria-label="Dismiss" onClick={() => setProposalSent(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-dim)", fontSize: "1.1rem", lineHeight: 1, padding: 0 }}>×</button>
+        </div>
+      )}
 
       {shown === null ? (
         <div style={{ display: "flex", justifyContent: "center", padding: "3rem" }}><div className="spinner" /></div>
@@ -87,6 +110,8 @@ export default function ClubsHome() {
           ))}
         </div>
       )}
+
+      <GroupProposals refreshKey={refreshKey} />
     </div>
   )
 }
