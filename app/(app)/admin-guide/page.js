@@ -1192,8 +1192,14 @@ export default function AdminGuidePage() {
                 before then. Rejected items are never announced.
               </Step>
               <Step>
-                The <strong>Sent</strong> list shows past announcements with a link to each PDF. Once sent,
-                an item can&apos;t be changed.
+                <strong>Approve — don&apos;t post</strong> is for small changes that aren&apos;t worth announcing:
+                the write-up is accepted but never goes into a PDF or a notification. It shows in{" "}
+                <strong>History</strong> as &quot;Not posted&quot;, and can be put <strong>Back to draft</strong>{" "}
+                if you change your mind.
+              </Step>
+              <Step>
+                The <strong>History</strong> list shows past announcements with a link to each PDF, plus anything
+                approved but not posted. Once sent, an item can&apos;t be changed.
               </Step>
             </Subsection>
             <Subsection id="sub-nf-switch" title="The on/off switch and who gets it">
