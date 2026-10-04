@@ -1,4 +1,6 @@
 "use client"
+import { useCallback, useState } from "react"
+import PdfPages from "@/components/PdfPages"
 //
 // Shared in-app document viewer chrome (2026-09-16).
 //
@@ -31,6 +33,12 @@
 export default function DocumentViewer({ url, name, accentColor = "var(--teal)", onClose }) {
   const displayName = name || "Attachment"
   const isImage = /\.(png|jpe?g|gif|webp)$/i.test(displayName)
+  // PDFs render through pdf.js so each page fits the screen width (Iain,
+  // 2026-10-04 -- an iframe showed full-size A4 on phones). If pdf.js can't
+  // open it, fall back to the iframe so the document still shows.
+  const isPdf = /\.pdf$/i.test(displayName) || /\.pdf(\?|#|$)/i.test(url || "")
+  const [pdfFailed, setPdfFailed] = useState(false)
+  const onPdfError = useCallback(() => setPdfFailed(true), [])
 
   const btnStyle = {
     display: "inline-flex", alignItems: "center", gap: 6, padding: "0.5rem 0.85rem",
@@ -72,6 +80,8 @@ export default function DocumentViewer({ url, name, accentColor = "var(--teal)",
         {url ? (
           isImage
             ? <img src={url} alt={displayName} style={{ maxWidth: "100%", display: "block", margin: "0 auto" }} />
+            : isPdf && !pdfFailed
+            ? <PdfPages url={url} onError={onPdfError} />
             : <iframe src={url} title={displayName} style={{ width: "100%", height: "100%", border: "none", minWidth: "100%" }} />
         ) : (
           <div style={{ padding: "2rem", color: "#fff", textAlign: "center" }}>No document specified.</div>

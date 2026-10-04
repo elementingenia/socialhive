@@ -35,14 +35,29 @@ function FileTypeBadge({ fileName }) {
 
 // ── Document card — primary content (open) always front and centre;         │
 // Status/Delete are small, secondary, admin-only actions below a divider ────
-function DocumentCard({ doc, isAdmin, badge, onEdit, onToggleActive, onDelete }) {
+// PDFs and images open in the in-app viewer (Close / Download / Open in
+// browser, pages fitted to the screen) -- the same view a New Features
+// notification opens (Iain, 2026-10-04). Word files can't be shown in the
+// browser, so they still open/download the old way.
+function opensInViewer(doc) {
+  return /\.(pdf|png|jpe?g|gif|webp)$/i.test(doc?.file_name || "") || /\.pdf(\?|#|$)/i.test(doc?.file_url || "")
+}
+function viewerHref(doc) {
+  const name = doc.file_name || `${doc.title}.pdf`
+  return `/documents/view?url=${encodeURIComponent(doc.file_url)}&name=${encodeURIComponent(name)}&color=${encodeURIComponent(COLOUR)}`
+}
+
+function DocumentCard({ doc, isAdmin, badge, onEdit, onToggleActive, onDelete, onOpen }) {
   return (
     <div style={{
       background: "var(--surface)", borderRadius: 12,
       border: "1px solid var(--border)", padding: "0.9rem 1rem",
       marginBottom: "0.6rem", boxShadow: "var(--shadow)",
     }}>
-      <a href={doc.file_url} target="_blank" rel="noreferrer" style={{ display: "block", textDecoration: "none" }}>
+      <a href={opensInViewer(doc) ? viewerHref(doc) : doc.file_url}
+        target={opensInViewer(doc) ? undefined : "_blank"} rel="noreferrer"
+        onClick={opensInViewer(doc) ? (e => { e.preventDefault(); onOpen?.(viewerHref(doc)) }) : undefined}
+        style={{ display: "block", textDecoration: "none" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.2rem", flexWrap: "wrap" }}>
           <FileTypeBadge fileName={doc.file_name} />
           <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text)" }}>{doc.title}</span>
@@ -59,7 +74,7 @@ function DocumentCard({ doc, isAdmin, badge, onEdit, onToggleActive, onDelete })
           </p>
         )}
         <div style={{ marginTop: "0.35rem", fontSize: "0.75rem", display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "baseline" }}>
-          <span style={{ color: COLOUR, fontWeight: 600 }}>Open ↗</span>
+          <span style={{ color: COLOUR, fontWeight: 600 }}>{opensInViewer(doc) ? "Open" : "Open ↗"}</span>
           {doc.categories?.length > 0 && (
             <span style={{ color: "var(--text-dim)" }}>· {doc.categories.map(c => c.name).join(", ")}</span>
           )}
@@ -517,7 +532,7 @@ function DocumentsPageInner() {
         </div>
       ) : (
         filtered.map(doc => (
-          <DocumentCard key={doc.id} doc={doc} isAdmin={isAdmin}
+          <DocumentCard key={doc.id} doc={doc} isAdmin={isAdmin} onOpen={href => router.push(href)}
             badge={isAdmin && !doc.active ? "Hidden" : null}
             onEdit={() => { setEditingDoc(doc); setSheet("edit") }}
             onToggleActive={() => toggleActive(doc)}
