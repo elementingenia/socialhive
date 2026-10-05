@@ -6,7 +6,8 @@ import { supabase } from "@/lib/supabase"
 import { authedFetch } from "@/lib/getAuthToken"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import { useUser } from "@/lib/UserContext"
-import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon, SpecialEventsIcon, CommitteeIcon, SurveysIcon, HappeningsNewsIcon, HeartIcon } from "@/components/NavIcons"
+import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon, SpecialEventsIcon, CommitteeIcon, SurveysIcon, HappeningsNewsIcon } from "@/components/NavIcons"
+import HeartButton from "@/components/HeartButton"
 import { BAR_ENABLED, SPACE_BOOKINGS_ENABLED } from "@/lib/features"
 import AskQuestion from "@/components/AskQuestion"
 import { isHtmlContent } from "@/lib/richText"
@@ -407,7 +408,8 @@ function HappeningsNewsTile() {
       const isLive = !!hs?.happenings_news?.live
       setLive(isLive)
       if (!isLive) { setPost(null); return }
-      const json = await fetch("/api/happenings-news?limit=1").then(r => r.json()).catch(() => ({}))
+      // authedFetch so the post comes back with this viewer's hearted_by_me.
+      const json = await authedFetch("/api/happenings-news?limit=1").then(r => r.json()).catch(() => ({}))
       if (cancelled) return
       setPost((json.posts || [])[0] || null)
     }
@@ -436,16 +438,14 @@ function HappeningsNewsTile() {
           <div style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}>No recaps posted yet — check back after the next event.</div>
         ) : (
           <>
-            <div style={{ fontWeight: 700, fontSize: "0.92rem", marginBottom: "0.25rem" }}>
-              {post.event?.title || "Recent event"}
-              {/* Heart count only on Home (2026-10-05) -- hearting happens on the post itself. */}
-              {post.heart_count > 0 && (
-                <span aria-label={`${post.heart_count} ${post.heart_count === 1 ? "heart" : "hearts"}`}
-                  style={{ marginLeft: 8, color: "var(--happenings-news)", fontWeight: 700, fontSize: "0.8rem", whiteSpace: "nowrap",
-                    display: "inline-flex", alignItems: "center", gap: 3, verticalAlign: "middle" }}>
-                  <HeartIcon size={14} filled /> {post.heart_count}
-                </span>
-              )}
+            {/* Title + heart share one row (vertical space); wraps at large
+                text sizes so the heart never falls off-screen. Hearting from
+                Home added 2026-10-05 (Iain); HeartButton stops the tap from
+                also opening the feed. */}
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 6, flexWrap: "wrap", marginBottom: "0.25rem" }}>
+              <div style={{ fontWeight: 700, fontSize: "0.92rem", minWidth: 0, flex: "1 1 auto" }}>{post.event?.title || "Recent event"}</div>
+              <HeartButton postId={post.id} count={post.heart_count || 0} hearted={!!post.hearted_by_me} size="sm"
+                onChange={({ count, hearted }) => setPost(p => ({ ...p, heart_count: count, hearted_by_me: hearted }))} />
             </div>
             <div style={{ fontSize: "0.82rem", color: "var(--text-dim)", lineHeight: 1.4 }}>{snippet}</div>
           </>
