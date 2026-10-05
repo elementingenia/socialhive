@@ -1280,7 +1280,7 @@ export default function AdminGuidePage() {
                 Swap &amp; Sell lets residents list things For sale, Free or Wanted, and message each other privately about one
                 listing at a time. It starts hidden. Open <strong>Admin › Occasional Activities › Swap &amp; Sell</strong>: Preview and
                 Production are switched separately, so you can try it on Preview first. While it&apos;s hidden, admins can still
-                use it from that page (tap <strong>Open Swap &amp; Sell →</strong>); residents see nothing and no tile shows on Home.
+                use it from that page (tap <strong>Open Swap &amp; Sell →</strong>); residents see nothing. While it&apos;s hidden, Swap &amp; Sell shows in the bottom menu for admins only; once live, every resident gets it there (Home, Calendar, Bookings, Swap &amp; Sell, plus Admin for admins).
               </Step>
               <Step>
                 Nothing is announced when something is listed. Residents who tap <strong>+ Join</strong> on the Swap &amp; Sell page get a
