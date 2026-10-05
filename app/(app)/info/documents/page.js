@@ -441,11 +441,18 @@ function DocumentsPageInner() {
     setFilter(folderId)
     const doc = documents.find(d => d.feature_date === nf && d.active)
       || documents.find(d => d.active && isInFolder(d, folderId))   // that day's gone? newest instead
-    // Replace first so the viewer's Close lands back on the folder, not on
-    // this ?nf link (which would reopen the PDF).
-    router.replace("/info/documents?folder=new-features")
+    // ONE navigation only (fix 2026-10-05). This used to router.replace()
+    // to the folder and then router.push() the viewer straight after, but
+    // Next.js only commits the last of two back-to-back navigations -- the
+    // replace was dropped, the ?nf link stayed in history, and Close
+    // (router.back()) landed on it and reopened the PDF: Close "did nothing".
+    // Now: replace this ?nf entry with the viewer, and tell the viewer where
+    // Close should go (`back`), so history never holds the ?nf link.
+    const folderHref = "/info/documents?folder=new-features"
     if (doc) {
-      router.push(`/documents/view?url=${encodeURIComponent(doc.file_url)}&name=${encodeURIComponent(doc.file_name || doc.title + ".pdf")}`)
+      router.replace(`/documents/view?url=${encodeURIComponent(doc.file_url)}&name=${encodeURIComponent(doc.file_name || doc.title + ".pdf")}&back=${encodeURIComponent(folderHref)}`)
+    } else {
+      router.replace(folderHref)
     }
   }, [loading, folderId, nf, folderParam, documents, router])
 
