@@ -1814,11 +1814,11 @@ export default function HelpGuidePage() {
           <Section id="swap" num={secNum("swap")} title="Swap & Sell">
             <Step>
               Swap &amp; Sell is where residents sell things, give them away, or ask if anyone has something
-              they need. It only appears on Home while an admin has it switched on.
+              they need. It only appears while an admin has it switched on.
             </Step>
             <Subsection id="sub-swap-browse" title="Browsing and joining">
               <Step>
-                Tap the <strong>Swap &amp; Sell</strong> tile on Home. You&apos;ll see everything listed, newest first.
+                Tap <strong>Swap &amp; Sell</strong> in the menu at the bottom of the screen. You&apos;ll see everything listed, newest first.
                 Use <strong>All</strong>, <strong>For sale</strong>, <strong>Free</strong> or <strong>Wanted</strong> to narrow it down,
                 <strong> Category</strong> to pick a type of item, or the search box to look for a word.
               </Step>

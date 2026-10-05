@@ -129,6 +129,21 @@ export default function BottomNav() {
     return () => { alive = false }
   }, [isAdmin, pathname])
 
+  // Swap & Sell sits in the default nav (Iain, 2026-10-05: "I'd prefer swap
+  // and sell as a bottom menu ... five for admins, four for most users"),
+  // replacing its Home tile. Shown while the hub is live in this deployment
+  // (hub_settings 'swap' Preview/Production flags); admins also see it while
+  // it's hidden so they can trial it. Read once per mount, like adminBadge.
+  const [swapLive, setSwapLive] = useState(false)
+  useEffect(() => {
+    let alive = true
+    fetch("/api/hub-settings").then(r => r.ok ? r.json() : null)
+      .then(d => { if (alive && d) setSwapLive(!!d.swap?.live) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+  const showSwap = swapLive || isAdmin
+
   // Clubs is the one data-driven hub: its sub-nav depends on WHICH club you're
   // in (its name, its colour) and whether that club actually has a catalogue —
   // so Dinner Club shows just Home + Dinner Club, Book Club adds Suggest.
@@ -203,6 +218,7 @@ export default function BottomNav() {
     { path: "/home",     label: "Home",     Icon: HomeIcon },
     { path: "/calendar", label: "Calendar", Icon: CalendarIcon },
     { path: "/bookings", label: "Bookings", Icon: BookingsIcon },
+    ...(showSwap             ? [{ path: "/swap",  label: "Swap & Sell", Icon: SwapIcon }] : []),
     ...(BAR_ENABLED && barOptIn && !isAdmin ? [{ path: "/bar",   label: "Bar",   Icon: BarIcon   }] : []),
     ...(isAdmin              ? [{ path: "/admin", label: "Admin", Icon: AdminIcon }] : []),
   ]
@@ -219,7 +235,7 @@ export default function BottomNav() {
     <nav style={navBase}>
       {defaultItems.map(({ path, label, Icon }) => {
         const active = pathname === path
-        const colour = path === "/bar" ? "var(--wine)" : undefined
+        const colour = path === "/bar" ? "var(--wine)" : path === "/swap" ? "var(--swap)" : undefined
         return (
           <button key={path} onClick={() => handleDefaultNav(path)}
             style={btn(active, colour)} aria-current={active ? "page" : undefined}>
