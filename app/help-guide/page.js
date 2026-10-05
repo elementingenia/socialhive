@@ -1791,7 +1791,7 @@ export default function HelpGuidePage() {
               <Step>
                 If you enjoyed a recap, tap the <strong>heart</strong>. It fills in to show you&apos;ve
                 hearted it, and the number next to it goes up. Tap it again to take your heart back.
-                You can heart a recap from the list or from inside the recap.
+                You can heart a recap from the Happenings News tile on Home, from the list, or from inside the recap.
               </Step>
               <Step>
                 Everyone can see how many hearts a recap has. Only the person who wrote it, admins,
