@@ -2,6 +2,7 @@
 import { Suspense, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import DocumentViewer from "@/components/DocumentViewer"
+import { safeNextPath } from "@/lib/safeNext"
 
 // Generic in-app document viewer (2026-09-16).
 //
@@ -36,8 +37,14 @@ function DocumentViewerInner() {
   const name = params.get("name") || "Document"
   const color = params.get("color") || "var(--teal)"
 
+  // `back` (optional, a same-site path checked by safeNextPath): where Close
+  // goes when the viewer was opened by replacing the previous page -- e.g. a
+  // New Features notification, which has nothing sensible to go "back" to.
+  const back = safeNextPath(params.get("back"))
+
   function close() {
-    if (typeof window !== "undefined" && window.history.length > 1) router.back()
+    if (back) router.replace(back)
+    else if (typeof window !== "undefined" && window.history.length > 1) router.back()
     else router.push("/home")
   }
 
