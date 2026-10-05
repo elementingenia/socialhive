@@ -8,7 +8,12 @@ import { summariseHearts, heartsFor } from "@/lib/happeningsNewsHearts"
 export const dynamic = "force-dynamic"
 
 const POST_SELECT = "id, event_id, member_id, content, primary_photo_id, created_at, edited_at, " +
-  "members(name), " +
+  // !member_id disambiguates: since migration 127 (happenings_news_hearts)
+  // there are TWO paths from posts to members -- the poster FK and
+  // many-to-many through hearts -- so a bare members(...) embed 500s
+  // with a "more than one relationship" error. Broke the whole feed
+  // 2026-10-05 after PR #197.
+  "members!member_id(name), " +
   "events(id, title, event_date, event_time, hub_type, club_id, clubs!club_id(name, slug, colour)), " +
   // !post_id disambiguates the embed -- happenings_news_posts and
   // happenings_news_photos have TWO foreign keys between them
