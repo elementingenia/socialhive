@@ -167,6 +167,15 @@ const RAW_SECTIONS = [
       { title: "The threshold and the 60-day limit", id: "sub-gp-threshold" },
     ],
   },
+  {
+    id: "swap", num: 17, title: "Swap & Sell (Admin › Occasional Activities › Swap & Sell)",
+    subs: [
+      { title: "Turning it on", id: "sub-swap-on" },
+      { title: "The listing cap", id: "sub-swap-cap" },
+      { title: "Reports, hiding and blocking", id: "sub-swap-reports" },
+      { title: "What admins can and can't see", id: "sub-swap-privacy" },
+    ],
+  },
 ]
 
 const SECTIONS = (() => {
@@ -1261,6 +1270,50 @@ export default function AdminGuidePage() {
                 starts at 5 and can be set from 2 to 50. A live proposal that hasn&apos;t become a club 60 days
                 after it was approved disappears from the Groups &amp; Clubs page and moves to{" "}
                 <strong>Closed</strong> as Expired.
+              </Step>
+            </Subsection>
+          </Section>
+
+          <Section id="swap" num={17} title="Swap & Sell (Admin › Occasional Activities › Swap & Sell)">
+            <Subsection id="sub-swap-on" title="Turning it on (added 2026-10-05)">
+              <Step>
+                Swap &amp; Sell lets residents list things For sale, Free or Wanted, and message each other privately about one
+                listing at a time. It starts hidden. Open <strong>Admin › Occasional Activities › Swap &amp; Sell</strong>: Preview and
+                Production are switched separately, so you can try it on Preview first. While it&apos;s hidden, admins can still
+                use it from that page (tap <strong>Open Swap &amp; Sell →</strong>); residents see nothing and no tile shows on Home.
+              </Step>
+              <Step>
+                Nothing is announced when something is listed. Residents who tap <strong>+ Join</strong> on the Swap &amp; Sell page get a
+                notification for each new listing (never for their own). New-listing alerts are only sent while it&apos;s live.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-swap-cap" title="The listing cap">
+              <Step>
+                <strong>Active listings per resident</strong> sets how many listings each resident can have showing at once
+                (starts at 2, between 1 and 20). Available and Reserved count; Gone, expired and hidden ones don&apos;t.
+                Listings come down by themselves after 30 days; the seller is reminded 3 days before and can tap Keep it listed.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-swap-reports" title="Reports, hiding and blocking">
+              <Step>
+                Any resident can report a listing, and either person in a conversation can report it. Every admin is notified.
+                Reports appear on the Manage Swap &amp; Sell page with <strong>Read conversation</strong> (for a reported conversation),
+                <strong> Hide listing</strong>, <strong>Block seller from listing</strong> and <strong>Mark dealt with</strong>.
+              </Step>
+              <Step>
+                A hidden listing disappears from Browse straight away; put it back from <strong>Hidden listings</strong>. A block stops
+                that resident creating new listings but leaves their existing ones (hide those separately) and they can still message
+                about other people&apos;s listings. Unblock from <strong>Blocked from listing</strong>. Admins can also hide any listing
+                from its own detail sheet.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-swap-privacy" title="What admins can and can't see">
+              <Step>
+                Admins cannot read conversations unless one has been reported. Once reported, it&apos;s readable from the report.
+              </Step>
+              <Step>
+                Private (hide_name) does not apply in Swap &amp; Sell: display names are always shown so people know who they&apos;re
+                dealing with. A Private resident sees a one-time note about this, and must tap OK, before their first listing or message.
               </Step>
             </Subsection>
           </Section>

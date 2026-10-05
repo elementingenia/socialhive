@@ -57,6 +57,11 @@ function typeIcon(type) {
     case "group_proposal_new":          return "💡"
     case "group_proposal_declined":     return "💡"
     case "group_proposal_club_created": return "🎉"
+    case "swap_message":                return "💬"
+    case "swap_item_gone":              return "🔄"
+    case "swap_new_listing":            return "🔄"
+    case "swap_expiring":               return "⏳"
+    case "swap_report":                 return "🚩"
     case "interest_approved":        return "🏷️"
     case "interest_merged":          return "🏷️"
     case "interest_rejected":        return "🏷️"
@@ -102,6 +107,11 @@ function typeColour(type) {
     case "group_proposal_new":          return "var(--purple)"
     case "group_proposal_declined":     return "var(--text-dim)"
     case "group_proposal_club_created": return "var(--purple)"
+    case "swap_message":
+    case "swap_item_gone":
+    case "swap_new_listing":
+    case "swap_expiring":               return "var(--swap)"
+    case "swap_report":                 return "var(--amber-dark)"
     case "interest_approved":        return "var(--teal)"
     case "interest_merged":          return "var(--teal)"
     case "interest_rejected":        return "var(--text-dim)"
@@ -151,6 +161,13 @@ function targetForNotif(n) {
   // My Groups & Clubs, since supporters are auto-joined).
   if (n.type === "group_proposal_review" || n.type === "group_proposal_ready") return "/admin?tab=Proposals"
   if (n.type?.startsWith("group_proposal_")) return "/clubs"
+  // Swap & Sell (migration 129). Notifications carry no conversation id,
+  // so a message opens the Messages list (unread ones are marked there);
+  // the push banner itself deep-links to the exact conversation.
+  if (n.type === "swap_message" || n.type === "swap_item_gone") return "/swap/messages"
+  if (n.type === "swap_new_listing") return "/swap"
+  if (n.type === "swap_expiring") return "/swap/mine"
+  if (n.type === "swap_report") return "/swap/manage"
   // Hub notices (2026-09-23): route back to the hub the message names.
   if (n.type === "hub_notice_posted") return hubNoticeHomeFromMessage(n.message)
   // Recap nudge (2026-10-02): the event has finished, so route via

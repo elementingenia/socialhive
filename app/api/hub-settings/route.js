@@ -1,6 +1,7 @@
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { requireAdminOrAreaOwner } from "@/lib/areaAuth"
 import { isHappeningsNewsLive } from "@/lib/happeningsNewsTier"
+import { isSwapLive, isValidListingCap, DEFAULT_LISTING_CAP } from "@/lib/swap"
 export const dynamic = "force-dynamic"
 
 // Which hub_settings rows an Owner (not just admin) may write, and which
@@ -56,6 +57,11 @@ export async function GET() {
     // archive-delay admin setting -- see migration 112 and
     // lib/happeningsNewsTier.js's isHappeningsNewsLive() for why a single
     // `enabled` flag isn't enough here, unlike every other hub above.
+    // Swap & Sell (migration 129) uses the same Preview/Production pair.
+    if (row.hub_type === "swap") {
+      out[row.hub_type].production_enabled = !!row.production_enabled
+      out[row.hub_type].live = isSwapLive(row)
+    }
     if (row.hub_type === "happenings_news") {
       out[row.hub_type].production_enabled = !!row.production_enabled
       out[row.hub_type].live = isHappeningsNewsLive(row)
@@ -70,11 +76,18 @@ export async function GET() {
       .select("digest_audience").eq("hub_type", "weekly_digest").maybeSingle()
     out.weekly_digest.audience = wd?.digest_audience === "community" ? "community" : "admins"
   }
+  // Swap & Sell listing cap (migration 129) -- read separately for the same
+  // reason as the digest audience: if 129 hasn't run, nothing else breaks.
+  if (out.swap) {
+    const { data: sw } = await supa.from("hub_settings")
+      .select("swap_listing_cap").eq("hub_type", "swap").maybeSingle()
+    out.swap.listing_cap = isValidListingCap(sw?.swap_listing_cap) ? Number(sw.swap_listing_cap) : DEFAULT_LISTING_CAP
+  }
   return Response.json(out)
 }
 
 export async function PATCH(req) {
-  const { hub_type, welcome_text, sub_messages, location_id, loan_cap, enabled, production_enabled, happenings_news_archive_days, digest_audience } = await req.json()
+  const { hub_type, welcome_text, sub_messages, location_id, loan_cap, enabled, production_enabled, happenings_news_archive_days, digest_audience, swap_listing_cap } = await req.json()
   if (!hub_type) return Response.json({ error: "hub_type required" }, { status: 400 })
 
   // AUTH FROM THE TOKEN, not from the request body — the bearer token is the
@@ -140,6 +153,14 @@ export async function PATCH(req) {
       return Response.json({ error: "digest_audience must be 'admins' or 'community' on weekly_digest" }, { status: 400 })
     }
     update.digest_audience = digest_audience
+  }
+  // Swap & Sell active-listing cap -- admin-only, swap row only.
+  if (swap_listing_cap !== undefined) {
+    if (!member.is_admin) return Response.json({ error: "Admins only" }, { status: 403 })
+    if (hub_type !== "swap" || !isValidListingCap(swap_listing_cap)) {
+      return Response.json({ error: "swap_listing_cap must be a whole number from 1 to 20 on swap" }, { status: 400 })
+    }
+    update.swap_listing_cap = Number(swap_listing_cap)
   }
   // null is meaningful here — it clears the hub's nominated venue.
   if (location_id !== undefined) update.location_id = location_id
