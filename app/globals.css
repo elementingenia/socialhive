@@ -44,6 +44,9 @@
                              brown, reads as "news/print" without clashing
                              with --amber (Main Notice) or --wine (the Bar).
                              Distinct from every hue above. */
+  --swap: #4d7c0f;       /* Swap & Sell (2026-10-05) -- olive green, "reuse",
+                             distinct from --teal (Show Time) and --green
+                             (descoped Outings). White text on it is 5.3:1. */
 
   /* Contact Title/Role accent (2026-09-16) -- Iain: Title/Role and the
      admin-only real-name annotation were both var(--text-dim), so once

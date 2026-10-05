@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { authedFetch } from "@/lib/getAuthToken"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import { useUser } from "@/lib/UserContext"
-import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon, SpecialEventsIcon, CommitteeIcon, SurveysIcon, HappeningsNewsIcon } from "@/components/NavIcons"
+import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon, SpecialEventsIcon, CommitteeIcon, SurveysIcon, HappeningsNewsIcon, SwapIcon } from "@/components/NavIcons"
 import HeartButton from "@/components/HeartButton"
 import { BAR_ENABLED, SPACE_BOOKINGS_ENABLED } from "@/lib/features"
 import AskQuestion from "@/components/AskQuestion"
@@ -387,6 +387,39 @@ function SurveysTile() {
   )
 }
 
+// Swap & Sell (migration 129, Iain 2026-10-05). Same shape as SurveysTile;
+// gated on the env-resolved `live` flag (Preview/Production, like Happenings
+// News). Deliberately quiet -- no counts or "new item" teaser on Home, so
+// the hub stays discreet for anyone who hasn't chosen to Join it.
+function SwapTile() {
+  const router = useRouter()
+  const [live, setLive] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    fetch("/api/hub-settings").then(r => r.json())
+      .then(hs => { if (!cancelled) setLive(!!hs?.swap?.live) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+  if (!live) return null
+  return (
+    <div onClick={() => router.push("/swap")} style={{
+      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px",
+      padding: "1rem 1.25rem", cursor: "pointer", display: "flex",
+      alignItems: "center", justifyContent: "space-between", marginTop: "0.5rem", marginBottom: "0.75rem",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem" }}>
+        <span style={{ color: "var(--swap)", lineHeight: 0, display: "flex", alignItems: "center" }}><SwapIcon size={40} /></span>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>Swap &amp; Sell</div>
+          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>Sell, give away or ask for things — privately</div>
+        </div>
+      </div>
+      <span style={{ color: "var(--text-dim)", fontSize: "1.1rem" }}>›</span>
+    </div>
+  )
+}
+
 // Happenings News tile (Iain, 2026-09-21): deliberately LARGER than every
 // other Home tile above -- "large enough to show at least part of the
 // post's written content as well as a photo... 50/50 split Text/Photo" when
@@ -594,6 +627,7 @@ export default function HomePage() {
           <SpecialEventsTile />
           <CommitteeTile />
           <SurveysTile />
+          <SwapTile />
 
           {/* Sub notices */}
           {subTexts.map((t, i) => <SubNoticeCard key={i} text={t} />)}

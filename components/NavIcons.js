@@ -453,3 +453,42 @@ export function ContactsIcon({ size = 26 }) {
     </svg>
   )
 }
+
+// Swap & Sell (2026-10-05) -- two opposing arrows: things changing hands.
+// Distinct from every other hub glyph in this file.
+export function SwapIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fill="currentColor"
+        d="M 11 20 L 45 20 L 45 12 L 61 24 L 45 36 L 45 28 L 11 28 Z
+           M 59 42 L 25 42 L 25 34 L 9 46 L 25 58 L 25 50 L 59 50 Z"/>
+    </svg>
+  )
+}
+
+// Speech bubble -- Swap & Sell Messages tab (2026-10-05). The app's first
+// resident-to-resident messages, so a glyph of its own rather than reusing
+// QuestionIcon (that one means "Ask a question").
+export function MessagesIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 14 12 L 56 12 C 60.4 12 64 15.6 64 20 L 64 44 C 64 48.4 60.4 52 56 52 L 30 52 L 16 62 L 18 52 L 14 52 C 9.6 52 6 48.4 6 44 L 6 20 C 6 15.6 9.6 12 14 12 Z
+           M 16 24 L 54 24 L 54 29 L 16 29 Z
+           M 16 35 L 44 35 L 44 40 L 16 40 Z"/>
+    </svg>
+  )
+}
+
+// Parcel -- Swap & Sell "My Listings" tab (2026-10-05): your own items.
+export function ListingsIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 8 22 L 35 10 L 62 22 L 62 52 L 35 64 L 8 52 Z
+           M 14 27 L 14 48 L 32 56 L 32 35 Z
+           M 38 35 L 38 56 L 56 48 L 56 27 Z
+           M 17 22 L 35 30 L 53 22 L 35 14 Z"/>
+    </svg>
+  )
+}

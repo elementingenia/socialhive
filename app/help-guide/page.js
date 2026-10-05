@@ -167,6 +167,16 @@ const RAW_SECTIONS = [
       { title: "Reading recaps and leaving a heart", id: "sub-news-hearts" },
     ],
   },
+  {
+    id: "swap", num: 14, title: "Swap & Sell",
+    subs: [
+      { title: "Browsing and joining",               id: "sub-swap-browse" },
+      { title: "Listing something",                  id: "sub-swap-list" },
+      { title: "Messaging about a listing",          id: "sub-swap-messages" },
+      { title: "My Listings — Reserved, Gone and keeping it listed", id: "sub-swap-mine" },
+      { title: "Your name, reporting, and payment",  id: "sub-swap-safety" },
+    ],
+  },
 ]
 
 // Bar section parked (feature not in scope) — see lib/features.js. Filtered
@@ -1798,6 +1808,82 @@ export default function HelpGuidePage() {
                 and the event&apos;s Owner or coordinator can tap <strong>See who hearted</strong> to
                 see the names. Nobody gets a notification when you heart something.
               </Step>
+            </Subsection>
+          </Section>
+
+          <Section id="swap" num={secNum("swap")} title="Swap & Sell">
+            <Step>
+              Swap &amp; Sell is where residents sell things, give them away, or ask if anyone has something
+              they need. It only appears on Home while an admin has it switched on.
+            </Step>
+            <Subsection id="sub-swap-browse" title="Browsing and joining">
+              <Step>
+                Tap the <strong>Swap &amp; Sell</strong> tile on Home. You&apos;ll see everything listed, newest first.
+                Use <strong>All</strong>, <strong>For sale</strong>, <strong>Free</strong> or <strong>Wanted</strong> to narrow it down,
+                <strong> Category</strong> to pick a type of item, or the search box to look for a word.
+              </Step>
+              <Step>
+                Swap &amp; Sell is quiet: nobody is told when something new is listed. If you&apos;d like to hear about
+                new listings, tap <strong>+ Join</strong>. Tap <strong>✓ Joined</strong> to stop.
+              </Step>
+              <Step>Tap any listing to see its photos, description and who listed it.</Step>
+            </Subsection>
+            <Subsection id="sub-swap-list" title="Listing something">
+              <Step>
+                Tap <strong>+ List something</strong>. Choose <strong>For sale</strong>, <strong>Free</strong> or <strong>Wanted</strong>,
+                give it a title, and choose a category. For sale needs a price in whole dollars, or tap <strong>Offers</strong>.
+                Condition and description are optional.
+              </Step>
+              <Step>
+                Some things aren&apos;t allowed: food or drink, alcohol, medicines, animals and weapons.
+                Tick <strong>This item is allowed</strong>, then tap <strong>Post — then add photos</strong>.
+              </Step>
+              <Step>
+                Add up to 4 photos. Tap <strong>★</strong> on a photo to make it the main one people see first.
+                Tap <strong>Done</strong> when you&apos;re finished. Photos are optional.
+              </Step>
+              <Step>
+                You can have a limited number of listings showing at once (set by the admins). Mark one as
+                <strong> Gone</strong> to make room for another. Your house number is never shown on a listing.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-swap-messages" title="Messaging about a listing">
+              <Step>
+                Open a listing and tap <strong>Message seller</strong> (or <strong>I have one</strong> on a Wanted post),
+                write your message and tap <strong>Send</strong>. Only you and the person who listed it can see the conversation.
+                If several people ask, each has their own private conversation.
+              </Step>
+              <Step>
+                When someone replies you get a notification. All your conversations are under <strong>Messages</strong> at the
+                bottom of the screen; unread ones are marked. Arrange collection between yourselves in the conversation.
+              </Step>
+              <Step>A conversation closes 14 days after its listing is marked Gone or comes down.</Step>
+            </Subsection>
+            <Subsection id="sub-swap-mine" title="My Listings — Reserved, Gone and keeping it listed">
+              <Step>
+                Tap <strong>My Listings</strong> at the bottom of the screen. Each listing has three buttons:
+                <strong> Available</strong>, <strong>Reserved</strong> and <strong>Gone</strong> (<strong>Found</strong> on a Wanted post).
+                You don&apos;t need a conversation to change it — if you sold it to a neighbour over the fence, just tap Gone.
+              </Step>
+              <Step>
+                When you tap Gone, anyone who messaged you about it is told it&apos;s no longer available. Reserved tells nobody;
+                the listing stays up with a Reserved label.
+              </Step>
+              <Step>
+                Listings come down after 30 days. Three days before, you get a reminder; tap <strong>Keep it listed</strong> in
+                My Listings for another 30 days. Tap <strong>Edit / photos</strong> to change the details or photos.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-swap-safety" title="Your name, reporting, and payment">
+              <Step>
+                Buyers and sellers need to know who they&apos;re dealing with, so Swap &amp; Sell always shows your display name —
+                even if you&apos;ve set yourself to Private. If you&apos;re Private, you&apos;ll be reminded once before your first listing or message.
+              </Step>
+              <Step>
+                If a listing or a conversation isn&apos;t right, tap <strong>Report this listing</strong> or
+                <strong> Report this conversation</strong>. Admins can only read a conversation once it has been reported.
+              </Step>
+              <Step>Element Happenings doesn&apos;t handle payments. Pay and collect between yourselves.</Step>
             </Subsection>
           </Section>
 

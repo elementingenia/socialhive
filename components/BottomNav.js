@@ -12,7 +12,7 @@ import {
   HomeIcon, MoviesIcon, CalendarIcon, SuggestionsIcon, DVDIcon,
   BookClubIcon, SocialIcon, AdminIcon, BookingsIcon, BarIcon,
   InfoIcon, DocumentsIcon, ContactsIcon, InterestsIcon, ClubsIcon, SpaceIcon, SpecialEventsIcon,
-  CommitteeIcon,
+  CommitteeIcon, SwapIcon, MessagesIcon, ListingsIcon,
 } from "@/components/NavIcons"
 
 const HUB_CONFIG = {
@@ -95,6 +95,16 @@ const HUB_CONFIG = {
     items: [
       { path: "/committee",           label: "Committee", Icon: CommitteeIcon },
       { path: "/committee/documents", label: "Documents", Icon: DocumentsIcon },
+    ],
+  },
+  // Swap & Sell (2026-10-05): Browse, the resident's own listings, and their
+  // private buyer/seller conversations.
+  swap: {
+    colour: "var(--swap)",
+    items: [
+      { path: "/swap",          label: "Swap & Sell", Icon: SwapIcon },
+      { path: "/swap/mine",     label: "My Listings", Icon: ListingsIcon },
+      { path: "/swap/messages", label: "Messages",    Icon: MessagesIcon },
     ],
   },
 }
