@@ -163,19 +163,14 @@ function SpaceBookingTile() {
 // Gated entirely on hub_settings.voting.enabled -- an admin-only toggle
 // (see app/api/hub-settings/route.js) -- so this renders nothing at all
 // until an admin turns Voting on.
-function VotingTile() {
+function VotingTile({ enabled }) {
   const router = useRouter()
-  const [enabled, setEnabled] = useState(false)
   const [openEvent, setOpenEvent] = useState(undefined) // undefined = loading
 
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const hs = await fetch("/api/hub-settings").then(r => r.json()).catch(() => ({}))
-      if (cancelled) return
-      const isEnabled = !!hs?.voting?.enabled
-      setEnabled(isEnabled)
-      if (!isEnabled) { setOpenEvent(null); return }
+      if (!enabled) { setOpenEvent(null); return }
 
       const res = await authedFetch("/api/voting").catch(() => null)
       const json = res ? await res.json().catch(() => ({})) : {}
@@ -184,7 +179,7 @@ function VotingTile() {
     }
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [enabled])
 
   if (!enabled) return null
 
@@ -219,19 +214,14 @@ function VotingTile() {
 // of the time and not clutter the UI"). Gated entirely on
 // hub_settings.special.enabled, so this renders nothing at all until an
 // admin turns Special Events on via /special-events/manage.
-function SpecialEventsTile() {
+function SpecialEventsTile({ enabled }) {
   const router = useRouter()
-  const [enabled, setEnabled] = useState(false)
   const [nextEvent, setNextEvent] = useState(undefined) // undefined = loading
 
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const hs = await fetch("/api/hub-settings").then(r => r.json()).catch(() => ({}))
-      if (cancelled) return
-      const isEnabled = !!hs?.special?.enabled
-      setEnabled(isEnabled)
-      if (!isEnabled) { setNextEvent(null); return }
+      if (!enabled) { setNextEvent(null); return }
 
       const todayStr = sydneyTodayStr()
       const { data } = await supabase
@@ -247,7 +237,7 @@ function SpecialEventsTile() {
     }
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [enabled])
 
   if (!enabled) return null
 
@@ -281,19 +271,14 @@ function SpecialEventsTile() {
 // (Social_Hive_Committee_Notice_Board_Scope_v3_FINAL, Iain 2026-09-07) is
 // also occasional, hidden until an admin turns it on via hub_settings.
 // Shows the latest (pinned-first) post's snippet instead of an event date.
-function CommitteeTile() {
+function CommitteeTile({ enabled }) {
   const router = useRouter()
-  const [enabled, setEnabled] = useState(false)
   const [latest, setLatest] = useState(undefined) // undefined = loading
 
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const hs = await fetch("/api/hub-settings").then(r => r.json()).catch(() => ({}))
-      if (cancelled) return
-      const isEnabled = !!hs?.committee?.enabled
-      setEnabled(isEnabled)
-      if (!isEnabled) { setLatest(null); return }
+      if (!enabled) { setLatest(null); return }
 
       const res = await authedFetch("/api/committee").catch(() => null)
       const json = res ? await res.json().catch(() => ({})) : {}
@@ -302,7 +287,7 @@ function CommitteeTile() {
     }
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [enabled])
 
   if (!enabled) return null
 
@@ -336,19 +321,14 @@ function CommitteeTile() {
 // occasional, hidden until an admin turns it on via hub_settings.surveys.
 // Shows the currently-open survey (if any), same "no live event = plain
 // fallback line" convention as VotingTile.
-function SurveysTile() {
+function SurveysTile({ enabled }) {
   const router = useRouter()
-  const [enabled, setEnabled] = useState(false)
   const [openSurvey, setOpenSurvey] = useState(undefined) // undefined = loading
 
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const hs = await fetch("/api/hub-settings").then(r => r.json()).catch(() => ({}))
-      if (cancelled) return
-      const isEnabled = !!hs?.surveys?.enabled
-      setEnabled(isEnabled)
-      if (!isEnabled) { setOpenSurvey(null); return }
+      if (!enabled) { setOpenSurvey(null); return }
 
       const res = await authedFetch("/api/surveys").catch(() => null)
       const json = res ? await res.json().catch(() => ({})) : {}
@@ -357,7 +337,7 @@ function SurveysTile() {
     }
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [enabled])
 
   if (!enabled) return null
 
@@ -395,27 +375,13 @@ function SurveysTile() {
 // same Preview/Production independence every other piece of this hub
 // respects. Renders nothing at all until an admin turns it on for THIS
 // deployment via /happenings-news/manage.
-function HappeningsNewsTile() {
+function HappeningsNewsTile({ live, initialPost }) {
   const router = useRouter()
-  const [live, setLive] = useState(false)
-  const [post, setPost] = useState(undefined) // undefined = loading, null = none yet
-
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      const hs = await fetch("/api/hub-settings").then(r => r.json()).catch(() => ({}))
-      if (cancelled) return
-      const isLive = !!hs?.happenings_news?.live
-      setLive(isLive)
-      if (!isLive) { setPost(null); return }
-      // authedFetch so the post comes back with this viewer's hearted_by_me.
-      const json = await authedFetch("/api/happenings-news?limit=1").then(r => r.json()).catch(() => ({}))
-      if (cancelled) return
-      setPost((json.posts || [])[0] || null)
-    }
-    load()
-    return () => { cancelled = true }
-  }, [])
+  // Loaded by HomePage before the page renders (2026-10-07, Iain): this tile
+  // sits above the hub grid, so if it popped in late it shoved the grid down
+  // just as residents tapped a tile. Local state only so the heart can update.
+  const [post, setPost] = useState(initialPost ?? null)
+  useEffect(() => { setPost(initialPost ?? null) }, [initialPost])
 
   if (!live) return null
 
@@ -432,9 +398,7 @@ function HappeningsNewsTile() {
           <span style={{ color: "var(--happenings-news)", lineHeight: 0, display: "flex" }}><HappeningsNewsIcon size={22} /></span>
           <span style={{ fontWeight: 800, fontSize: "0.82rem", textTransform: "uppercase", letterSpacing: "0.04em", color: "var(--happenings-news)" }}>Happenings News</span>
         </div>
-        {post === undefined ? (
-          <div style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}>Loading…</div>
-        ) : post === null ? (
+        {!post ? (
           <div style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}>No recaps posted yet — check back after the next event.</div>
         ) : (
           <>
@@ -534,11 +498,26 @@ export default function HomePage() {
   const [mainText, setMainText] = useState("")
   const [subTexts, setSubTexts] = useState([])
   const [loading,  setLoading]  = useState(true)
+  const [hubs,     setHubs]     = useState({})
+  const [newsPost, setNewsPost] = useState(null)
 
+  // Everything that decides the page's LAYOUT loads before anything shows
+  // (2026-10-07, Iain): tiles used to appear first and Happenings News
+  // popped in above them a moment later, so residents tapped the wrong
+  // thing. Settings and the latest news post load in parallel (the news
+  // API doesn't depend on the live flag), then the page renders top to
+  // bottom in one go. Occasional tiles get their on/off flag from here
+  // rather than each refetching settings and popping in late.
   useEffect(() => {
-    fetch("/api/hub-settings")
-      .then(r => r.json())
-      .then(d => {
+    let cancelled = false
+    const settingsP = fetch("/api/hub-settings").then(r => r.json())
+    const newsP = authedFetch("/api/happenings-news?limit=1")
+      .then(r => r.json()).catch(() => ({}))
+    Promise.all([settingsP, newsP])
+      .then(([d, news]) => {
+        if (cancelled) return
+        setHubs(d || {})
+        setNewsPost(d?.happenings_news?.live ? ((news?.posts || [])[0] || null) : null)
         // Admin's Page Texts "Shown to residents" switch (2026-09-22) --
         // treat a disabled Home section exactly like no text was ever
         // saved, so it falls through to the plain one-line greeting below
@@ -548,7 +527,8 @@ export default function HomePage() {
         setSubTexts(homeEnabled && Array.isArray(d.home?.subs) ? d.home.subs.filter(Boolean) : [])
         setLoading(false)
       })
-      .catch(() => setLoading(false))
+      .catch(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [])
 
   const firstName = member?.name?.split(" ")[0] || "there"
@@ -583,17 +563,17 @@ export default function HomePage() {
 
           {/* Happenings News -- deliberately above the hub grid, larger
               than every tile in it (see HappeningsNewsTile's own comment) */}
-          <HappeningsNewsTile />
+          <HappeningsNewsTile live={!!hubs?.happenings_news?.live} initialPost={newsPost} />
 
           {/* Hub tiles — between main and sub notices */}
           <HubTiles />
 
           {/* Book a Space — full-width pill, not part of the two-row grid (feature parked, see lib/features.js) */}
           {SPACE_BOOKINGS_ENABLED && <SpaceBookingTile />}
-          <VotingTile />
-          <SpecialEventsTile />
-          <CommitteeTile />
-          <SurveysTile />
+          <VotingTile enabled={!!hubs?.voting?.enabled} />
+          <SpecialEventsTile enabled={!!hubs?.special?.enabled} />
+          <CommitteeTile enabled={!!hubs?.committee?.enabled} />
+          <SurveysTile enabled={!!hubs?.surveys?.enabled} />
 
           {/* Sub notices */}
           {subTexts.map((t, i) => <SubNoticeCard key={i} text={t} />)}
