@@ -5,7 +5,7 @@ import { notify } from "@/lib/notify"
 import { resolveMemberName } from "@/lib/memberName"
 import { withStreetNames } from "@/lib/streetsServer"
 import { eventDeepLink } from "@/lib/eventNav"
-import { canInviteToEvent, planInvites, inviteMessage, INVITE_CAP_PER_SENDER } from "@/lib/eventInvites"
+import { canInviteToEvent, planInvites, inviteMessage, isInviteExcluded, isNotSignedIn, INVITE_CAP_PER_SENDER } from "@/lib/eventInvites"
 
 export const dynamic = "force-dynamic"
 
@@ -13,7 +13,9 @@ export const dynamic = "force-dynamic"
 // other residents to an upcoming event. Fixed wording, no free text.
 // Guards: once per resident per event (by anyone -- event_invites UNIQUE),
 // max 10 per sender per event, never yourself / someone already booked /
-// a test or never-logged-in account. A Private (hide_name) resident is only
+// a test account. Residents who have never signed in are offered too, flagged
+// not_signed_in so the picker greys them out (Iain, 2026-10-07): the invite
+// sits in their alerts until their first sign-in. A Private (hide_name) resident is only
 // offered to admins -- to anyone else they'd just show as "Resident",
 // which is no use in a picker and would undercut their privacy choice.
 
@@ -29,7 +31,7 @@ async function loadContext(eventId, member) {
     supa.from("event_invites").select("to_member_id, from_member_id").eq("event_id", eventId),
   ])
   const ineligibleIds = (members || [])
-    .filter(m => m.status !== "active" || !m.auth_id || m.is_test || (m.hide_name && !member.is_admin))
+    .filter(m => isInviteExcluded(m, !!member.is_admin))
     .map(m => m.id)
   return {
     event,
@@ -55,7 +57,7 @@ export async function GET(req) {
 
   const blocked = new Set([...ctx.ineligibleIds, ...ctx.bookedIds, ...ctx.alreadyInvitedIds, member.id])
   const candidates = (await withStreetNames(supa, ctx.members.filter(m => !blocked.has(m.id))))
-    .map(m => ({ id: m.id, name: resolveMemberName(m, { canManage: !!member.is_admin }), house_number: m.house_number || null, street_name: m.street_name || null }))
+    .map(m => ({ id: m.id, name: resolveMemberName(m, { canManage: !!member.is_admin }), house_number: m.house_number || null, street_name: m.street_name || null, not_signed_in: isNotSignedIn(m) }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
   return NextResponse.json({
