@@ -10,6 +10,9 @@ import { formatAddress } from "@/lib/address"
 // (2-character minimum, A-Z), tap names to pick, Send. The server decides
 // who's actually eligible (app/api/events/invite) -- this list is only
 // what it returned. Hidden entirely once the event can't take invites.
+// Residents who have never signed in show greyed out with "Not on the app
+// yet" but stay selectable (Iain, 2026-10-07) -- the invite waits for their
+// first sign-in, and the sender knows to mention it in person.
 
 const inputStyle = {
   width: "100%", padding: "0.75rem 1rem", borderRadius: "10px", border: "1px solid var(--border)",
@@ -70,7 +73,10 @@ export default function InviteNeighbourButton({ event, colour = "var(--amber)" }
       const d = await res.json()
       if (!res.ok) throw new Error(d.error || "Couldn't send invites")
       const names = picked.map(p => p.name).join(", ")
-      setMessage({ ok: true, text: `Invite sent to ${names}.` })
+      const notOnApp = picked.filter(p => p.not_signed_in).map(p => p.name)
+      const nudge = notOnApp.length === 0 ? ""
+        : ` ${notOnApp.join(", ")} ${notOnApp.length === 1 ? "hasn't" : "haven't"} signed in to the app yet, so they won't see it until they do. A quick word in person would help.`
+      setMessage({ ok: true, text: `Invite sent to ${names}.${nudge}` })
       setCandidates(cs => cs.filter(c => !picked.some(p => p.id === c.id)))
       setRemaining(d.remaining ?? 0)
       setPicked([]); setQuery("")
@@ -135,10 +141,11 @@ export default function InviteNeighbourButton({ event, colour = "var(--amber)" }
                     <button key={p.id} type="button" onClick={() => setPicked(ps => ps.filter(x => x.id !== p.id))}
                       style={{
                         display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px", borderRadius: 20,
-                        border: "1px solid var(--teal)", background: "transparent", color: "var(--teal)",
+                        border: `1px solid ${p.not_signed_in ? "var(--border)" : "var(--teal)"}`, background: "transparent",
+                        color: p.not_signed_in ? "var(--text-dim)" : "var(--teal)",
                         fontSize: "0.85rem", fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
                       }}>
-                      {p.name} <span aria-label={`Remove ${p.name}`}>✕</span>
+                      {p.name}{p.not_signed_in && " (not on app)"} <span aria-label={`Remove ${p.name}`}>✕</span>
                     </button>
                   ))}
                 </div>
@@ -163,11 +170,14 @@ export default function InviteNeighbourButton({ event, colour = "var(--amber)" }
                         style={{
                           display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%",
                           padding: "0.7rem 0.4rem", border: "none", borderBottom: "1px solid var(--border)",
-                          background: "transparent", color: "var(--text)", fontSize: "0.95rem",
-                          textAlign: "left", cursor: "pointer", fontFamily: "inherit",
+                          background: "transparent", color: c.not_signed_in ? "var(--text-dim)" : "var(--text)", fontSize: "0.95rem",
+                          textAlign: "left", cursor: "pointer", fontFamily: "inherit", gap: 8,
                         }}>
-                        <span>{c.name}</span>
-                        {(c.house_number || c.street_name) && <span style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>{formatAddress(c.house_number, c.street_name)}</span>}
+                        <span style={{ minWidth: 0 }}>
+                          {c.name}
+                          {c.not_signed_in && <span style={{ display: "block", fontSize: "0.75rem", fontStyle: "italic" }}>Not on the app yet</span>}
+                        </span>
+                        {(c.house_number || c.street_name) && <span style={{ fontSize: "0.8rem", color: "var(--text-dim)", flexShrink: 0 }}>{formatAddress(c.house_number, c.street_name)}</span>}
                       </button>
                     ))}
                   </div>

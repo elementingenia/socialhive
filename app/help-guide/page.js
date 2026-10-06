@@ -1516,6 +1516,12 @@ export default function HelpGuidePage() {
                 in the list. You can send up to 10 invites per event, and the button disappears
                 once the event is no longer taking bookings.
               </Step>
+              <Step>
+                A name shown in grey with <strong>Not on the app yet</strong> belongs to a neighbour
+                who hasn't signed in to Element Happenings yet. You can still invite them: the invite
+                waits in their alerts for when they first sign in. It's worth mentioning it to them in
+                person too, and helping them sign in if they'd like to.
+              </Step>
             </Subsection>
 
             <Subsection id="sub-calendar-sharedlink" title="Opening an event link someone sent you">

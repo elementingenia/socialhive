@@ -1,5 +1,5 @@
 import assert from "node:assert/strict"
-import { INVITE_CAP_PER_SENDER, canInviteToEvent, planInvites, inviteMessage } from "../../lib/eventInvites.js"
+import { INVITE_CAP_PER_SENDER, canInviteToEvent, planInvites, inviteMessage, isInviteExcluded, isNotSignedIn } from "../../lib/eventInvites.js"
 
 let n = 0
 const t = (name, fn) => { fn(); n++ }
@@ -35,5 +35,15 @@ t("cap fully used", () => {
 t("over-count never negative", () => assert.equal(planInvites({ requestedIds: ["a"], senderId: "me", senderSentCount: 15 }).remaining, 0))
 t("message wording", () => assert.equal(inviteMessage("Jan Smith", "Trivia Night"), "Jan Smith thinks you'd enjoy Trivia Night"))
 t("message fallbacks", () => assert.equal(inviteMessage("", ""), "A neighbour thinks you'd enjoy an event"))
+
+const M = (o = {}) => ({ status: "active", auth_id: "x", is_test: false, hide_name: false, ...o })
+t("active signed-in resident is invitable", () => assert.equal(isInviteExcluded(M()), false))
+t("never signed in is still invitable", () => assert.equal(isInviteExcluded(M({ auth_id: null })), false))
+t("inactive excluded", () => assert.equal(isInviteExcluded(M({ status: "inactive" })), true))
+t("test account excluded", () => assert.equal(isInviteExcluded(M({ is_test: true })), true))
+t("Private excluded for non-admin", () => assert.equal(isInviteExcluded(M({ hide_name: true }), false), true))
+t("Private offered to admin", () => assert.equal(isInviteExcluded(M({ hide_name: true }), true), false))
+t("null member excluded", () => assert.equal(isInviteExcluded(null), true))
+t("not signed in flag", () => { assert.equal(isNotSignedIn(M({ auth_id: null })), true); assert.equal(isNotSignedIn(M()), false) })
 
 console.log(`eventInvites: ${n} passed`)
