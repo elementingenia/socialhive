@@ -2,6 +2,7 @@ import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { notify } from "@/lib/notify"
 import { requireAdminOrAreaOwner } from "@/lib/areaAuth"
+import { clubNoticeMessage, clubNoticeLink } from "@/lib/clubNotices"
 
 // Club notices (Phase 2c). Posting fans a notification out to everyone who has
 // JOINED the club (club_members) — the deliberate reason join exists — so this
@@ -21,7 +22,7 @@ export async function POST(req) {
   const { error, status, member } = await requireAdminOrAreaOwner(req, "club", club_id)
   if (error) return NextResponse.json({ error }, { status })
 
-  const { data: club } = await supa.from("clubs").select("id, name").eq("id", club_id).single()
+  const { data: club } = await supa.from("clubs").select("id, name, slug").eq("id", club_id).single()
   if (!club) return NextResponse.json({ error: "Group/Club not found" }, { status: 404 })
 
   const { data: notice, error: insError } = await supa.from("club_notices")
@@ -32,13 +33,12 @@ export async function POST(req) {
   // Notify every joined member except the author. event_id is null — this is a
   // club-level notice, not tied to an event.
   const { data: joined } = await supa.from("club_members").select("member_id").eq("club_id", club_id)
-  const plain = content.trim().replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
-  const snippet = plain.length > 90 ? plain.slice(0, 88) + "…" : plain
-  const msg = `New ${club.name} notice: ${snippet}`
+  const msg = clubNoticeMessage(club.name, content.trim())
+  const url = clubNoticeLink(club.slug)
   let notified = 0
   for (const row of joined || []) {
     if (row.member_id === member.id) continue
-    await notify(row.member_id, null, "club_notice_posted", msg)
+    await notify(row.member_id, null, "club_notice_posted", msg, url)
     notified++
   }
 

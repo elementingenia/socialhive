@@ -5,6 +5,7 @@ import { authedFetch } from "@/lib/getAuthToken"
 import { useUI } from "@/lib/UIContext"
 import { eventDeepLink, recapPromptLink } from "@/lib/eventNav"
 import { hubNoticeHomeFromMessage } from "@/lib/hubNotices"
+import { clubNoticeLink } from "@/lib/clubNotices"
 import { featureDocLink } from "@/lib/newFeatures"
 import { isoToSydneyDateStr } from "@/lib/date"
 
@@ -136,8 +137,9 @@ function typeColour(type) {
 // gap): ClubHome.js (/clubs/[slug]) has always supported ?event=<id>, it
 // just needed the club's slug, which the query below now joins. See
 // lib/eventNav.js for the full root-cause note.
-// Notification types with no event_id (club_notice_posted, bar_reconciled)
-// have no navigable target and stay tick-only.
+// Notification types with no event_id and no case below (e.g. bar_reconciled)
+// have no navigable target and stay tick-only. club_notice_posted used to be
+// one of them -- tapping it did nothing (BUG-082); it now opens the club.
 // The hub_type/club -> URL routing itself now lives in lib/eventNav.js
 // (eventDeepLink), shared with the global Find button, so the two don't
 // drift apart as hubs are added.
@@ -172,6 +174,8 @@ function targetForNotif(n) {
   if (n.type === "swap_report") return "/swap/manage"
   // Hub notices (2026-09-23): route back to the hub the message names.
   if (n.type === "hub_notice_posted") return hubNoticeHomeFromMessage(n.message)
+  // Club notices (BUG-082): /api/notifications attaches club_slug.
+  if (n.type === "club_notice_posted") return clubNoticeLink(n.club_slug)
   // Recap nudge (2026-10-02): the event has finished, so route via
   // recapPromptLink -- Show Time's /screenings can't open a past screening.
   if (n.type === "event_recap_prompt") return recapPromptLink({

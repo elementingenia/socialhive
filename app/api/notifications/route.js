@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin"
 export const dynamic = "force-dynamic"
 import { NextResponse } from 'next/server'
 import { rewordEventReminder, isExpiredEventReminder } from "@/lib/notifications"
+import { clubForNoticeMessage } from "@/lib/clubNotices"
 
 async function getMember(token) {
   const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
@@ -48,10 +49,24 @@ export async function GET(req) {
     await supabaseAdmin.from('notifications').update({ read_at: nowIso }).in('id', expiredIds)
   }
 
-  const out = (data || []).map(n => rewordEventReminder(
-    expiredIds.includes(n.id) ? { ...n, read_at: n.read_at || nowIso } : n,
-    now,
-  ))
+  // Club notices (BUG-082, 2026-10-06): no event_id and no club column, so
+  // resolve the club from the message prefix and attach its slug -- the
+  // drawer uses it to open /clubs/<slug> instead of doing nothing on tap.
+  const hasClubNotices = (data || []).some(n => n.type === 'club_notice_posted')
+  let clubs = []
+  if (hasClubNotices) {
+    const { data: c } = await supabaseAdmin.from('clubs').select('name, slug').eq('archived', false)
+    clubs = c || []
+  }
+
+  const out = (data || []).map(n => {
+    const row = rewordEventReminder(
+      expiredIds.includes(n.id) ? { ...n, read_at: n.read_at || nowIso } : n,
+      now,
+    )
+    if (n.type === 'club_notice_posted') row.club_slug = clubForNoticeMessage(n.message, clubs)?.slug || null
+    return row
+  })
 
   return NextResponse.json(out)
 }
