@@ -29,6 +29,7 @@ import { resolveMemberName } from "@/lib/memberName"
 import { busSeatsUsed } from "@/lib/busSeats"
 import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/attendeeExport"
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
+import EventNotices from "@/components/EventNotices"
 import InviteNeighbourButton from "@/components/InviteNeighbourButton"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
@@ -1540,6 +1541,8 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
             />
           </div>
         )}
+
+        <EventNotices eventId={event.id} colour="var(--terracotta)" />
 
         <CapacityBar booked={booked} max={event.max_seats} waitlist={waiting} />
       </div>

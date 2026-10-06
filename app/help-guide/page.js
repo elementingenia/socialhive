@@ -143,6 +143,8 @@ const RAW_SECTIONS = [
     subs: [
       { title: "Understanding booking status", id: "sub-bookings-status" },
       { title: "My Space Bookings — editing and cancelling", id: "sub-bookings-space" },
+      { title: "Notices about an event you're booked on", id: "sub-bookings-notices" },
+      { title: "Sending a notice to your attendees", id: "sub-bookings-notices-ec" },
     ],
   },
   {
@@ -1655,6 +1657,43 @@ export default function HelpGuidePage() {
                 💡 Editing a space booking checks the new date/time/location for clashes before
                 saving — if it isn't free, you'll be asked to pick a different slot rather than
                 losing your existing booking.
+              </InfoBox>
+            </Subsection>
+
+            <Subsection id="sub-bookings-notices" title="Notices about an event you're booked on">
+              <Step>
+                An event's coordinator can send a notice to everyone booked on it — for example a
+                change of meeting point or a reminder of what to bring. You'll get it as an alert,
+                and it also stays on the event's card under <strong>📣 Notice to attendees</strong>,
+                so you can find it again later.
+              </Step>
+              <Step>
+                Notices go to everyone booked, including people on the waitlist, and to anyone named
+                in someone else's booking. Only the people booked on the event (and its coordinators)
+                can see them.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-bookings-notices-ec" title="Sending a notice to your attendees" ecOnly>
+              <Step>
+                On the card for an event you coordinate, tap <strong>📣 Notice to attendees</strong>,
+                write your message and tap <strong>Send notice</strong>. Everyone booked on the event
+                — confirmed and waitlisted — gets an alert straight away. The event's area Owner and
+                admins can do this too.
+              </Step>
+              <Step>
+                The confirmation tells you how many people it went to. If anyone is booked without
+                the app (a contact booked for them), it says so — tell those people another way.
+              </Step>
+              <Step>
+                Each notice has <strong>Edit</strong> and <strong>Remove</strong>. Editing fixes the
+                wording without sending another alert. <strong>Remove</strong> takes the notice off
+                the event; alerts already sent stay on people's phones.
+              </Step>
+              <InfoBox>
+                💡 &quot;Open, all welcome&quot; Groups &amp; Clubs events have no bookings, so they
+                don&apos;t offer notices — use the club&apos;s own <strong>📣 Post notice</strong>
+                instead.
               </InfoBox>
             </Subsection>
           </Section>
