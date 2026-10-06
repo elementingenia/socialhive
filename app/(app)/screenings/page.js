@@ -23,6 +23,7 @@ import { waitlistLabel } from '@/lib/waitlist'
 import { useOwners } from '@/lib/useOwners'
 import { exportAttendeeListPdf } from '@/lib/attendeeExport'
 import { CopyLinkButton, AddToCalendarButton } from '@/components/EventShareActions'
+import EventNotices from '@/components/EventNotices'
 import InviteNeighbourButton from '@/components/InviteNeighbourButton'
 import { buildShareUrl, resolveEventWindow } from '@/lib/eventShare'
 
@@ -879,6 +880,9 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
           {ev.notes && <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', fontStyle: 'italic' }}>{ev.notes}</div>}
         </div>
       </div>
+
+      {/* Event notices (2026-10-06) -- coordinator to attendees, full width. */}
+      <EventNotices eventId={ev.id} colour="var(--teal)" style={{ padding: '0 0.75rem' }} />
 
       {/* Booking status strip — always visible */}
       <BookingStrip myBooking={ev.my_booking} isFull={isFull} closed={closed} blocked={blocked} />

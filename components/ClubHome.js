@@ -42,6 +42,7 @@ import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/att
 import { paymentSummary, reconciliationIsStale, isPaid as isPaymentPaid, isSubmitted as isPaymentSubmitted, isPartial as isPaymentPartial, seatsCost, remainingBalance, wholeDollar, balancePhrase, isRemindedToday } from "@/lib/payments"
 import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
+import EventNotices from "@/components/EventNotices"
 import InviteNeighbourButton from "@/components/InviteNeighbourButton"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 import { isHtmlContent } from "@/lib/richText"
@@ -804,6 +805,9 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
             />
           </div>
         )}
+
+        {/* Event notices (2026-10-06) -- coordinator to attendees. */}
+        <EventNotices eventId={event.id} colour={colour} />
 
         {/* Seats booked / left -- not on "open, all welcome" events
             (no capacity), same rule as the Show attendees row below. */}

@@ -7,6 +7,7 @@ import { bookingsClosed } from "@/lib/booking"
 import { byOwnThenName } from '@/lib/sortNames'
 import { fmtSpaceEventDate, fmtSpaceEventTime } from "@/components/SharedSpaceEventRow"
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
+import EventNotices from "@/components/EventNotices"
 import InviteNeighbourButton from "@/components/InviteNeighbourButton"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 
@@ -173,6 +174,8 @@ export default function SpaceScheduledEventCard({ event, onOpen, onEdit }) {
             display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden",
           }}>{event.description}</div>
         )}
+
+        <EventNotices eventId={event.id} colour={COLOUR} />
 
         <CapacityBar booked={booked} max={event.max_seats} waitlist={waiting} />
       </div>
