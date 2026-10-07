@@ -1716,6 +1716,11 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     bring_category_ids: event?.bring_category_ids || [],
     bring_required: !!event?.bring_required,
     theme_name:   event?.theme_name || "",
+    // Menu/Additional Info (Iain, 2026-10-07): same option as Social and
+    // Special Events, available whether the event is onsite or offsite.
+    has_dining:   !!event?.has_dining,
+    menu_type:    event?.menu_type || null,
+    menu_text:    event?.menu_text || "",
     description:  event?.description || "",
     welcome_message: event?.welcome_message || "",
     coordinator_ids: (event?.event_coordinators || []).filter(ec => !ec.replaced_at).map(ec => ec.member_id),
@@ -1851,6 +1856,62 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
   const [busDriverName, setBusDriverName] = useState(event?.bus_driver_name || "")
 
   const [saveError, setSaveError] = useState(null)
+  // Menu/Additional Info file upload -- same two-step signed-upload flow as
+  // Social/Special Events (app/api/events/menu, BUG-040): the file goes
+  // straight to Storage, never through our Vercel function. Needs a saved
+  // event id, so a brand-new event uploads after its first save.
+  const [localMenuUrl,      setLocalMenuUrl]      = useState(event?.menu_url || null)
+  const [localMenuFileName, setLocalMenuFileName] = useState(event?.menu_file_name || null)
+  const [uploadingMenu,     setUploadingMenu]     = useState(false)
+  async function uploadMenuFile(file) {
+    if (!event?.id) return
+    setUploadingMenu(true)
+    setSaveError(null)
+    set("menu_type", "file")
+    try {
+      const signRes = await authedFetch("/api/events/menu", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: event.id, action: "sign", file_name: file.name, content_type: file.type }),
+      })
+      const signData = await signRes.json().catch(() => ({}))
+      if (!signRes.ok) throw new Error(signData.error || "Could not prepare the upload")
+      const { error: upErr } = await supabase.storage
+        .from("event-menus")
+        .uploadToSignedUrl(signData.path, signData.token, file, { contentType: file.type })
+      if (upErr) throw new Error(upErr.message || "Upload failed")
+      const completeRes = await authedFetch("/api/events/menu", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: event.id, action: "complete", path: signData.path, file_name: file.name }),
+      })
+      const d = await completeRes.json().catch(() => ({}))
+      if (!completeRes.ok) throw new Error(d.error || "Could not save the uploaded document")
+      setLocalMenuUrl(d.menu_url)
+      setLocalMenuFileName(d.menu_file_name)
+    } catch (err) {
+      setSaveError(err.message || "Upload failed")
+    } finally {
+      setUploadingMenu(false)
+    }
+  }
+  async function removeMenuFile() {
+    if (!event?.id) return
+    setUploadingMenu(true)
+    setSaveError(null)
+    try {
+      const res = await authedFetch("/api/events/menu", {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: event.id }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || "Could not remove the document")
+      setLocalMenuUrl(null)
+      setLocalMenuFileName(null)
+    } catch (err) {
+      setSaveError(err.message || "Could not remove the document")
+    } finally {
+      setUploadingMenu(false)
+    }
+  }
   // Mandatory-field tracking (Iain, 2026-08-04) -- this form's Save button
   // used to just go quietly disabled with no explanation at all when Date or
   // Book was missing (the silent-failure pattern this app keeps tripping
@@ -2042,6 +2103,9 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       bring_category_ids: caps.bringEnabled ? (form.bring_category_ids || []) : [],
       bring_required:  caps.bringEnabled ? !!form.bring_required : false,
       theme_name:      caps.hasTheme ? (form.theme_name.trim() || null) : null,
+      has_dining:      !!form.has_dining,
+      menu_type:       form.has_dining ? form.menu_type : null,
+      menu_text:       form.has_dining && form.menu_type === "text" ? form.menu_text : null,
       book_snapshot:   selectedBook ? {
         title:     selectedBook.title,
         author:    selectedBook.author,
@@ -2319,6 +2383,88 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
           placeholder="Any extra details about this meeting…"
         />
       </div>
+
+      {/* Menu/Additional Info -- same option as Social and Special Events
+          (Iain, 2026-10-07), onsite or offsite. Per event: a new recurring
+          series doesn't carry it, each date gets its own once created. */}
+      {!event && recurMode === "series" && recur.enabled ? (
+        <div style={{ marginBottom: 12 }}>
+          <label style={labelStyle}>Menu/Additional Info</label>
+          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", fontStyle: "italic" }}>Create the series first, then edit a date to add a menu or document to it.</div>
+        </div>
+      ) : (
+        <div style={{ marginBottom: 12 }}>
+          <Toggle value={form.has_dining} colour={colour} onChange={v => set("has_dining", v)} label="Menu/Additional Info" />
+          {form.has_dining && (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <button type="button" onClick={() => set("menu_type", "text")} style={{
+                  flex: 1, padding: "0.6rem 0.5rem", borderRadius: 10, fontSize: "0.88rem", fontFamily: "inherit", cursor: "pointer",
+                  border: `1.5px solid ${form.menu_type === "text" ? colour : "var(--border)"}`,
+                  background: form.menu_type === "text" ? colour : "var(--surface)",
+                  color: form.menu_type === "text" ? "#fff" : "var(--text)",
+                  fontWeight: form.menu_type === "text" ? 700 : 500,
+                }}>Type it in</button>
+                {event?.id ? (
+                  <label style={{
+                    flex: 1, padding: "0.6rem 0.5rem", borderRadius: 10, fontSize: "0.88rem", fontFamily: "inherit", textAlign: "center",
+                    cursor: uploadingMenu ? "not-allowed" : "pointer", opacity: uploadingMenu ? 0.6 : 1,
+                    border: `1.5px solid ${form.menu_type === "file" ? colour : "var(--border)"}`,
+                    background: form.menu_type === "file" ? colour : "var(--surface)",
+                    color: form.menu_type === "file" ? "#fff" : "var(--text)",
+                    fontWeight: form.menu_type === "file" ? 700 : 500,
+                  }}>
+                    {uploadingMenu ? "Uploading…" : "Upload Document"}
+                    <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" style={{ display: "none" }}
+                      disabled={uploadingMenu}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) uploadMenuFile(f); e.target.value = "" }} />
+                  </label>
+                ) : (
+                  <button type="button" onClick={() => set("menu_type", "file")} style={{
+                    flex: 1, padding: "0.6rem 0.5rem", borderRadius: 10, fontSize: "0.88rem", fontFamily: "inherit", cursor: "pointer",
+                    border: `1.5px solid ${form.menu_type === "file" ? colour : "var(--border)"}`,
+                    background: form.menu_type === "file" ? colour : "var(--surface)",
+                    color: form.menu_type === "file" ? "#fff" : "var(--text)",
+                    fontWeight: form.menu_type === "file" ? 700 : 500,
+                  }}>Upload Document</button>
+                )}
+              </div>
+              {form.menu_type === "text" && (
+                <RichEditor
+                  initialValue={form.menu_text}
+                  hubColour={colour}
+                  bg="card"
+                  onChange={html => set("menu_text", html)}
+                  placeholder="Type the menu or extra information shown to residents…"
+                />
+              )}
+              {form.menu_type === "file" && (
+                event?.id ? (
+                  localMenuUrl ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ flex: 1, minWidth: 0, background: "var(--surface2)", borderRadius: 8, padding: "8px 10px", fontSize: 13 }}>
+                        <span style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📄 {localMenuFileName || "Document"}</span>
+                      </div>
+                      <button type="button" onClick={removeMenuFile} disabled={uploadingMenu} style={{
+                        padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface2)",
+                        color: "var(--danger)", fontWeight: 700, fontSize: 13, cursor: uploadingMenu ? "not-allowed" : "pointer", fontFamily: "inherit",
+                      }}>Remove</button>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>
+                      Tap &ldquo;Upload Document&rdquo; above to choose a PDF, JPEG, PNG or WEBP file.
+                    </div>
+                  )
+                ) : (
+                  <div style={{ fontSize: 12, color: "var(--text-dim)", fontStyle: "italic" }}>
+                    Create the event first, then reopen it to upload the document.
+                  </div>
+                )
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Booking -- "open, all welcome" events skip capacity/payment/attendee
           policy entirely (Iain, 2026-09-11 -- Groups & Clubs dry run). Sits
@@ -2888,7 +3034,7 @@ export default function ClubHome({ club }) {
   async function openEventById(id) {
     const { data } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver_name, booking_required, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, display_name, username), image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver_name, booking_required, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, display_name, username), image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("id", id).single()
     if (!data) return
     setSlideOutEvent(toSlideOutShape(data, myBookings[id]))
@@ -2951,7 +3097,7 @@ export default function ClubHome({ club }) {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver_name, booking_required, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, display_name, username), image_url, image_focal_x, image_focal_y, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver_name, booking_required, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, display_name, username), image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("club_id", club.id)
       .eq("archived", false)
       .order("event_date", { ascending: true })

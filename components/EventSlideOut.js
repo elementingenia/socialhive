@@ -3154,6 +3154,18 @@ export default function EventSlideOut({ event, onClose, isAuthenticated = true, 
                 </div>
               )}
 
+              {/* Groups & Clubs Menu/Additional Info (2026-10-07) -- same link as
+                  Social/Special above, without their cost pill (club events
+                  show cost/description in their own places). */}
+              {event.club && event.has_dining && ((event.menu_type === "text" && event.menu_text) || (event.menu_type === "file" && event.menu_url)) && (
+                <div style={{ marginBottom: 14 }}>
+                  <button onClick={() => setShowMenu(true)} style={{
+                    background: "none", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 700,
+                    color: clubInk(colour), textDecoration: "underline", fontFamily: "inherit", padding: 0,
+                  }}>Menu/View Details</button>
+                </div>
+              )}
+
               {showMenu && (
                 <MenuModal event={event} colour={colour} onClose={() => setShowMenu(false)} />
               )}

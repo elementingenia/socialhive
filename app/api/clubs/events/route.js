@@ -73,7 +73,8 @@ async function validateSpace(payload, excludeEventId, viewerId, canManage) {
 const FIELDS = ["club_id", "event_date", "event_time", "event_end_time", "title", "is_public", "show_attendee_names",
   "description", "welcome_message", "book_id", "kit_return_date", "book_return_date", "reservation_cutoff", "max_seats",
   "location_type", "location", "location_id", "has_bus", "bus_driver_id", "bus_driver_name", "bus_max_seats", "allow_personal_vehicles", "max_seats_per_booking", "allow_nonresident_guests", "require_attendee_names", "booking_required", "payment_required", "cost",
-  "payment_due_by", "bring_category_ids", "bring_required", "theme_name", "book_snapshot"]
+  "payment_due_by", "bring_category_ids", "bring_required", "theme_name", "book_snapshot",
+  "has_dining", "menu_type", "menu_text"]
 
 // "Open, all welcome" events (Iain, 2026-09-11 — Groups & Clubs dry run):
 // booking_required=false means no booking ever exists for this event, so
@@ -100,6 +101,14 @@ function buildPayload(body, isInsert) {
   if (isInsert) { payload.hub_type = "club"; payload.archived = false }
   // Bus driver: resident OR a named "Other", never both (migration 125).
   if ("has_bus" in payload) Object.assign(payload, normaliseBusDriver(payload))
+  // Menu/Additional Info (2026-10-07) -- same normalisation as Social's
+  // buildEventPayload: menu_type only 'text'/'file' when on, menu_text only
+  // kept for 'text'. menu_url/menu_file_name are owned by /api/events/menu.
+  if ("has_dining" in payload) {
+    payload.has_dining = !!payload.has_dining
+    payload.menu_type = payload.has_dining && ["text", "file"].includes(payload.menu_type) ? payload.menu_type : null
+    payload.menu_text = payload.menu_type === "text" ? (payload.menu_text || null) : null
+  }
   return enforceOpenEventRules(payload)
 }
 

@@ -1198,6 +1198,10 @@ export default function HelpGuidePage() {
                 💡 Some club events are marked <strong>Open — All Welcome</strong> instead. These don't
                 need a booking at all — just come along, no sign-up or seat count required.
               </InfoBox>
+              <Step>
+                If an event has a menu or extra details, a <strong>Menu/View Details</strong> link
+                appears when you open it.
+              </Step>
             </Subsection>
 
             <Subsection id="sub-clubs-bring" title="Bringing something">
@@ -1256,6 +1260,14 @@ export default function HelpGuidePage() {
                 flow above, while <strong>Open — All Welcome</strong> turns it off entirely — no seat
                 count, no payment, no attendee list to manage, just an event residents can turn up to.
                 Use it for a drop-in activity that doesn't need a headcount.
+              </Step>
+              <Step>
+                Turn on <strong>Menu/Additional Info</strong> to give residents a menu, a flyer or any
+                extra details — onsite or offsite. Choose <strong>Type it in</strong> to write it
+                directly, or <strong>Upload Document</strong> to attach a PDF or image (save a new
+                event first, then reopen it to upload). Residents see a{" "}
+                <strong>Menu/View Details</strong> link when they open the event. For a new repeating
+                event, add it to each date after the series is created.
               </Step>
               <Step>
                 On a paid event, each attendee has an <strong>Unpaid / Paid / Partial</strong> badge —
