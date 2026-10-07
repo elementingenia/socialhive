@@ -1,5 +1,6 @@
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
+import { isAreaOwner } from "@/lib/areaAuth"
 
 
 // Same auth/authz split as app/api/events/image/route.js (added
@@ -35,6 +36,13 @@ async function getAdminOrEC(token, eventId) {
   // the most recent with replaced_at IS NULL -- admin worked (it never
   // reaches this query) while Scampi, the real EC, was blocked. Matches the
   // canonical pattern in lib/areaAuth.js's requireEventManage().
+  // Area Owner (club or hub) -- added 2026-10-07 with Groups & Clubs
+  // Menu/Additional Info: a club Owner can edit the club's events, so they
+  // must be able to attach its document too. Same rule as
+  // lib/areaAuth.js's requireEventManage().
+  const { data: ev } = await supa.from("events").select("hub_type, club_id").eq("id", eventId).maybeSingle()
+  if (ev && await isAreaOwner(member.id, ev.club_id ? "club" : "hub", ev.club_id || ev.hub_type)) return member
+
   const { data: ec } = await supa
     .from("event_coordinators")
     .select("id")
@@ -49,6 +57,8 @@ function authErrorResponse(result) {
   if (result?.unauthenticated) return NextResponse.json({ error: "Unauthenticated" }, { status: 401 })
   return NextResponse.json({ error: result?.reason || "Forbidden" }, { status: 403 })
 }
+
+const MENU_HUBS = ["social", "special", "club"]
 
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"]
 
@@ -87,14 +97,15 @@ export async function POST(req) {
     const member = await getAdminOrEC(token, eventId)
     if (!member || member.unauthenticated || member.forbidden) return authErrorResponse(member)
 
-    const { data: event } = await supa.from("events").select("hub_type, menu_url").eq("id", eventId).single()
+    const { data: event } = await supa.from("events").select("hub_type, club_id, menu_url").eq("id", eventId).single()
     if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 })
     // 'special' added 2026-09-04 -- Special Events cloned this same Menu/
     // Additional Info UI from Social's event form, but this allowlist was
     // never widened to match, so any attempt 400'd (surfaced via setError,
     // unlike Event Image's silent version of the same class of bug).
-    if (event.hub_type !== "social" && event.hub_type !== "special") {
-      return NextResponse.json({ error: "Menu upload only supported for Social Hive and Special Events" }, { status: 400 })
+    // 'club' added 2026-10-07 (Groups & Clubs Menu/Additional Info).
+    if (!MENU_HUBS.includes(event.hub_type) && !event.club_id) {
+      return NextResponse.json({ error: "Menu upload only supported for Social Hive, Special Events and Groups & Clubs" }, { status: 400 })
     }
 
     if (action === "sign") {
@@ -149,10 +160,10 @@ export async function POST(req) {
   const member = await getAdminOrEC(token, eventId)
   if (!member || member.unauthenticated || member.forbidden) return authErrorResponse(member)
 
-  const { data: event } = await supa.from("events").select("hub_type, menu_url").eq("id", eventId).single()
+  const { data: event } = await supa.from("events").select("hub_type, club_id, menu_url").eq("id", eventId).single()
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 })
-  if (event.hub_type !== "social" && event.hub_type !== "special") {
-    return NextResponse.json({ error: "Menu upload only supported for Social Hive and Special Events" }, { status: 400 })
+  if (!MENU_HUBS.includes(event.hub_type) && !event.club_id) {
+    return NextResponse.json({ error: "Menu upload only supported for Social Hive, Special Events and Groups & Clubs" }, { status: 400 })
   }
 
   await removeExistingMenuFile(event)
