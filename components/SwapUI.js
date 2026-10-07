@@ -127,8 +127,12 @@ export function ListingSheet({ listing, me, onClose, onChanged }) {
   const [reporting, setReporting] = useState(false)
   const [reason, setReason] = useState("")
   const [notice, setNotice] = useState("")
+  const [editing, setEditing] = useState(false)
 
   if (!listing) return null
+  if (editing) {
+    return <ListingForm listing={listing} me={me} onClose={() => { setEditing(false); onChanged?.(); onClose() }} onSaved={onChanged} />
+  }
   const photos = listing.photos || []
   const photo = photos[photoIdx] || photos[0]
   const canContact = !listing.is_mine && listing.status !== "gone"
@@ -203,9 +207,14 @@ export function ListingSheet({ listing, me, onClose, onChanged }) {
         </div>
 
         {listing.is_mine && (
-          <div style={{ fontSize: "0.9rem", color: "var(--text-dim)", marginBottom: "1rem" }}>
-            This is your listing. Change it from <strong style={{ color: "var(--text)" }}>My Listings</strong>.
-          </div>
+          <>
+            <button type="button" onClick={() => setEditing(true)} style={primaryButton(false)}>
+              Edit listing
+            </button>
+            <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginTop: 8, marginBottom: "1rem" }}>
+              Mark it Reserved or Gone from <strong style={{ color: "var(--text)" }}>My Listings</strong>.
+            </div>
+          </>
         )}
 
         {canContact && (listing.my_conversation_id ? (
