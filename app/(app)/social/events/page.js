@@ -31,6 +31,7 @@ import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/att
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
 import EventNotices from "@/components/EventNotices"
 import InviteNeighbourButton from "@/components/InviteNeighbourButton"
+import MenuButton from "@/components/MenuButton"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
 
@@ -1503,8 +1504,8 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
                 <div style={{ marginBottom: "0.2rem" }}>{calendarBtn}</div>
               ) : null}
               {evWindow && (
-                <div style={{ marginBottom: "0.2rem", textAlign: "right" }}>
-                  <InviteNeighbourButton event={event} colour="var(--terracotta)" />{" "}<CopyLinkButton url={shareUrl} colour="var(--terracotta)" />
+                <div style={{ marginBottom: "0.2rem", display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: 4 }}>
+                  <MenuButton event={event} colour="var(--terracotta)" />{" "}<InviteNeighbourButton event={event} colour="var(--terracotta)" />{" "}<CopyLinkButton url={shareUrl} colour="var(--terracotta)" />
                 </div>
               )}
             </>

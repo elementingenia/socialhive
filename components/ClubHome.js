@@ -44,6 +44,7 @@ import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, V
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
 import EventNotices from "@/components/EventNotices"
 import InviteNeighbourButton from "@/components/InviteNeighbourButton"
+import MenuButton from "@/components/MenuButton"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 import { isHtmlContent } from "@/lib/richText"
 import BusDriverField from "@/components/BusDriverField"
@@ -759,8 +760,8 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
           <div>{shareCalendarBtn}</div>
         ) : null}
         {shareUrl && shareEvWindow && (
-          <div style={{ marginTop: "0.15rem", textAlign: "right" }}>
-            <InviteNeighbourButton event={event} colour={colour} />{" "}<CopyLinkButton url={shareUrl} colour={colour} />
+          <div style={{ marginTop: "0.15rem", display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: 4 }}>
+            <MenuButton event={event} colour={colour} />{" "}<InviteNeighbourButton event={event} colour={colour} />{" "}<CopyLinkButton url={shareUrl} colour={colour} />
           </div>
         )}
         {/* Bus driver -- same line as Social's tile */}

@@ -1000,6 +1000,10 @@ export default function HelpGuidePage() {
                 Each card shows the event title, date and time, location, cost, and seat availability.
                 Tap any card to open the event detail panel.
               </Step>
+              <Step>
+                If an event has a menu or extra details, tap <strong>📋 Menu/View Details</strong> on
+                the event card (next to Invite a neighbour), or the same link when you open the event.
+              </Step>
             </Subsection>
 
             <Subsection id="sub-social-detail" title="Event detail & booking">
@@ -1199,8 +1203,8 @@ export default function HelpGuidePage() {
                 need a booking at all — just come along, no sign-up or seat count required.
               </InfoBox>
               <Step>
-                If an event has a menu or extra details, a <strong>Menu/View Details</strong> link
-                appears when you open it.
+                If an event has a menu or extra details, tap <strong>📋 Menu/View Details</strong> on
+                the event card (next to Invite a neighbour), or the same link when you open the event.
               </Step>
             </Subsection>
 
@@ -1805,6 +1809,10 @@ export default function HelpGuidePage() {
                 Event. Booking works exactly like Social Hive — pick your seats, add anyone else coming
                 with you if the event allows it, and confirm. If an event is full, you'll be offered
                 a spot on the waitlist instead.
+              </Step>
+              <Step>
+                If an event has a menu or extra details, tap <strong>📋 Menu/View Details</strong> on
+                the event card (next to Invite a neighbour), or the same link when you open the event.
               </Step>
             </Subsection>
 

@@ -12,6 +12,7 @@ import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import VehicleOffersPanel from "@/components/VehicleOffersPanel"
 import ExpandableText from "@/components/ExpandableText"
 import HappeningsNewsCard from "@/components/HappeningsNewsCard"
+import MenuModal from "@/components/MenuModal"
 import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge, balancePhrase, remainingBalance, wholeDollar, paymentSummary, reconciliationIsStale } from "@/lib/payments"
 import { byOwnThenName, ordinal } from "@/lib/sortNames"
 import { resolveMemberName } from "@/lib/memberName"
@@ -316,51 +317,6 @@ function ConfirmDialog({ message, onConfirm, onCancel, paymentNote, confirming }
             <button onClick={onCancel} disabled={confirming} style={{ flex: 1, padding: "11px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: confirming ? "default" : "pointer", color: "var(--text)", opacity: confirming ? 0.5 : 1 }}>Keep it</button>
             <button onClick={onConfirm} disabled={confirming} style={{ flex: 1, padding: "11px 0", background: "var(--danger)", border: "none", borderRadius: 10, fontSize: 14, fontWeight: 600, cursor: confirming ? "default" : "pointer", color: "#fff", opacity: confirming ? 0.7 : 1 }}>{confirming ? "Cancelling…" : "Yes, cancel"}</button>
           </div>
-        </div>
-      </div>
-    </Portal>
-  )
-}
-
-function MenuModal({ event, colour, onClose }) {
-  const isPdf = event.menu_type === "file" && /\.pdf($|\?)/i.test(event.menu_url || "")
-  const isImageFile = event.menu_type === "file" && !isPdf
-
-  return (
-    <Portal>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 600,
-        display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-        <div onClick={e => e.stopPropagation()} style={{
-          background: "var(--surface)", borderRadius: 16, width: "100%", maxWidth: 480,
-          maxHeight: "85vh", display: "flex", flexDirection: "column", overflow: "hidden",
-        }}>
-          <div style={{
-            display: "flex", justifyContent: "space-between", alignItems: "center",
-            padding: "14px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0,
-          }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)" }}>Menu</div>
-            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 22, lineHeight: 1, color: "var(--text-dim)" }}>×</button>
-          </div>
-          <div style={{ padding: 16, overflowY: "auto", flex: 1 }}>
-            {event.menu_type === "text" && (
-              <div style={{ fontSize: 14, color: "var(--text)", lineHeight: 1.6 }}
-                dangerouslySetInnerHTML={{ __html: bbToHtml(event.menu_text, colour) }} />
-            )}
-            {isPdf && (
-              <iframe src={event.menu_url} title="Menu" style={{ width: "100%", height: "60vh", border: "none", borderRadius: 8 }} />
-            )}
-            {isImageFile && (
-              <img src={event.menu_url} alt="Menu" style={{ width: "100%", borderRadius: 8, display: "block" }} />
-            )}
-          </div>
-          {event.menu_type === "file" && event.menu_url && (
-            <div style={{ padding: "10px 16px", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
-              <a href={event.menu_url} download={event.menu_file_name || "menu"} target="_blank" rel="noreferrer"
-                style={{ display: "block", textAlign: "center", padding: "10px", borderRadius: 10, background: colour, color: clubTextOn(colour), fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
-                Download
-              </a>
-            </div>
-          )}
         </div>
       </div>
     </Portal>
