@@ -176,7 +176,7 @@ const RAW_SECTIONS = [
       { title: "Browsing and joining",               id: "sub-swap-browse" },
       { title: "Listing something",                  id: "sub-swap-list" },
       { title: "Messaging about a listing",          id: "sub-swap-messages" },
-      { title: "My Listings — Reserved, Gone and keeping it listed", id: "sub-swap-mine" },
+      { title: "My Listings — editing, Reserved, Gone and keeping it listed", id: "sub-swap-mine" },
       { title: "Your name, reporting, and payment",  id: "sub-swap-safety" },
     ],
   },
@@ -1969,7 +1969,7 @@ export default function HelpGuidePage() {
               </Step>
               <Step>A conversation closes 14 days after its listing is marked Gone or comes down.</Step>
             </Subsection>
-            <Subsection id="sub-swap-mine" title="My Listings — Reserved, Gone and keeping it listed">
+            <Subsection id="sub-swap-mine" title="My Listings — editing, Reserved, Gone and keeping it listed">
               <Step>
                 Tap <strong>My Listings</strong> at the bottom of the screen. Each listing has three buttons:
                 <strong> Available</strong>, <strong>Reserved</strong> and <strong>Gone</strong> (<strong>Found</strong> on a Wanted post).
@@ -1981,7 +1981,11 @@ export default function HelpGuidePage() {
               </Step>
               <Step>
                 Listings come down after 30 days. Three days before, you get a reminder; tap <strong>Keep it listed</strong> in
-                My Listings for another 30 days. Tap <strong>Edit / photos</strong> to change the details or photos.
+                My Listings for another 30 days.
+              </Step>
+              <Step>
+                To change the title, price, description or photos, tap <strong>Edit listing</strong> — it&apos;s on each listing
+                in My Listings, and on your own listing when you open it in Swap &amp; Sell.
               </Step>
             </Subsection>
             <Subsection id="sub-swap-safety" title="Your name, reporting, and payment">

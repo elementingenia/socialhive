@@ -100,9 +100,9 @@ export default function SwapMinePage() {
                       }}>Keep it listed</button>
                     )}
                     <button type="button" onClick={() => setEditing(l)} style={{
-                      padding: "0.55rem 1rem", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)",
-                      color: "var(--text)", fontWeight: 700, fontFamily: "inherit", fontSize: "0.88rem", cursor: "pointer",
-                    }}>Edit / photos</button>
+                      padding: "0.55rem 1rem", borderRadius: 10, border: `1px solid ${SWAP}`, background: "var(--surface)",
+                      color: SWAP, fontWeight: 700, fontFamily: "inherit", fontSize: "0.88rem", cursor: "pointer",
+                    }}>Edit listing</button>
                     {l.enquiry_count > 0 && (
                       <button type="button" onClick={() => router.push("/swap/messages")} style={{
                         padding: "0.55rem 1rem", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)",
