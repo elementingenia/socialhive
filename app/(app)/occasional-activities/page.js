@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useUser } from "@/lib/UserContext"
 import { authedFetch } from "@/lib/getAuthToken"
-import { VotingIcon, SpecialEventsIcon, SurveysIcon, HappeningsNewsIcon, SwapIcon } from "@/components/NavIcons"
+import { VotingIcon, SpecialEventsIcon, SurveysIcon, HappeningsNewsIcon, SwapIcon, MoviesIcon } from "@/components/NavIcons"
 
 // Admin's single discovery entry point for hidden-by-default, occasional-use
 // hubs -- Iain, 2026-09-04: "change the Voting option in Admin to Occasional
@@ -59,6 +59,8 @@ export default function OccasionalActivitiesPage() {
   const [settings, setSettings] = useState(null)
   const [digestSaving, setDigestSaving] = useState(false)
   const [digestError, setDigestError] = useState(null)
+  const [stSaving, setStSaving] = useState(false)
+  const [stError, setStError] = useState(null)
 
   useEffect(() => {
     if (!loading && !member?.is_admin) router.replace("/home")
@@ -114,6 +116,30 @@ export default function OccasionalActivitiesPage() {
       setDigestError(err.message)
     } finally {
       setDigestSaving(false)
+    }
+  }
+
+  // Show Time: residents add showings (migration 131, Iain 2026-10-07).
+  // Like the digest it has no manage page, so the switch lives here. While
+  // off, admins and Show Time Owners can still use the wizard to trial it.
+  const residentShowingsOn = !!settings?.showtime_resident_events?.enabled
+  async function toggleResidentShowings() {
+    setStSaving(true); setStError(null)
+    try {
+      const res = await authedFetch("/api/hub-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hub_type: "showtime_resident_events", enabled: !residentShowingsOn }),
+      })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        throw new Error(d.error || "Couldn't change the setting")
+      }
+      setSettings(s => ({ ...(s || {}), showtime_resident_events: { ...(s?.showtime_resident_events || {}), enabled: !residentShowingsOn } }))
+    } catch (err) {
+      setStError(err.message)
+    } finally {
+      setStSaving(false)
     }
   }
 
@@ -183,6 +209,36 @@ export default function OccasionalActivitiesPage() {
           </div>
         </div>
         {digestError && <div style={{ color: "var(--danger)", fontSize: "0.82rem", marginTop: "0.5rem" }}>{digestError}</div>}
+      </div>
+
+      <div style={{
+        background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px",
+        padding: "1rem", marginBottom: "0.75rem",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.9rem" }}>
+          <MoviesIcon size={32} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, color: "var(--teal)" }}>Show Time: residents add showings</div>
+            <div style={{ color: "var(--text-dim)", fontSize: "0.82rem" }}>
+              {residentShowingsOn
+                ? "Any resident can add a showing in Show Time › Scheduled."
+                : "Off: only admins and Show Time Owners can add showings (use this to trial it)."}
+            </div>
+          </div>
+          <button type="button" role="switch" aria-checked={residentShowingsOn} aria-label="Residents add showings on or off"
+            disabled={settings === null || stSaving} onClick={toggleResidentShowings}
+            style={{
+              flexShrink: 0, width: 50, height: 28, borderRadius: 14, border: "none", position: "relative",
+              background: residentShowingsOn ? "var(--teal)" : "var(--border)", cursor: "pointer",
+              opacity: settings === null || stSaving ? 0.6 : 1, transition: "background 0.2s",
+            }}>
+            <span style={{
+              position: "absolute", top: 3, left: residentShowingsOn ? 25 : 3, width: 22, height: 22, borderRadius: "50%",
+              background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.2)", transition: "left 0.2s",
+            }} />
+          </button>
+        </div>
+        {stError && <div style={{ color: "var(--danger)", fontSize: "0.82rem", marginTop: "0.5rem" }}>{stError}</div>}
       </div>
 
       {AREAS.map(area => {

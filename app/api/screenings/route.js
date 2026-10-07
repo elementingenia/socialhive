@@ -10,7 +10,8 @@ import { notifyRequestOnlySpace } from '@/lib/notifyRequestOnlySpace'
 import { titleFor } from '@/lib/showing'
 import { checkCancelPaymentGuard } from '@/lib/eventCancelGuard'
 import { sydneyTodayStr } from '@/lib/date'
-import { requireAdminOrAreaOwner, requireEventManage } from '@/lib/areaAuth'
+import { requireAdminOrAreaOwner, requireEventManage, isAreaOwner } from '@/lib/areaAuth'
+import { resolveCoordinatorIds } from '@/lib/residentShowing'
 import { resolveMemberName } from '@/lib/memberName'
 
 // Movie screenings always run in the one dedicated common space -- there's no
@@ -69,9 +70,12 @@ export async function GET(req) {
     .select('event_id, member_id, members!member_id(id, name, username)')
     .in('event_id', eventIds)
     .is('replaced_at', null)
-  const coordMap = {}
+  // A showing can have several coordinators (resident showings, 2026-10-07).
+  // coordsMap holds them all; `coordinator` (the first) stays for older callers.
+  const coordsMap = {}
   for (const ec of ecRows || []) {
-    coordMap[ec.event_id] = ec.members
+    if (!ec.members) continue
+    ;(coordsMap[ec.event_id] = coordsMap[ec.event_id] || []).push(ec.members)
   }
 
   const { data: bookings } = await supabaseAdmin
@@ -155,7 +159,7 @@ export async function GET(req) {
     // added; masking only protects that name from everyone else. isOwn below
     // is "is this my own booking", reused as the bypass for every party
     // member under it, not just an exact self-match within the party.
-    const isCoordinator = coordMap[ev.id]?.id === member.id
+    const isCoordinator = (coordsMap[ev.id] || []).some(c => c.id === member.id)
     const canManageBooks = member.is_admin || isCoordinator
     const attendeeOf = b => {
       const isOwn     = b.member_id === member.id
@@ -198,7 +202,8 @@ export async function GET(req) {
       my_booking,
       community_score: ev.movie_id ? (communityAvg[ev.movie_id] || null) : null,
       attendees,
-      coordinator: coordMap[ev.id] || null,
+      coordinator: (coordsMap[ev.id] || [])[0] || null,
+      coordinators: coordsMap[ev.id] || [],
     }
   })
 
@@ -293,7 +298,7 @@ export async function POST(req) {
 }
 
 export async function PATCH(req) {
-  const { event_id, movie_id, showing_title, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
+  const { event_id, movie_id, showing_title, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, notes, coordinator_id, coordinator_ids, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   // Admin, Show Time's Owner (area-wide), or this screening's own EC
@@ -301,6 +306,12 @@ export async function PATCH(req) {
   // already used for EC, just extended to cover Owner too.
   const { error: authErr, status: authStatus, member } = await requireEventManage(req, event_id)
   if (authErr) return NextResponse.json({ error: authErr }, { status: authStatus })
+
+  // Several coordinators per showing (2026-10-07). A coordinator who isn't an
+  // admin/Owner must leave at least one on it.
+  const isManager = !!member.is_admin || await isAreaOwner(member.id, 'hub', 'movie')
+  const coords = resolveCoordinatorIds({ coordinator_ids, coordinator_id }, { isManager })
+  if (coords.error) return NextResponse.json({ error: coords.error }, { status: 400 })
 
   if (!event_date || !event_time) return NextResponse.json({ error: 'Date and time are required' }, { status: 400 })
   if (!event_end_time) return NextResponse.json({ error: 'An end time is required -- every screening books the Cinema as a common space.' }, { status: 400 })
@@ -356,10 +367,11 @@ export async function PATCH(req) {
     })
   }
 
-  // Update coordinator — clear existing then insert new if provided
+  // Update coordinators — clear existing then insert the new list.
   await supabaseAdmin.from('event_coordinators').delete().eq('event_id', event_id)
-  if (coordinator_id) {
-    await supabaseAdmin.from('event_coordinators').insert({ event_id, member_id: coordinator_id, assigned_by: member.id })
+  if (coords.ids.length) {
+    await supabaseAdmin.from('event_coordinators').insert(
+      coords.ids.map(id => ({ event_id, member_id: id, assigned_by: member.id })))
   }
 
   const dateChanged = before && (before.event_date !== event_date || before.event_time !== event_time)

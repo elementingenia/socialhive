@@ -124,6 +124,7 @@ const RAW_SECTIONS = [
     subs: [
       { title: "Why this tile exists", id: "sub-occ-why" },
       { title: "Turning a hub on or off", id: "sub-occ-toggle" },
+      { title: "Show Time: residents add showings", id: "sub-occ-showtime" },
     ],
   },
   {
@@ -1045,6 +1046,29 @@ export default function AdminGuidePage() {
                 Events already created, are untouched. It only controls whether the Home tile and
                 hub pages are reachable by residents right now.
               </InfoBox>
+            </Subsection>
+            <Subsection id="sub-occ-showtime" title="Show Time: residents add showings">
+              <Step>
+                The <strong>Show Time: residents add showings</strong> switch on this page controls
+                whether any resident can add a showing from <strong>Show Time › Scheduled › + Add</strong>.
+                While it&apos;s <strong>Off</strong>, only admins and Show Time Owners see + Add, so you
+                can trial it first. Everyone, admins included, adds showings through the same
+                five-question wizard, then uses <strong>Edit</strong> for anything else.
+              </Step>
+              <Step>
+                Every new showing is set to: the Cinema, its capacity from <strong>Admin › Locations</strong>{" "}
+                (20 if none is set), up to 4 seats per booking, bookable by anyone, no booking close
+                time, no notes, and the creator as coordinator. The seats the creator keeps are a
+                normal confirmed booking in their name. The creator must answer Yes to having booked
+                the Cinema in the Ingenia app, and it can&apos;t clash with anything else already
+                holding the Cinema.
+              </Step>
+              <Step>
+                Show Time Owners get a notification every time someone adds a showing, whoever the
+                creator chose to tell. Owners and admins can edit or cancel any showing; a showing&apos;s
+                coordinators can edit or cancel their own, and add more coordinators. A coordinator
+                who isn&apos;t an admin or Owner can&apos;t leave a showing with no coordinator.
+              </Step>
             </Subsection>
           </Section>
 

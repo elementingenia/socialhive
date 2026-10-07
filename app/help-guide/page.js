@@ -75,6 +75,7 @@ const RAW_SECTIONS = [
       { title: "After you have booked",                      id: "sub-movies-afterbook" },
       { title: "Rating films — the community voting panel",  id: "sub-movies-voting" },
       { title: "Scheduled screenings list",                  id: "sub-movies-scheduled" },
+      { title: "Adding your own showing",                    id: "sub-movies-addshowing" },
       { title: "Suggestions library",                        id: "sub-movies-library" },
       { title: "DVD library",                                id: "sub-movies-dvd" },
       { title: "Coordinator panel (EC only)",                id: "sub-movies-ec" },
@@ -896,6 +897,50 @@ export default function HelpGuidePage() {
                 order, not A-Z, with each resident's position — <strong>(1st)</strong>,{" "}
                 <strong>(2nd)</strong>, and so on — to the left of their name, so you can see at a
                 glance who's next in line for a seat.
+              </InfoBox>
+            </Subsection>
+
+            <Subsection id="sub-movies-addshowing" title="Adding your own showing">
+              <Step>
+                Want to watch something in the Cinema and let others join you? First book the Cinema
+                in the <strong>Ingenia app</strong>. Then go to <strong>Scheduled</strong> and tap{" "}
+                <strong>+ Add</strong>. You&apos;ll be asked five short questions, one at a time:
+              </Step>
+              <Step>
+                <strong>1. Have you booked the Cinema in the Ingenia app?</strong> If you choose{" "}
+                <strong>No</strong> you can&apos;t carry on. The Cinema can&apos;t be used without an
+                Ingenia booking.
+              </Step>
+              <Step>
+                <strong>2. What are you showing?</strong> Choose <strong>A movie</strong> and type the
+                title. Films already in Suggestions or our DVD Library show first. If yours isn&apos;t
+                there, tap <strong>Search all films</strong> to find it (it&apos;s added to
+                Suggestions too). Or choose <strong>Something else</strong> and type what it is, e.g.
+                the AFL Grand Final.
+              </Step>
+              <Step>
+                <strong>3. When are you showing it?</strong> Pick the date, start time and expected
+                end time. If something else already has the Cinema then, you&apos;ll be told and can
+                pick another time.
+              </Step>
+              <Step>
+                <strong>4. How many seats are you keeping for yourself?</strong> Those seats are
+                booked in your name. Everyone else can book the rest, up to 4 seats each.
+              </Step>
+              <Step>
+                <strong>5. Who do you want to tell?</strong> <strong>All residents</strong>,{" "}
+                <strong>Show Time members only</strong>, or <strong>Nobody</strong>. Show Time&apos;s
+                Owners always get a note that you added it.
+              </Step>
+              <Step>
+                Tap <strong>Add showing</strong>. It appears in Scheduled straight away with you as
+                the coordinator. To add a picture, notes or another coordinator, or to change or
+                cancel it, tap <strong>Edit</strong> on its card.
+              </Step>
+              <InfoBox>
+                💡 If your profile is set to <strong>Private</strong>, you&apos;ll be told first that
+                your name will be shown as the person who added the showing. People need to know who
+                to ask about it.
               </InfoBox>
             </Subsection>
 

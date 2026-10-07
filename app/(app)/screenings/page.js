@@ -26,6 +26,7 @@ import { CopyLinkButton, AddToCalendarButton } from '@/components/EventShareActi
 import EventNotices from '@/components/EventNotices'
 import InviteNeighbourButton from '@/components/InviteNeighbourButton'
 import { buildShareUrl, resolveEventWindow } from '@/lib/eventShare'
+import ShowTimeWizard from '@/components/ShowTimeWizard'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -84,7 +85,7 @@ function Toast({ toasts }) {
 }
 
 // ── Coord Picker ──────────────────────────────────────────────────────────────
-function CoordPicker({ members, value, onChange }) {
+function CoordPicker({ members, value, onChange, placeholder }) {
   const chosen = members.find(m => m.id === value) || null
   const [query, setQuery] = useState('')
   const [open, setOpen]   = useState(false)
@@ -108,7 +109,7 @@ function CoordPicker({ members, value, onChange }) {
         role="button" tabIndex={0} aria-haspopup="listbox" aria-expanded={open}
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(o => !o); setQuery('') } }}
         style={{ width: '100%', padding: '0.75rem 1rem', borderRadius: 10, border: `1.5px solid ${open ? 'var(--teal)' : 'var(--border)'}`, background: 'var(--surface)', color: chosen ? 'var(--text)' : 'var(--text-dim)', fontSize: '0.95rem', boxSizing: 'border-box', fontFamily: 'inherit', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>{chosen ? (chosen.name || chosen.username) : '— Select coordinator —'}</span>
+        <span>{chosen ? (chosen.name || chosen.username) : (placeholder || '— Select coordinator —')}</span>
         <span style={{ color: 'var(--text-dim)', fontSize: '0.8rem' }}>▾</span>
       </div>
       {open && (
@@ -134,6 +135,29 @@ function CoordPicker({ members, value, onChange }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// Several coordinators (2026-10-07): chips for the chosen ones, plus the
+// single picker above to add another.
+function CoordsPicker({ members, value, onChange }) {
+  const chosen = value.map(id => members.find(m => m.id === id)).filter(Boolean)
+  const remaining = members.filter(m => !value.includes(m.id))
+  return (
+    <div>
+      {chosen.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.5rem' }}>
+          {chosen.map(m => (
+            <span key={m.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', background: 'var(--teal)14', color: 'var(--teal)', border: '1px solid var(--teal)', borderRadius: 999, padding: '0.3rem 0.4rem 0.3rem 0.75rem', fontSize: '0.88rem', fontWeight: 600 }}>
+              {m.name || m.username}
+              <button type="button" aria-label={`Remove ${m.name || m.username}`} onClick={() => onChange(value.filter(id => id !== m.id))}
+                style={{ background: 'none', border: 'none', color: 'var(--teal)', cursor: 'pointer', fontSize: '1rem', lineHeight: 1, padding: '0 0.2rem' }}>✕</button>
+            </span>
+          ))}
+        </div>
+      )}
+      <CoordPicker members={remaining} value="" placeholder="+ Add a coordinator" onChange={id => { if (id) onChange([...value, id]) }} />
     </div>
   )
 }
@@ -189,7 +213,8 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [cutoff, setCutoff]           = useState(cutoffToInputValue(event?.reservation_cutoff))
   const [allowGuests, setAllowGuests] = useState(event ? !!event.allow_nonresident_guests : true) // new events default to "Anyone" (2026-07-25)
   const [requireNaming, setRequireNaming] = useState(!!event?.require_attendee_names)
-  const [coordinator, setCoordinator] = useState(event?.coordinator?.id || null)
+  const [coordinators, setCoordinators] = useState(
+    event?.coordinators?.length ? event.coordinators.map(c => c.id) : (event?.coordinator?.id ? [event.coordinator.id] : []))
   const [saving, setSaving]           = useState(false)
   const [justSaved, setJustSaved]     = useState(false)
   const [cancelling, setCancelling]   = useState(false)
@@ -327,7 +352,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     setSaving(true); setErr(null)
     const body = { movie_id: showMode === 'movie' ? (pickedMovie?.id || null) : null,
                    showing_title: showMode === 'other' ? freeText.trim() : null,
-                   location_id: venueId || null, event_date: date, event_time: time, event_end_time: endTime, max_seats: Number(maxSeats), max_seats_per_booking: Number(maxSeatsPerBooking), notes: notes || null, coordinator_id: coordinator || null, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: Number(maxSeatsPerBooking) > 1 ? allowGuests : false, require_attendee_names: Number(maxSeatsPerBooking) > 1 ? requireNaming : false }
+                   location_id: venueId || null, event_date: date, event_time: time, event_end_time: endTime, max_seats: Number(maxSeats), max_seats_per_booking: Number(maxSeatsPerBooking), notes: notes || null, coordinator_ids: coordinators, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: Number(maxSeatsPerBooking) > 1 ? allowGuests : false, require_attendee_names: Number(maxSeatsPerBooking) > 1 ? requireNaming : false }
     if (eventId) body.event_id = eventId
     // try/finally so the button can NEVER be left stuck on "Saving…". It just
     // was: the route 500'd with an HTML body, res.json() threw, and
@@ -617,8 +642,8 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
           </div>
 
           <div style={{ marginBottom: '1rem' }}>
-            <label style={LABEL}>Coordinator (optional)</label>
-            <CoordPicker members={members} value={coordinator} onChange={setCoordinator} />
+            <label style={LABEL}>Coordinators</label>
+            <CoordsPicker members={members} value={coordinators} onChange={setCoordinators} />
           </div>
           {err && <div style={{ color: 'var(--danger)', fontSize: '0.85rem', marginBottom: '1rem' }}>{err}</div>}
           <button onClick={handleSubmit} disabled={saving}
@@ -814,7 +839,7 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
               screening has no coordinator (EventCoordinators renders
               nothing at all in that case, so there'd be no line to sit on). */}
           {(() => {
-            const coordinatorNames = ev.coordinator ? [ev.coordinator.name || ev.coordinator.username] : []
+            const coordinatorNames = (ev.coordinators?.length ? ev.coordinators : (ev.coordinator ? [ev.coordinator] : [])).map(c => c.name || c.username)
             const evWindow = resolveEventWindow(ev)
             const shareUrl = buildShareUrl('/screenings', ev.id)
             const shareLocation = ev.location ? (ev.location_type === 'offsite' ? ev.location.split('\n')[0] : ev.location) : null
@@ -984,7 +1009,9 @@ export default function Screenings() {
   const [loading,       setLoading]       = useState(true)
   const [session,       setSession]       = useState(null)
   const [member,        setMember]        = useState(null)
-  const [showAdd,       setShowAdd]       = useState(false)
+  const [showWizard,    setShowWizard]    = useState(false)
+  // What the add-a-showing wizard needs (switch state, Private, Cinema size).
+  const [wizardInfo,    setWizardInfo]    = useState(null)
   const [editEvent,     setEditEvent]     = useState(null)
   const [members,       setMembers]       = useState([])
   const [toasts,        setToasts]        = useState([])
@@ -1041,6 +1068,14 @@ export default function Screenings() {
     if (session) loadScreenings()
   }, [session, loadScreenings])
 
+  useEffect(() => {
+    if (!session) return
+    authedFetch('/api/screenings/resident').then(r => r.ok ? r.json() : null)
+      .then(setWizardInfo).catch(() => setWizardInfo(null))
+  }, [session])
+  const canAdd = !!wizardInfo?.canUse
+  const isCoordOf = ev => !!member?.id && (ev.coordinators || (ev.coordinator ? [ev.coordinator] : [])).some(c => c.id === member.id)
+
   function openSlideOut(ev) {
     setSlideOutEvent(toSlideOutShape(ev))
   }
@@ -1083,8 +1118,8 @@ export default function Screenings() {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
         <h1 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--teal)' }}>🎬 Upcoming Screenings</h1>
-        {canManage && (
-          <button onClick={() => setShowAdd(true)}
+        {canAdd && (
+          <button onClick={() => setShowWizard(true)}
             style={{ background: 'var(--teal)', color: '#fff', border: 'none', borderRadius: '10px', padding: '0.5rem 1rem', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}>
             + Add
           </button>
@@ -1096,7 +1131,7 @@ export default function Screenings() {
       ) : screenings.length === 0 ? (
         <div style={{ textAlign: 'center', color: 'var(--text-dim)', padding: '3rem', fontSize: '0.9rem' }}>
           No upcoming screenings yet.
-          {canManage && <div style={{ marginTop: '0.5rem', fontSize: '0.82rem' }}>Use &quot;+ Add&quot; to schedule one.</div>}
+          {canAdd && <div style={{ marginTop: '0.5rem', fontSize: '0.82rem' }}>Use &quot;+ Add&quot; to schedule one.</div>}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
@@ -1109,11 +1144,11 @@ export default function Screenings() {
                 key={ev.id}
                 ev={ev}
                 isAdmin={canManage}
-                isEC={!!member?.id && ev.coordinator?.id === member.id}
+                isEC={isCoordOf(ev)}
                 freeCostData={freeCostData}
                 onOpen={() => openSlideOut(ev)}
                 onEdit={ev => setEditEvent(ev)}
-                canBypassClosed={canManage || (!!member?.id && ev.coordinator?.id === member.id)}
+                canBypassClosed={canManage || isCoordOf(ev)}
               />
             )
           })}
@@ -1127,12 +1162,25 @@ export default function Screenings() {
         onRefresh={handleSlideOutRefresh}
       />
 
-      {(showAdd || editEvent) && (
+      {showWizard && (
+        <ShowTimeWizard
+          info={wizardInfo}
+          onClose={() => setShowWizard(false)}
+          onCreated={(ev, { mode }) => {
+            addToast(mode === 'other'
+              ? `${ev.title} added. Tap Edit on it to add a picture.`
+              : `${ev.title} added to Show Time`, 'success')
+            loadScreenings()
+          }}
+        />
+      )}
+
+      {editEvent && (
         <ScreeningSheet
           session={session}
-          event={editEvent || null}
+          event={editEvent}
           members={members}
-          onClose={() => { setShowAdd(false); setEditEvent(null) }}
+          onClose={() => setEditEvent(null)}
           onSaved={loadScreenings}
           addToast={addToast}
         />
