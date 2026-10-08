@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { authedFetch } from "@/lib/getAuthToken"
 import { ListingCard, ListingForm, primaryButton, SWAP } from "@/components/SwapUI"
-import { isListingActive, isExpired, statusLabel, capReached } from "@/lib/swap"
+import { isListingActive, isExpired, statusLabel, capReached, sydneyShortDate } from "@/lib/swap"
 
 // Swap & Sell -- My Listings. Status is changed HERE (Scope_Answered 3.3,
 // answering Iain's "what if there's no conversation?"): a deal done at the
@@ -74,7 +74,7 @@ export default function SwapMinePage() {
               ) : (
                 <>
                   <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", marginBottom: 6 }}>
-                    {expired ? "Expired — no longer showing." : l.status === "gone" ? "No longer showing." : `Showing for ${daysLeft} more day${daysLeft === 1 ? "" : "s"}.`}
+                    {expired ? "Expired — no longer showing." : l.status === "gone" ? "No longer showing." : `Showing until ${sydneyShortDate(l.expires_at)}.`}
                     {l.enquiry_count ? ` ${l.enquiry_count} ${l.enquiry_count === 1 ? "person has" : "people have"} messaged you.` : ""}
                   </div>
                   <div role="group" aria-label="Status" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>

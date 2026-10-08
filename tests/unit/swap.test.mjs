@@ -4,7 +4,7 @@ import {
   isSwapLive, canUseSwap, isValidListingCap, isExpired, isListingActive, countActive, capReached,
   expiryReminderDue, isConversationClosed, canStartConversation, canReadConversation, otherPartyId,
   isUnreadFor, priceLabel, statusLabel, contactButtonLabel, validateListing, validateMessage,
-  needsPrivacyAck, swapName, filterListings, expiryFrom, daysListedLabel, goneNotification,
+  needsPrivacyAck, swapName, filterListings, expiryFrom, daysListedLabel, goneNotification, sydneyShortDate, expiringNotification,
   newListingMessage, CATEGORIES, EXPIRY_DAYS, MAX_TITLE, MAX_MESSAGE,
 } from '../../lib/swap.js'
 
@@ -165,6 +165,21 @@ ok(goneNotification({ title: 'Lamp', type: 'sale' }).includes('no longer availab
 ok(goneNotification({ title: 'Ladder', type: 'wanted' }).includes('found'), 'found wording')
 ok(newListingMessage({ type: 'sale', title: 'Lamp', price_dollars: 5 }).includes('$5'), 'new listing shows price')
 ok(CATEGORIES.slice(0, -1).every((c, i, a) => i === 0 || a[i - 1].localeCompare(c) < 0) && CATEGORIES.at(-1) === 'Other', 'categories A-Z, Other last')
+
+// ── Sydney calendar days (2026-10-09) ───────────────────────────────────────
+{
+  // 11pm Thu 8 Oct AEDT = 12:00Z; viewed 7am Fri 9 Oct AEDT = 20:00Z (8h later)
+  const listed = '2026-10-08T12:00:00Z', view = new Date('2026-10-08T20:00:00Z')
+  ok(daysListedLabel(listed, view) === 'Listed yesterday', 'listed 11pm, viewed 7am next day = yesterday (Sydney)')
+  // 1am Fri 9 Oct AEDT = 14:00Z Thu; viewed 11pm Fri = 12:00Z Fri -- same Sydney day, 22h apart
+  ok(daysListedLabel('2026-10-08T14:00:00Z', new Date('2026-10-09T12:00:00Z')) === 'Listed today', 'same Sydney day 22h apart = today')
+  // 9am Sat 10 Oct UTC = 8pm Sat Sydney; 1pm UTC Sat = 12am Sun Sydney
+  ok(sydneyShortDate('2026-10-10T13:30:00Z') === 'Sun 11 Oct', 'short date uses Sydney day, not UTC')
+  ok(sydneyShortDate(null) === '', 'short date blank for null')
+  const msg = expiringNotification({ title: 'Lamp', expires_at: '2026-10-11T13:30:00Z' })
+  ok(msg.includes('comes down on Mon 12 Oct') && !msg.includes('3 days'), 'expiry reminder names the Sydney date')
+  ok(expiringNotification({ title: 'Lamp' }).includes('comes down soon'), 'expiry reminder without date')
+}
 
 console.log(`swap: ${pass} passed, ${fail} failed`)
 if (fail) process.exit(1)

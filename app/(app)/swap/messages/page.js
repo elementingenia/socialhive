@@ -4,14 +4,14 @@ import { useRouter } from "next/navigation"
 import { authedFetch } from "@/lib/getAuthToken"
 import { SWAP, StatusPill } from "@/components/SwapUI"
 import { priceLabel } from "@/lib/swap"
+import { isoToSydneyDateStr, sydneyTodayStr } from "@/lib/date"
 
 // Swap & Sell -- Messages: every private conversation the resident is in,
 // as buyer or seller. Unread ones are marked; tap to open the thread.
 function when(iso) {
   const d = new Date(iso)
   if (isNaN(d.getTime())) return ""
-  const today = new Date()
-  const sameDay = d.toDateString() === today.toDateString()
+  const sameDay = isoToSydneyDateStr(d.toISOString()) === sydneyTodayStr()
   return sameDay
     ? d.toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit", timeZone: "Australia/Sydney" })
     : d.toLocaleDateString("en-AU", { day: "numeric", month: "short", timeZone: "Australia/Sydney" })
