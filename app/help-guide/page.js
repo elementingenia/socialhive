@@ -1980,7 +1980,7 @@ export default function HelpGuidePage() {
                 the listing stays up with a Reserved label.
               </Step>
               <Step>
-                Listings come down after 30 days. Three days before, you get a reminder; tap <strong>Keep it listed</strong> in
+                Listings come down after 30 days — My Listings shows the date. A few days before, you get a reminder with the date; tap <strong>Keep it listed</strong> in
                 My Listings for another 30 days.
               </Step>
               <Step>
