@@ -63,7 +63,7 @@ export async function POST(request) {
 
     // Update Supabase Auth password first (if auth_id exists) — same
     // ordering as /api/auth/change-password, so a failure here leaves the
-    // members.pin row untouched rather than desynced from the real login
+    // stored PIN hash untouched rather than desynced from the real login
     // credential.
     if (member.auth_id) {
       const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
