@@ -115,15 +115,14 @@ function verifyScryptPin(pin, stored) {
 checks.push({
   name: 'testbot E2E fixture account present, active, admin',
   run: async () => {
-    const rows = await rest('members?username=ilike.testbot&select=username,status,is_admin,pin,pin_hash')
+    const rows = await rest('members?username=ilike.testbot&select=username,status,is_admin,pin_hash')
     if (rows.length === 0) return ['testbot member row is missing entirely']
     const bad = []
     const t = rows[0]
     if (t.status !== 'active') bad.push(`status is "${t.status}", expected "active"`)
     if (!t.is_admin) bad.push('is_admin is false, expected true (tests assert admin-only UI)')
-    // PINs are hashed since migration 132 (2026-10-09); a not-yet-upgraded
-    // row may still hold the legacy plain-text value.
-    const pinOk = t.pin_hash ? verifyScryptPin('9999', t.pin_hash) : t.pin === '9999'
+    // PINs are stored only as hashes since 2026-10-09 (migrations 132/133).
+    const pinOk = !!t.pin_hash && verifyScryptPin('9999', t.pin_hash)
     if (!pinOk) bad.push('PIN is not "9999" (must match tests/e2e/auth.setup.js)')
     return bad
   },
