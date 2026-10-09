@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
+import { newPinColumns } from "@/lib/pinAuth"
 import { newAuthEmail } from "@/lib/authEmail"
 import { sydneyTodayStr } from "@/lib/date"
 
@@ -104,7 +105,7 @@ export async function POST(request) {
       // Profile (validated there -- see lib/memberName.js).
       display_name: username.trim(),
       username: username.trim(),
-      pin: password,
+      ...newPinColumns(password),
       auth_id: authUserId,
       auth_email: fakeEmail,
       is_admin: false,

@@ -899,6 +899,16 @@ export default function AdminGuidePage() {
                 admin — so the resident is required to set their own new PIN the next time they sign in,
                 rather than continuing to use the one you just handed them indefinitely.
               </Step>
+              <Step>
+                PINs are stored scrambled (hashed), so <strong>nobody can look up a resident's
+                existing PIN</strong> — not admins, not the database. If a resident forgets theirs,
+                reset it. The new PIN is shown to you once, when you set it.
+              </Step>
+              <Step>
+                <strong>Login lockout:</strong> 5 wrong PINs in a row locks that account for 15
+                minutes, and the resident is told so on the sign-in screen. Resetting their PIN here
+                clears the lock straight away.
+              </Step>
             </Subsection>
             <Subsection id="sub-acc-export" title="Exporting the list — Export button (added 2026-08-30)">
               <Step>

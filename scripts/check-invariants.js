@@ -97,19 +97,34 @@ checks.push({
   },
 })
 
+// Mirror of lib/pinHash.js verifyPin (this script runs outside the Next.js
+// alias resolver, so it can't import @/lib).
+function verifyScryptPin(pin, stored) {
+  const crypto = require('crypto')
+  const parts = String(stored).split('$')
+  if (parts.length !== 6 || parts[0] !== 'scrypt') return false
+  const [, n, r, p, salt, hash] = parts
+  const expected = Buffer.from(hash, 'base64')
+  const actual = crypto.scryptSync(pin, Buffer.from(salt, 'base64'), expected.length, { N: +n, r: +r, p: +p })
+  return crypto.timingSafeEqual(actual, expected)
+}
+
 // 3. The testbot E2E fixture specifically — CI depends on this exact
 // account existing, active, and admin. Catch it missing here, in seconds,
 // instead of via 100 silent red CI runs.
 checks.push({
   name: 'testbot E2E fixture account present, active, admin',
   run: async () => {
-    const rows = await rest('members?username=ilike.testbot&select=username,status,is_admin,pin')
+    const rows = await rest('members?username=ilike.testbot&select=username,status,is_admin,pin,pin_hash')
     if (rows.length === 0) return ['testbot member row is missing entirely']
     const bad = []
     const t = rows[0]
     if (t.status !== 'active') bad.push(`status is "${t.status}", expected "active"`)
     if (!t.is_admin) bad.push('is_admin is false, expected true (tests assert admin-only UI)')
-    if (t.pin !== '9999') bad.push(`pin is "${t.pin}", expected "9999" (must match tests/e2e/auth.setup.js)`)
+    // PINs are hashed since migration 132 (2026-10-09); a not-yet-upgraded
+    // row may still hold the legacy plain-text value.
+    const pinOk = t.pin_hash ? verifyScryptPin('9999', t.pin_hash) : t.pin === '9999'
+    if (!pinOk) bad.push('PIN is not "9999" (must match tests/e2e/auth.setup.js)')
     return bad
   },
 })

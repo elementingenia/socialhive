@@ -1,6 +1,8 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { ensureAuthEmail } from "@/lib/authEmail"
+import { checkMemberPin, PIN_AUTH_COLUMNS } from "@/lib/pinAuth"
+import { lockedMessage } from "@/lib/pinLockout"
 
 
 // Supabase Auth requires 6+ char passwords — pin may be shorter, so we pad
@@ -18,7 +20,7 @@ export async function POST(request) {
     // Look up member
     const { data: member, error: memberError } = await supabaseAdmin
       .from('members')
-      .select('id, username, pin, auth_id, status, auth_email, must_change_pin')
+      .select(`id, username, auth_id, status, auth_email, must_change_pin, ${PIN_AUTH_COLUMNS}`)
       .ilike('username', username.trim())
       .single()
 
@@ -28,7 +30,12 @@ export async function POST(request) {
     if (member.status !== 'active') {
       return NextResponse.json({ error: 'Account is not active' }, { status: 403 })
     }
-    if (member.pin !== password) {
+    // Hashed PIN check + lockout (lib/pinAuth.js, 2026-10-09).
+    const pinCheck = await checkMemberPin(supabaseAdmin, member, password)
+    if (pinCheck.lockedMinutes) {
+      return NextResponse.json({ error: lockedMessage(pinCheck.lockedMinutes) }, { status: 423 })
+    }
+    if (!pinCheck.ok) {
       return NextResponse.json({ error: 'Invalid username or password' }, { status: 401 })
     }
 
@@ -39,7 +46,7 @@ export async function POST(request) {
     if (!fakeEmail) {
       return NextResponse.json({ error: 'Login failed' }, { status: 500 })
     }
-    const authPassword = toAuthPassword(member.pin)
+    const authPassword = toAuthPassword(String(password))
 
     // Create Supabase Auth user if not yet linked
     if (!member.auth_id) {
