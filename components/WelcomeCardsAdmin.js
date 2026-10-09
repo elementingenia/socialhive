@@ -107,7 +107,7 @@ export default function WelcomeCardsAdmin() {
       setConfirming(false); setSelected(new Set())
       if (d.failed?.length) setError(`No card for: ${d.failed.join(", ")} (password not changed). Try again.`)
       if (d.cards?.length) {
-        const html = buildWelcomeCardsHtml(d.cards, { site: d.site, helpLine: d.helpLine })
+        const html = buildWelcomeCardsHtml(d.cards, { site: d.site, helpLine: d.helpLine, failed: d.failed })
         const url = URL.createObjectURL(new Blob([html], { type: "text/html" }))
         const q = new URLSearchParams({ url, name: "Welcome cards.html", back: "/admin?tab=SignInHelp" })
         router.push(`/documents/view?${q.toString()}`)

@@ -82,23 +82,28 @@ export async function POST(req) {
     .select("id, name, username, house_number, status, is_test, auth_id").in("id", ids)
   if (error) return NextResponse.json({ error: "Could not load residents." }, { status: 500 })
   const members = sortForWalking((rows || []).filter(m => m.status === "active" && !m.is_test && m.username))
+  // Anyone asked for but not eligible (deactivated since, no username) is
+  // reported back, not silently dropped.
+  const eligible = new Set(members.map(m => m.id))
+  const skipped = (rows || []).filter(m => !eligible.has(m.id)).map(m => m.name)
+  if (rows && rows.length < ids.length) console.error("welcome-cards: ids not found", ids.length - rows.length)
 
   const origin = new URL(req.url).origin
   const now = new Date().toISOString()
   const cards = []
-  const failed = []
+  const failed = [...skipped]
 
   for (const m of members) {
     const pin = generateStartingPin(randomInt)
     if (m.auth_id) {
       const { error: authErr } = await supa.auth.admin.updateUserById(m.auth_id, { password: toAuthPassword(pin) })
-      if (authErr) { failed.push(m.name); continue }
+      if (authErr) { console.error("welcome-cards: auth update failed", m.id, authErr.message); failed.push(m.name); continue }
     }
     const { error: upErr } = await supa.from("members").update({
       ...newPinColumns(pin), must_change_pin: true,
       welcome_card_printed_at: now, welcome_card_printed_by: admin.id,
     }).eq("id", m.id)
-    if (upErr) { failed.push(m.name); continue }
+    if (upErr) { console.error("welcome-cards: member update failed", m.id, upErr.message); failed.push(m.name); continue }
 
     const qrSvg = await QRCode.toString(cardLoginUrl(origin, m.username), { type: "svg", margin: 0, errorCorrectionLevel: "M" })
     cards.push({ name: m.name, house_number: m.house_number, username: m.username, pin, qrSvg })
