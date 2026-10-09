@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { afterLoginPath, safeNextPath } from '@/lib/safeNext'
+import { prefillUsername } from '@/lib/welcomeCards'
 
 // Separate component so useSearchParams is inside Suspense
 function InactivityNotice({ onNotice }) {
@@ -29,10 +30,14 @@ export default function Login() {
   // window.location rather than useSearchParams so this page doesn't need a
   // Suspense boundary of its own. `register=1` opens the Register tab.
   const [next, setNext] = useState(null)
+  // ?u=<username> from a printed welcome card's QR code (2026-10-09) fills
+  // the username box so the resident only types their password.
+  const [prefillUser, setPrefillUser] = useState('')
   const router = useRouter()
   useEffect(() => {
     const p = new URLSearchParams(window.location.search)
     setNext(safeNextPath(p.get('next')))
+    setPrefillUser(prefillUsername(p.get('u')))
     if (p.get('register') === '1') setTab('register')
   }, [])
 
@@ -93,7 +98,7 @@ export default function Login() {
         </div>
         )}
 
-        {!forcePin && tab === 'signin' && <SignIn router={router} next={next}
+        {!forcePin && tab === 'signin' && <SignIn router={router} next={next} prefillUser={prefillUser}
           onForcePinChange={(u) => { setForcePin(u); setTab('change'); setNotice(null) }} />}
         {!forcePin && tab === 'register' && <Register onSuccess={() => setTab('signin')} />}
         {(forcePin || tab === 'change') && (
@@ -105,8 +110,12 @@ export default function Login() {
   )
 }
 
-function SignIn({ router, next, onForcePinChange }) {
+function SignIn({ router, next, onForcePinChange, prefillUser }) {
   const [username, setUsername] = useState('')
+  // Fill from the welcome-card link once it's read; never overwrite typing.
+  useEffect(() => {
+    if (prefillUser) setUsername(u => u || prefillUser)
+  }, [prefillUser])
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)

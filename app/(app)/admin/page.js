@@ -6,9 +6,10 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon, CommitteeIcon, UptakeIcon, InterestsIcon, StreetsIcon, NewFeaturesIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon, CommitteeIcon, UptakeIcon, InterestsIcon, StreetsIcon, NewFeaturesIcon, SignInHelpIcon } from '@/components/NavIcons'
 import OwnersManager from '@/components/OwnersManager'
 import UptakeStats from '@/components/UptakeStats'
+import WelcomeCardsAdmin from '@/components/WelcomeCardsAdmin'
 import InterestsAdmin from '@/components/InterestsAdmin'
 import GroupProposalsAdmin from '@/components/GroupProposalsAdmin'
 import StreetsAdmin from '@/components/StreetsAdmin'
@@ -60,6 +61,10 @@ const SECTIONS = [
   // has no live source of truth for that. See components/UptakeStats.js and
   // app/api/admin/uptake/route.js for the full evidence trail.
   { key: 'Uptake', label: 'Uptake', Icon: UptakeIcon },
+  // Welcome cards for residents who have never signed in (Iain, 2026-10-09):
+  // username + one-time password + QR code, printed and handed out. Deep
+  // link /admin?tab=SignInHelp (the card viewer's Close returns here).
+  { key: 'SignInHelp', label: 'Sign-in Help', Icon: SignInHelpIcon },
   // "Ask me about" chip list + resident suggestion review queue (backlog B3,
   // 2026-10-02). Tile shows a count badge while suggestions are waiting (Q2).
   // Relabelled for Skills (B7, 2026-10-03); key unchanged so /admin?tab=Interests links still work.
@@ -1550,6 +1555,7 @@ export default function AdminPage() {
         {tab === 'Locations' && <LocationsTab />}
         {tab === 'Tools'     && <ToolsTab />}
         {tab === 'Uptake'    && <UptakeStats />}
+        {tab === 'SignInHelp' && <WelcomeCardsAdmin />}
         {tab === 'Interests' && <InterestsAdmin onCountChange={setInterestsPending} />}
         {tab === 'Proposals' && <GroupProposalsAdmin onCountChange={setProposalsAction} />}
         {tab === 'Streets'   && <StreetsAdmin />}

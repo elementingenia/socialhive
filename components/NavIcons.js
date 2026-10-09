@@ -390,6 +390,21 @@ export function InterestsIcon({ size = 26 }) {
 
 // Street sign (Admin > Streets, migration 122) -- a post with two arrow
 // signs. Same 70x70 fill convention as the icons above.
+// Key -- Admin > Sign-in Help (welcome cards, 2026-10-09)
+export function SignInHelpIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fillRule="evenodd" fill="currentColor"
+        d="M 5 35 A 15 15 0 1 0 35 35 A 15 15 0 1 0 5 35 Z
+           M 14 35 A 6 6 0 1 0 26 35 A 6 6 0 1 0 14 35 Z"/>
+      <path fill="currentColor"
+        d="M 32 31 L 66 31 L 66 39 L 32 39 Z
+           M 50 39 L 56 39 L 56 50 L 50 50 Z
+           M 59 39 L 65 39 L 65 47 L 59 47 Z"/>
+    </svg>
+  )
+}
+
 export function StreetsIcon({ size = 26 }) {
   return (
     <svg width={size} height={size} viewBox={VB} aria-hidden="true">
