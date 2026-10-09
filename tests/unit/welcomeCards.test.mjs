@@ -66,4 +66,10 @@ t("html escapes and pages by four", () => {
   assert.ok(noHelp.includes("1 card."))
 })
 
+t("failed residents are listed on the sheet, escaped", () => {
+  const html = buildWelcomeCardsHtml([{ name: "A B", username: "ab", pin: "4826" }], { site: "x", failed: ["Marjorie <C>"] })
+  assert.ok(html.includes("No card for: Marjorie &lt;C&gt;"))
+  assert.ok(!buildWelcomeCardsHtml([], { site: "x" }).includes("No card for"))
+})
+
 console.log(`welcomeCards: ${n} tests passed`)
