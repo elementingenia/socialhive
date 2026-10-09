@@ -647,6 +647,11 @@ export default function HelpGuidePage() {
                 <strong>Sign In</strong>. If you have previously signed in on this device, the app
                 may remember your username.
               </Step>
+              <Step>
+                <strong>Got a welcome card?</strong> Scan the square code with your phone camera, or type the
+                website on the card. Your username is filled in for you: enter the password from the card
+                and tap <strong>Sign In</strong>. You will then be asked to choose your own new password.
+              </Step>
             </Subsection>
 
             <Subsection id="sub-register" title="Register — first time users">

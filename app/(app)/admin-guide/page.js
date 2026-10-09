@@ -107,6 +107,7 @@ const RAW_SECTIONS = [
       { title: "Deactivate vs. Delete — not interchangeable", id: "sub-acc-remove" },
       { title: "Creating a login for a resident", id: "sub-acc-create" },
       { title: "Reset PIN — what it forces on next login", id: "sub-acc-pin" },
+      { title: "Sign-in Help — welcome cards", id: "sub-acc-welcome" },
       { title: "Exporting the list — Export button", id: "sub-acc-export" },
       { title: "Admin badge — seeing who is Admin at a glance", id: "sub-acc-adminbadge" },
       { title: "Info › Documents — editing a document", id: "sub-acc-docedit" },
@@ -908,6 +909,38 @@ export default function AdminGuidePage() {
                 <strong>Login lockout:</strong> 5 wrong PINs in a row locks that account for 15
                 minutes, and the resident is told so on the sign-in screen. Resetting their PIN here
                 clears the lock straight away.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-acc-welcome" title="Sign-in Help — welcome cards (added 2026-10-09)">
+              <Step>
+                <strong>Admin › Sign-in Help</strong> lists residents who have never signed in, in
+                house-number order so you can walk round. Each row shows their username, when a card was
+                last printed and by whom, and <strong>Signed in</strong> once they have made it in
+                (<strong>Not yet</strong> if a card went out and they haven't).
+              </Step>
+              <Step>
+                Tick residents (or <strong>Select all</strong>) and tap <strong>Print N cards</strong>.
+                Each card shows the website, their username, a <strong>starting password</strong>, a QR
+                code that opens the sign-in page with their username already filled in, and three steps.
+                Four cards print on one A4 page; cut along the dashed lines.
+              </Step>
+              <Step>
+                <strong>Printing resets the password</strong> — exactly like Reset PIN, including forcing
+                them to choose their own at first sign-in. Old passwords can't be shown (they're stored
+                scrambled), so every printed card carries a new one. Reprinting replaces the previous card.
+              </Step>
+              <Step>
+                <strong>Everyone</strong> lists all residents, for reprinting a card for someone who has
+                forgotten their password. You're warned before printing if any of them already sign in,
+                because their current password stops working.
+              </Step>
+              <Step>
+                The <strong>“Need help?”</strong> line at the top sets one line printed on every card (a
+                name and phone, say). Leave it empty and cards have no help line.
+              </Step>
+              <Step>
+                A card is a password. Hand it to the resident or put it in their letterbox — never leave it
+                in a common area. Admins only.
               </Step>
             </Subsection>
             <Subsection id="sub-acc-export" title="Exporting the list — Export button (added 2026-08-30)">
