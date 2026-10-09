@@ -6,6 +6,10 @@ import { findAnyRoomConflict } from "@/lib/spaceBookings"
 import { titleFor } from "@/lib/showing"
 import { notify } from "@/lib/notify"
 import { notifyHubFollowers } from "@/lib/notifyAudience"
+import { generateSeriesEvents } from "@/lib/generateSeriesEvents"
+import {
+  validateRepeat, ruleFor, planDates, describeRepeat, TBA_TITLE, SHOWING_NAME_MAX,
+} from "@/lib/showtimeSeries"
 import {
   WIZARD_HUB_TYPE, DEFAULT_MAX_PER_BOOKING, cinemaCapacity, canUseWizard,
   validateResidentShowing, allResidentsAudience, shortDate,
@@ -70,7 +74,9 @@ export async function POST(req) {
   const body = await req.json().catch(() => ({}))
   const capacity = cinemaCapacity(cinema)
   const invalid = validateResidentShowing(body, { capacity, isPrivate: !!member.hide_name })
+    || validateRepeat(body.repeat)
   if (invalid) return NextResponse.json({ error: invalid }, { status: 400 })
+  if (body.repeat) return createRepeating({ body, member, isManager, cinema, capacity })
 
   const { movie_id, showing_title, event_date, event_time, event_end_time, notify: notifyChoice } = body
   const seatsKept = Number(body.seats_kept)
@@ -159,4 +165,108 @@ export async function POST(req) {
   }
 
   return NextResponse.json({ ...event, notified, isManager })
+}
+
+
+// ── Repeating showing (Iain, 2026-10-10) ────────────────────────────────────
+// Scope: "Element Happenings – Show Time Repeating Showings – Scope Answered".
+// Every date is created now as "To be announced". If the wizard already said
+// what's on the first date, that date gets it straight away. Alerts go out
+// only for a date whose content is set -- never for the run itself (agreed);
+// Owners still hear that a run was added, as for any resident showing.
+async function createRepeating({ body, member, isManager, cinema, capacity }) {
+  const { movie_id, showing_title, event_date, event_time, event_end_time, notify: notifyChoice, repeat } = body
+  const seatsKept = Number(body.seats_kept)
+  const showingName = (repeat.showing_name || "").trim().slice(0, SHOWING_NAME_MAX) || null
+  const dates = planDates({ kind: repeat.kind, firstDate: event_date, count: repeat.dates_ahead })
+  if (!dates.length || dates[0] !== event_date) {
+    return NextResponse.json({ error: "Those dates don't work out. Choose the first date again." }, { status: 400 })
+  }
+
+  // Every date must have the Cinema free. Say which ones don't.
+  const clashes = []
+  for (const d of dates) {
+    const c = await findAnyRoomConflict(supabaseAdmin, {
+      location_id: cinema.id, event_date: d, event_time, event_end_time,
+      locationName: cinema.name, viewerId: member.id, canManage: !!member.is_admin,
+    })
+    if (c) clashes.push(shortDate(d))
+  }
+  if (clashes.length) {
+    return NextResponse.json({ error: `The ${cinema.name} is already booked on ${clashes.join(", ")}. Choose a different time or first date.` }, { status: 409 })
+  }
+
+  // What's on the first date, if already chosen.
+  let firstContent = null
+  if (body.content_later !== true) {
+    if (movie_id) {
+      const { data: movie } = await supabaseAdmin
+        .from("movies").select("id, title, director, poster_url, year").eq("id", movie_id).maybeSingle()
+      if (!movie) return NextResponse.json({ error: "That movie couldn't be found. Search for it again." }, { status: 400 })
+      firstContent = { movie_id: movie.id, title: titleFor({ movieTitle: movie.title }),
+        movie_snapshot: { title: movie.title, director: movie.director, poster_url: movie.poster_url, year: movie.year } }
+    } else {
+      firstContent = { movie_id: null, title: titleFor({ freeText: showing_title }), movie_snapshot: null }
+    }
+  }
+
+  const rule = ruleFor(repeat.kind, event_date)
+  const { data: series, error: se } = await supabaseAdmin.from("event_series").insert({
+    hub_type: "movie", club_id: null, created_by: member.id, mode: "series",
+    rule_type: rule.rule_type, rule_config: rule.rule_config, month_end_policy: "clamp",
+    horizon_months: 12, start_date: event_date, event_time, event_end_time,
+    title: null, showing_name: showingName,
+    location_type: "onsite", location: cinema.name, location_id: cinema.id,
+    max_seats: capacity, max_seats_per_booking: DEFAULT_MAX_PER_BOOKING,
+    allow_nonresident_guests: true, require_attendee_names: false, booking_required: true,
+    is_public: false, coordinator_ids: [member.id],
+    dates_ahead: dates.length, keep_rolling: repeat.keep_rolling === true,
+    coordinator_seats: seatsKept > 0 ? seatsKept : 0, ingenia_confirmed: true,
+  }).select("*").single()
+  if (se) return NextResponse.json({ error: se.message }, { status: 500 })
+
+  let gen
+  try {
+    gen = await generateSeriesEvents(series, { initial: true })
+  } catch (e) {
+    await supabaseAdmin.from("event_series").delete().eq("id", series.id)
+    return NextResponse.json({ error: "Couldn't create the dates. Please try again." }, { status: 500 })
+  }
+  const first = (gen.events || []).find(e => e.event_date === event_date)
+  if (!first) {
+    return NextResponse.json({ error: "The first date couldn't be created. Please try again." }, { status: 500 })
+  }
+  if (firstContent) {
+    await supabaseAdmin.from("events").update({ ...firstContent, content_tba: false }).eq("id", first.id)
+  }
+
+  // Owners always hear about a new run, with their own message.
+  const howOften = describeRepeat(repeat.kind, event_date)
+  const label = showingName || firstContent?.title || "A repeating showing"
+  const { data: ownerRows } = await supabaseAdmin.from("space_owners")
+    .select("member_id").eq("context_type", "hub").eq("context_key", "movie")
+  const ownerIds = [...new Set((ownerRows || []).map(o => o.member_id).filter(id => id && id !== member.id))]
+  const creatorName = member.display_name || member.name || "A resident"
+  await Promise.all(ownerIds.map(id => notify(id, first.id, "showtime_resident_event",
+    `${creatorName} added a repeating Show Time showing: ${label} — ${howOften.toLowerCase()}, ${gen.created} dates from ${shortDate(event_date)}${series.keep_rolling ? ", rolling" : ""}. Ingenia Cinema booking confirmed for the run.`)))
+
+  // Residents only hear about the first date, and only if it has content.
+  let notified = 0
+  if (firstContent) {
+    const message = `New showing: ${showingName ? `${showingName} — ` : ""}${firstContent.title} — ${shortDate(event_date)}`
+    if (notifyChoice === "all") {
+      const { data: everyone } = await supabaseAdmin.from("members").select("id, status, auth_id, is_test")
+      const ids = allResidentsAudience(everyone, [member.id, ...ownerIds])
+      await Promise.all(ids.map(id => notify(id, first.id, "event_added", message)))
+      notified = ids.length
+    } else if (notifyChoice === "members") {
+      notified = await notifyHubFollowers(supabaseAdmin, "movie", first.id, "event_added", message,
+        { excludeMemberId: [member.id, ...ownerIds] })
+    }
+  }
+
+  return NextResponse.json({
+    id: first.id, title: firstContent?.title || TBA_TITLE, showing_name: showingName,
+    series_id: series.id, dates_created: gen.created, notified, isManager,
+  })
 }
