@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { newAuthEmail } from "@/lib/authEmail"
 import { validateNewAccount, validateUsername, validatePin } from "@/lib/accounts"
 import { sydneyTodayStr } from "@/lib/date"
+import { newPinColumns } from "@/lib/pinAuth"
 
 // Admin-only account management (2026-07-16). Fills two gaps: no way for an
 // admin to create a login for a resident who hasn't self-registered (and to
@@ -119,7 +120,7 @@ export async function POST(req) {
     const { data: member, error: insertErr } = await supabaseAdmin.from("members").insert({
       // display_name (2026-08-14) defaults to Real Name at creation here too --
       // see the identical note in app/api/auth/register/route.js.
-      name, display_name: name, username, pin, auth_id: authUserId, auth_email: fakeEmail,
+      name, display_name: name, username, ...newPinColumns(pin), auth_id: authUserId, auth_email: fakeEmail,
       // Admin-created: the PIN is handed over, so force a change on first
       // login (migration 067). Self-registration leaves this false.
       must_change_pin: true,
@@ -145,8 +146,9 @@ export async function POST(req) {
 
   // ── Reset a member's PIN ─────────────────────────────────────────────────────
   // No old-pin check (that's the point — the resident forgot it). Updates the
-  // Auth password when an auth user exists; always updates members.pin (login
-  // lazily creates the Auth user from pin if auth_id is still null).
+  // Auth password when an auth user exists; always stores the new PIN as a
+  // hash (never plain text, 2026-10-09) and clears any login lockout. Login
+  // lazily creates the Auth user from the typed PIN if auth_id is still null.
   if (action === "reset_pin") {
     const memberId = body.member_id
     const pin = body.pin == null ? "" : String(body.pin)
@@ -165,7 +167,7 @@ export async function POST(req) {
     // An admin-set PIN is a handed-over credential, same as on creation, so
     // the member must replace it on their next login (migration 067).
     const { error: pinErr } = await supabaseAdmin.from("members")
-      .update({ pin, must_change_pin: true }).eq("id", memberId)
+      .update({ ...newPinColumns(pin), must_change_pin: true }).eq("id", memberId)
     if (pinErr) return NextResponse.json({ error: "Could not reset the PIN. Please try again." }, { status: 500 })
 
     return NextResponse.json({ ok: true })

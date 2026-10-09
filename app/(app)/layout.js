@@ -11,6 +11,7 @@ import PinModal from "@/components/PinModal"
 import NotificationsDrawer from "@/components/NotificationsDrawer"
 import FindButton from "@/components/FindButton"
 import { loginHref } from "@/lib/safeNext"
+import { authedFetch } from "@/lib/getAuthToken"
 
 const INACTIVITY_DAYS = 14
 const INACTIVITY_MS   = INACTIVITY_DAYS * 24 * 60 * 60 * 1000
@@ -192,7 +193,10 @@ export default function AppLayout({ children }) {
         }
         const fiveMin = 5 * 60 * 1000
         if (!lastActive || now - lastActive > fiveMin) {
-          await supabase.from("members").update({ last_active_at: now.toISOString() }).eq("id", member.id)
+          // Server route, not a browser write: members has no self-update
+          // RLS policy, so a browser update silently did nothing for every
+          // non-admin (BUG-086). Fire-and-forget -- never block page load.
+          authedFetch("/api/auth/heartbeat", { method: "POST" }).catch(() => {})
         }
       }
 

@@ -1,5 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
+import { checkMemberPin, newPinColumns, PIN_AUTH_COLUMNS } from "@/lib/pinAuth"
+import { lockedMessage } from "@/lib/pinLockout"
 
 // Profile's "Change PIN" modal (components/PinModal.js) posts here. The
 // caller is already logged in with a Supabase Auth session — unlike
@@ -44,14 +46,18 @@ export async function POST(request) {
 
     const { data: member, error: memberError } = await supabaseAdmin
       .from('members')
-      .select('id, pin, auth_id')
+      .select(`id, auth_id, ${PIN_AUTH_COLUMNS}`)
       .eq('auth_id', user.id)
       .single()
 
     if (memberError || !member) {
       return NextResponse.json({ error: 'Account not found' }, { status: 401 })
     }
-    if (member.pin !== current_pin) {
+    const pinCheck = await checkMemberPin(supabaseAdmin, member, current_pin)
+    if (pinCheck.lockedMinutes) {
+      return NextResponse.json({ error: lockedMessage(pinCheck.lockedMinutes) }, { status: 423 })
+    }
+    if (!pinCheck.ok) {
       return NextResponse.json({ error: 'Current PIN is incorrect' }, { status: 401 })
     }
 
@@ -71,7 +77,7 @@ export async function POST(request) {
 
     const { error: pinError } = await supabaseAdmin
       .from('members')
-      .update({ pin: new_pin, must_change_pin: false })
+      .update({ ...newPinColumns(new_pin), must_change_pin: false })
       .eq('id', member.id)
 
     if (pinError) {

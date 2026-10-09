@@ -693,6 +693,11 @@ export default function HelpGuidePage() {
               </Step>
               <InfoBox>
                 💡 If you forget your PIN, contact your coordinator — they can reset it for you.
+                Nobody can look up your existing PIN, only set a new one.
+              </InfoBox>
+              <InfoBox>
+                🔒 If you enter the wrong PIN 5 times in a row, your account is locked for 15
+                minutes. Wait and try again, or ask an admin to reset your PIN.
               </InfoBox>
             </Subsection>
 
