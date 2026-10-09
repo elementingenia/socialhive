@@ -82,7 +82,10 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen, c
           <div style={{ width: 100, minHeight: 130, background: 'var(--surface2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', flexShrink: 0 }}>🎬</div>
         )}
         <div style={{ flex: 1, minWidth: 0, padding: '0.9rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-          <div style={{ fontWeight: 800, fontSize: '1.05rem', lineHeight: 1.2 }}>
+          {event.showing_name && (
+            <div style={{ color: 'var(--teal)', fontSize: '0.78rem', fontWeight: 700 }}>{event.showing_name}</div>
+          )}
+          <div style={{ fontWeight: 800, fontSize: '1.05rem', lineHeight: 1.2, ...(event.content_tba ? { fontStyle: 'italic', color: 'var(--text-dim)', fontWeight: 700 } : {}) }}>
             {movie?.title || event.title}{movie?.rating && <span style={{ fontWeight: 400, fontSize: '0.75em', verticalAlign: 'baseline', color: 'var(--text-dim)' }}> ({movie.rating})</span>}
           </div>
           <div style={{ fontSize: '0.8rem', color: 'var(--teal)', fontWeight: 600 }}>

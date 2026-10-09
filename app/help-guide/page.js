@@ -76,6 +76,7 @@ const RAW_SECTIONS = [
       { title: "Rating films — the community voting panel",  id: "sub-movies-voting" },
       { title: "Scheduled screenings list",                  id: "sub-movies-scheduled" },
       { title: "Adding your own showing",                    id: "sub-movies-addshowing" },
+      { title: "Repeating showings",                         id: "sub-movies-repeating" },
       { title: "Suggestions library",                        id: "sub-movies-library" },
       { title: "DVD library",                                id: "sub-movies-dvd" },
       { title: "Coordinator panel (EC only)",                id: "sub-movies-ec" },
@@ -914,7 +915,10 @@ export default function HelpGuidePage() {
               <Step>
                 Want to watch something in the Cinema and let others join you? First book the Cinema
                 in the <strong>Ingenia app</strong>. Then go to <strong>Scheduled</strong> and tap{" "}
-                <strong>+ Add</strong>. You&apos;ll be asked five short questions, one at a time:
+                <strong>+ Add</strong>. You&apos;ll be asked a few short questions, one at a time.
+                The first is <strong>Is this a one-off, or does it repeat?</strong> For a one-off,
+                choose <strong>Just this once</strong> (for one that repeats, see Repeating showings
+                below). Then:
               </Step>
               <Step>
                 <strong>1. Have you booked the Cinema in the Ingenia app?</strong> If you choose{" "}
@@ -952,6 +956,53 @@ export default function HelpGuidePage() {
                 your name will be shown as the person who added the showing. People need to know who
                 to ask about it.
               </InfoBox>
+            </Subsection>
+
+            <Subsection id="sub-movies-repeating" title="Repeating showings">
+              <Step>
+                For a regular night, such as a showing every second Sunday, tap <strong>+ Add</strong>{" "}
+                in <strong>Scheduled</strong> and choose <strong>It repeats</strong>. You can give it a
+                name, e.g. <strong>Friday Night Action Movies</strong>. The name shows on every date,
+                with what&apos;s on underneath.
+              </Step>
+              <Step>
+                <strong>Ingenia:</strong> book the Cinema in the Ingenia app for all the dates first.
+              </Step>
+              <Step>
+                <strong>What&apos;s on the first date?</strong> Choose a movie, something else, or{" "}
+                <strong>Decide later</strong>. Dates you haven&apos;t decided show as{" "}
+                <strong>To be announced</strong>. Residents can still book them.
+              </Step>
+              <Step>
+                <strong>When is the first date?</strong> Then <strong>How often?</strong> (every week,
+                every fortnight, or the same day each month), <strong>How many dates to book ahead?</strong>{" "}
+                (2 to 12), and <strong>Keep it rolling?</strong> With <strong>Yes, keep it going</strong>,
+                a new date is added as each one passes, until you end it. Keep the Ingenia booking up
+                to date for the new dates.
+              </Step>
+              <Step>
+                The seats you keep for yourself are kept on every date. If the Cinema is already
+                booked on any of the dates, you&apos;ll be told which ones.
+              </Step>
+              <Step>
+                <strong>Choosing what&apos;s on:</strong> on a To be announced date, tap{" "}
+                <strong>Choose what&apos;s showing</strong> (or <strong>Edit</strong>) and pick a movie or
+                something else. Show Time members, and anyone already booked, are told at that moment.
+                Nobody is told when the dates are first created. If a date is still To be announced
+                3 days before, its coordinators get a reminder.
+              </Step>
+              <Step>
+                <strong>Muting one repeating showing:</strong> if you&apos;ve joined Show Time but
+                don&apos;t want alerts about one particular night, tap <strong>🔔 Alerts on</strong>{" "}
+                on any of its dates so it reads <strong>🔕 Alerts muted</strong>. You still hear about
+                every other Show Time showing, and about any date you&apos;ve booked.
+              </Step>
+              <Step>
+                <strong>Ending it:</strong> its coordinators, Show Time&apos;s Owners or an admin can tap{" "}
+                <strong>Edit</strong> on any date, then <strong>End these repeating showings</strong>.
+                No more dates are added. Future dates nobody else has booked are removed; dates
+                someone has booked stay.
+              </Step>
             </Subsection>
 
             <Subsection id="sub-movies-library" title="Suggestions library">

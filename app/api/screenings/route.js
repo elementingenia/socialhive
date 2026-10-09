@@ -4,6 +4,7 @@ import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyEventDetailsChanged } from '@/lib/notifyEventUpdated'
 import { promoteWaitlist } from '@/lib/promoteWaitlist'
 import { notifyHubFollowers } from '@/lib/notifyAudience'
+import { notify } from '@/lib/notify'
 import { hubLocation, fetchLocation } from '@/lib/eventClash'
 import { findAnyRoomConflict } from '@/lib/spaceBookings'
 import { notifyRequestOnlySpace } from '@/lib/notifyRequestOnlySpace'
@@ -13,6 +14,8 @@ import { sydneyTodayStr } from '@/lib/date'
 import { requireAdminOrAreaOwner, requireEventManage, isAreaOwner } from '@/lib/areaAuth'
 import { resolveCoordinatorIds } from '@/lib/residentShowing'
 import { resolveMemberName } from '@/lib/memberName'
+import { TBA_TITLE, SHOWING_NAME_MAX, isContentBeingSet, contentSetRecipients, contentSetMessage } from '@/lib/showtimeSeries'
+import { shortDate } from '@/lib/residentShowing'
 
 // Movie screenings always run in the one dedicated common space -- there's no
 // location picker in the screening form, so every screening is auto-bound to
@@ -298,7 +301,8 @@ export async function POST(req) {
 }
 
 export async function PATCH(req) {
-  const { event_id, movie_id, showing_title, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, notes, coordinator_id, coordinator_ids, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
+  const body = await req.json()
+  const { event_id, movie_id, showing_title, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, notes, coordinator_id, coordinator_ids, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = body
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   // Admin, Show Time's Owner (area-wide), or this screening's own EC
@@ -341,11 +345,21 @@ export async function PATCH(req) {
   if (conflict) return NextResponse.json({ error: conflict.message }, { status: 409 })
 
   const { data: before } = await supabaseAdmin
-    .from('events').select('event_date, event_time, location_id').eq('id', event_id).single()
+    .from('events').select('event_date, event_time, location_id, content_tba, series_id, showing_name').eq('id', event_id).single()
+
+  // Repeating showings (migration 135, Iain 2026-10-10): a date can stay
+  // "To be announced" through any other edit. Choosing a film or typing
+  // what's on sets it, and that is the moment residents are told.
+  const contentSet = isContentBeingSet({ wasTba: !!before?.content_tba, movieId: movie_id, showingTitle: showing_title })
+  const stillTba = !!before?.content_tba && !contentSet
+  if (stillTba) title = TBA_TITLE
+
+  const update = { movie_id: movie_id || null, title, event_date, event_time, event_end_time, max_seats: max_seats || 20, max_seats_per_booking: max_seats_per_booking || 4, notes: notes || null, movie_snapshot: movieSnapshot, reservation_cutoff: reservation_cutoff || null, allow_nonresident_guests: !!allow_nonresident_guests, require_attendee_names: !!require_attendee_names, location_type: 'onsite', location: cinema.name, location_id, content_tba: stillTba }
+  if ('showing_name' in body) update.showing_name = (body.showing_name || '').trim().slice(0, SHOWING_NAME_MAX) || null
 
   const { error } = await supabaseAdmin
     .from('events')
-    .update({ movie_id: movie_id || null, title, event_date, event_time, event_end_time, max_seats: max_seats || 20, max_seats_per_booking: max_seats_per_booking || 4, notes: notes || null, movie_snapshot: movieSnapshot, reservation_cutoff: reservation_cutoff || null, allow_nonresident_guests: !!allow_nonresident_guests, require_attendee_names: !!require_attendee_names, location_type: 'onsite', location: cinema.name, location_id })
+    .update(update)
     .eq('id', event_id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -372,6 +386,25 @@ export async function PATCH(req) {
   if (coords.ids.length) {
     await supabaseAdmin.from('event_coordinators').insert(
       coords.ids.map(id => ({ event_id, member_id: id, assigned_by: member.id })))
+  }
+
+  if (contentSet) {
+    const showingName = 'showing_name' in update ? update.showing_name : before?.showing_name
+    const [{ data: followers }, { data: muted }, { data: bookers }] = await Promise.all([
+      supabaseAdmin.from('hub_followers').select('member_id').eq('hub_type', 'movie'),
+      before?.series_id
+        ? supabaseAdmin.from('showtime_series_mutes').select('member_id').eq('series_id', before.series_id)
+        : Promise.resolve({ data: [] }),
+      supabaseAdmin.from('bookings').select('member_id').eq('event_id', event_id).in('status', ['confirmed', 'waitlist']),
+    ])
+    const ids = contentSetRecipients({
+      followerIds: (followers || []).map(f => f.member_id),
+      mutedIds: (muted || []).map(m => m.member_id),
+      bookerIds: (bookers || []).map(b => b.member_id),
+      excludeIds: [member.id],
+    })
+    const message = contentSetMessage({ showingName, title, when: shortDate(event_date) })
+    await Promise.all(ids.map(id => notify(id, event_id, 'event_added', message, '/screenings?event=' + event_id)))
   }
 
   const dateChanged = before && (before.event_date !== event_date || before.event_time !== event_time)

@@ -175,8 +175,13 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   // A Movies event is a SHOWING. A film is one kind; "AFL Grand Final" is
   // another (Iain, 2026-07-31). Either way it books the venue — which is what
   // makes booking a football night through Movies secure the Cinema.
-  const [showMode, setShowMode]       = useState(event && !event.movie_id ? 'other' : 'movie')
-  const [freeText, setFreeText]       = useState(event && !event.movie_id ? (event.title || '') : '')
+  // A repeating showing's date can still be "To be announced" (Iain,
+  // 2026-10-10) -- it opens on "Decide later" so an unrelated edit (say, the
+  // time) never forces a film to be picked.
+  const [showMode, setShowMode]       = useState(event?.content_tba ? 'later' : event && !event.movie_id ? 'other' : 'movie')
+  const [freeText, setFreeText]       = useState(event && !event.movie_id && !event.content_tba ? (event.title || '') : '')
+  const [showingName, setShowingName] = useState(event?.showing_name || '')
+  const [ending, setEnding]           = useState(false)
   const [movies, setMovies]           = useState([])
   const [pickedMovie, setPickedMovie] = useState(null)
   const [movieOpen, setMovieOpen]     = useState(false)
@@ -271,6 +276,21 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
 
   function handleClose() { setOpen(false); setTimeout(onClose, 280) }
 
+  async function endRun() {
+    if (!event?.series_id) return
+    if (!confirm('End these repeating showings? No more dates will be added. Future dates nobody else has booked are removed; dates someone has booked stay.')) return
+    setEnding(true); setErr(null)
+    const res = await authedFetch('/api/screenings/series', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'end', series_id: event.series_id }),
+    }).catch(() => null)
+    setEnding(false)
+    const d = await res?.json().catch(() => ({})) || {}
+    if (!res?.ok) { setErr(d.error || 'Could not end these showings'); return }
+    addToast(`Repeating showings ended${d.removed ? ` — ${d.removed} future ${d.removed === 1 ? 'date' : 'dates'} removed` : ''}`, 'success')
+    onSaved(); handleClose()
+  }
+
   async function cancelScreening() {
     if (!eventId) return
     if (!confirm('Cancel this screening? Anyone booked will be notified. It will be removed from the list.')) return
@@ -302,7 +322,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   // since it depends on which mode (movie/other) is picked.
   function computeInvalidFields() {
     const invalid = {}
-    const showErr = validateShowing({ mode: showMode, movieId: pickedMovie?.id, freeText })
+    const showErr = showMode === 'later' ? null : validateShowing({ mode: showMode, movieId: pickedMovie?.id, freeText })
     if (showErr) invalid.showing = showErr
     if (!date) invalid.date = FIELD_MESSAGES.date
     if (!time) invalid.time = FIELD_MESSAGES.time
@@ -352,6 +372,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     setSaving(true); setErr(null)
     const body = { movie_id: showMode === 'movie' ? (pickedMovie?.id || null) : null,
                    showing_title: showMode === 'other' ? freeText.trim() : null,
+                   ...(event?.series_id ? { showing_name: showingName.trim() || null } : {}),
                    location_id: venueId || null, event_date: date, event_time: time, event_end_time: endTime, max_seats: Number(maxSeats), max_seats_per_booking: Number(maxSeatsPerBooking), notes: notes || null, coordinator_ids: coordinators, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: Number(maxSeatsPerBooking) > 1 ? allowGuests : false, require_attendee_names: Number(maxSeatsPerBooking) > 1 ? requireNaming : false }
     if (eventId) body.event_id = eventId
     // try/finally so the button can NEVER be left stuck on "Saving…". It just
@@ -379,7 +400,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
       setErr(data.error || `Save failed (${res.status})`)
       addToast('Failed to save', 'error'); return
     }
-    const shownAs = showMode === 'other' ? freeText.trim() : (pickedMovie?.title || 'Movie Night')
+    const shownAs = showMode === 'later' ? 'To be announced' : showMode === 'other' ? freeText.trim() : (pickedMovie?.title || 'Movie Night')
     const wasCreate = !eventId
     addToast((wasCreate ? 'Screening added' : 'Screening updated') + ' — ' + shownAs + ' on ' + date, 'success')
     onSaved()
@@ -435,7 +456,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
           <div style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Showing</label>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              {[['movie', 'A movie'], ['other', 'Something else']].map(([v, txt]) => (
+              {[['movie', 'A movie'], ['other', 'Something else'], ...(event?.content_tba ? [['later', 'Decide later']] : [])].map(([v, txt]) => (
                 <button key={v} type="button" onClick={() => setShowMode(v)} style={{
                   flex: 1, padding: '0.5rem', borderRadius: 10, fontFamily: 'inherit',
                   fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer', border: '2px solid',
@@ -447,7 +468,20 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
             </div>
           </div>
 
-          {showMode === 'other' ? (
+          {event?.series_id && (
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={LABEL}>Name for these showings</label>
+              <input value={showingName} onChange={e => setShowingName(e.target.value)} maxLength={80}
+                placeholder="e.g. Friday Night Action Movies" style={INPUT} />
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '0.3rem' }}>Changes this date only.</div>
+            </div>
+          )}
+
+          {showMode === 'later' ? (
+            <div style={{ marginBottom: '1rem', background: 'var(--surface2)', borderRadius: 10, padding: '0.75rem 0.9rem', fontSize: '0.88rem', lineHeight: 1.4 }}>
+              This date stays &ldquo;To be announced&rdquo;. Choose A movie or Something else when you know what&apos;s on &mdash; Show Time members are told then.
+            </div>
+          ) : showMode === 'other' ? (
             <>
               <div ref={el => (fieldRefs.current.showing = el)} style={{ marginBottom: '1rem' }}>
                 <label style={LABEL}>What&apos;s showing <span style={{ color: 'var(--danger)' }}>*</span>
@@ -664,6 +698,18 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
               {cancelling ? 'Cancelling…' : 'Cancel this screening'}
             </button>
           )}
+
+          {/* End a repeating run: no more dates are added, and future dates
+              nobody else has booked are removed. Booked dates stay. */}
+          {eventId && event?.series_id && (
+            <button onClick={endRun} disabled={ending}
+              style={{ width: '100%', marginTop: '0.6rem', padding: '0.6rem', borderRadius: 8,
+                border: '1px solid #fca5a5', background: 'var(--surface)', color: '#991b1b',
+                fontWeight: 700, fontSize: '0.8rem', fontFamily: 'inherit',
+                cursor: ending ? 'not-allowed' : 'pointer', opacity: ending ? 0.6 : 1 }}>
+              {ending ? 'Ending…' : 'End these repeating showings'}
+            </button>
+          )}
         </div>
       </div>
     </>
@@ -735,7 +781,7 @@ function BookingStrip({ myBooking, isFull, closed, blocked }) {
 
 // ── Screening Card ─────────────────────────────────────────────────────────────
 // Pure display — tap anywhere to open the unified slide-over for booking/modify/cancel
-function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit, canBypassClosed = false }) {
+function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit, canBypassClosed = false, seriesAlerts = null, onToggleMute }) {
   const router = useRouter()
   const [showAttendees, setShowAttendees] = useState(false)
   const movie              = ev.movies
@@ -817,7 +863,10 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <div style={{ fontWeight: 800, fontSize: '1.1rem', lineHeight: 1.2 }}>
+            <div style={{ fontWeight: 800, fontSize: '1.1rem', lineHeight: 1.2, ...(ev.content_tba ? { fontStyle: 'italic', color: 'var(--text-dim)', fontWeight: 700 } : {}) }}>
+              {ev.showing_name && (
+                <div style={{ fontStyle: 'normal', color: 'var(--teal)', fontSize: '0.78rem', fontWeight: 700, marginBottom: 2 }}>{ev.showing_name}</div>
+              )}
               {movie?.title || ev.title}{movie?.rating && <span style={{ fontWeight: 400, fontSize: '0.75em', verticalAlign: 'baseline', color: 'var(--text-dim)' }}> ({movie.rating})</span>}
             </div>
             {isAdmin && freeCostData && (
@@ -831,6 +880,30 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
               </span>
             )}
           </div>
+          {/* Repeating showings (Iain, 2026-10-10): a coordinator chooses
+              what's on a "To be announced" date from here; a Show Time member
+              can mute one series' alerts without leaving Show Time. */}
+          {(ev.content_tba && (isAdmin || isEC) && onEdit) || (ev.series_id && seriesAlerts?.following && onToggleMute) ? (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center' }}>
+              {ev.content_tba && (isAdmin || isEC) && onEdit && (
+                <button onClick={e => { e.stopPropagation(); onEdit(ev) }}
+                  style={{ background: 'var(--teal)', color: '#fff', border: 'none', borderRadius: '8px', padding: '0.3rem 0.7rem', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  Choose what&apos;s showing
+                </button>
+              )}
+              {ev.series_id && seriesAlerts?.following && onToggleMute && (() => {
+                const muted = seriesAlerts.muted.includes(ev.series_id)
+                return (
+                  <button onClick={e => { e.stopPropagation(); onToggleMute(ev.series_id, !muted) }}
+                    aria-pressed={muted}
+                    title={muted ? 'Turn alerts back on for these showings' : "Stop alerts about these showings (you'll still hear about other Show Time showings)"}
+                    style={{ background: muted ? 'var(--surface2)' : 'var(--surface)', color: muted ? 'var(--text-dim)' : 'var(--teal)', border: `1px solid ${muted ? 'var(--border)' : 'var(--teal)'}`, borderRadius: '20px', padding: '0.2rem 0.65rem', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+                    {muted ? '🔕 Alerts muted' : '🔔 Alerts on'}
+                  </button>
+                )
+              })()}
+            </div>
+          ) : null}
           {/* Event Deep Linking + Add to Calendar (Iain, 2026-09-15
               correction): Add to Calendar sits on the Coordinators line,
               Copy Link directly below it -- not a separate footer row,
@@ -1020,6 +1093,8 @@ export default function Screenings() {
   const [dvdTmdbIds,        setDvdTmdbIds]        = useState(new Set())
   const [dvdImdbIds,        setDvdImdbIds]        = useState(new Set())
   const [ownershipRecords,  setOwnershipRecords]  = useState([])
+  // Repeating showings: am I a Show Time member, and which series have I muted?
+  const [seriesAlerts,      setSeriesAlerts]      = useState({ following: false, muted: [] })
 
   // Owner of the Show Time hub gets the same create/edit/manage options an
   // admin has, scoped to this hub only (Iain, 2026-08-10).
@@ -1073,6 +1148,21 @@ export default function Screenings() {
     authedFetch('/api/screenings/resident').then(r => r.ok ? r.json() : null)
       .then(setWizardInfo).catch(() => setWizardInfo(null))
   }, [session])
+  useEffect(() => {
+    if (!session) return
+    authedFetch('/api/screenings/series').then(r => r.ok ? r.json() : null)
+      .then(d => d && setSeriesAlerts({ following: !!d.following, muted: d.muted || [] })).catch(() => {})
+  }, [session])
+  async function toggleSeriesMute(seriesId, mute) {
+    const prev = seriesAlerts
+    setSeriesAlerts(a => ({ ...a, muted: mute ? [...a.muted, seriesId] : a.muted.filter(id => id !== seriesId) }))
+    const res = await authedFetch('/api/screenings/series', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: mute ? 'mute' : 'unmute', series_id: seriesId }),
+    }).catch(() => null)
+    if (!res?.ok) { setSeriesAlerts(prev); addToast("Couldn't change alerts. Please try again.", 'error'); return }
+    addToast(mute ? "Alerts muted for these showings" : "Alerts back on for these showings", 'success')
+  }
   const canAdd = !!wizardInfo?.canUse
   const isCoordOf = ev => !!member?.id && (ev.coordinators || (ev.coordinator ? [ev.coordinator] : [])).some(c => c.id === member.id)
 
@@ -1149,6 +1239,8 @@ export default function Screenings() {
                 onOpen={() => openSlideOut(ev)}
                 onEdit={ev => setEditEvent(ev)}
                 canBypassClosed={canManage || isCoordOf(ev)}
+                seriesAlerts={seriesAlerts}
+                onToggleMute={toggleSeriesMute}
               />
             )
           })}
@@ -1166,10 +1258,12 @@ export default function Screenings() {
         <ShowTimeWizard
           info={wizardInfo}
           onClose={() => setShowWizard(false)}
-          onCreated={(ev, { mode }) => {
-            addToast(mode === 'other'
-              ? `${ev.title} added. Tap Edit on it to add a picture.`
-              : `${ev.title} added to Show Time`, 'success')
+          onCreated={(ev, { mode, repeats }) => {
+            addToast(repeats
+              ? `${ev.showing_name || 'Repeating showing'} added — ${ev.dates_created} dates`
+              : mode === 'other'
+                ? `${ev.title} added. Tap Edit on it to add a picture.`
+                : `${ev.title} added to Show Time`, 'success')
             loadScreenings()
           }}
         />
