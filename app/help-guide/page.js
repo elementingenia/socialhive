@@ -111,6 +111,7 @@ const RAW_SECTIONS = [
       { title: "Finding a contact",     id: "sub-info-contacts" },
       { title: "Finding someone by skill or interest", id: "sub-info-interests" },
       { title: "Community documents",   id: "sub-info-documents" },
+      { title: "My Stuff — your pinned people and documents", id: "sub-info-mystuff" },
     ],
   },
   {
@@ -1521,6 +1522,33 @@ export default function HelpGuidePage() {
                 filed in the <strong>📁 New Features</strong> folder at the bottom of the list (or tap the{" "}
                 <strong>✨ New Features</strong> pill). You&apos;ll also get a notification — tap it to open that
                 guide straight away.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-info-mystuff" title="My Stuff — your pinned people and documents">
+              <Step>
+                <strong>My Stuff</strong> is a tile on the Home page that keeps the things you use most in one
+                place. It shows four groups: <strong>Repeating events</strong> you&apos;re booked on,{" "}
+                <strong>Groups &amp; Clubs</strong> you&apos;ve joined, <strong>People</strong> and{" "}
+                <strong>Documents</strong>.
+              </Step>
+              <Step>
+                <strong>People:</strong> in Info › Contacts, tap <strong>📌 Pin</strong> on someone&apos;s card. They
+                appear in My Stuff, and tap <strong>More</strong> there to see their details, just as on Contacts.
+              </Step>
+              <Step>
+                <strong>Documents:</strong> tap <strong>📌 Pin</strong> on a document in Info › Documents or
+                Committee › Documents. Tap it in My Stuff to open it.
+              </Step>
+              <Step>
+                <strong>Groups &amp; Clubs</strong> and <strong>repeating events</strong> appear on their own —
+                there&apos;s nothing to pin. A repeating event shows while you have a seat on at least one future
+                date; tap it to open your next booked date.
+              </Step>
+              <Step>
+                To remove a person or document, tap <strong>📌 Pinned</strong> (in My Stuff or where you pinned
+                it). Your pins are private: nobody else, admins included, can see them, and nobody is told you
+                pinned them.
               </Step>
             </Subsection>
           </Section>

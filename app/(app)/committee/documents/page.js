@@ -1,6 +1,8 @@
 "use client"
 import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
+import PinButton from "@/components/PinButton"
+import { usePins } from "@/lib/usePins"
 
 const COLOUR = "var(--committee)"
 
@@ -57,6 +59,8 @@ function categoryNames(doc) {
 
 export default function CommitteeDocumentsPage() {
   const [docs, setDocs] = useState(null)
+  // My Stuff (migration 136): the 📌 Pin on each document.
+  const { isPinned, toggle: togglePin } = usePins()
   const [search, setSearch] = useState("")
 
   useEffect(() => {
@@ -115,11 +119,13 @@ export default function CommitteeDocumentsPage() {
         </div>
       ) : (
         filtered.map(d => (
-          <a key={d.id} href={attachmentHref(d.file_url, d.file_name)}
+          <div key={d.id} style={{
+            display: "flex", alignItems: "flex-start", gap: "0.5rem", background: "var(--surface)", border: "1px solid var(--border)",
+            borderLeft: `4px solid ${COLOUR}`, borderRadius: 10, padding: "0.75rem 0.9rem", marginBottom: 8,
+          }}>
+          <a href={attachmentHref(d.file_url, d.file_name)}
             {...(isViewableAttachment(d.file_name) ? {} : { target: "_blank", rel: "noreferrer" })} style={{
-            display: "block", background: "var(--surface)", border: "1px solid var(--border)",
-            borderLeft: `4px solid ${COLOUR}`, borderRadius: 10, padding: "0.75rem 0.9rem",
-            marginBottom: 8, textDecoration: "none",
+            display: "block", flex: 1, minWidth: 0, textDecoration: "none",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
               <FileTypeBadge fileName={d.file_name} />
@@ -129,6 +135,8 @@ export default function CommitteeDocumentsPage() {
               {categoryNames(d) ? `${categoryNames(d)} · ` : ""}{fmt(d.created_at)}
             </div>
           </a>
+          <PinButton pinned={isPinned("document", d.id)} onToggle={() => togglePin("document", d.id)} label={d.title} />
+          </div>
         ))
       )}
     </div>
