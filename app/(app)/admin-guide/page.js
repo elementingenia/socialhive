@@ -45,7 +45,7 @@ const RAW_SECTIONS = [
     ],
   },
   {
-    id: "pagetexts", num: 2, title: "Page Texts — Wording Across the App",
+    id: "pagetexts", num: 2, title: "Hub Settings — Page Texts (Wording Across the App)",
     subs: [
       { title: "Happenings Home — the Main & Sub Notices", id: "sub-pt-home" },
       { title: "Show Time, Social Hive & Library wording", id: "sub-pt-other" },
@@ -62,9 +62,9 @@ const RAW_SECTIONS = [
     ],
   },
   {
-    id: "bookclub", num: 4, title: "Book Club Admin",
+    id: "bookclub", num: 4, title: "Book Club — Outstanding Books (Book Club › Manage)",
     subs: [
-      { title: "This screen is cross-club, not Book-Club-only", id: "sub-bc-scope" },
+      { title: "Where it lives now, and who can use it", id: "sub-bc-scope" },
       { title: 'What “Mark returned” actually does', id: "sub-bc-tracking" },
     ],
   },
@@ -78,7 +78,7 @@ const RAW_SECTIONS = [
     ],
   },
   {
-    id: "owners", num: 6, title: "Owners — Who Gets Each Hub's Questions",
+    id: "owners", num: 6, title: "Hub Settings — Owners (Who Gets Each Hub's Questions)",
     subs: [
       { title: "What assigning an Owner actually routes", id: "sub-owners-how" },
       { title: "The fallback chain when nobody's assigned", id: "sub-owners-fallback" },
@@ -94,7 +94,7 @@ const RAW_SECTIONS = [
     ],
   },
   {
-    id: "tools", num: 8, title: "Tools — DVD Library Enrichment",
+    id: "tools", num: 8, title: "Show Time › Enrich — DVD Library Enrichment",
     subs: [
       { title: "Running enrichment",   id: "sub-tools-run" },
       { title: "Failure catalogue",    id: "sub-tools-fail" },
@@ -107,7 +107,7 @@ const RAW_SECTIONS = [
       { title: "Deactivate vs. Delete — not interchangeable", id: "sub-acc-remove" },
       { title: "Creating a login for a resident", id: "sub-acc-create" },
       { title: "Reset PIN — what it forces on next login", id: "sub-acc-pin" },
-      { title: "Sign-in Help — welcome cards", id: "sub-acc-welcome" },
+      { title: "Residents › Sign-in Help — welcome cards", id: "sub-acc-welcome" },
       { title: "Exporting the list — Export button", id: "sub-acc-export" },
       { title: "Admin badge — seeing who is Admin at a glance", id: "sub-acc-adminbadge" },
       { title: "Info › Documents — editing a document", id: "sub-acc-docedit" },
@@ -144,7 +144,7 @@ const RAW_SECTIONS = [
     ],
   },
   {
-    id: "streets", num: 14, title: "Streets — House Numbers & Street Names (Admin › Streets)",
+    id: "streets", num: 14, title: "Streets — House Numbers & Street Names (Admin › Locations › Streets)",
     subs: [
       { title: "Why there's a street list", id: "sub-streets-why" },
       { title: "Adding, renaming and deleting streets", id: "sub-streets-manage" },
@@ -161,7 +161,7 @@ const RAW_SECTIONS = [
     ],
   },
   {
-    id: "proposals", num: 16, title: "Group Proposals — New Groups Suggested by Residents (Admin › Group Proposals)",
+    id: "proposals", num: 16, title: "Group Proposals — New Groups Suggested by Residents (Admin › Groups & Clubs › Proposals)",
     subs: [
       { title: "How a proposal becomes a club", id: "sub-gp-flow" },
       { title: "Approving, editing and declining", id: "sub-gp-review" },
@@ -443,10 +443,20 @@ export default function AdminGuidePage() {
               <Step>
                 Tap your account pill in the top-right of the header, then <strong>Administration
                 Manual</strong> (this page) or use the <strong>Admin</strong> footer/nav icon to open the
-                Admin panel itself. The panel opens as a card grid: <strong>Page Texts, Show Time, Book
-                Club, Groups & Clubs, Owners, Locations, Tools</strong>{BAR_ENABLED ? ", Bar" : ""}. Tap
-                any card to open that section; the <strong>← Admin</strong> link at the top of each
-                section takes you back to the grid.
+                Admin panel itself. The panel opens as a card grid of eight: <strong>Hub Settings, Show
+                Time, Groups &amp; Clubs, Locations</strong>{BAR_ENABLED ? ", Bar" : ""}<strong>, Occasional
+                Activities, Residents, Interests &amp; Skills, New Features</strong>. Tap any card to open
+                that section; some open with a row of buttons across the top (for example Show Time's{" "}
+                <strong>Suggested / Ownership / Streaming / Enrich</strong>) to switch between their
+                parts. The <strong>← Admin</strong> link at the top takes you back to the grid.
+              </Step>
+              <Step>
+                Where the old cards went (October 2026): Page Texts and Owners are both in{" "}
+                <strong>Hub Settings</strong>, one row per area; Tools is <strong>Show Time › Enrich</strong>;
+                Group Proposals is <strong>Groups &amp; Clubs › Proposals</strong>; Streets is{" "}
+                <strong>Locations › Streets</strong>; Uptake and Sign-in Help are both in{" "}
+                <strong>Residents</strong>; Book Club&apos;s outstanding books list is on Book Club&apos;s own{" "}
+                <strong>Manage</strong> screen (Section 4). Old links to the retired cards still land in the right place.
               </Step>
               <Step>
                 Resident account editing (adding a login, changing a resident's details) is <strong>not</strong>{" "}
@@ -455,11 +465,11 @@ export default function AdminGuidePage() {
             </Subsection>
           </Section>
 
-          <Section id="pagetexts" num={2} title="Page Texts — Wording Across the App">
+          <Section id="pagetexts" num={2} title="Hub Settings — Page Texts (Wording Across the App)">
             <Subsection id="sub-pt-home" title="Happenings Home — the Main & Sub Notices">
               <Step>
                 This is the actual, working way to change what residents see on the <strong>Home</strong>{" "}
-                screen banner. Open <strong>Admin → Page Texts → Happenings Home</strong>. The main text box is
+                screen banner. Open <strong>Admin → Hub Settings → Happenings Home</strong>. The main text box is
                 the <strong>Main Notice</strong> shown at the top of Home; below it you can add, edit, or
                 remove any number of <strong>Sub Notices</strong> — each one its own rich-text box with a{" "}
                 <strong>×</strong> to remove it. Saving here writes straight to what every resident sees on
@@ -580,20 +590,23 @@ export default function AdminGuidePage() {
             </Subsection>
           </Section>
 
-          <Section id="bookclub" num={4} title="Book Club Admin">
-            <Subsection id="sub-bc-scope" title="This screen is cross-club, not Book-Club-only">
-              <WarnBox>
-                ⚠ Despite the card's label, this list is not filtered to the "Book Club" club specifically
-                — it queries every booking anywhere in the app with an outstanding book/kit loan
-                (<code>has_book = true</code>), oldest-first. Any other Group/Club with{" "}
-                <strong>Book return dates</strong> or <strong>Kit return dates</strong> turned on
-                (Section 5) will show its outstanding loans here too, mixed in with Book Club's.
-              </WarnBox>
+          <Section id="bookclub" num={4} title="Book Club — Outstanding Books (Book Club › Manage)">
+            <Subsection id="sub-bc-scope" title="Where it lives now, and who can use it">
+              <Step>
+                The list of book-club copies still out with residents used to be its own Admin card. Since
+                October 2026 it is at the top of <strong>Book Club › ⚙ Manage</strong>, so the Book Club
+                Owner can use it as well as admins. It shows on any club that lends copies — a books catalogue, or Book/Kit return dates turned on (Section 5) — listing only that club&apos;s loans.
+              </Step>
+              <Step>
+                It lists every booking on that club&apos;s events that still holds a copy, oldest first —
+                including bookings that were later cancelled (marked <strong>Cancelled</strong>), since
+                the book still needs to come back.
+              </Step>
             </Subsection>
             <Subsection id="sub-bc-tracking" title={'What “Mark returned” actually does'}>
               <Step>
                 Each row shows who has a copy out, which title, and how many days it's been out. Tapping{" "}
-                <strong>Mark returned</strong> flips that one booking's loan flag off — the exact same
+                <strong>Mark Returned</strong> flips that one booking's loan flag off — the exact same
                 underlying flag as the "Has Book / Returned / No Book" toggle on that club's own attendee
                 list. There's no separate "confirm return" step and no notification sent — it's a single
                 immediate write.
@@ -630,8 +643,7 @@ export default function AdminGuidePage() {
               <FlagCard name="Book return dates (has_book_return)">
                 ON: every event for this club gets a "Book return date" field when creating it, and each
                 attendee on the attendee list gets a Has Book / Returned toggle plus a 🔔 reminder button.
-                This is also what feeds the Book Club Admin list in Section 4 — a club with this off never
-                appears there, however many bookings it has.
+                Outstanding loans also show on that club&apos;s own Manage screen (Section 4).
               </FlagCard>
 
               <FlagCard name="Kit return dates (has_kit_return)">
@@ -714,11 +726,13 @@ export default function AdminGuidePage() {
             </Subsection>
           </Section>
 
-          <Section id="owners" num={6} title="Owners — Who Gets Each Hub's Questions">
+          <Section id="owners" num={6} title="Hub Settings — Owners (Who Gets Each Hub's Questions)">
             <Subsection id="sub-owners-how" title="What assigning an Owner actually routes">
               <Step>
-                This screen assigns Owners separately for <strong>Show Time</strong>, <strong>Social Hive</strong>,
-                and <strong>Library</strong> (Groups & Clubs owners are assigned per-club on each club's own
+                <strong>Admin › Hub Settings</strong> shows one row per area — open a row to see that
+                area&apos;s page texts and, below them, its Owners. Owners are assigned separately for{" "}
+                <strong>Show Time</strong>, <strong>Social Hive</strong>, <strong>Library</strong>,{" "}
+                <strong>Voting</strong> and <strong>Committee</strong> (Happenings Home has none; Groups & Clubs owners are assigned per-club on each club's own
                 edit form instead, in Section 5). Every resident listed as an Owner for a hub receives{" "}
                 <strong>every question asked on that hub's page</strong>, and is shown as its contact. You
                 can list more than one Owner per hub — all of them get every question, there's no
@@ -817,8 +831,12 @@ export default function AdminGuidePage() {
             </Subsection>
           </Section>
 
-          <Section id="tools" num={8} title="Tools — DVD Library Enrichment">
+          <Section id="tools" num={8} title="Show Time › Enrich — DVD Library Enrichment">
             <Subsection id="sub-tools-run" title="Running enrichment">
+              <Step>
+                Admins run this from <strong>Admin › Show Time › Enrich</strong>. Show Time&apos;s Owners
+                can run the same thing from <strong>Show Time › ⚙ Manage</strong>, below the page texts.
+              </Step>
               <Step>
                 Runs in batches of 50, pulling poster art and metadata for DVD library titles that don't
                 have it yet from TMDB/OMDb, and skips anything already marked "not found" from a previous
@@ -840,7 +858,7 @@ export default function AdminGuidePage() {
               <Step>
                 A persistent, database-backed list of every title that's ever come back "not found" or
                 "API error" across all previous enrichment runs, split into those two groups. It's not
-                fetched automatically when you open Tools — tap <strong>Load from DB</strong> to see it,
+                fetched automatically when you open Enrich — tap <strong>Load from DB</strong> to see it,
                 <strong>Refresh</strong> to update it after a new run.
               </Step>
             </Subsection>
@@ -913,7 +931,7 @@ export default function AdminGuidePage() {
             </Subsection>
             <Subsection id="sub-acc-welcome" title="Sign-in Help — welcome cards (added 2026-10-09)">
               <Step>
-                <strong>Admin › Sign-in Help</strong> lists residents who have never signed in, in
+                <strong>Admin › Residents › Sign-in Help</strong> lists residents who have never signed in, in
                 house-number order so you can walk round. Each row shows their username, when a card was
                 last printed and by whom, and <strong>Signed in</strong> once they have made it in
                 (<strong>Not yet</strong> if a card went out and they haven't).
@@ -1123,7 +1141,7 @@ export default function AdminGuidePage() {
               </Step>
               <Step>
                 <strong>1. Home banner (Main + Sub Notices)</strong> — community-wide, shown to every
-                resident on the Home screen. Set at <strong>Admin → Page Texts → Happenings Home</strong>{" "}
+                resident on the Home screen. Set at <strong>Admin → Hub Settings → Happenings Home</strong>{" "}
                 (Section 2). Admin-only.
               </Step>
               <Step>
@@ -1204,7 +1222,7 @@ export default function AdminGuidePage() {
             <Subsection id="sub-streets-why" title="Why there's a street list (added 2026-10-03)">
               <Step>
                 House numbers around the village don&apos;t run in any order, so residents give directions
-                by street. <strong>Admin › Streets</strong> holds the community&apos;s street names. Residents
+                by street. <strong>Admin › Locations › Streets</strong> holds the community&apos;s street names. Residents
                 pick theirs from this list on their Profile, next to their house number — they can&apos;t
                 type a street of their own, so every address reads the same way.
               </Step>

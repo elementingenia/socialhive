@@ -110,7 +110,7 @@ export async function POST(req) {
   await supa.from("group_proposal_supporters").insert({ proposal_id: created.id, member_id: me.id })
 
   for (const adminId of await activeAdminIds()) {
-    await notify(adminId, null, "group_proposal_review", newProposalMessage(name), "/admin?tab=Proposals", me.id)
+    await notify(adminId, null, "group_proposal_review", newProposalMessage(name), "/admin?tab=Clubs&sub=Proposals", me.id)
   }
   return NextResponse.json({ ok: true, id: created.id })
 }
@@ -160,7 +160,7 @@ export async function PATCH(req) {
       .eq("id", p.id).is("threshold_alerted_at", null).select("id")
     if (stamped?.length) {
       for (const adminId of await activeAdminIds()) {
-        await notify(adminId, null, "group_proposal_ready", thresholdReachedMessage(p.name, count), "/admin?tab=Proposals")
+        await notify(adminId, null, "group_proposal_ready", thresholdReachedMessage(p.name, count), "/admin?tab=Clubs&sub=Proposals")
       }
     }
   }

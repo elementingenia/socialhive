@@ -167,7 +167,7 @@ function targetForNotif(n) {
   // Propose a group (B1): admin alerts open Admin > Group Proposals; the
   // resident notices open Groups & Clubs (a created club shows under
   // My Groups & Clubs, since supporters are auto-joined).
-  if (n.type === "group_proposal_review" || n.type === "group_proposal_ready") return "/admin?tab=Proposals"
+  if (n.type === "group_proposal_review" || n.type === "group_proposal_ready") return "/admin?tab=Clubs&sub=Proposals"
   if (n.type?.startsWith("group_proposal_")) return "/clubs"
   // Swap & Sell (migration 129). Notifications carry no conversation id,
   // so a message opens the Messages list (unread ones are marked there);
