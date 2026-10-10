@@ -7,10 +7,8 @@ import { authedFetch } from "@/lib/getAuthToken"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import { useUser } from "@/lib/UserContext"
 import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon, SpecialEventsIcon, CommitteeIcon, SurveysIcon, HappeningsNewsIcon, MyStuffIcon } from "@/components/NavIcons"
-import { summaryLine } from "@/lib/myStuff"
 import HeartButton from "@/components/HeartButton"
 import { BAR_ENABLED, SPACE_BOOKINGS_ENABLED } from "@/lib/features"
-import AskQuestion from "@/components/AskQuestion"
 import { isHtmlContent } from "@/lib/richText"
 
 // Home hub grid — kept to at most TWO rows (Iain: mobile vertical space is
@@ -23,7 +21,9 @@ const HUBS = [
   { key: "library", label: "Library", Icon: BookClubIcon, path: "/booklibrary/books", colour: "var(--purple)",   span: 2 },
   { key: "clubs",  label: "Groups & Clubs",  Icon: ClubsIcon,  path: "/clubs",         colour: "var(--purple)",     span: 2 },
   { key: "info",   label: "Info",   Icon: InfoIcon,   path: "/info/contacts", colour: "#4e7aab",           span: 2 },
-  { key: "ask",    label: "Ask a question", emoji: "💬", path: null,           colour: "var(--amber-dark)", span: 2, ask: true },
+  // My Stuff takes the old "Ask a question" slot (Iain, 2026-10-10). Asking a
+  // question moved to the small ? button above Find (components/AskButton.js).
+  { key: "mystuff", label: "My Stuff", Icon: MyStuffIcon, path: "/my-stuff",  colour: "var(--amber-dark)", span: 2 },
 ]
 
 // Render HTML (WYSIWYG) or legacy BBCode content
@@ -95,9 +95,7 @@ function HubTiles() {
   )
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "0.5rem", marginBottom: "0.75rem", position: "relative" }}>
-      {HUBS.map(h => h.ask
-        ? <AskQuestion key={h.key} pickTarget colour={h.colour} trigger={(open) => tile(h, open)} />
-        : tile(h, () => router.push(h.path)))}
+      {HUBS.map(h => tile(h, () => router.push(h.path)))}
     </div>
   )
 }
@@ -150,44 +148,6 @@ function SpaceBookingTile() {
         <div>
           <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>Book a Space</div>
           <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{label()}</div>
-        </div>
-      </div>
-      <span style={{ color: "var(--text-dim)", fontSize: "1.1rem" }}>›</span>
-    </div>
-  )
-}
-
-// My Stuff (migration 136, Iain 2026-10-10): always shown, near the top --
-// the resident's own pinned people and documents, plus the Groups & Clubs
-// they've joined and repeating events they've booked. Same pill shape as
-// the tiles below. Private: /api/my-stuff only returns the caller's own.
-function MyStuffTile() {
-  const router = useRouter()
-  const [line, setLine] = useState("Loading…")
-  useEffect(() => {
-    let cancelled = false
-    authedFetch("/api/my-stuff").then(r => r.ok ? r.json() : null).then(d => {
-      if (cancelled) return
-      if (!d) { setLine("Your pinned people, documents, clubs and events"); return }
-      setLine(summaryLine({
-        series: (d.series || []).length, clubs: (d.clubs || []).length,
-        people: (d.pins || []).filter(p => p.item_type !== "document").length,
-        documents: (d.pins || []).filter(p => p.item_type === "document").length,
-      }))
-    }).catch(() => {})
-    return () => { cancelled = true }
-  }, [])
-  return (
-    <div onClick={() => router.push("/my-stuff")} style={{
-      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px",
-      padding: "1rem 1.25rem", cursor: "pointer", display: "flex",
-      alignItems: "center", justifyContent: "space-between", marginTop: "0.5rem", marginBottom: "0.75rem",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0 }}>
-        <span style={{ color: "var(--teal)", lineHeight: 0, display: "flex", alignItems: "center" }}><MyStuffIcon size={40} /></span>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>My Stuff</div>
-          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{line}</div>
         </div>
       </div>
       <span style={{ color: "var(--text-dim)", fontSize: "1.1rem" }}>›</span>
@@ -606,9 +566,6 @@ export default function HomePage() {
 
           {/* Hub tiles — between main and sub notices */}
           <HubTiles />
-
-          {/* My Stuff -- the first full-width tile, right under the hub grid */}
-          <MyStuffTile />
 
           {/* Book a Space — full-width pill, not part of the two-row grid (feature parked, see lib/features.js) */}
           {SPACE_BOOKINGS_ENABLED && <SpaceBookingTile />}
