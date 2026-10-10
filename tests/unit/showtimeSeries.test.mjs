@@ -3,7 +3,7 @@
 
 import {
   ruleFor, describeRepeat, planDates, validateRepeat, contentSetRecipients,
-  isContentBeingSet, needsTbaNudge, contentSetMessage, MAX_DATES_AHEAD,
+  isContentBeingSet, needsTbaNudge, contentSetMessage, MAX_DATES_AHEAD, groupScheduled,
 } from '../../lib/showtimeSeries.js'
 import { validateResidentShowing } from '../../lib/residentShowing.js'
 
@@ -75,6 +75,22 @@ ok(!needsTbaNudge({ ...ev, archived: true }, '2026-10-10', '2026-10-13'), 'cance
 eq(contentSetMessage({ showingName: 'Friday Night Action Movies', title: 'Heat', when: 'Fri 16 Oct' }),
   'New showing: Friday Night Action Movies — Heat — Fri 16 Oct', 'message with name')
 eq(contentSetMessage({ title: 'Heat', when: 'Fri 16 Oct' }), 'New showing: Heat — Fri 16 Oct', 'message without name')
+
+// ── Scheduled list: one full card per repeating showing ──────────────────
+const list = [
+  { id: 'a1', series_id: 'A', event_date: '2026-10-11' },
+  { id: 'x',  series_id: null, event_date: '2026-10-12' },
+  { id: 'b1', series_id: 'B', event_date: '2026-10-16' },
+  { id: 'a2', series_id: 'A', event_date: '2026-10-25' },
+  { id: 'b2', series_id: 'B', event_date: '2026-10-23' },
+  { id: 'a3', series_id: 'A', event_date: '2026-11-08' },
+]
+const g = groupScheduled(list)
+eq(g.map(i => i.parent.id), ['a1', 'x', 'b1'], 'each series once, at its next date, in date order')
+eq(g[0].children.map(e => e.id), ['a2', 'a3'], 'later dates become rows')
+eq(g[1].children, [], 'one-off has no rows')
+eq(g[2].children.map(e => e.id), ['b2'], 'second series rows')
+eq(groupScheduled([]), [], 'empty list')
 
 console.log(`showtimeSeries: ${pass} passed, ${fail} failed`)
 if (fail) process.exit(1)

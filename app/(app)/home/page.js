@@ -6,7 +6,8 @@ import { supabase } from "@/lib/supabase"
 import { authedFetch } from "@/lib/getAuthToken"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import { useUser } from "@/lib/UserContext"
-import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon, SpecialEventsIcon, CommitteeIcon, SurveysIcon, HappeningsNewsIcon } from "@/components/NavIcons"
+import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, SpaceIcon, VotingIcon, SpecialEventsIcon, CommitteeIcon, SurveysIcon, HappeningsNewsIcon, MyStuffIcon } from "@/components/NavIcons"
+import { summaryLine } from "@/lib/myStuff"
 import HeartButton from "@/components/HeartButton"
 import { BAR_ENABLED, SPACE_BOOKINGS_ENABLED } from "@/lib/features"
 import AskQuestion from "@/components/AskQuestion"
@@ -149,6 +150,44 @@ function SpaceBookingTile() {
         <div>
           <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>Book a Space</div>
           <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{label()}</div>
+        </div>
+      </div>
+      <span style={{ color: "var(--text-dim)", fontSize: "1.1rem" }}>›</span>
+    </div>
+  )
+}
+
+// My Stuff (migration 136, Iain 2026-10-10): always shown, near the top --
+// the resident's own pinned people and documents, plus the Groups & Clubs
+// they've joined and repeating events they've booked. Same pill shape as
+// the tiles below. Private: /api/my-stuff only returns the caller's own.
+function MyStuffTile() {
+  const router = useRouter()
+  const [line, setLine] = useState("Loading…")
+  useEffect(() => {
+    let cancelled = false
+    authedFetch("/api/my-stuff").then(r => r.ok ? r.json() : null).then(d => {
+      if (cancelled) return
+      if (!d) { setLine("Your pinned people, documents, clubs and events"); return }
+      setLine(summaryLine({
+        series: (d.series || []).length, clubs: (d.clubs || []).length,
+        people: (d.pins || []).filter(p => p.item_type !== "document").length,
+        documents: (d.pins || []).filter(p => p.item_type === "document").length,
+      }))
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [])
+  return (
+    <div onClick={() => router.push("/my-stuff")} style={{
+      background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px",
+      padding: "1rem 1.25rem", cursor: "pointer", display: "flex",
+      alignItems: "center", justifyContent: "space-between", marginTop: "0.5rem", marginBottom: "0.75rem",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0 }}>
+        <span style={{ color: "var(--teal)", lineHeight: 0, display: "flex", alignItems: "center" }}><MyStuffIcon size={40} /></span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: "0.88rem" }}>My Stuff</div>
+          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)" }}>{line}</div>
         </div>
       </div>
       <span style={{ color: "var(--text-dim)", fontSize: "1.1rem" }}>›</span>
@@ -567,6 +606,9 @@ export default function HomePage() {
 
           {/* Hub tiles — between main and sub notices */}
           <HubTiles />
+
+          {/* My Stuff -- the first full-width tile, right under the hub grid */}
+          <MyStuffTile />
 
           {/* Book a Space — full-width pill, not part of the two-row grid (feature parked, see lib/features.js) */}
           {SPACE_BOOKINGS_ENABLED && <SpaceBookingTile />}

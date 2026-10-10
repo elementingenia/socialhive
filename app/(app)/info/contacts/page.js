@@ -6,12 +6,13 @@ import ResidentEditForm, { Sheet, CategoryPicker, COLOUR, inputStyle, labelStyle
 import { isBuiltInCategory } from "@/lib/contactCategories"
 import { formatPhoneInput } from "@/lib/phone"
 import { sydneyTodayStr } from "@/lib/date"
-import { isExternalContact, displayRecipientName } from "@/lib/categoryQuestions"
-import { resolveMemberName } from "@/lib/memberName"
+import { displayRecipientName } from "@/lib/categoryQuestions"
 import AskQuestion from "@/components/AskQuestion"
 import { authedFetch } from "@/lib/getAuthToken"
-import { interestsLine } from "@/lib/interests"
-import PhoneActions from "@/components/PhoneActions"
+import ContactCard from "@/components/ContactCard"
+import { buildContactEntries } from "@/lib/contactEntries"
+import { usePins } from "@/lib/usePins"
+import { pinFromPersonKey } from "@/lib/myStuff"
 import StreetPicker from "@/components/StreetPicker"
 import { useStreets } from "@/lib/useStreets"
 import { formatAddress, houseNumberInput, normaliseHouseNumber } from "@/lib/address"
@@ -81,126 +82,6 @@ function exportContactsCsv(entries, scopeLabel) {
   a.click()
   a.remove()
   URL.revokeObjectURL(url)
-}
-
-// ── Contact card ─────────────────────────────────────────────────────────────
-// Compact by design (Iain, 2026-07-12) -- this list is headed toward 200+
-// entries as the community scales, so each tile is a single scan-able line
-// (name + house #) by default. A "More" toggle appears for EVERYONE
-// whenever a contact actually has title/phone/email beyond what's already
-// on the compact line -- admins additionally get "Edit" alongside it, since
-// viewing details and editing them are different actions (2026-07-12,
-// clarified same day: Edit alone isn't a substitute for a quick "More").
-function ContactCard({ contact, badges = [], external = false, isResident = true, onEdit, query = "" }) {
-  // Title/Role is always visible under the name now (Iain, 2026-09-16) --
-  // it's identity information (who this person is), not contact detail
-  // like phone/email, so it no longer waits behind "More". "More" now only
-  // ever reveals phone/email -- hasMore is scoped to those two alone.
-  // Interests and skills also live behind "More" (Iain, 2026-10-03: only in
-  // the expanded view), so a card with either gets the toggle too.
-  const hasMore = !!(contact.phone || contact.email || contact.interests?.length || contact.skills?.length)
-  // External contacts open with their details already showing. They can't be
-  // messaged in the app, so the useful thing is their phone/email -- burying
-  // it behind "More" would make a dimmed card a dead end (scope §7).
-  const [expanded, setExpanded] = useState(external && hasMore)
-  // A search that matched one of this card's interests/skills opens it, so
-  // the reason it matched is visible (those lines live behind "More").
-  const q = query.trim().toLowerCase()
-  const matchesChip = q.length > 0 && [...(contact.interests || []), ...(contact.skills || [])]
-    .some(l => l.toLowerCase().includes(q))
-  useEffect(() => { if (matchesChip) setExpanded(true) }, [matchesChip])
-  const isAdminView = !!onEdit
-
-  return (
-    <div style={{
-      background: external ? "rgba(138,143,107,0.10)" : "var(--surface)", borderRadius: 10,
-      border: "1px solid var(--border)",
-      borderLeft: external ? "3px solid rgba(138,143,107,0.55)" : "1px solid var(--border)",
-      padding: "0.55rem 0.8rem",
-      marginBottom: "0.4rem",
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
-        <div style={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: "0.4rem", flexWrap: "wrap" }}>
-          <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text)" }}>{contact.name}</span>
-          {isResident && (contact.house_number || contact.street_name) && (
-            <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>· {formatAddress(contact.house_number, contact.street_name)}</span>
-          )}
-          {badges.map(b => (
-            <span key={b} style={{
-              fontSize: "0.6rem", fontWeight: 700, padding: "0.05rem 0.4rem",
-              borderRadius: 10, background: "var(--surface2)", color: "var(--text-dim)",
-            }}>{b}</span>
-          ))}
-          {/* Colour is never the only signal -- this label carries the meaning
-              for colour-vision-deficient and screen-reader users. The contact
-              NAME stays full-strength var(--text); only the container is
-              tinted, because dimming text on an aging-eyes app would be a
-              legibility regression. */}
-          {external && (
-            <span style={{
-              fontSize: "0.6rem", fontWeight: 700, padding: "0.05rem 0.4rem",
-              borderRadius: 10, background: "rgba(138,143,107,0.18)", color: "var(--external-ink)",
-            }}>External</span>
-          )}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
-          {hasMore && (
-            <button onClick={() => setExpanded(v => !v)} style={{
-              flexShrink: 0, fontSize: "0.7rem", fontWeight: 700, color: COLOUR,
-              background: "none", border: "none", cursor: "pointer", fontFamily: "inherit", padding: 0,
-            }}>{expanded ? "Less ▲" : "More ▼"}</button>
-          )}
-          {isAdminView && (
-            <button onClick={onEdit} style={{
-              flexShrink: 0, fontSize: "0.7rem", fontWeight: 700, padding: "0.2rem 0.55rem", borderRadius: 6,
-              border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)",
-              cursor: "pointer", fontFamily: "inherit",
-            }}>Edit</button>
-          )}
-        </div>
-      </div>
-      {contact.title && (
-        // Distinct colour from the realName line below (Iain, 2026-09-16):
-        // both used to be var(--text-dim), and since Title/Role became
-        // always-visible (not gated behind "More") they were reading as
-        // the same line twice. --role-accent is a bronze, deliberately not
-        // the page's own blue (COLOUR, used for phone/email/"More") and not
-        // any hub colour -- see app/globals.css for the contrast check.
-        <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--role-accent)", marginTop: "0.15rem" }}>
-          {contact.title}
-        </div>
-      )}
-      {contact.realName && (
-        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.15rem" }}>
-          {contact.realName}
-        </div>
-      )}
-      {expanded && (
-        <div style={{ marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-          {/* "Can help with" (skills, B7) and "Ask me about" (interests, B3):
-              expanded view only (Iain, 2026-10-03). Approved chips only, never
-              for a Private resident -- enforced server-side by
-              /api/interests/directory. Nothing rendered when empty. */}
-          {contact.skills?.length > 0 && (
-            <div style={{ fontSize: "0.8rem", color: "var(--text)", lineHeight: 1.35 }}>
-              <span style={{ color: "var(--text-dim)" }}>Can help with: </span>{interestsLine(contact.skills)}
-            </div>
-          )}
-          {contact.interests?.length > 0 && (
-            <div style={{ fontSize: "0.8rem", color: "var(--text)", lineHeight: 1.35 }}>
-              <span style={{ color: "var(--text-dim)" }}>Ask me about: </span>{interestsLine(contact.interests)}
-            </div>
-          )}
-          {contact.phone && <PhoneActions phone={contact.phone} colour={COLOUR} />}
-          {contact.email && (
-            <a href={`mailto:${contact.email}`} style={{ fontSize: "0.85rem", color: COLOUR, textDecoration: "none", fontWeight: 600 }}>
-              ✉ {contact.email}
-            </a>
-          )}
-        </div>
-      )}
-    </div>
-  )
 }
 
 // ── Add / Edit a standalone (non-resident) contact ────────────────────────────
@@ -544,6 +425,8 @@ function InviteCodeControl({ code, onSaved }) {
 // ── Main page ─────────────────────────────────────────────────────────────────
 export default function ContactsPage() {
   const { isAdmin, member: me }     = useUser()
+  // My Stuff (migration 136): the 📌 Pin on each person.
+  const { isPinned, toggle: togglePin } = usePins()
   const [categories, setCategories] = useState([])
   const [members, setMembers]       = useState([])
   const [contacts, setContacts]     = useState([])
@@ -630,68 +513,8 @@ export default function ContactsPage() {
   // (status=active, hide_name=true, no house number/phone) was showing up
   // here as an unexplained "Resident" card with blank details, which
   // raised real community concern (Iain, 2026-09-02).
-  const entries = useMemo(() => {
-    const memberEntries = members.filter(m => !m.is_test).map(m => {
-      const linked = contactByMemberId[m.id]
-      const isSelf = m.id === me?.id
-      const maskedForViewer = m.hide_name && !isAdmin && !isSelf
-      // display_name (2026-08-14): preferred fallback ahead of the real name
-      // once unmasked -- masking itself (maskedForViewer) is unchanged.
-      // searchName carries BOTH raw name and display_name, unmasked, so a
-      // viewer who only knows one of the two names can still find the card
-      // -- but only when this entry isn't masked for them (never leak the
-      // real name of a Private resident into search for a non-admin).
-      //
-      // realName (2026-08-15, Iain): Display Name is front-and-centre for
-      // everyone, but an admin specifically needs the Real Name reachable
-      // without a click -- fire-warden/register accuracy means an admin
-      // scanning this list has to be able to tell "Coastal Jane" is really
-      // "Jane Doe" at a glance, not just search for either. Admin-only
-      // (canManage), and only shown when it actually differs from what's
-      // already on the card -- Private residents already collapse to
-      // "Resident" for non-admins with nothing further revealed, unchanged.
-      return {
-        key: `m-${m.id}`,
-        name: maskedForViewer ? "Resident" : resolveMemberName(m, { viewerId: me?.id, canManage: isAdmin }),
-        realName: (!maskedForViewer && isAdmin && m.display_name && m.display_name !== m.name) ? m.name : null,
-        searchName: maskedForViewer ? null : [m.name, m.display_name].filter(Boolean).join(" "),
-        email: maskedForViewer ? null : m.email,
-        house_number: maskedForViewer ? null : m.house_number,
-        street_name: maskedForViewer ? null : (m.street_name || null),
-        phone: maskedForViewer ? null : (m.phone || null),
-        title: maskedForViewer ? null : (linked?.title || null),
-        interests: maskedForViewer ? null : (interests[m.id] || null),
-        skills: maskedForViewer ? null : (skills[m.id] || null),
-        categoryIds: [residentsId, ...((linked?.contact_category_members) || []).map(x => x.category_id)].filter(Boolean),
-        isMember: true, member: m,
-        // Every active member is implicitly a Resident (migration 029), so a
-        // member is never external.
-        external: false,
-        isResident: true,   // members are implicitly Residents (migration 029)
-      badges: [isAdmin && m.is_admin && "Admin", isAdmin && m.hide_name && "Private"].filter(Boolean),
-      }
-    })
-    const contactEntries = displayContacts.map(c => ({
-      key: `c-${c.id}`, name: c.name, email: c.email, house_number: c.house_number,
-      street_name: c.street_name || null,
-      phone: c.phone, title: c.title,
-      categoryIds: (c.contact_category_members || []).map(x => x.category_id),
-      isMember: false, contact: c,
-      // External = not in the Residents category (Iain's rule, 2026-07-27).
-      // NOTE this is deliberately a DIFFERENT test from the one that decides
-      // whether a category can be asked a question (that one requires an app
-      // login -- see lib/questionRouting.js). A resident with no account, like
-      // Lyn or Diane, is still a neighbour and is NOT marked external; they
-      // just can't be messaged in-app.
-      external: isExternalContact((c.contact_category_members || []).map(x => x.category_id), residentsId),
-      // House number is a resident's detail. A tradesperson or the Community
-      // Manager has one on file sometimes, but showing it implies they live
-      // here (Iain, 2026-07-29), so it is hidden unless they're a Resident.
-      isResident: !!residentsId && (c.contact_category_members || []).some(x => x.category_id === residentsId),
-      badges: isAdmin && !c.active ? ["Hidden"] : [],
-    }))
-    return [...memberEntries, ...contactEntries].sort((a, b) => a.name.localeCompare(b.name))
-  }, [members, displayContacts, contactByMemberId, residentsId, isAdmin, interests, skills])
+  const entries = useMemo(() => buildContactEntries({ members, displayContacts, contactByMemberId, residentsId, isAdmin, interests, skills, me }),
+    [members, displayContacts, contactByMemberId, residentsId, isAdmin, interests, skills, me])
 
   // Mirrors the server-side gate in lib/questionRouting.js's askableCategories:
   // active + askable + at least one member with a login. The extra clause here
@@ -882,6 +705,8 @@ export default function ContactsPage() {
       ) : (
         sortedFiltered.map(e => (
           <ContactCard key={e.key} contact={e} badges={e.badges} external={e.external} isResident={e.isResident} query={search}
+            pinned={(() => { const p = pinFromPersonKey(e.key); return !!p && isPinned(p.item_type, p.item_id) })()}
+            onTogglePin={e.member?.id && e.member.id === me?.id ? undefined : () => { const p = pinFromPersonKey(e.key); if (p) togglePin(p.item_type, p.item_id) }}
             onEdit={isAdmin ? () => setSheet(e.isMember ? { type: "resident", member: e.member } : { type: "contact", contact: e.contact }) : null} />
         ))
       )}

@@ -4,6 +4,8 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import { useOwners } from "@/lib/useOwners"
+import PinButton from "@/components/PinButton"
+import { usePins } from "@/lib/usePins"
 import { Sheet, CategoryPicker, COLOUR, inputStyle, labelStyle, getToken } from "@/components/ResidentEditPanel"
 import { MAX_ATTACHMENT_BYTES, tooLargeMessage } from "@/lib/attachmentLimits"
 import { NEW_FEATURES_KEY, NEW_FEATURES_NAME, visibleDocuments, orderPills, isInFolder } from "@/lib/newFeatures"
@@ -47,17 +49,18 @@ function viewerHref(doc) {
   return `/documents/view?url=${encodeURIComponent(doc.file_url)}&name=${encodeURIComponent(name)}&color=${encodeURIComponent(COLOUR)}`
 }
 
-function DocumentCard({ doc, isAdmin, badge, onEdit, onToggleActive, onDelete, onOpen }) {
+function DocumentCard({ doc, isAdmin, badge, onEdit, onToggleActive, onDelete, onOpen, pinned, onTogglePin }) {
   return (
     <div style={{
       background: "var(--surface)", borderRadius: 12,
       border: "1px solid var(--border)", padding: "0.9rem 1rem",
       marginBottom: "0.6rem", boxShadow: "var(--shadow)",
     }}>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
       <a href={opensInViewer(doc) ? viewerHref(doc) : doc.file_url}
         target={opensInViewer(doc) ? undefined : "_blank"} rel="noreferrer"
         onClick={opensInViewer(doc) ? (e => { e.preventDefault(); onOpen?.(viewerHref(doc)) }) : undefined}
-        style={{ display: "block", textDecoration: "none" }}>
+        style={{ display: "block", textDecoration: "none", flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.2rem", flexWrap: "wrap" }}>
           <FileTypeBadge fileName={doc.file_name} />
           <span style={{ fontWeight: 700, fontSize: "0.95rem", color: "var(--text)" }}>{doc.title}</span>
@@ -80,6 +83,8 @@ function DocumentCard({ doc, isAdmin, badge, onEdit, onToggleActive, onDelete, o
           )}
         </div>
       </a>
+      {onTogglePin && <PinButton pinned={!!pinned} onToggle={onTogglePin} label={doc.title} />}
+      </div>
       {isAdmin && (
         <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "0.6rem", paddingTop: "0.6rem", borderTop: "1px solid var(--border)" }}>
           <button onClick={onEdit} style={{
@@ -389,6 +394,8 @@ function DocCategoryManager({ categories, setCategories, onSaved }) {
 //  - ?nf=YYYY-MM-DD (a new_features notification/push) opens that day's PDF
 //    in the in-app viewer; ?folder=new-features opens the folder.
 function DocumentsPageInner() {
+  // My Stuff (migration 136): the 📌 Pin on each document.
+  const { isPinned, toggle: togglePin } = usePins()
   const { isAdmin, member } = useUser()
   const router = useRouter()
   const params = useSearchParams()
@@ -540,6 +547,7 @@ function DocumentsPageInner() {
       ) : (
         filtered.map(doc => (
           <DocumentCard key={doc.id} doc={doc} isAdmin={isAdmin} onOpen={href => router.push(href)}
+            pinned={isPinned("document", doc.id)} onTogglePin={() => togglePin("document", doc.id)}
             badge={isAdmin && !doc.active ? "Hidden" : null}
             onEdit={() => { setEditingDoc(doc); setSheet("edit") }}
             onToggleActive={() => toggleActive(doc)}

@@ -507,3 +507,13 @@ export function ListingsIcon({ size = 26 }) {
     </svg>
   )
 }
+
+// My Stuff (2026-10-10) -- a push pin: things you've pinned to keep handy.
+export function MyStuffIcon({ size = 26 }) {
+  return (
+    <svg width={size} height={size} viewBox={VB} aria-hidden="true">
+      <path fill="currentColor"
+        d="M 24 6 L 46 6 L 42 12 L 42 30 Q 54 36 54 46 L 37 46 L 35 66 L 33 46 L 16 46 Q 16 36 28 30 L 28 12 Z"/>
+    </svg>
+  )
+}
