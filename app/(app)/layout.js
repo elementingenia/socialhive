@@ -10,6 +10,7 @@ import ProfileSlideOver from "@/components/ProfileSlideOver"
 import PinModal from "@/components/PinModal"
 import NotificationsDrawer from "@/components/NotificationsDrawer"
 import FindButton from "@/components/FindButton"
+import AskButton from "@/components/AskButton"
 import { loginHref } from "@/lib/safeNext"
 import { authedFetch } from "@/lib/getAuthToken"
 
@@ -73,6 +74,8 @@ function InnerLayout({ children }) {
           authenticated page (Iain, 2026-09-22), not just inside Calendar's
           own filter row. See components/FindButton.js. */}
       <FindButton />
+      {/* Ask a question, just above Find (Iain, 2026-10-10). */}
+      <AskButton />
 
       {savedToast && (
         <div style={{

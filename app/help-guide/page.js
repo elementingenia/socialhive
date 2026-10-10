@@ -1545,7 +1545,7 @@ export default function HelpGuidePage() {
 
             <Subsection id="sub-info-mystuff" title="My Stuff — your pinned people and documents">
               <Step>
-                <strong>My Stuff</strong> is a tile on the Home page that keeps the things you use most in one
+                <strong>My Stuff</strong> is a square tile on the Home page (next to Info) that keeps the things you use most in one
                 place. It shows four groups: <strong>Repeating events</strong> you&apos;re booked on,{" "}
                 <strong>Groups &amp; Clubs</strong> you&apos;ve joined, <strong>People</strong> and{" "}
                 <strong>Documents</strong>.
@@ -1579,6 +1579,10 @@ export default function HelpGuidePage() {
                 it goes privately to whoever is the right contact for that area (the Owner or
                 coordinator, or an admin if no one's assigned). Type your question and send it; the
                 other side gets notified and can reply.
+              </Step>
+              <Step>
+                To ask anyone at all, tap the small grey <strong>?</strong> button in the bottom-right
+                corner of any page (just above the 🔍 search button) and choose who to ask.
               </Step>
               <Step>
                 To show them something, tap <strong>📷 Add photos (up to 3)</strong> under your question
