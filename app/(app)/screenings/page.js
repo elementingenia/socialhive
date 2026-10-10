@@ -20,6 +20,7 @@ import AttendeeNamingPicker from '@/components/AttendeeNamingPicker'
 import { INVALID_FIELD_STYLE, scrollToFirstInvalid } from '@/lib/formValidation'
 import { byOwnThenName, ordinal } from '@/lib/sortNames'
 import { waitlistLabel } from '@/lib/waitlist'
+import { groupScheduled } from '@/lib/showtimeSeries'
 import { useOwners } from '@/lib/useOwners'
 import { exportAttendeeListPdf } from '@/lib/attendeeExport'
 import { CopyLinkButton, AddToCalendarButton } from '@/components/EventShareActions'
@@ -781,6 +782,58 @@ function BookingStrip({ myBooking, isFull, closed, blocked }) {
 
 // ── Screening Card ─────────────────────────────────────────────────────────────
 // Pure display — tap anywhere to open the unified slide-over for booking/modify/cancel
+// Later dates of a repeating showing (Iain, 2026-10-10): "as it does in
+// Groups and Clubs, only the current active event shows in full and the
+// rest are collapsed". Same shape as ClubHome's UpcomingDatesAccordion:
+// closed by default, one row per date, tap a row to open it and book.
+function UpcomingShowingsAccordion({ events, onOpen, onEdit, canEdit }) {
+  const [open, setOpen] = useState(false)
+  if (!events.length) return null
+  const fmt = (iso) => new Date(iso + 'T00:00:00').toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' })
+  return (
+    <div style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--border)', overflow: 'hidden', margin: '-0.4rem 0 0 12px' }}>
+      <button onClick={() => setOpen(o => !o)} aria-expanded={open}
+        style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '0.75rem 1rem', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+        <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-dim)' }}>📅 Upcoming dates ({events.length})</span>
+        <span style={{ color: 'var(--text-dim)', fontSize: '1rem', display: 'inline-block',
+          transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</span>
+      </button>
+      {open && (
+        <div style={{ borderTop: '1px solid var(--border)', padding: '0.4rem 0.5rem' }}>
+          {events.map(ev => {
+            const booked = !!ev.my_booking?.has_confirmed
+            const waitlisted = !booked && !!ev.my_booking?.has_waitlist
+            const what = ev.movies?.title || ev.title
+            return (
+              <div key={ev.id} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 4, borderBottom: '1px solid var(--border)' }}>
+                <button onClick={() => onOpen(ev)}
+                  style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8,
+                    padding: '0.6rem 0.7rem', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', color: 'var(--text)' }}>
+                  <span style={{ minWidth: 0 }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--teal)' }}>{fmt(ev.event_date)}</span>
+                    {ev.event_time && <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}> · {fmtTime24(ev.event_time)}</span>}
+                    <span style={{ display: 'block', fontSize: '0.8rem', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      ...(ev.content_tba ? { fontStyle: 'italic', color: 'var(--text-dim)' } : {}) }}>{what}</span>
+                  </span>
+                  <span style={{ flexShrink: 0, fontSize: '0.72rem', fontWeight: 700, whiteSpace: 'nowrap',
+                    color: booked ? '#15803d' : waitlisted ? '#d97706' : 'var(--teal)' }}>
+                    {booked ? '✓ Booked' : waitlisted ? `⏳ ${waitlistLabel(ev.my_booking?.waitlist_position)}` : 'Book →'}
+                  </span>
+                </button>
+                {canEdit(ev) && (
+                  <button onClick={() => onEdit(ev)} aria-label="Edit this date" title="Edit this date"
+                    style={{ flexShrink: 0, background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, padding: '0.4rem 0.6rem', color: 'var(--teal)', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>✎ Edit</button>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit, canBypassClosed = false, seriesAlerts = null, onToggleMute }) {
   const router = useRouter()
   const [showAttendees, setShowAttendees] = useState(false)
@@ -1225,11 +1278,11 @@ export default function Screenings() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-          {screenings.map(ev => {
+          {groupScheduled(screenings).map(({ parent: ev, children }) => {
             const freeCostData = canManage && ev.movies
               ? computeFreeCost(ev.movies, { streamingServices, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecords.filter(o => o.movie_id === ev.movie_id) })
               : null
-            return (
+            const card = (
               <ScreeningCard
                 key={ev.id}
                 ev={ev}
@@ -1243,6 +1296,13 @@ export default function Screenings() {
                 onToggleMute={toggleSeriesMute}
               />
             )
+            return children.length ? (
+              <div key={ev.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                {card}
+                <UpcomingShowingsAccordion events={children} onOpen={openSlideOut} onEdit={e => setEditEvent(e)}
+                  canEdit={e => canManage || isCoordOf(e)} />
+              </div>
+            ) : card
           })}
         </div>
       )}

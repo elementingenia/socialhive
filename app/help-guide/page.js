@@ -986,6 +986,11 @@ export default function HelpGuidePage() {
                 booked on any of the dates, you&apos;ll be told which ones.
               </Step>
               <Step>
+                <strong>In Scheduled</strong>, a repeating showing appears once, at its next date, in full.
+                Its later dates are under <strong>📅 Upcoming dates</strong> just below it, one row each
+                with what&apos;s on. Tap the heading to open the list, then tap a date to see it and book.
+              </Step>
+              <Step>
                 <strong>Choosing what&apos;s on:</strong> on a To be announced date, tap{" "}
                 <strong>Choose what&apos;s showing</strong> (or <strong>Edit</strong>) and pick a movie or
                 something else. Show Time members, and anyone already booked, are told at that moment.
