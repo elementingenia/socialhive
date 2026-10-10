@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
+import { requireAdminOrAreaOwner } from '@/lib/areaAuth'
 import { pickTmdbMatch } from '@/lib/tmdbMatch'
 const TMDB_KEY = process.env.TMDB_API_KEY || '0e0ec3c6d62df378f31f7ddb78a83b49'
 const OMDB_KEY = process.env.OMDB_API_KEY || 'ed1ed939'
@@ -20,15 +21,6 @@ function makeAdminClient() {
   return supabaseAdmin
 }
 
-async function getMember(token) {
-  const authClient = makeAdminClient()
-  const { data: { user } } = await authClient.auth.getUser(token)
-  if (!user) return null
-  const db = makeAdminClient()
-  const { data } = await db
-    .from('members').select('id, is_admin').eq('auth_id', user.id).single()
-  return data
-}
 
 function cleanTitle(title) {
   return title
@@ -117,10 +109,10 @@ async function enrichFromTmdbByImdb(imdbId) {
 const delay = ms => new Promise(r => setTimeout(r, ms))
 
 export async function GET(req) {
-  const token = req.headers.get('Authorization')?.replace('Bearer ', '')
-  if (!token) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
-  const member = await getMember(token)
-  if (!member?.is_admin) return NextResponse.json({ error: 'Admin only' }, { status: 403 })
+  // Admins and Show Time Owners (Admin clean-up, Iain 2026-10-10: "Available
+  // to ShowTime Owners"). Writes below use the service role either way.
+  const auth = await requireAdminOrAreaOwner(req, 'hub', 'movie')
+  if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
   const { searchParams } = new URL(req.url)
   const limit     = Math.min(parseInt(searchParams.get('limit') || '10'), 20)

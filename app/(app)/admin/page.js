@@ -6,7 +6,7 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
-import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, ToolsIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon, CommitteeIcon, UptakeIcon, InterestsIcon, StreetsIcon, NewFeaturesIcon, SignInHelpIcon } from '@/components/NavIcons'
+import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon, CommitteeIcon, UptakeIcon, InterestsIcon, NewFeaturesIcon } from '@/components/NavIcons'
 import OwnersManager from '@/components/OwnersManager'
 import UptakeStats from '@/components/UptakeStats'
 import WelcomeCardsAdmin from '@/components/WelcomeCardsAdmin'
@@ -17,7 +17,8 @@ import ResidentEditForm, { Sheet, labelStyle } from '@/components/ResidentEditPa
 import { CLUB_COLOURS, nextClubColour } from '@/lib/clubColours'
 import ClubForm from '@/components/ClubForm'
 import HubTextSection from '@/components/HubTextSection'
-import { HUB_SECTIONS } from '@/lib/hubSections'
+import DvdEnrichPanel from '@/components/DvdEnrichPanel'
+import { resolveAdminTab, HUB_SETTINGS_AREAS } from '@/lib/adminTabs'
 import { BAR_ENABLED } from '@/lib/features'
 import { validateClosure, reasonRemaining, REASON_MAX } from '@/lib/spaces'
 import { useLocations } from '@/lib/useLocations'
@@ -31,57 +32,46 @@ const HUB_TYPES = [
   { value: 'bookclub', label: 'Book Club', icon: '📚' },
 ]
 const HUB_COLOUR = { movie:'var(--teal)', social:'var(--terracotta)', bookclub:'var(--purple)' }
+// Admin clean-up (Iain 2026-10-10, Element_Happenings_Admin_Cleanup_Scope_
+// Answered): 14 tiles down to 8, in the agreed order. Retired tiles became
+// sub-tabs -- Page Texts + Owners -> Hub Settings; Tools -> Show Time >
+// Enrich; Group Proposals -> Groups & Clubs > Proposals; Streets ->
+// Locations > Streets; Uptake + Sign-in Help -> Residents. Book Club's
+// outstanding-books list moved to Book Club's own Manage screen. Old
+// /admin?tab= links (sent notifications, bookmarks) are mapped by
+// lib/adminTabs.js. Occasional Activities and New Features stay link tiles.
 const SECTIONS = [
-  { key: 'PageTexts', label: 'Page Texts', Icon: PageTextsIcon },
-  { key: 'Movies',    label: 'Show Time', Icon: MoviesIcon },
-  { key: 'BookClub',  label: 'Book Club',  Icon: BookClubIcon },
-  { key: 'Clubs',     label: 'Groups & Clubs', Icon: ClubsIcon },
-  { key: 'Owners',    label: 'Owners',     Icon: InfoIcon },
+  { key: 'HubSettings', label: 'Hub Settings', Icon: PageTextsIcon },
+  { key: 'Movies',      label: 'Show Time', Icon: MoviesIcon },
+  { key: 'Clubs',       label: 'Groups & Clubs', Icon: ClubsIcon },
+  { key: 'Locations',   label: 'Locations',  Icon: InfoIcon },
   // Bar section parked (feature not in scope) — see lib/features.js
   ...(BAR_ENABLED ? [{ key: 'Bar', label: 'Bar', Icon: BarIcon }] : []),
-  { key: 'Locations', label: 'Locations',  Icon: InfoIcon },
-  { key: 'Tools',     label: 'Tools',      Icon: ToolsIcon },
-  // Occasional Activities -- always visible in Admin (unlike Show Time/
-  // Social/Library, which are reached via a "Manage" link on their own live
-  // page) because Voting and Special Events both start hidden-by-default
-  // (hub_settings.<hub>.enabled = false) with no other discoverable link
-  // anywhere until an admin turns them on -- this tile IS that discovery
-  // path, so it can't itself be gated behind the flags it exists to control.
-  // Replaces the old standalone "Voting" tile (Iain, 2026-09-04: "change
-  // the Voting option in Admin to Occasional Activities and have voting and
-  // special events housed together") -- one shared entry point for any
-  // future hidden/occasional-use feature of the same shape, rather than one
-  // cluttering Admin tile per hub. Routes to /occasional-activities, a
-  // landing page listing each area's current on/off state with a link
-  // through to that hub's own existing manage page.
-  { key: 'Occasional', label: 'Occasional Activities', Icon: OccasionalActivitiesIcon, href: '/occasional-activities' },
-  // Resident uptake at a glance (2026-09-09) -- registered accounts vs.
-  // genuine active use (members.last_active_at, live since migration 009),
-  // plus a manually-entered total-occupied-households figure since this app
-  // has no live source of truth for that. See components/UptakeStats.js and
-  // app/api/admin/uptake/route.js for the full evidence trail.
-  { key: 'Uptake', label: 'Uptake', Icon: UptakeIcon },
-  // Welcome cards for residents who have never signed in (Iain, 2026-10-09):
-  // username + one-time password + QR code, printed and handed out. Deep
-  // link /admin?tab=SignInHelp (the card viewer's Close returns here).
-  { key: 'SignInHelp', label: 'Sign-in Help', Icon: SignInHelpIcon },
-  // "Ask me about" chip list + resident suggestion review queue (backlog B3,
-  // 2026-10-02). Tile shows a count badge while suggestions are waiting (Q2).
-  // Relabelled for Skills (B7, 2026-10-03); key unchanged so /admin?tab=Interests links still work.
-  { key: 'Interests', label: 'Interests & Skills', Icon: InterestsIcon },
-  // Propose a group (backlog B1, migration 126, Iain 2026-10-04): approve
-  // resident proposals, create the club once enough people would join, and
-  // set that threshold. Badge = proposals needing action (to approve or ready
-  // to create). Deep link /admin?tab=Proposals from the admin alerts.
-  { key: 'Proposals', label: 'Group Proposals', Icon: ClubsIcon },
-  // The community's street names (migration 122, Iain 2026-10-03). Residents
-  // pick theirs from this list next to their house number -- house numbers
-  // here are scattered, so people give directions by street.
-  { key: 'Streets', label: 'Streets', Icon: StreetsIcon },
-  // Feature announcements (migration 123, Iain 2026-10-03, decision 4: its
-  // own tile). Drafts to approve, the 08:30 daily send switch and audience.
+  // Always visible: Voting/Special Events etc. start hidden, so this tile is
+  // their only discovery path (see app/(app)/occasional-activities).
+  { key: 'Occasional',  label: 'Occasional Activities', Icon: OccasionalActivitiesIcon, href: '/occasional-activities' },
+  { key: 'Residents',   label: 'Residents', Icon: UptakeIcon },
+  { key: 'Interests',   label: 'Interests & Skills', Icon: InterestsIcon },
   { key: 'NewFeatures', label: 'New Features', Icon: NewFeaturesIcon, href: '/new-features' },
 ]
+
+// Sub-tab row shared by every tile that has sub-tabs. Full-width equal
+// buttons (big targets), coloured per tile. Was LocationsSubTabs.
+function AdminSubTabs({ options, value, onChange, colour = 'var(--teal)' }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1rem' }}>
+      {options.map(([v, txt]) => (
+        <button key={v} type="button" onClick={() => onChange(v)} aria-pressed={value === v} style={{
+          flex: '1 1 0', minWidth: '5.5rem', padding: '0.6rem 0.4rem', borderRadius: 10, fontFamily: 'inherit', fontSize: '0.88rem',
+          fontWeight: 700, cursor: 'pointer', border: '2px solid',
+          borderColor: value === v ? colour : 'var(--border)',
+          background: value === v ? 'var(--surface2)' : 'var(--surface)',
+          color: value === v ? colour : 'var(--text-dim)',
+        }}>{txt}</button>
+      ))}
+    </div>
+  )
+}
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 function fmtDate(str) {
@@ -355,80 +345,6 @@ function BarProductsTab() {
 // Cross-event view of every physical kit copy currently checked out. Independent
 // of any single event, since "who has a kit copy out" is a standing question,
 // not something tied to one meeting.
-function BookClubTab() {
-  const [rows,    setRows]    = useState([])
-  const [loading, setLoading] = useState(true)
-  const [clearing, setClearing] = useState(null)
-
-  async function load() {
-    setLoading(true)
-    const { data } = await supabase
-      .from('bookings')
-      .select('id, status, has_book, book_given_at, name_hidden, members(name, username, hide_name), events(id, title, book_id, book_return_date, book_snapshot, books(title))')
-      .eq('has_book', true)
-      .order('book_given_at', { ascending: true })
-    setRows(data || [])
-    setLoading(false)
-  }
-
-  useEffect(() => { load() }, [])
-
-  async function markReturned(id) {
-    setClearing(id)
-    await supabase.from('bookings').update({ has_book: false }).eq('id', id)
-    setClearing(null)
-    load()
-  }
-
-  function daysOut(givenAt) {
-    if (!givenAt) return null
-    const days = Math.floor((Date.now() - new Date(givenAt).getTime()) / 86400000)
-    if (days <= 0) return 'Given today'
-    return `${days} day${days !== 1 ? 's' : ''} out`
-  }
-
-  if (loading) return <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)' }}>Loading…</div>
-
-  return (
-    <div>
-      <div style={{ fontSize:'0.78rem', fontWeight:700, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.85rem' }}>
-        Outstanding Books {rows.length > 0 && `(${rows.length})`}
-      </div>
-      {rows.length === 0 ? (
-        <div style={{ textAlign:'center', padding:'2rem', color:'var(--text-dim)', fontSize:'0.9rem' }}>No kit copies currently checked out</div>
-      ) : (
-        <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
-          {rows.map(r => {
-            const name = (r.members?.hide_name || r.name_hidden) ? 'Resident' : (r.members?.name || r.members?.username || '—')
-            const bookTitle = r.events?.books?.title || r.events?.book_snapshot?.title || r.events?.title || 'Unknown book'
-            return (
-              <div key={r.id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'0.75rem',
-                background:'var(--surface)', borderRadius:'12px', border:'1px solid var(--border)', padding:'0.7rem 0.9rem' }}>
-                <div style={{ minWidth:0, flex:1 }}>
-                  <div style={{ fontWeight:700, fontSize:'0.88rem' }}>
-                    {name}
-                    {r.status === 'cancelled' && <span style={{ color:'var(--danger)', fontWeight:600, fontSize:'0.72rem' }}> · Cancelled</span>}
-                  </div>
-                  <div style={{ fontSize:'0.78rem', color:'var(--text-dim)', marginTop:'0.15rem' }}>{bookTitle}</div>
-                  <div style={{ fontSize:'0.72rem', color:'var(--purple)', fontWeight:600, marginTop:'0.2rem' }}>
-                    {daysOut(r.book_given_at)}
-                    {r.events?.book_return_date && ` · Due back ${fmtDate(r.events.book_return_date)}`}
-                  </div>
-                </div>
-                <button onClick={() => markReturned(r.id)} disabled={clearing === r.id}
-                  style={{ fontSize:'0.78rem', fontWeight:700, padding:'0.4rem 0.8rem', borderRadius:'8px', border:'1px solid var(--purple)',
-                    background:'none', color:'var(--purple)', cursor: clearing === r.id ? 'not-allowed' : 'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
-                  {clearing === r.id ? 'Saving…' : 'Mark Returned'}
-                </button>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
-  )
-}
-
 function BarTab() {
   const [sub, setSub] = useState('Products')
   return (
@@ -733,191 +649,6 @@ function ReconcileTab() {
 
 
 // ── TOOLS TAB ─────────────────────────────────────────────────────────────────
-function ToolsTab() {
-  const [status,        setStatus]        = useState('idle')
-  const [lastBatch,     setLastBatch]     = useState(null)
-  const [totalEnriched, setTotalEnriched] = useState(0)
-  const [totalFailed,   setTotalFailed]   = useState(0)
-  const [totalSkipped,  setTotalSkipped]  = useState(0)
-  const [batchCount,    setBatchCount]    = useState(0)
-  const [failures,      setFailures]      = useState([])   // accumulated across batches
-  const [catalogue,     setCatalogue]     = useState(null) // loaded from DB
-  const [showCatalogue, setShowCatalogue] = useState(false)
-  const [loadingCat,    setLoadingCat]    = useState(false)
-  const stopRef = useRef(false)
-
-  async function runAll() {
-    stopRef.current = false
-    setStatus('running')
-    setTotalEnriched(0)
-    setTotalFailed(0)
-    setTotalSkipped(0)
-    setBatchCount(0)
-    setLastBatch(null)
-    setFailures([])
-
-    let runningEnriched = 0
-    let runningFailed   = 0
-    let runningSkipped  = 0
-    let batches = 0
-    let allFailures = []
-
-    while (!stopRef.current) {
-      try {
-        // Server-side writes — route uses service role, no RLS issues
-        const res  = await fetch('/api/admin/enrich-dvd?limit=20', { headers:{ Authorization:`Bearer ${await getAuthToken()}` } })
-        const data = await res.json()
-        if (data.error) { setStatus('error'); return }
-        batches++
-
-        if (data.processed === 0) {
-          setStatus('done')
-          return
-        }
-
-        const batchEnriched = data.enriched  || 0
-        const batchFailed   = data.failed    || 0
-        const batchSkipped  = data.skipped   || 0
-        const batchFails    = (data.results  || []).filter(r => r.status !== 'ok')
-
-        runningEnriched += batchEnriched
-        runningFailed   += batchFailed
-        runningSkipped  += batchSkipped
-        allFailures = [...allFailures, ...batchFails]
-
-        setLastBatch({ enriched: batchEnriched, failed: batchFailed, skipped: batchSkipped, processed: data.processed })
-        setTotalEnriched(runningEnriched)
-        setTotalFailed(runningFailed)
-        setTotalSkipped(runningSkipped)
-        setBatchCount(batches)
-        setFailures([...allFailures])
-
-        await new Promise(r => setTimeout(r, 500))
-      } catch(err) {
-        setLastBatch({ error: err.message })
-        setStatus('error')
-        return
-      }
-    }
-    setStatus('stopped')
-  }
-
-  async function loadCatalogue() {
-    setLoadingCat(true)
-    const res = await fetch('/api/admin/enrich-dvd?catalogue=true', { headers:{ Authorization:`Bearer ${await getAuthToken()}` } })
-    const data = await res.json()
-    setCatalogue(data.failures || [])
-    setShowCatalogue(true)
-    setLoadingCat(false)
-  }
-
-  function stop() { stopRef.current = true }
-
-  const isRunning = status === 'running'
-  const catNoMatch = catalogue?.filter(f => f.enrichment_status === 'no_match') || []
-  const catApiErr  = catalogue?.filter(f => f.enrichment_status === 'api_error') || []
-
-  return (
-    <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
-
-      {/* ── Enrichment runner ── */}
-      <div style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', padding:'1.25rem' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:'0.6rem', marginBottom:'0.5rem' }}>
-          <span style={{ fontSize:'1.3rem' }}>🖼️</span>
-          <div style={{ fontWeight:700, fontSize:'0.95rem' }}>Enrich DVD Library</div>
-        </div>
-        <p style={{ fontSize:'0.82rem', color:'var(--text-dim)', marginBottom:'1rem', lineHeight:1.5 }}>
-          Auto-runs batches of 50. Skips titles already marked "not found". Keep this tab open.
-        </p>
-
-        {(isRunning || status === 'done' || status === 'stopped' || status === 'error') && (
-          <div style={{ background:'var(--surface2)', borderRadius:'10px', padding:'0.75rem', marginBottom:'0.85rem', fontSize:'0.8rem', lineHeight:1.9 }}>
-            <div style={{ fontWeight:700, color: status==='done' ? '#15803d' : status==='error' ? 'var(--danger)' : 'var(--teal)', marginBottom:'0.35rem' }}>
-              {status==='running' && `⏳ Running… batch ${batchCount}`}
-              {status==='done'    && '✅ All done!'}
-              {status==='stopped' && `⏸ Stopped after ${batchCount} batches`}
-              {status==='error'   && '✕ Error — see below'}
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'0.5rem', marginBottom:'0.25rem' }}>
-              <div style={{ textAlign:'center' }}>
-                <div style={{ fontWeight:800, fontSize:'1.1rem', color:'#15803d' }}>{totalEnriched}</div>
-                <div style={{ color:'var(--text-dim)', fontSize:'0.72rem' }}>Enriched</div>
-              </div>
-              <div style={{ textAlign:'center' }}>
-                <div style={{ fontWeight:800, fontSize:'1.1rem', color:'var(--text-dim)' }}>{totalSkipped}</div>
-                <div style={{ color:'var(--text-dim)', fontSize:'0.72rem' }}>No match</div>
-              </div>
-              <div style={{ textAlign:'center' }}>
-                <div style={{ fontWeight:800, fontSize:'1.1rem', color: totalFailed>0 ? 'var(--danger)' : 'var(--text-dim)' }}>{totalFailed}</div>
-                <div style={{ color:'var(--text-dim)', fontSize:'0.72rem' }}>API errors</div>
-              </div>
-            </div>
-            {lastBatch?.error && <div style={{ color:'var(--danger)', marginTop:'0.35rem' }}>Error: {lastBatch.error}</div>}
-          </div>
-        )}
-
-        <div style={{ display:'flex', gap:'0.6rem' }}>
-          <button onClick={runAll} disabled={isRunning}
-            style={{ flex:1, background:status==='done'?'#15803d':'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', padding:'0.75rem', fontWeight:700, fontSize:'0.88rem', cursor:isRunning?'not-allowed':'pointer', opacity:isRunning?0.6:1 }}>
-            {status==='idle'    && 'Run enrichment →'}
-            {status==='running' && 'Running…'}
-            {status==='done'    && '✓ Done — run again?'}
-            {status==='stopped' && 'Resume'}
-            {status==='error'   && 'Retry'}
-          </button>
-          {isRunning && (
-            <button onClick={stop}
-              style={{ background:'none', border:'1.5px solid var(--danger)', color:'var(--danger)', borderRadius:'10px', padding:'0.75rem 1rem', fontWeight:700, fontSize:'0.88rem', cursor:'pointer' }}>
-              Stop
-            </button>
-          )}
-        </div>
-      </div>
-
-
-
-      {/* ── Persistent catalogue (from DB) ── */}
-      <div style={{ background:'var(--surface)', borderRadius:'14px', border:'1px solid var(--border)', padding:'1.25rem' }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.75rem' }}>
-          <div style={{ fontWeight:700, fontSize:'0.9rem' }}>Failure Catalogue</div>
-          <button onClick={loadCatalogue} disabled={loadingCat}
-            style={{ background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'8px', padding:'0.35rem 0.75rem', fontSize:'0.78rem', fontWeight:600, cursor:'pointer', color:'var(--text)' }}>
-            {loadingCat ? 'Loading…' : showCatalogue ? 'Refresh' : 'Load from DB'}
-          </button>
-        </div>
-        <p style={{ fontSize:'0.8rem', color:'var(--text-dim)', marginBottom: showCatalogue ? '1rem' : 0, lineHeight:1.5 }}>
-          All titles marked "not found" or "API error" across all previous runs.
-        </p>
-        {showCatalogue && catalogue && (
-          <>
-            {catalogue.length === 0 && (
-              <div style={{ fontSize:'0.85rem', color:'#15803d', fontWeight:600 }}>✓ No failures on record</div>
-            )}
-            {[['no_match','Not found on TMDB / OMDb', catNoMatch],['api_error','API / network errors (will retry)', catApiErr]].map(([key,label,items]) =>
-              items.length > 0 && (
-                <div key={key} style={{ marginBottom:'1rem' }}>
-                  <div style={{ fontSize:'0.75rem', fontWeight:700, color: key==='api_error'?'var(--danger)':'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:'0.5rem' }}>
-                    {label} — {items.length} title{items.length!==1?'s':''}
-                  </div>
-                  <div style={{ display:'flex', flexDirection:'column', gap:'0.3rem', maxHeight:240, overflowY:'auto' }}>
-                    {items.map(f => (
-                      <div key={f.id} style={{ background:'var(--surface2)', borderRadius:'8px', padding:'0.45rem 0.75rem', fontSize:'0.8rem', display:'flex', justifyContent:'space-between', gap:'0.5rem' }}>
-                        <span style={{ fontWeight:600 }}>{f.title}</span>
-                        <span style={{ color:'var(--text-dim)', fontSize:'0.72rem', flexShrink:0 }}>{f.genre || '—'}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )
-            )}
-          </>
-        )}
-      </div>
-
-    </div>
-  )
-}
-
 // ── MOVIES TAB ────────────────────────────────────────────────────────────────
 
 // Suggested Movies sub-tab — read-only FREE/COST view
@@ -1435,8 +1166,7 @@ function StreamingServicesTab({ addToast }) {
 }
 
 // Movies tab wrapper
-function MoviesTab() {
-  const [sub, setSub] = useState('Suggested')
+function MoviesTab({ sub, onSub }) {
   const [toasts, setToasts] = useState([])
 
   function addToast(message, type = 'success') {
@@ -1444,14 +1174,6 @@ function MoviesTab() {
     setToasts(p => [...p, { id, message, type }])
     setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 4000)
   }
-
-  const subBtnStyle = (active) => ({
-    padding:'0.35rem 0.85rem', borderRadius:'20px', border:'1px solid',
-    borderColor: active ? 'var(--teal)' : 'var(--border)',
-    background:  active ? 'var(--teal)' : 'var(--surface)',
-    color:       active ? '#fff' : 'var(--text)',
-    fontWeight:600, fontSize:'0.78rem', cursor:'pointer', whiteSpace:'nowrap',
-  })
 
   return (
     <div>
@@ -1463,15 +1185,12 @@ function MoviesTab() {
           </div>
         ))}
       </div>
-      {/* Sub-tabs */}
-      <div style={{ display:'flex', gap:'0.4rem', marginBottom:'1rem', overflowX:'auto' }}>
-        {['Suggested', 'Ownership', 'Streaming'].map(s => (
-          <button key={s} onClick={() => setSub(s)} style={subBtnStyle(sub === s)}>{s}</button>
-        ))}
-      </div>
+      <AdminSubTabs colour="var(--teal)" value={sub} onChange={onSub}
+        options={[['Suggested', 'Suggested'], ['Ownership', 'Ownership'], ['Streaming', 'Streaming'], ['Enrich', 'Enrich']]} />
       {sub === 'Suggested'  && <SuggestedMoviesView />}
       {sub === 'Ownership'  && <PrivateOwnershipTab addToast={addToast} />}
       {sub === 'Streaming'  && <StreamingServicesTab addToast={addToast} />}
+      {sub === 'Enrich'     && <DvdEnrichPanel />}
     </div>
   )
 }
@@ -1479,16 +1198,66 @@ function MoviesTab() {
 
 
 
-// ── PAGE TEXTS TAB ────────────────────────────────────────────────────────────
-// Each section is now a self-contained HubTextSection (components/HubTextSection.js,
-// config in lib/hubSections.js) — extracted 2026-08-12 so the same editor can be
-// reused on an Owner's "Manage this area" screen for just their one section.
-function PageTextsTab() {
+// ── HUB SETTINGS TAB ─────────────────────────────────────────────────────────
+// Page Texts + Owners, one closed-by-default row per area (Admin clean-up,
+// 2026-10-10). Reuses HubTextSection and OwnersManager unchanged. Club
+// Owners stay in each club's Edit form; Special Events has neither.
+function HubSettingsTab() {
+  const [open, setOpen] = useState(null)
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      {HUB_SECTIONS.map(sec => (
-        <HubTextSection key={sec.key} sectionKey={sec.key} />
-      ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+      <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', lineHeight: 1.5, marginBottom: '0.25rem' }}>
+        Each area's welcome text and its Owners. Owners receive questions asked on that area's page and are shown as its contact. App admins always receive Home questions, so Home has no Owners.
+      </div>
+      {HUB_SETTINGS_AREAS.map(area => {
+        const isOpen = open === area.key
+        return (
+          <div key={area.key} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderLeft: `4px solid ${area.colour}`, borderRadius: 12 }}>
+            <button type="button" onClick={() => setOpen(isOpen ? null : area.key)} aria-expanded={isOpen}
+              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', padding: '0.85rem 1rem', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
+              <span style={{ fontWeight: 800, color: area.colour, fontSize: '0.95rem' }}>{area.label}</span>
+              <span style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>{isOpen ? '▲' : '▼'}</span>
+            </button>
+            {isOpen && (
+              <div style={{ padding: '0 1rem 1rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                {area.sections.map(k => <HubTextSection key={k} sectionKey={k} />)}
+                {area.ownerKey && (
+                  <div>
+                    <div style={{ fontWeight: 800, color: area.colour, marginBottom: '0.5rem' }}>Owners</div>
+                    <OwnersManager contextType="hub" contextKey={area.ownerKey} />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── GROUPS & CLUBS TAB ───────────────────────────────────────────────────────
+function ClubsAdminTab({ sub, onSub, onProposalsCount }) {
+  return (
+    <div>
+      <AdminSubTabs colour="var(--purple)" value={sub} onChange={onSub}
+        options={[['Clubs', 'Groups & Clubs'], ['Proposals', 'Proposals']]} />
+      {sub === 'Proposals'
+        ? <GroupProposalsAdmin onCountChange={onProposalsCount} />
+        : <ClubsTab />}
+    </div>
+  )
+}
+
+// ── RESIDENTS TAB ────────────────────────────────────────────────────────────
+// Uptake + Sign-in Help (welcome cards) -- both about residents getting onto
+// and using the app.
+function ResidentsTab({ sub, onSub }) {
+  return (
+    <div>
+      <AdminSubTabs colour="var(--teal)" value={sub} onChange={onSub}
+        options={[['Uptake', 'Uptake'], ['SignInHelp', 'Sign-in Help']]} />
+      {sub === 'SignInHelp' ? <WelcomeCardsAdmin /> : <UptakeStats />}
     </div>
   )
 }
@@ -1497,17 +1266,26 @@ function PageTextsTab() {
 export default function AdminPage() {
   const { member, loading } = useUser()
   const router = useRouter()
-  const [tab, setTab] = useState(null)
+  const [tab, setTabState] = useState(null)
+  const [sub, setSub] = useState(null)
+  // Opening a tile resets its sub-tab to the default (lib/adminTabs.js).
+  const setTab = useCallback((t, s) => {
+    const r = resolveAdminTab(t, s)
+    setTabState(r ? r.tab : null)
+    setSub(r ? r.sub : null)
+  }, [])
   const [interestsPending, setInterestsPending] = useState(0)
   const [proposalsAction, setProposalsAction] = useState(0)
 
-  // Deep link: /admin?tab=Interests (the daily interests-review alert lands
-  // here). window.location rather than useSearchParams, which would need a
-  // Suspense boundary around the whole page.
+  // Deep link: /admin?tab=X&sub=Y. Retired tile keys (?tab=Proposals,
+  // SignInHelp, Streets...) still arrive from sent notifications and map to
+  // their new home via resolveAdminTab. window.location rather than
+  // useSearchParams, which would need a Suspense boundary around the page.
   useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get('tab')
-    if (t && SECTIONS.some(s => s.key === t && !s.href)) setTab(t)
-  }, [])
+    const q = new URLSearchParams(window.location.search)
+    const t = q.get('tab')
+    if (t) setTab(t, q.get('sub'))
+  }, [setTab])
 
   // Reset to main admin page when footer Admin button re-tapped
   useEffect(() => {
@@ -1539,26 +1317,19 @@ export default function AdminPage() {
 
   // Section view — show selected section with back nav
   if (tab) {
-    const section = SECTIONS.find(s => s.key === tab)
     return (
       <div style={{ padding:'0 1rem 6rem' }}>
         <button onClick={() => setTab(null)}
           style={{ display:'flex', alignItems:'center', gap:'0.4rem', background:'none', border:'none', color:'var(--teal)', fontWeight:600, fontSize:'0.88rem', cursor:'pointer', padding:'1rem 0', fontFamily:'inherit' }}>
           ← Admin
         </button>
-        {tab === 'PageTexts' && <PageTextsTab />}
-        {tab === 'Movies'    && <MoviesTab />}
-        {tab === 'BookClub'  && <BookClubTab />}
-        {tab === 'Clubs'     && <ClubsTab />}
-        {tab === 'Owners'    && <HubOwnersTab />}
+        {tab === 'HubSettings' && <HubSettingsTab />}
+        {tab === 'Movies'    && <MoviesTab sub={sub} onSub={setSub} />}
+        {tab === 'Clubs'     && <ClubsAdminTab sub={sub} onSub={setSub} onProposalsCount={setProposalsAction} />}
         {BAR_ENABLED && tab === 'Bar' && <BarTab />}
-        {tab === 'Locations' && <LocationsTab />}
-        {tab === 'Tools'     && <ToolsTab />}
-        {tab === 'Uptake'    && <UptakeStats />}
-        {tab === 'SignInHelp' && <WelcomeCardsAdmin />}
+        {tab === 'Locations' && <LocationsTab sub={sub} onSub={setSub} />}
+        {tab === 'Residents' && <ResidentsTab sub={sub} onSub={setSub} />}
         {tab === 'Interests' && <InterestsAdmin onCountChange={setInterestsPending} />}
-        {tab === 'Proposals' && <GroupProposalsAdmin onCountChange={setProposalsAction} />}
-        {tab === 'Streets'   && <StreetsAdmin />}
       </div>
     )
   }
@@ -1577,7 +1348,7 @@ export default function AdminPage() {
                 ...(spanFull ? { gridColumn:'1/-1' } : {}) }}>
               <span style={{ color:'var(--text)', lineHeight:0, position:'relative' }}>
                 <s.Icon size={32} />
-                {s.key === 'Proposals' && proposalsAction > 0 && (
+                {s.key === 'Clubs' && proposalsAction > 0 && (
                   <span aria-label={`${proposalsAction} waiting for action`} style={{ position:'absolute', top:-6, right:-14, minWidth:20, height:20, padding:'0 5px', borderRadius:10, background:'#e53e3e', color:'#fff', fontSize:'0.7rem', fontWeight:700, lineHeight:'20px', textAlign:'center', boxSizing:'border-box' }}>{proposalsAction}</span>
                 )}
                 {s.key === 'Interests' && interestsPending > 0 && (
@@ -1599,49 +1370,6 @@ export default function AdminPage() {
 // Create/configure clubs that render in the data-driven /clubs hub. Writes go
 // straight through the supabase client (clubs RLS allows admin write), same as
 // Book Club edits its events client-side.
-function HubOwnersTab() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', lineHeight: 1.5 }}>
-        Owners are the residents who receive questions asked on a hub&apos;s page and are shown as its contact. App admins always receive Home questions as a fallback, so they don&apos;t need listing here.
-      </div>
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: 'var(--teal)', marginBottom: '0.5rem' }}>
-          <MoviesIcon size={18} /> Show Time
-        </div>
-        <OwnersManager contextType="hub" contextKey="movie" />
-      </div>
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: 'var(--terracotta)', marginBottom: '0.5rem' }}>
-          <SocialIcon size={18} /> Social
-        </div>
-        <OwnersManager contextType="hub" contextKey="social" />
-      </div>
-      {/* Shed placeholder removed 2026-08-12 -- Shed was never built and is
-          out of scope (Owner_SelfService_and_Library_Hub_Scope_v1), dropped
-          from Home the same session. Library takes its place here. */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: 'var(--purple)', marginBottom: '0.5rem' }}>
-          <BookClubIcon size={18} /> Library
-        </div>
-        <OwnersManager contextType="hub" contextKey="library" />
-      </div>
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: 'var(--voting)', marginBottom: '0.5rem' }}>
-          <VotingIcon size={18} /> Voting
-        </div>
-        <OwnersManager contextType="hub" contextKey="voting" />
-      </div>
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, color: 'var(--committee)', marginBottom: '0.5rem' }}>
-          <CommitteeIcon size={18} /> Committee
-        </div>
-        <OwnersManager contextType="hub" contextKey="committee" />
-      </div>
-    </div>
-  )
-}
-
 function ClubsTab() {
   const [clubs, setClubs] = useState(null)
   const [editing, setEditing] = useState(null) // null | 'new' | club object
@@ -2139,23 +1867,14 @@ function SpaceBookingsTab() {
 // together") -- a simple 2-button sub-pill, same visual language as the
 // Open/Closed toggle inside each venue's own settings.
 function LocationsSubTabs({ view, setView }) {
-  return (
-    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-      {[['venues', 'Venues'], ['bookings', 'Bookings']].map(([v, txt]) => (
-        <button key={v} type="button" onClick={() => setView(v)} style={{
-          flex: 1, padding: '0.6rem', borderRadius: 10, fontFamily: 'inherit', fontSize: '0.88rem',
-          fontWeight: 700, cursor: 'pointer', border: '2px solid',
-          borderColor: view === v ? 'var(--amber)' : 'var(--border)',
-          background: view === v ? 'var(--amber)18' : 'var(--surface)',
-          color: view === v ? 'var(--amber-dark)' : 'var(--text-dim)',
-        }}>{txt}</button>
-      ))}
-    </div>
-  )
+  return <AdminSubTabs colour="var(--amber-dark)" value={view} onChange={setView}
+    options={[['venues', 'Venues'], ['bookings', 'Bookings'], ['streets', 'Streets']]} />
 }
 
-function LocationsTab() {
-  const [view, setView]           = useState('venues') // 'venues' | 'bookings'
+function LocationsTab({ sub, onSub }) {
+  // Sub-tab comes from the Admin root (?sub=) so Streets/Bookings can be deep-linked.
+  const view = sub === 'Bookings' ? 'bookings' : sub === 'Streets' ? 'streets' : 'venues'
+  const setView = v => onSub(v === 'bookings' ? 'Bookings' : v === 'streets' ? 'Streets' : 'Venues')
   const [locations, setLocations] = useState(null)
   const [newName, setNewName]     = useState('')
   const [busy, setBusy]           = useState(false)
@@ -2229,11 +1948,11 @@ function LocationsTab() {
     return null
   }
 
-  if (view === 'bookings') {
+  if (view === 'bookings' || view === 'streets') {
     return (
       <div>
         <LocationsSubTabs view={view} setView={setView} />
-        <SpaceBookingsTab />
+        {view === 'bookings' ? <SpaceBookingsTab /> : <StreetsAdmin />}
       </div>
     )
   }

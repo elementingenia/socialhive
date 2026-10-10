@@ -109,7 +109,7 @@ export default function WelcomeCardsAdmin() {
       if (d.cards?.length) {
         const html = buildWelcomeCardsHtml(d.cards, { site: d.site, helpLine: d.helpLine, failed: d.failed })
         const url = URL.createObjectURL(new Blob([html], { type: "text/html" }))
-        const q = new URLSearchParams({ url, name: "Welcome cards.html", back: "/admin?tab=SignInHelp" })
+        const q = new URLSearchParams({ url, name: "Welcome cards.html", back: "/admin?tab=Residents&sub=SignInHelp" })
         router.push(`/documents/view?${q.toString()}`)
         return
       }
