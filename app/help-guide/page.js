@@ -618,7 +618,7 @@ export default function HelpGuidePage() {
               </Step>
               <Step>
                 <strong>Administration Manual</strong> — admin accounts only. Opens a separate guide
-                covering the Admin panel and admin-only screens (Page Texts, Owners, Locations, and more).
+                covering the Admin panel and admin-only screens (Hub Settings, Locations, Residents, and more).
               </Step>
               <Step>
                 <strong>Update Profile</strong> — change your display name, email address, and house
@@ -1071,6 +1071,13 @@ export default function HelpGuidePage() {
                 have notices.)
               </Step>
               <Step>
+                The Owner can also fill in missing DVD details. Tap <strong>⚙ Manage</strong> on the Show
+                Time page and scroll to <strong>Enrich DVD Library</strong>, then tap{" "}
+                <strong>Run enrichment →</strong>. It fetches posters and film details for DVDs that don&apos;t
+                have them yet. Keep the page open while it runs. <strong>Load from DB</strong> under{" "}
+                <strong>Failure Catalogue</strong> lists any titles it couldn&apos;t match.
+              </Step>
+              <Step>
                 Adding a walk-up booking, using <strong>Modify Seats</strong> on someone's booking,
                 or booking for your own party as this event's coordinator is not held to the
                 resident-facing per-booking seat limit. You can book up to the number of seats still
@@ -1429,6 +1436,12 @@ export default function HelpGuidePage() {
                 that club's notices), the club's Owner and admins see a <strong>👥 N members</strong>{" "}
                 count. Tapping it expands to show every member's name, A–Z — tap again to collapse.
                 Nobody else sees this count or list.
+              </Step>
+              <Step>
+                Book Club&apos;s Owner and admins can see every copy still out with residents: tap{" "}
+                <strong>⚙ Manage</strong> on the Book Club page — <strong>Outstanding Books</strong> is at
+                the top, oldest first, with how long each copy has been out. Tap{" "}
+                <strong>Mark Returned</strong> when a copy comes back.
               </Step>
               <Step>
                 On a bus-enabled event, a 🚌 marker and running seat count show exactly who's riding —
