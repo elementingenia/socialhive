@@ -76,3 +76,14 @@ ok(transportLabel({}) === 'Own way', 'own way label')
 
 console.log(`transportAllocation: ${pass} passed, ${fail} failed`)
 if (fail) process.exit(1)
+
+// Resident choosing their own transport while booking (2026-10-11): the
+// message names them, not "The Event Coordinator".
+{
+  const { buildTransportMessage: m } = await import("../../lib/transportAllocation.js")
+  const self = m({ mode: "car", eventTitle: "Stockton Flexi-Day", driverName: "Jan", actor: "Iain Pallot" })
+  if (self !== "Iain Pallot has given you a seat in Jan's car for Stockton Flexi-Day.") throw new Error("actor message wrong: " + self)
+  const ec = m({ mode: "bus", eventTitle: "X" })
+  if (ec !== "The Event Coordinator has put you on the bus for X.") throw new Error("default actor changed: " + ec)
+  console.log("✓ buildTransportMessage actor")
+}

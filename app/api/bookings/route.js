@@ -11,6 +11,7 @@ import { isEventCoordinator } from '@/lib/areaAuth'
 import { amountOwing } from '@/lib/payments'
 import { busSeatsUsed, validateBusRequest, requestedBusSeats } from '@/lib/busSeats'
 import { eventNotifyRecipients } from '@/lib/questionRouting'
+import { applyTransport } from '@/lib/applyTransport'
 
 
 async function getMember(token) {
@@ -58,7 +59,7 @@ export async function POST(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('id, max_seats, max_seats_per_booking, unassigned_seats_count, hub_type, book_id, booking_required, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('id, max_seats, max_seats_per_booking, unassigned_seats_count, hub_type, book_id, booking_required, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, allow_personal_vehicles, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
 
   // "Open, all welcome" events (Groups & Clubs dry run, 2026-09-11) have no
@@ -174,6 +175,30 @@ export async function POST(req) {
     return NextResponse.json({ error: 'Already booked for this event' }, { status: 409 })
   }
 
+  // Transport chosen while booking (Iain, 2026-10-11 -- Stockton Flexi-Day,
+  // Village Rollers: "There are NO transport options until after booked").
+  // The same whole-booking choice the coordinator uses (lib/applyTransport):
+  // "none" = Own way, "bus", "car" (a seat in someone's car) or "driver".
+  // Bus/car/driving need the whole booking to confirm outright, same rule as
+  // the bus toggle below; it's checked BEFORE anything is written so a full
+  // bus or car rejects the booking instead of half-saving it.
+  const transport = body.transport && body.transport.mode ? body.transport : null
+  const needsTransport = !!transport && transport.mode !== 'none'
+  if (needsTransport) {
+    if (available < requestedSeats) {
+      return NextResponse.json({
+        error: "There aren't enough seats free to confirm your whole booking, so the bus or a car can't be arranged yet. Choose Own way to book (or join the waitlist), then set transport once you have a seat.",
+      }, { status: 409 })
+    }
+    const pre = await applyTransport({
+      eventId: event_id, owner: { memberId: member.id }, mode: transport.mode,
+      vehicleOfferId: transport.vehicle_offer_id || null, seatsOffered: transport.seats_offered,
+      actingMemberId: member.id, validateOnly: true, bySelf: true,
+      preview: { confirmed: true, seats: requestedSeats, attendees: party.attendees || [] },
+    })
+    if (!pre.ok) return NextResponse.json({ error: pre.error }, { status: pre.status || 409 })
+  }
+
   // Community bus (migration 085, Iain 2026-08-19): independent of the
   // event's own seat cap, and explicitly NO waitlist -- a bus seat is only
   // ever granted alongside a booking that's fully confirmable outright. A
@@ -184,8 +209,10 @@ export async function POST(req) {
   // silently dropping what they asked for. The client mirrors this (disables
   // the bus control once the event itself would split) so a resident should
   // rarely actually hit this message.
-  const ownerWantsBus = !!event.has_bus && !!body.bus_passenger
-  const busRequested = requestedBusSeats({ ownerWantsBus, attendees: party.attendees })
+  // When transport was chosen above it owns the bus too (whole booking), so
+  // the per-person bus flags are ignored.
+  const ownerWantsBus = !transport && !!event.has_bus && !!body.bus_passenger
+  const busRequested = transport ? 0 : requestedBusSeats({ ownerWantsBus, attendees: party.attendees })
   if (busRequested > 0) {
     if (!event.has_bus) {
       return NextResponse.json({ error: "This event doesn't have a bus." }, { status: 400 })
@@ -215,8 +242,19 @@ export async function POST(req) {
       payment_status: initialPaymentStatus, bus_passenger: ownerWantsBus, ...bringFields,
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    await syncAttendees(event_id, { ownerId: member.id }, party.attendees)
-    return NextResponse.json({ status: 'confirmed', seats: requestedSeats })
+    await syncAttendees(event_id, { ownerId: member.id }, transport ? stripBus(party.attendees) : party.attendees)
+    let transportError = null
+    if (transport) {
+      const applied = await applyTransport({
+        eventId: event_id, owner: { memberId: member.id }, mode: transport.mode,
+        vehicleOfferId: transport.vehicle_offer_id || null, seatsOffered: transport.seats_offered,
+        actingMemberId: member.id, skipOwnerNotify: true, bySelf: true,
+      })
+      // The booking is saved either way; only a last-second race (someone
+      // took the last bus/car seat) lands here.
+      if (!applied.ok) transportError = applied.error
+    }
+    return NextResponse.json({ status: 'confirmed', seats: requestedSeats, ...(transportError ? { transport_error: transportError } : {}) })
   }
 
   // Some or all seats must go to waitlist — ask for confirmation first.
@@ -236,7 +274,7 @@ export async function POST(req) {
   // User confirmed — insert rows
   const rows = []
   if (willConfirm > 0) {
-    rows.push({ event_id, member_id: member.id, seats: willConfirm,  status: 'confirmed', booked_at: bookedAt, payment_status: initialPaymentStatus, ...bringFields })
+    rows.push({ event_id, member_id: member.id, seats: willConfirm,  status: 'confirmed', booked_at: bookedAt, payment_status: initialPaymentStatus, ...bringFields, ...(transport?.mode === 'none' ? { own_way: true } : {}) })
   }
   rows.push({ event_id, member_id: member.id, seats: willWaitlist, status: 'waitlist',  booked_at: bookedAt, payment_status: initialPaymentStatus, ...bringFields })
 
@@ -557,4 +595,11 @@ export async function DELETE(req) {
   // would receive it is the one who just performed the action (Iain, 2026-07-21).
 
   return NextResponse.json({ success: true })
+}
+
+// Transport chosen at booking time covers the whole booking, so any
+// per-attendee bus flag sent alongside it is dropped (applyTransport sets
+// the bus flags itself when the choice is "bus").
+function stripBus(attendees = []) {
+  return attendees.map(a => ({ ...a, is_bus_passenger: false }))
 }
