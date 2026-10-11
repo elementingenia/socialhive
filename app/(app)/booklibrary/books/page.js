@@ -572,7 +572,9 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
     const res = await fetch('/api/admin/book-add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session?.access_token },
-      body: JSON.stringify({ google_books_id: selected.google_books_id }),
+      // isbn lets the server re-fetch an Open Library result (or fall back to
+      // Open Library when Google is down) -- BUG-088, lib/bookLookup.js.
+      body: JSON.stringify({ google_books_id: selected.google_books_id, isbn: selected.isbn || (mode === 'barcode' ? barcode.trim() : null) }),
     })
     const data = await res.json()
     setAdding(false)
