@@ -51,6 +51,7 @@ const RAW_SECTIONS = [
       { title: "Show Time, Social Hive & Library wording", id: "sub-pt-other" },
       { title: "Shown to residents — hiding text without deleting it", id: "sub-pt-toggle" },
       { title: "Loan caps — what happens at the limit", id: "sub-pt-loancap" },
+      { title: "Adding books — when the search can't find one", id: "sub-pt-addbook" },
     ],
   },
   {
@@ -549,6 +550,22 @@ export default function AdminGuidePage() {
                 <em>N</em> DVDs on loan — return one first" — and they cannot borrow anything else until an
                 existing loan is marked returned, freeing up a slot. If you don't set a cap, the app falls
                 back to <strong>3</strong>.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-pt-addbook" title="Adding books — when the search can't find one">
+              <Step>
+                In <strong>Library</strong>, Owners and admins tap <strong>Add Book</strong> and either scan or
+                type the barcode, or use <strong>Search by Title</strong>. Title search runs when you tap{" "}
+                <strong>Search</strong> (or press Enter), not while you type, and you can add the author to
+                narrow it — for example <em>High Wire Candice Fox</em>.
+              </Step>
+              <Step>
+                Lookups use Google Books first, then Open Library. Google allows the app 1,000 lookups a day;
+                once that is used up, only Open Library answers until it resets (about 6pm Sydney time).
+                Some books — often recent Australian editions — are on neither. For those, tap{" "}
+                <strong>Can&apos;t find it? Add the details yourself</strong>, enter the title (required),
+                author and barcode, and tap <strong>Add to Book Library</strong>. The book is added without a
+                cover or summary; a duplicate barcode, or the same title and author, is refused.
               </Step>
             </Subsection>
           </Section>

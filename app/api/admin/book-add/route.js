@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { requireAdminOrAreaOwner } from '@/lib/areaAuth'
-import { googleBooksGet, mapGoogleVolume, openLibraryByIsbn, isOpenLibraryId, normaliseIsbn, isValidIsbn, bookRowFields } from '@/lib/bookLookup'
+import { googleBooksGet, mapGoogleVolume, openLibraryByIsbn, isOpenLibraryId, normaliseIsbn, isValidIsbn, bookRowFields, manualBookRow } from '@/lib/bookLookup'
 
 export const maxDuration = 20
 
@@ -13,6 +13,29 @@ export async function POST(req) {
   if (error) return NextResponse.json({ error }, { status })
 
   const body = await req.json().catch(() => ({}))
+
+  // Manual entry (BUG-092): the book isn't on Google Books or Open Library
+  // (e.g. a recent Australian edition), so the Owner/admin types the title,
+  // author and barcode themselves. No external id; the enrichment task can
+  // still fill in cover/summary later from the ISBN if a source adds it.
+  if (body.manual) {
+    const m = manualBookRow(body)
+    if (m.error) return NextResponse.json({ error: m.error }, { status: 400 })
+    if (m.row.isbn) {
+      const { data: sameIsbn } = await supabaseAdmin
+        .from('books').select('id, title').eq('we_own', true).eq('isbn', m.row.isbn).limit(1).maybeSingle()
+      if (sameIsbn) return NextResponse.json({ error: `"${sameIsbn.title}" is already in the Book Library` }, { status: 409 })
+    }
+    const { data: sameTitle } = await supabaseAdmin
+      .from('books').select('id, title, author').eq('we_own', true).ilike('title', m.row.title).limit(5)
+    const clash = (sameTitle || []).find(b => !m.row.author || !b.author || b.author.toLowerCase() === m.row.author.toLowerCase())
+    if (clash) return NextResponse.json({ error: `"${clash.title}" is already in the Book Library` }, { status: 409 })
+    const { data: inserted, error: insError } = await supabaseAdmin
+      .from('books').insert({ ...m.row, we_own: true }).select('id, title').single()
+    if (insError) return NextResponse.json({ error: insError.message }, { status: 500 })
+    return NextResponse.json({ id: inserted.id, title: inserted.title })
+  }
+
   const google_books_id = body.google_books_id
   const isbn = isValidIsbn(normaliseIsbn(body.isbn)) ? normaliseIsbn(body.isbn) : null
   if (!google_books_id) return NextResponse.json({ error: 'google_books_id required' }, { status: 400 })
