@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { normaliseIsbn, isValidIsbn, googleBooksGet, mapGoogleVolume, openLibraryByIsbn, openLibraryByTitle } from "@/lib/bookLookup"
+import { normaliseIsbn, isValidIsbn, googleBooksGet, googleIsbnSearch, mapGoogleVolume, openLibraryByIsbn, openLibraryByTitle, queryWords, matchesAllWords } from "@/lib/bookLookup"
 
 export const dynamic = "force-dynamic"
 // Up to 3 Google attempts + an Open Library fallback -- comfortably more than
@@ -17,7 +17,12 @@ export async function GET(req) {
     if (!isValidIsbn(isbn)) {
       return NextResponse.json({ results: [], error: "invalid_isbn" }, { status: 400 })
     }
-    const google = await searchGoogleBooks(`isbn:${isbn}`, { rerank: false })
+    // googleIsbnSearch also retries the bare number when Google's isbn: index
+    // misses an edition it holds (BUG-092).
+    const g = await googleIsbnSearch(isbn)
+    const google = g.ok
+      ? { results: g.items.filter(it => it.volumeInfo?.authors?.length).slice(0, 8).map(mapGoogleVolume) }
+      : { results: [], error: g.error === "not_found" ? null : g.error }
     if (google.results?.length) return NextResponse.json({ results: google.results })
     // BUG-088: Google failed, or found nothing (it has been returning empty
     // for ISBNs it definitely holds) -- try Open Library before giving up.
@@ -28,7 +33,12 @@ export async function GET(req) {
   }
 
   if (!q || q.length < 2) return NextResponse.json({ results: [] })
-  const google = await searchGoogleBooks(`intitle:${encodeURIComponent(q)}`, { rerank: true, qNorm: q.toLowerCase().trim() })
+  // BUG-092: free-text search (title OR author words), not intitle:, so
+  // "High Wire Candice Fox" works; results must contain every typed word in
+  // their title/subtitle/authors. Typing just a title still works the same.
+  const words = queryWords(q)
+  if (!words.length) return NextResponse.json({ results: [] })
+  const google = await searchGoogleBooks(encodeURIComponent(words.join(" ")), { rerank: true, words, qNorm: q.toLowerCase().trim() })
   if (google.results?.length) return NextResponse.json({ results: google.results })
   // Google unreachable after retries, OR Google answered with nothing --
   // Open Library title search instead (BUG-091: the empty case used to stop
@@ -46,7 +56,7 @@ function errorResponse(error) {
   )
 }
 
-async function searchGoogleBooks(queryFragment, { rerank, qNorm }) {
+async function searchGoogleBooks(queryFragment, { rerank, words, qNorm }) {
   const g = await googleBooksGet(`volumes?q=${queryFragment}&maxResults=20&printType=books&langRestrict=en`)
   if (!g.ok) return { results: [], error: g.error === "not_found" ? null : g.error }
 
@@ -56,9 +66,8 @@ async function searchGoogleBooks(queryFragment, { rerank, qNorm }) {
   const items = (data.items || []).filter(item => {
     const info = item.volumeInfo
     if (!info?.title || !info?.authors?.length) return false
-    if (!rerank) return true // ISBN search -- Google already matched the exact edition, no title-substring gate needed
-    const mainTitle = info.title.toLowerCase().split(/[:\-–]/)[0].trim()
-    return mainTitle.includes(qNorm)
+    if (!rerank) return true
+    return matchesAllWords(`${info.title} ${info.subtitle || ""} ${info.authors.join(" ")}`, words)
   })
 
   const deduped = items.filter(item => {
@@ -89,6 +98,11 @@ async function searchGoogleBooks(queryFragment, { rerank, qNorm }) {
   const STUDY_AID_RE = /\b(book analysis|study guide|summary|summaries|sparknotes|cliffs?notes|companion|workbook|study notes)\b/i
   function scoreItem(info) {
     let score = 0
+    // Title actually matches what was typed (the whole query, or the query
+    // starts with the book's main title -- "high wire candice fox" vs
+    // "High Wire") -- outweighs the cover/rating signals below.
+    const mainTitle = (info.title || "").toLowerCase().split(/[:\-–]/)[0].trim()
+    if (mainTitle && (mainTitle.includes(qNorm) || qNorm.startsWith(mainTitle))) score += 6
     if (info.imageLinks?.thumbnail) score += 3
     // Weighted by the actual rating value, not just whether one exists --
     // Iain, 2026-08-13: a 5.0 edition should clearly outrank a 1.0 edition

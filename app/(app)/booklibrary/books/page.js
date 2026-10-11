@@ -510,21 +510,52 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
   const [adding,      setAdding]      = useState(false)
   const [isDuplicate, setIsDuplicate] = useState(false)
   const [scanning,    setScanning]    = useState(false)
+  // Manual entry (BUG-092) -- for a book no source holds.
+  const [manualOpen,  setManualOpen]  = useState(false)
+  const [manual,      setManual]      = useState({ title:'', author:'', isbn:'' })
+  const [manualError, setManualError] = useState('')
 
   function switchMode(next) {
-    setMode(next); setSearch(''); setBarcode(''); setResults([]); setSelected(null); setIsDuplicate(false); setBarcodeError(''); setSearchError('')
+    setMode(next); setSearch(''); setBarcode(''); setResults([]); setSelected(null); setIsDuplicate(false); setBarcodeError(''); setSearchError(''); setManualOpen(false); setManualError('')
   }
 
+  function openManual() {
+    setSelected(null); setResults([]); setManualError('')
+    setManual({ title: mode === 'title' ? search.trim() : '', author:'', isbn: mode === 'barcode' ? barcode.trim() : '' })
+    setManualOpen(true)
+  }
+
+  // Title search runs only on Search / Enter (BUG-092): it used to fire a
+  // Google Books call on every keystroke, and Google allows this app 1,000
+  // calls a day -- a few residents typing titles used the lot, after which
+  // every search fell back to Open Library alone.
   async function doSearch(q) {
-    setSearch(q); setSelected(null); setIsDuplicate(false); setSearchError('')
-    if (!q.trim()) { setResults([]); return }
+    setSelected(null); setIsDuplicate(false); setSearchError(''); setManualOpen(false)
+    if (q.trim().length < 2) { setResults([]); return }
     setSearching(true)
-    const res = await fetch('/api/books/search?q=' + encodeURIComponent(q))
+    const res = await fetch('/api/books/search?q=' + encodeURIComponent(q.trim()))
     const data = await res.json()
     setSearching(false)
     const unavailable = searchUnavailableMessage(data.error)
     if (unavailable) { setSearchError(unavailable); setResults([]); return }
-    setResults(data.results || [])
+    if (!data.results?.length) { setSearchError('No books found. Try adding the author, or add the details yourself below.'); setResults([]); return }
+    setResults(data.results)
+  }
+
+  async function handleManualAdd() {
+    setManualError('')
+    if (manual.title.trim().length < 2) { setManualError("Enter the book's title"); return }
+    setAdding(true)
+    const res = await fetch('/api/admin/book-add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session?.access_token },
+      body: JSON.stringify({ manual: true, title: manual.title, author: manual.author, isbn: manual.isbn }),
+    })
+    const data = await res.json()
+    setAdding(false)
+    if (!res.ok) { setManualError(data.error || 'Add failed'); return }
+    addToast(data.title + ' added to the Book Library')
+    onAdded()
   }
 
   // Barcode mode: NOT live search-as-you-type — the number must be entered
@@ -547,7 +578,7 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
     if (data.error === 'invalid_isbn') { setBarcodeError('Enter a full 10 or 13-digit ISBN'); setResults([]); return }
     const unavailable = searchUnavailableMessage(data.error)
     if (unavailable) { setBarcodeError(unavailable); setResults([]); return }
-    if (!data.results?.length) { setBarcodeError('No book found for that barcode'); setResults([]); return }
+    if (!data.results?.length) { setBarcodeError('No book found for that barcode. You can add the details yourself below.'); setResults([]); return }
     setResults(data.results)
   }
 
@@ -619,12 +650,14 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
                   trust/notice the type-ahead behaviour. Added a matching
                   Search button (same layout as Barcode mode) that
                   re-triggers the same search explicitly, plus a short hint
-                  for the sub-2-character case -- live search-as-you-type is
-                  kept, this is additive parity, not a replacement. */}
+                  for the sub-2-character case. 2026-10-11 (BUG-092): live
+                  search-as-you-type REMOVED -- each keystroke was a Google
+                  Books call against a 1,000/day quota. Search / Enter only,
+                  same as Barcode mode. */}
               <div style={{ position:'relative', display:'flex', gap:'0.5rem' }}>
-                <input value={search} onChange={e => doSearch(e.target.value)}
+                <input value={search} onChange={e => { setSearch(e.target.value); setSearchError('') }}
                   onKeyDown={e => { if (e.key === 'Enter') doSearch(search) }}
-                  placeholder="Search book title…"
+                  placeholder="Title, or title and author…"
                   style={{ flex:1, padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit' }} />
                 <button onClick={() => doSearch(search)} disabled={searching || search.trim().length < 2}
                   style={{ flexShrink:0, padding:'0 1.1rem', background:'var(--purple)', color:'#fff', border:'none', borderRadius:'12px', fontSize:'0.9rem', fontWeight:700, cursor:(searching||search.trim().length<2)?'not-allowed':'pointer', opacity:(searching||search.trim().length<2)?0.5:1 }}>
@@ -695,6 +728,35 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
               )}
             </div>
           )}
+          {!selected && !manualOpen && (
+            <button onClick={openManual}
+              style={{ alignSelf:'flex-start', background:'none', border:'none', padding:'0.25rem 0', color:'var(--purple)', fontSize:'0.85rem', fontWeight:700, cursor:'pointer', textDecoration:'underline', fontFamily:'inherit' }}>
+              Can't find it? Add the details yourself
+            </button>
+          )}
+          {manualOpen && (
+            <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem', background:'var(--surface2)', borderRadius:'12px', padding:'0.85rem', border:'1px solid var(--purple)' }}>
+              <div style={{ fontWeight:700, fontSize:'0.9rem' }}>Add book details</div>
+              <div style={{ fontSize:'0.78rem', color:'var(--text-dim)' }}>For a book Google Books and Open Library don't list. Title is required.</div>
+              <input value={manual.title} onChange={e => setManual(m => ({ ...m, title: e.target.value }))} placeholder="Title"
+                style={{ padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit', color:'var(--text)' }} />
+              <input value={manual.author} onChange={e => setManual(m => ({ ...m, author: e.target.value }))} placeholder="Author"
+                style={{ padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit', color:'var(--text)' }} />
+              <input value={manual.isbn} onChange={e => setManual(m => ({ ...m, isbn: e.target.value }))} placeholder="ISBN / barcode (optional)" inputMode="numeric"
+                style={{ padding:'0.7rem 0.85rem', border:'1.5px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', background:'var(--surface)', boxSizing:'border-box', fontFamily:'inherit', color:'var(--text)' }} />
+              {manualError && <div style={{ fontSize:'0.8rem', color:'var(--danger)' }}>{manualError}</div>}
+              <div style={{ display:'flex', gap:'0.5rem' }}>
+                <button onClick={() => { setManualOpen(false); setManualError('') }} disabled={adding}
+                  style={{ flex:1, padding:'0.8rem', background:'var(--surface)', color:'var(--text)', border:'1px solid var(--border)', borderRadius:'12px', fontSize:'0.9rem', fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+                  Cancel
+                </button>
+                <button onClick={handleManualAdd} disabled={adding || manual.title.trim().length < 2}
+                  style={{ flex:2, padding:'0.8rem', background:'var(--purple)', color:'#fff', border:'none', borderRadius:'12px', fontSize:'0.9rem', fontWeight:700, cursor:(adding||manual.title.trim().length<2)?'not-allowed':'pointer', opacity:(adding||manual.title.trim().length<2)?0.5:1, fontFamily:'inherit' }}>
+                  {adding ? 'Adding…' : '📚 Add to Book Library'}
+                </button>
+              </div>
+            </div>
+          )}
           {selected && (
             <div style={{ display:'flex', flexDirection:'column', gap:'0.5rem' }}>
               <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', background:'var(--surface2)', borderRadius:'12px', padding:'0.75rem', border:`1px solid ${isDuplicate ? 'var(--danger)' : 'var(--purple)'}` }}>
@@ -713,10 +775,10 @@ function AddBookSheet({ session, onAdded, onClose, addToast }) {
               )}
             </div>
           )}
-          <button onClick={handleAdd} disabled={!selected || adding || isDuplicate}
+          {!manualOpen && <button onClick={handleAdd} disabled={!selected || adding || isDuplicate}
             style={{ background:'var(--purple)', color:'#fff', border:'none', borderRadius:'12px', padding:'0.9rem', fontSize:'0.95rem', fontWeight:700, cursor:(!selected||adding||isDuplicate)?'not-allowed':'pointer', opacity:(!selected||adding||isDuplicate)?0.5:1 }}>
             {adding ? 'Adding to Library…' : '📚 Add to Book Library'}
-          </button>
+          </button>}
         </div>
       </div>
     </div>

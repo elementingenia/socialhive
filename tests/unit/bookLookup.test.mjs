@@ -7,6 +7,7 @@ import {
   normaliseIsbn, isValidIsbn, isOpenLibraryId,
   mapGoogleVolume, mapOpenLibraryEdition, mapOpenLibrarySearchDoc, bookRowFields,
   googleBooksGet, lookupByIsbn, openLibraryByTitle,
+  queryWords, matchesAllWords, manualBookRow, volumeHasIsbn, googleIsbnSearch,
 } from '../../lib/bookLookup.js'
 
 let pass = 0, fail = 0
@@ -93,7 +94,7 @@ function mockFetch(handlers) {
   ])
   const r = await lookupByIsbn('9780340824801', { fetchImpl: f })
   eq(r.result?.google_books_id, 'OL3700000M', 'Google empty -> Open Library')
-  eq(f.calls.filter(c => c.includes('googleapis')).length, 1, 'empty 200 is not retried')
+  eq(f.calls.filter(c => c.includes('googleapis')).length, 2, 'empty isbn: tries the bare number once, no retries (BUG-092)')
 }
 // 4. Neither has it -> null result, no error
 {
@@ -118,11 +119,42 @@ function mockFetch(handlers) {
 // 7. Title search fallback filters unusable docs
 {
   const f = mockFetch([['openlibrary', () => resp(200, { docs: [
-    { title: 'A', author_name: ['B'], isbn: ['9781234567897'], cover_edition_key: 'OL1M' },
-    { title: 'No isbn', author_name: ['B'], cover_edition_key: 'OL2M' },
+    { title: 'Alpha', author_name: ['Bee'], isbn: ['9781234567897'], cover_edition_key: 'OL1M' },
+    { title: 'Alpha no isbn', author_name: ['Bee'], cover_edition_key: 'OL2M' },
   ] })]])
-  const r = await openLibraryByTitle('A', { fetchImpl: f })
+  const r = await openLibraryByTitle('Alpha', { fetchImpl: f })
   eq(r.results.length, 1, 'title fallback keeps only addable docs')
+}
+
+// ── BUG-092: title+author words, plain-ISBN retry, manual entry ─────────────
+eq(JSON.stringify(queryWords('High Wire  Candice Fox')), '["high","wire","candice","fox"]', 'queryWords splits + lowercases')
+eq(JSON.stringify(queryWords('A b')), '[]', 'single letters dropped')
+eq(matchesAllWords('High Wire Candice Fox', queryWords('high wire fox')), true, 'title + author words match')
+eq(matchesAllWords('Mirette on the high wire Emily Arnold McCully', queryWords('High Wire Candice Fox')), false, 'author words exclude other High Wires')
+eq(matchesAllWords('Le Carré', queryWords('le carre')), true, 'accents ignored')
+eq(matchesAllWords('anything', []), false, 'no words never matches')
+{
+  const m = manualBookRow({ title: '  High   Wire ', author: 'Candice Fox', isbn: '978-1-76104-904-0' })
+  eq(m.row?.title, 'High Wire', 'manual title tidied')
+  eq(m.row?.isbn, '9781761049040', 'manual isbn normalised')
+  eq(m.row?.google_books_id, null, 'manual has no external id')
+  eq(manualBookRow({ title: 'X' }).error, "Enter the book's title", 'manual needs a title')
+  eq(manualBookRow({ title: 'High Wire', isbn: '12345' }).error, 'ISBN must be a full 10 or 13-digit number', 'manual rejects partial isbn')
+  eq(manualBookRow({ title: 'High Wire' }).row?.isbn, null, 'manual isbn optional')
+}
+{
+  const hw = { id: 'hw1', volumeInfo: { title: 'High Wire', authors: ['Candice Fox'], industryIdentifiers: [{ type: 'ISBN_13', identifier: '9781761049040' }] } }
+  const other = { id: 'o1', volumeInfo: { title: 'Other', authors: ['X'], industryIdentifiers: [{ type: 'ISBN_13', identifier: '9780000000002' }] } }
+  eq(volumeHasIsbn(hw, '9781761049040'), true, 'volumeHasIsbn true')
+  eq(volumeHasIsbn(other, '9781761049040'), false, 'volumeHasIsbn false')
+  const f = mockFetch([['googleapis', () => null]])
+  const f2 = async (url) => { f.calls.push(url); return url.includes('isbn:') ? resp(200, { totalItems: 0 }) : resp(200, { items: [other, hw] }) }
+  f2.calls = f.calls
+  const r = await googleIsbnSearch('9781761049040', { fetchImpl: f2 })
+  eq(r.items?.length, 1, 'plain-number retry keeps only the volume listing the ISBN')
+  eq(r.items?.[0]?.id, 'hw1', 'plain-number retry finds the High Wire volume')
+  const r2 = await lookupByIsbn('9781761049040', { fetchImpl: f2 })
+  eq(r2.result?.title, 'High Wire', 'lookupByIsbn uses the plain-number retry')
 }
 
 console.error = origErr
