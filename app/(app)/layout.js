@@ -190,7 +190,8 @@ export default function AppLayout({ children }) {
         const lastActive = member.last_active_at ? new Date(member.last_active_at) : null
         const now = new Date()
         if (lastActive && now - lastActive > INACTIVITY_MS) {
-          await supabase.auth.signOut()
+          // Local only -- an inactive old device must not sign the resident out everywhere.
+          await supabase.auth.signOut({ scope: "local" })
           router.replace(loginHref(window.location.pathname + window.location.search, { reason: "inactive" }))
           return
         }

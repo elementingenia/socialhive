@@ -630,7 +630,7 @@ export default function HelpGuidePage() {
                 confirm account actions.
               </Step>
               <Step>
-                <strong>Sign Out</strong> — signs you out of the app completely. Tap <strong>Sign
+                <strong>Sign Out</strong> — signs you out on this device only. You stay signed in on your other devices. Tap <strong>Sign
                 In</strong> on the login screen to get back in.
               </Step>
               <InfoBox>
