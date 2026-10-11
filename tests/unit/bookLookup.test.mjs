@@ -8,6 +8,7 @@ import {
   mapGoogleVolume, mapOpenLibraryEdition, mapOpenLibrarySearchDoc, bookRowFields,
   googleBooksGet, lookupByIsbn, openLibraryByTitle,
   queryWords, matchesAllWords, manualBookRow, volumeHasIsbn, googleIsbnSearch,
+  volumeIdFromIsbnPage,
 } from '../../lib/bookLookup.js'
 
 let pass = 0, fail = 0
@@ -155,6 +156,37 @@ eq(matchesAllWords('anything', []), false, 'no words never matches')
   eq(r.items?.[0]?.id, 'hw1', 'plain-number retry finds the High Wire volume')
   const r2 = await lookupByIsbn('9781761049040', { fetchImpl: f2 })
   eq(r2.result?.title, 'High Wire', 'lookupByIsbn uses the plain-number retry')
+}
+
+// ── BUG-093: Google ISBN page fallback ──────────────────────────────────────
+{
+  const html = '<html><link rel="canonical" href="https://books.google.com/books/about/High_Wire.html?id=CFQhEQAAQBAJ"/>'
+  eq(volumeIdFromIsbnPage(html), 'CFQhEQAAQBAJ', 'canonical id parsed')
+  eq(volumeIdFromIsbnPage('<meta property="og:url" content="https://books.google.com/books/about/X.html?id=AbCdEfGhIjKl"/>'), 'AbCdEfGhIjKl', 'og:url id parsed')
+  eq(volumeIdFromIsbnPage('<html>nothing</html>'), null, 'no id -> null')
+  const hw = { id: 'CFQhEQAAQBAJ', volumeInfo: { title: 'High Wire', authors: ['Candice Fox'], industryIdentifiers: [{ type: 'ISBN_13', identifier: '9781761049040' }] } }
+  const wrong = { id: 'N0aeRNMMT6kC', volumeInfo: { title: 'Unrelated', authors: ['X'], industryIdentifiers: [{ type: 'ISBN_13', identifier: '9780000000019' }] } }
+  const mk = (vol, pageId) => { const f = async (url) => {
+    f.calls.push(url)
+    if (url.includes('books.google.com/books?vid=')) return { ok: true, status: 200, text: async () => `<link rel="canonical" href="https://books.google.com/books/about/a.html?id=${pageId}"/>` }
+    if (url.includes('/volumes/')) return resp(200, vol)
+    return resp(200, { totalItems: 0 })
+  }; f.calls = []; return f }
+  const r = await lookupByIsbn('9781761049040', { fetchImpl: mk(hw, 'CFQhEQAAQBAJ') })
+  eq(r.result?.google_books_id, 'CFQhEQAAQBAJ', 'empty searches -> ISBN page finds the volume')
+  eq(r.result?.isbn, '9781761049040', 'ISBN page result keeps the ISBN')
+  const fw = mk(wrong, 'N0aeRNMMT6kC')
+  const r2 = await googleIsbnSearch('9781761049040', { fetchImpl: fw })
+  eq(r2.items?.length, 0, 'ISBN page volume without that ISBN is rejected')
+  const f503 = async (url) => { f503.calls.push(url)
+    if (url.includes('books.google.com/books?vid=')) return { ok: true, status: 200, text: async () => '<link rel="canonical" href="x?id=CFQhEQAAQBAJ"/>' }
+    if (url.includes('/volumes/')) return resp(200, hw)
+    return resp(503, {}) }
+  f503.calls = []
+  const r3 = await googleIsbnSearch('9781761049040', { fetchImpl: f503, budgetMs: 0 })
+  eq(r3.items?.[0]?.id, 'CFQhEQAAQBAJ', 'search 503 -> ISBN page still used')
+  const fq = async () => resp(429, { error: { status: 'RESOURCE_EXHAUSTED' } })
+  eq((await googleIsbnSearch('9781761049040', { fetchImpl: fq })).error, 'quota_exceeded', 'quota -> no page fallback')
 }
 
 console.error = origErr
