@@ -57,6 +57,7 @@ eq(sd.cover_url, 'https://covers.openlibrary.org/b/id/5-M.jpg', 'search doc cove
 
 const row = bookRowFields(o)
 eq(row.genre, 'Prehistoric peoples', 'row maps genres -> genre')
+eq(row.genres, 'Prehistoric peoples', 'row also fills genres column (Book Club reads it)')
 eq(row.google_books_id, 'OL3700000M', 'row keeps id')
 
 // ── network behaviour (mocked fetch) ─────────────────────────────────────────
