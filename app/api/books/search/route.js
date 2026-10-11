@@ -29,11 +29,14 @@ export async function GET(req) {
 
   if (!q || q.length < 2) return NextResponse.json({ results: [] })
   const google = await searchGoogleBooks(`intitle:${encodeURIComponent(q)}`, { rerank: true, qNorm: q.toLowerCase().trim() })
-  if (!google.error) return NextResponse.json({ results: google.results })
-  // Google unreachable after retries -- Open Library title search instead.
+  if (google.results?.length) return NextResponse.json({ results: google.results })
+  // Google unreachable after retries, OR Google answered with nothing --
+  // Open Library title search instead (BUG-091: the empty case used to stop
+  // here, so a book Google doesn't hold could never be found by title).
   const ol = await openLibraryByTitle(q)
   if (ol.ok) return NextResponse.json({ results: ol.results.slice(0, 8) })
-  return errorResponse(google.error)
+  if (google.error) return errorResponse(google.error)
+  return NextResponse.json({ results: [] })
 }
 
 function errorResponse(error) {
