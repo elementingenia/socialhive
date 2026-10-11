@@ -145,7 +145,7 @@ function SignIn({ router, next, onForcePinChange, prefillUser }) {
           // to the Change Password tab. Signing out matters -- otherwise a
           // refresh would drop them into the app with the handed-over PIN
           // still live.
-          await supabase.auth.signOut()
+          await supabase.auth.signOut({ scope: "local" })
           onForcePinChange(data.username || username.trim())
           setLoading(false)
           return

@@ -54,7 +54,10 @@ export default function Header() {
   async function signOut() {
     setMenuOpen(false)
     const { supabase } = await import("@/lib/supabase")
-    await supabase.auth.signOut()
+    // scope "local": sign out THIS device only. The library default is
+    // "global", which revoked every session for the account -- signing out on
+    // one device kicked the resident out on all the others (Iain, 2026-10-11).
+    await supabase.auth.signOut({ scope: "local" })
     router.replace("/login")
   }
 
