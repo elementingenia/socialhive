@@ -1,6 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { requireAdminOrAreaOwner } from '@/lib/areaAuth'
+import { googleBooksGet, mapGoogleVolume, openLibraryByIsbn, isOpenLibraryId, normaliseIsbn, isValidIsbn, bookRowFields } from '@/lib/bookLookup'
+
+export const maxDuration = 20
 
 // Mirrors app/api/admin/dvd-add/route.js — same shape (search client-side,
 // re-fetch full details server-side by id, dedupe, insert we_own=true) —
@@ -9,12 +12,14 @@ export async function POST(req) {
   const { error, status } = await requireAdminOrAreaOwner(req, 'hub', 'library')
   if (error) return NextResponse.json({ error }, { status })
 
-  const { google_books_id } = await req.json()
+  const body = await req.json().catch(() => ({}))
+  const google_books_id = body.google_books_id
+  const isbn = isValidIsbn(normaliseIsbn(body.isbn)) ? normaliseIsbn(body.isbn) : null
   if (!google_books_id) return NextResponse.json({ error: 'google_books_id required' }, { status: 400 })
 
   const db = supabaseAdmin
 
-  // Duplicate check — already in the Book Library
+  // Duplicate check — already in the Book Library (same Google/Open Library id)
   const { data: existing } = await db
     .from('books')
     .select('id, title')
@@ -23,60 +28,44 @@ export async function POST(req) {
     .maybeSingle()
   if (existing) return NextResponse.json({ error: `"${existing.title}" is already in the Book Library` }, { status: 409 })
 
-  // Re-fetch from Google Books server-side rather than trusting client-
-  // supplied fields (same discipline as dvd-add re-fetching from TMDB/OMDb).
-  // Bug fixed 2026-08-12: this fetch was missing the API key that
-  // /api/books/search and /api/books/details both already send — the
-  // by-ID endpoint enforces a much stricter anonymous quota than search,
-  // so every add attempt was failing with "Could not fetch book details"
-  // even though GOOGLE_BOOKS_API_KEY was set in Vercel the whole time.
-  const apiKey = process.env.GOOGLE_BOOKS_API_KEY
-  const keyParam = apiKey ? `?key=${apiKey}` : ''
-  let item
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 8000)
-    const res = await fetch(
-      `https://www.googleapis.com/books/v1/volumes/${encodeURIComponent(google_books_id)}${keyParam}`,
-      { signal: controller.signal, cache: 'no-store' }
-    )
-    clearTimeout(timeout)
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => ({}))
-      return NextResponse.json({ error: errBody?.error?.message || 'Could not fetch book details' }, { status: 502 })
+  // Re-fetch server-side rather than trusting client-supplied fields (same
+  // discipline as dvd-add re-fetching from TMDB/OMDb).
+  // BUG-088 (2026-10-11): Google Books has been answering most calls with a
+  // 503, so this now retries Google and, if it still can't be reached (or the
+  // result came from Open Library in the first place), looks the copy up on
+  // Open Library by its ISBN — see lib/bookLookup.js.
+  let result = null
+  if (!isOpenLibraryId(google_books_id)) {
+    const g = await googleBooksGet(`volumes/${encodeURIComponent(google_books_id)}`)
+    if (g.ok && g.data?.volumeInfo?.title) {
+      result = mapGoogleVolume(g.data)
+      result.author = (g.data.volumeInfo.authors || []).slice(0, 3).join(', ')
+    } else if (!isbn) {
+      return NextResponse.json({ error: g.error === 'quota_exceeded'
+        ? "Book lookup has hit today's usage limit — try again later."
+        : 'Book lookup is temporarily unavailable — try again in a moment.' }, { status: 502 })
     }
-    item = await res.json()
-  } catch (err) {
-    return NextResponse.json({ error: 'Google Books lookup failed: ' + err.message }, { status: 502 })
+  }
+  if (!result) {
+    if (!isbn) return NextResponse.json({ error: 'isbn required for this book' }, { status: 400 })
+    const ol = await openLibraryByIsbn(isbn)
+    if (!ol.ok) return NextResponse.json({ error: 'Book lookup is temporarily unavailable — try again in a moment.' }, { status: 502 })
+    if (!ol.result) return NextResponse.json({ error: 'Book not found' }, { status: 404 })
+    result = ol.result
   }
 
-  const info = item.volumeInfo || {}
-  if (!info.title) return NextResponse.json({ error: 'Book not found' }, { status: 404 })
-
-  // ISBN_13 preferred over ISBN_10 when both are present (matches
-  // /api/books/search's extractIsbn) -- stored for both title-based and
-  // barcode-based adds, since Google returns industryIdentifiers either way.
-  const ids = info.industryIdentifiers || []
-  const isbn = (ids.find(x => x.type === 'ISBN_13') || ids.find(x => x.type === 'ISBN_10'))?.identifier || null
-
-  const row = {
-    google_books_id,
-    title:          info.title,
-    author:         (info.authors || []).slice(0, 3).join(', ') || null,
-    cover_url:      info.imageLinks?.thumbnail?.replace('http://', 'https://') || null,
-    summary:        info.description || null,
-    rating:         info.averageRating ? parseFloat(info.averageRating).toFixed(1) : null,
-    rating_link:    info.infoLink || `https://books.google.com/books?id=${google_books_id}`,
-    genre:          (info.categories || []).slice(0, 4).join(', ') || null,
-    published_year: info.publishedDate ? (parseInt(info.publishedDate.substring(0, 4), 10) || null) : null,
-    isbn,
-    // publisher (2026-08-13, migration 082): whatever edition Google
-    // resolved this google_books_id to -- for a physical-copy import where
-    // the exact printing matters, the caller should overwrite this after
-    // insert with the copy's actual publisher rather than trust Google's.
-    publisher:      info.publisher || null,
-    we_own:         true,
+  // Same copy already shelved under a different id (e.g. once from Google,
+  // once from Open Library) — match on ISBN too.
+  if (result.isbn) {
+    const { data: sameIsbn } = await db
+      .from('books').select('id, title').eq('we_own', true).eq('isbn', result.isbn).limit(1).maybeSingle()
+    if (sameIsbn) return NextResponse.json({ error: `"${sameIsbn.title}" is already in the Book Library` }, { status: 409 })
   }
+
+  // publisher (2026-08-13, migration 082): whatever edition the source
+  // resolved to -- for a physical-copy import where the exact printing
+  // matters, the caller should overwrite this after insert.
+  const row = { ...bookRowFields(result), we_own: true }
 
   const { data: inserted, error: insError } = await db.from('books').insert(row).select('id, title').single()
   if (insError) return NextResponse.json({ error: insError.message }, { status: 500 })

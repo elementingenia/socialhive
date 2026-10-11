@@ -1,6 +1,9 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
 import { requireAdminOrAreaOwner } from '@/lib/areaAuth'
+import { lookupByIsbn, bookRowFields } from '@/lib/bookLookup'
+
+export const maxDuration = 20
 
 // Book Library delete — admin OR this hub's Owner, per the Owner
 // self-service model (Owner_SelfService_and_Library_Hub_Scope_v1 Part A).
@@ -69,50 +72,22 @@ export async function PATCH(req, { params }) {
     return NextResponse.json({ book, refreshed: false, unchanged: true })
   }
 
-  // Re-search Google Books for the new code, same lookup
-  // /api/books/search's ISBN mode uses, and refresh the book's data from
-  // whatever it finds — "refreshing to the new code" per Iain's request,
-  // not just swapping the stored digits.
-  const apiKey = process.env.GOOGLE_BOOKS_API_KEY
-  const keyParam = apiKey ? `&key=${apiKey}` : ""
-  const url = `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&maxResults=1&printType=books${keyParam}`
-
-  let item = null
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 8000)
-    const res = await fetch(url, { signal: controller.signal, cache: 'no-store' })
-    clearTimeout(timeout)
-    if (res.ok) {
-      const data = await res.json()
-      item = (data.items || [])[0] || null
-    } else if (res.status === 429) {
-      return NextResponse.json({ error: 'quota_exceeded' }, { status: 429 })
-    } else {
-      return NextResponse.json({ error: 'search_unavailable' }, { status: 503 })
-    }
-  } catch (err) {
-    console.error('Google Books ISBN re-search failed:', err?.message)
-    return NextResponse.json({ error: 'search_unavailable' }, { status: 503 })
+  // Re-search for the new code (Google first, Open Library fallback --
+  // BUG-088, lib/bookLookup.js) and refresh the book's data from whatever
+  // it finds — "refreshing to the new code" per Iain's request, not just
+  // swapping the stored digits.
+  const found = await lookupByIsbn(isbn)
+  if (found.error) {
+    return NextResponse.json({ error: found.error === 'quota_exceeded' ? 'quota_exceeded' : 'search_unavailable' },
+      { status: found.error === 'quota_exceeded' ? 429 : 503 })
   }
+  const item = found.result
 
   let updateFields = { isbn }
   if (item) {
-    const info = item.volumeInfo || {}
-    updateFields = {
-      isbn,
-      google_books_id: item.id,
-      title:          info.title || undefined,
-      author:         (info.authors || []).slice(0, 3).join(', ') || undefined,
-      cover_url:      info.imageLinks?.thumbnail?.replace('http://', 'https://') || undefined,
-      summary:        info.description || undefined,
-      rating:         info.averageRating ? parseFloat(info.averageRating).toFixed(1) : undefined,
-      rating_link:    info.infoLink || `https://books.google.com/books?id=${item.id}`,
-      genre:          (info.categories || []).slice(0, 4).join(', ') || undefined,
-      published_year: info.publishedDate ? (parseInt(info.publishedDate.substring(0, 4), 10) || undefined) : undefined,
-      publisher:      info.publisher || undefined,
-    }
-    Object.keys(updateFields).forEach(k => updateFields[k] === undefined && delete updateFields[k])
+    const r = { ...item, isbn }
+    updateFields = bookRowFields(r)
+    Object.keys(updateFields).forEach(k => (updateFields[k] === null || updateFields[k] === undefined || updateFields[k] === '') && delete updateFields[k])
   }
   // No match found — the ISBN itself is still saved (Iain's spec doesn't
   // say to reject an unmatched code, just to refresh IF the search finds

@@ -1,68 +1,55 @@
 import { NextResponse } from "next/server"
+import { normaliseIsbn, isValidIsbn, googleBooksGet, mapGoogleVolume, openLibraryByIsbn, openLibraryByTitle } from "@/lib/bookLookup"
 
-// Strips anything but digits/X so "978-0-14-118535-4" and "978 0 14 118535 4"
-// both match cleanly -- Iain, 2026-08-13: manual barcode entry, the user
-// types whatever's printed under the barcode (hyphens and all).
-function normaliseIsbn(raw) {
-  return (raw || "").toUpperCase().replace(/[^0-9X]/g, "")
-}
-
-function extractIsbn(info) {
-  const ids = info.industryIdentifiers || []
-  const isbn13 = ids.find(x => x.type === "ISBN_13")
-  const isbn10 = ids.find(x => x.type === "ISBN_10")
-  return (isbn13 || isbn10)?.identifier || null
-}
+export const dynamic = "force-dynamic"
+// Up to 3 Google attempts + an Open Library fallback -- comfortably more than
+// the 10s default, see lib/bookLookup.js (BUG-088).
+export const maxDuration = 20
 
 export async function GET(req) {
   const { searchParams } = new URL(req.url)
   const q    = searchParams.get("q")?.trim()
   const isbn = normaliseIsbn(searchParams.get("isbn"))
 
-  // Barcode/ISBN mode -- Iain, 2026-08-13: manual entry only for now (no
-  // camera scanning), triggered by an explicit "Search" button rather than
-  // live search-as-you-type, and the number must be entered in full: a
-  // bare 10 or 13 digit ISBN (10-digit may end in an X check digit).
+  // Barcode/ISBN mode -- typed or camera-scanned; must be a full 10 or 13
+  // digit ISBN (10-digit may end in an X check digit).
   if (isbn) {
-    if (!/^(\d{9}[\dX]|\d{13})$/.test(isbn)) {
+    if (!isValidIsbn(isbn)) {
       return NextResponse.json({ results: [], error: "invalid_isbn" }, { status: 400 })
     }
-    return searchGoogleBooks(`isbn:${isbn}`, { rerank: false })
+    const google = await searchGoogleBooks(`isbn:${isbn}`, { rerank: false })
+    if (google.results?.length) return NextResponse.json({ results: google.results })
+    // BUG-088: Google failed, or found nothing (it has been returning empty
+    // for ISBNs it definitely holds) -- try Open Library before giving up.
+    const ol = await openLibraryByIsbn(isbn)
+    if (ol.ok && ol.result) return NextResponse.json({ results: [ol.result] })
+    if (google.error && !ol.ok) return errorResponse(google.error)
+    return NextResponse.json({ results: [] })
   }
 
   if (!q || q.length < 2) return NextResponse.json({ results: [] })
-  return searchGoogleBooks(`intitle:${encodeURIComponent(q)}`, { rerank: true, qNorm: q.toLowerCase().trim() })
+  const google = await searchGoogleBooks(`intitle:${encodeURIComponent(q)}`, { rerank: true, qNorm: q.toLowerCase().trim() })
+  if (!google.error) return NextResponse.json({ results: google.results })
+  // Google unreachable after retries -- Open Library title search instead.
+  const ol = await openLibraryByTitle(q)
+  if (ol.ok) return NextResponse.json({ results: ol.results.slice(0, 8) })
+  return errorResponse(google.error)
+}
+
+function errorResponse(error) {
+  return NextResponse.json(
+    { results: [], error: error === "quota_exceeded" ? "quota_exceeded" : "search_unavailable" },
+    { status: error === "quota_exceeded" ? 429 : 503 }
+  )
 }
 
 async function searchGoogleBooks(queryFragment, { rerank, qNorm }) {
-  const apiKey = process.env.GOOGLE_BOOKS_API_KEY
-  const keyParam = apiKey ? `&key=${apiKey}` : ""
-  const url = `https://www.googleapis.com/books/v1/volumes?q=${queryFragment}&maxResults=20&printType=books&langRestrict=en${keyParam}`
+  const g = await googleBooksGet(`volumes?q=${queryFragment}&maxResults=20&printType=books&langRestrict=en`)
+  if (!g.ok) return { results: [], error: g.error === "not_found" ? null : g.error }
 
-  let res
-  try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 8000)
-    res = await fetch(url, { signal: controller.signal, cache: "no-store" })
-    clearTimeout(timeout)
-  } catch (err) {
-    console.error("Google Books fetch failed:", err?.message)
-    return NextResponse.json({ results: [], error: "search_unavailable" }, { status: 503 })
-  }
-
-  if (!res.ok) {
-    const errBody = await res.json().catch(() => ({}))
-    const isQuota = errBody?.error?.status === "RESOURCE_EXHAUSTED" || res.status === 429
-    console.error("Google Books error:", res.status, errBody?.error?.message)
-    return NextResponse.json(
-      { results: [], error: isQuota ? "quota_exceeded" : "search_unavailable" },
-      { status: res.status === 429 ? 429 : 503 }
-    )
-  }
-
-  const data = await res.json()
   const seen = new Set()
 
+  const data = g.data
   const items = (data.items || []).filter(item => {
     const info = item.volumeInfo
     if (!info?.title || !info?.authors?.length) return false
@@ -129,25 +116,7 @@ async function searchGoogleBooks(queryFragment, { rerank, qNorm }) {
         .map(x => x.item)
     : deduped
 
-  const results = ordered.slice(0, 8).map(item => {
-    const info = item.volumeInfo
-    const cover = info.imageLinks?.thumbnail?.replace("http://", "https://") || null
-    const publishedYear = info.publishedDate
-      ? parseInt(info.publishedDate.substring(0, 4), 10) || null
-      : null
-    return {
-      google_books_id: item.id,
-      title:          info.title,
-      author:         (info.authors || []).slice(0, 2).join(", "),
-      cover_url:      cover,
-      summary:        info.description || null,
-      rating:         info.averageRating ? parseFloat(info.averageRating).toFixed(1) : null,
-      rating_link:    info.infoLink || `https://books.google.com/books?id=${item.id}`,
-      genres:         (info.categories || []).slice(0, 4).join(", ") || null,
-      published_year: publishedYear,
-      isbn:           extractIsbn(info),
-    }
-  })
+  const results = ordered.slice(0, 8).map(mapGoogleVolume)
 
-  return NextResponse.json({ results })
+  return { results }
 }
