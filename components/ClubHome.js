@@ -224,7 +224,7 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
   async function loadAttendees() {
     const { data } = await supabase
       .from("bookings")
-      .select("id, seats, has_book, book_given_at, name_hidden, bring_note, bus_passenger, members(id, name, display_name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
+      .select("id, seats, has_book, book_given_at, name_hidden, bring_note, bus_passenger, own_way, members(id, name, display_name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
       .eq("event_id", event.id)
       .eq("status", "confirmed")
     // Named additional attendees (the party), grouped by the booker.
@@ -293,6 +293,8 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
         isPrivate,
         seats: b.seats || 1,
         busPassenger: !!b.bus_passenger,
+        // Own way (2026-10-11): explicit choice, shown only with no bus/car.
+        ownWay: !!b.own_way && !b.bus_passenger && !carStatus,
         carOwnerKey,
         carStatus,
         drivingPassengers: drivingSection?.passengers || [],
@@ -942,6 +944,9 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
                       )}
                       {a.carStatus?.role === "riding" && (
                         <span title={`In ${a.carStatus.driverName}'s car`} style={{ marginLeft: 4, fontSize: "0.72rem" }}>🧍 In {a.carStatus.driverName}'s car</span>
+                      )}
+                      {a.ownWay && (
+                        <span title="Making their own way there" style={{ marginLeft: 4, fontSize: "0.72rem" }}>🚶 Own way</span>
                       )}
                       {a.bring && <span style={{ fontWeight: 600, color: clubInk(colour) }}> · {a.bring}{a.bringNote ? ` — ${a.bringNote}` : ""}</span>}
                     </span>

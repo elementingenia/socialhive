@@ -859,6 +859,13 @@ export default function HelpGuidePage() {
                 list and can&apos;t be added by someone else — they book themselves in, or the event&apos;s
                 coordinator can book them at the door.
               </InfoBox>
+              <InfoBox>
+                🚗 On an event that allows car sharing, <strong>Getting there</strong> appears above{" "}
+                <strong>Book Now</strong> / <strong>Sign Up</strong>: choose <strong>Own way</strong>,{" "}
+                <strong>🚌 Bus</strong> (if there is one), <strong>🧍 In a car</strong> (then pick whose
+                car) or <strong>🚗 Driving</strong> (then set your spare seats). It&apos;s saved with your
+                booking and covers everyone in it. You can leave it blank and sort it out later.
+              </InfoBox>
             </Subsection>
 
             <Subsection id="sub-movies-afterbook" title="After you have booked">
@@ -1192,9 +1199,12 @@ export default function HelpGuidePage() {
                 (then choose whose car) or <strong>🚗 Driving</strong> (then set their spare seats)
                 under <strong>Getting there</strong>. For a booking that's already made, tap{" "}
                 <strong>🚌🚗 Set transport</strong> under the resident's name, choose, and tap{" "}
-                <strong>Save transport</strong>. The choice covers everyone in that booking, and every
-                seat must be named first. If they were already on the bus or in another car they are
-                moved, and residents with the app are told. Bus and car seat limits still apply.
+                <strong>Save transport</strong>. Once transport is set the button reads{" "}
+                <strong>🚌🚗 Edit transport</strong>, and a resident set to Own way shows{" "}
+                <strong>🚶 Own way</strong> next to their name. The choice covers everyone in that
+                booking, and every seat must be named first. If they were already on the bus or in
+                another car they are moved, and residents with the app are told. Bus and car seat
+                limits still apply.
               </Step>
               <Step>
                 On a paid event, tap the <strong>Unpaid / Paid</strong> switch next to a resident's
@@ -1453,9 +1463,12 @@ export default function HelpGuidePage() {
                 (then choose whose car) or <strong>🚗 Driving</strong> (then set their spare seats)
                 under <strong>Getting there</strong>. For a booking that's already made, tap{" "}
                 <strong>🚌🚗 Set transport</strong> under the resident's name, choose, and tap{" "}
-                <strong>Save transport</strong>. The choice covers everyone in that booking, and every
-                seat must be named first. If they were already on the bus or in another car they are
-                moved, and residents with the app are told. Bus and car seat limits still apply.
+                <strong>Save transport</strong>. Once transport is set the button reads{" "}
+                <strong>🚌🚗 Edit transport</strong>, and a resident set to Own way shows{" "}
+                <strong>🚶 Own way</strong> next to their name. The choice covers everyone in that
+                booking, and every seat must be named first. If they were already on the bus or in
+                another car they are moved, and residents with the app are told. Bus and car seat
+                limits still apply.
               </Step>
               <Step>
                 Adding a walk-up booking, using <strong>Modify Seats</strong> on someone's booking,

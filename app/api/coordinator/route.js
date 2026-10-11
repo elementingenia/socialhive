@@ -36,7 +36,7 @@ export async function GET(req) {
   // Fetch active bookings for the event
   const { data: activeBookings, error: be } = await supa
     .from("bookings")
-    .select("id, seats, status, payment_status, amount_paid, refund_due, refund_paid_at, has_book, book_given_at, name_hidden, booked_at, updated_at, bring_note, bus_passenger, member_id, contact_id, members(id, name, display_name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
+    .select("id, seats, status, payment_status, amount_paid, refund_due, refund_paid_at, has_book, book_given_at, name_hidden, booked_at, updated_at, bring_note, bus_passenger, own_way, member_id, contact_id, members(id, name, display_name, username, hide_name), contacts(id, name), bring:club_bring_categories!bring_category_id(label)")
     .eq("event_id", eventId)
     .neq("status", "cancelled")
     .order("booked_at")
@@ -528,8 +528,10 @@ export async function PATCH(req) {
     // Checked BEFORE the booking row is written, so a full bus or car
     // rejects the whole walk-up rather than saving a booking with the
     // transport silently dropped. See lib/transportAllocation.js.
-    const transport = body.transport && body.transport.mode && body.transport.mode !== "none" ? body.transport : null
-    if (transport) {
+    // "none" = an explicit Own way choice (2026-10-11): nothing to validate,
+    // but it's applied after insert so the booking records own_way.
+    const transport = body.transport && body.transport.mode ? body.transport : null
+    if (transport && transport.mode !== "none") {
       if (bookingStatus !== "confirmed") {
         return NextResponse.json({ error: "Transport can only be set on a confirmed booking, not one on the waitlist." }, { status: 409 })
       }
@@ -568,7 +570,7 @@ export async function PATCH(req) {
     }
 
     let transportError = null
-    if (transport) {
+    if (transport && bookingStatus === "confirmed") {
       const applied = await applyTransport({
         eventId: event_id, owner: { memberId: member_id || null, contactId: contact_id || null },
         mode: transport.mode, vehicleOfferId: transport.vehicle_offer_id || null, seatsOffered: transport.seats_offered,
@@ -581,7 +583,7 @@ export async function PATCH(req) {
 
     // No account to notify/push for a contact-owned booking.
     if (member_id) {
-      const how = !transport || transportError ? ""
+      const how = !transport || transportError || transport.mode === "none" || bookingStatus !== "confirmed" ? ""
         : transport.mode === "bus" ? " You're on the bus."
         : transport.mode === "car" ? " You have a seat in a car -- see the event for details."
         : " You're listed as driving your own car."
