@@ -1,8 +1,9 @@
 const { test, expect } = require('@playwright/test')
-const { getUpcomingBookclubEvent, getActiveClubs } = require('./helpers')
+const { getUpcomingBookclubEvent, getActiveClubs, getActiveSuggestedBooks } = require('./helpers')
 
 // ── Book Club Home ─────────────────────────────────────────────────────────────
 test.describe('Book Club Home', () => {
+  let hasBook = false
   test.beforeEach(async ({ page }) => {
     // Book Club legitimately has no upcoming event between picks. These tests
     // assert on the event card, so skip (not fail) when there's genuinely no
@@ -10,6 +11,7 @@ test.describe('Book Club Home', () => {
     // content gap. The always-on smoke test below still guards the render path.
     const ev = await getUpcomingBookclubEvent()
     test.skip(!ev, 'No upcoming Book Club pick — content-dependent tests skipped')
+    hasBook = !!ev.book_id
     await page.goto('/clubs/book-club')
     await page.waitForLoadState('networkidle')
   })
@@ -25,11 +27,16 @@ test.describe('Book Club Home', () => {
     await expect(page.getByText(/\d{1,2} (January|February|March|April|May|June|July|August|September|October|November|December)/i).first()).toBeVisible()
   })
 
+  // The rating pill and the book summary's Show more only exist once a book is
+  // chosen for the event; the next gathering often has none yet ("Not selected
+  // yet") -- a content gap, not a regression.
   test('Google rating pill shown (amber star)', async ({ page }) => {
+    test.skip(!hasBook, 'Next Book Club event has no book chosen yet')
     await expect(page.getByText(/⭐/).first()).toBeVisible()
   })
 
   test('Show more toggle expands and collapses', async ({ page }) => {
+    test.skip(!hasBook, 'Next Book Club event has no book chosen yet')
     const showMore = page.getByText('Show more ▼').first()
     await expect(showMore).toBeVisible()
     await showMore.click()
@@ -75,6 +82,10 @@ test.describe('Book Club Home', () => {
 
 // ── Book Club Suggestions ──────────────────────────────────────────────────────
 test.describe('Book Club Suggestions', () => {
+  // Suggestions that have been read move into the collapsed "Read Books"
+  // section, so with none active there are no tiles to check.
+  let hasActive = false
+  test.beforeAll(async () => { hasActive = (await getActiveSuggestedBooks()).length > 0 })
   test.beforeEach(async ({ page }) => {
     await page.goto('/bookclub/suggestions')
     await page.waitForLoadState('networkidle')
@@ -85,21 +96,25 @@ test.describe('Book Club Suggestions', () => {
   })
 
   test('At least one book tile renders', async ({ page }) => {
+    test.skip(!hasActive, 'No active book suggestions (all have been read)')
     // Book tiles render book titles as text
     const tiles = page.locator('[style*="border-radius: 16px"], [style*="border-radius:16px"]')
     await expect(tiles.first()).toBeVisible()
   })
 
   test('Book tile shows Google rating pill', async ({ page }) => {
+    test.skip(!hasActive, 'No active book suggestions (all have been read)')
     await expect(page.getByText(/⭐/).first()).toBeVisible()
   })
 
   test('Community score pill shown (purple, with vote count in parens)', async ({ page }) => {
+    test.skip(!hasActive, 'No active book suggestions (all have been read)')
     // Community pill format: "X.X (N)" — may show "— (0)" when no votes
     await expect(page.locator('text=/\\(\\d+\\)/').first()).toBeVisible()
   })
 
   test('Book cover or title links to Google Books', async ({ page }) => {
+    test.skip(!hasActive, 'No active book suggestions (all have been read)')
     // Links wrapping book covers/titles should point to books.google.com or play.google.com
     const bookLink = page.locator('a[href*="google"]').first()
     await expect(bookLink).toBeVisible()
@@ -120,6 +135,7 @@ test.describe('Book Club Suggestions', () => {
 
 
   test('Author and year shown on book tile', async ({ page }) => {
+    test.skip(!hasActive, 'No active book suggestions (all have been read)')
     // "by Author Name (YYYY)" format — year may not be present if not fetched yet
     const byAuthor = page.locator('text=/by /i').first()
     await expect(byAuthor).toBeVisible()

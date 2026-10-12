@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test')
-const { getNextScreening, getBookableScreening, getTestbotMovieBooking, fmtDate, fmtDateLong, fmtTime24 } = require('./helpers')
+const { getNextScreening, getBookableScreening, getTestbotMovieBooking, getVisibleResidentName, fmtDate, fmtDateLong, fmtTime24 } = require('./helpers')
 
 // ── Movies Home ───────────────────────────────────────────────────────────────
 test.describe('Movies Home', () => {
@@ -162,6 +162,10 @@ test.describe('Admin panel', () => {
 
 // ── Info > Contacts (folds in what used to be Admin > Members, 2026-07-12) ────
 test.describe('Info > Contacts', () => {
+  // Test Bot is hidden from every screen since 2026-09-23 (BUG-064), so these
+  // tests search for a real visible resident instead.
+  let resident = ''
+  test.beforeAll(async () => { resident = await getVisibleResidentName() })
   test.beforeEach(async ({ page }) => {
     await page.goto('/info/contacts')
     await page.waitForLoadState('networkidle')
@@ -171,7 +175,7 @@ test.describe('Info > Contacts', () => {
     // Contacts shows a resident's real name, not their @username (the old
     // Admin > Members list showed "@testbot" -- Contacts intentionally only
     // ever surfaces the friendly name field, "Test Bot").
-    await expect(page.getByText('Test Bot').first()).toBeVisible({ timeout: 10000 })
+    await expect(page.getByText(resident).first()).toBeVisible({ timeout: 10000 })
     // Admin-only controls, including the Invite Code moved from Admin > Members
     // Toolbar shortened to fit on one compact line (2026-07-12): "+ Add",
     // "Categories", "🔑 Invite Code" (Invite Code kept its full label since
@@ -184,14 +188,14 @@ test.describe('Info > Contacts', () => {
   // Placeholder is 'Search…' since 2026-07-29 -- it searches name, title/role,
   // phone, email and house number, not just name, so 'by name' was misleading.
   test('Search filters the resident/contact list', async ({ page }) => {
-    await page.getByPlaceholder('Search…').fill('Test Bot')
-    await expect(page.getByText('Test Bot').first()).toBeVisible()
+    await page.getByPlaceholder('Search…').fill(resident)
+    await expect(page.getByText(resident).first()).toBeVisible()
   })
 
   test('Search also matches a house number for a resident', async ({ page }) => {
     const box = page.getByPlaceholder('Search…')
-    await box.fill('Test Bot')
-    await expect(page.getByText('Test Bot').first()).toBeVisible()
+    await box.fill(resident)
+    await expect(page.getByText(resident).first()).toBeVisible()
     // A term that matches nobody must clear the list, proving the filter is
     // actually applied rather than the page just always showing everyone.
     await box.fill('zzzznobodymatchesthis')

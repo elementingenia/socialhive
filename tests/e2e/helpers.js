@@ -103,10 +103,41 @@ async function getUpcomingBookclubEvent() {
   // its events are now hub_type=club scoped by club_id, NOT the legacy
   // hub_type=bookclub. Query via the club slug so this keeps working.
   const rows = await supaGet(
-    `events?select=id,title,event_date,clubs!inner(slug)&clubs.slug=eq.book-club&archived=eq.false&event_date=gte.${todayStr()}&order=event_date.asc&limit=1`,
+    `events?select=id,title,event_date,book_id,clubs!inner(slug)&clubs.slug=eq.book-club&archived=eq.false&event_date=gte.${todayStr()}&order=event_date.asc&limit=1`,
     SUPABASE_ANON_KEY
   )
   return rows[0] || null
+}
+
+// Suggested books that still show as active tiles on Book Club > Suggestions.
+// Mirrors components/BookCatalogue.js: a suggestion moves into the collapsed
+// "Read Books" section once it has a past event and no upcoming one, so when
+// every suggestion has been read there are no tiles to assert on (2026-10-12:
+// the only suggestion, read 2026-09-29, made 5 tile tests fail as a content gap).
+async function getActiveSuggestedBooks() {
+  const books = await supaGet(`books?select=id&we_own=eq.false`, SUPABASE_SERVICE_KEY)
+  if (!books.length) return []
+  const ids = books.map(b => b.id).join(',')
+  const today = todayStr()
+  const [future, past] = await Promise.all([
+    supaGet(`events?select=book_id&book_id=in.(${ids})&event_date=gte.${today}`, SUPABASE_SERVICE_KEY),
+    supaGet(`events?select=book_id&book_id=in.(${ids})&event_date=lt.${today}`, SUPABASE_SERVICE_KEY),
+  ])
+  const scheduled = new Set(future.map(e => e.book_id))
+  const readOnly = new Set(past.map(e => e.book_id).filter(id => !scheduled.has(id)))
+  return books.filter(b => !readOnly.has(b.id))
+}
+
+// A real resident's display name that Info > Contacts shows. Test Bot is
+// hidden from every screen since 2026-09-23 (BUG-064), so the Contacts tests
+// can no longer search for it.
+async function getVisibleResidentName() {
+  const rows = await supaGet(
+    `members?select=display_name&status=eq.active&is_test=eq.false&hide_name=eq.false&display_name=not.is.null&order=display_name.asc&limit=1`,
+    SUPABASE_SERVICE_KEY
+  )
+  if (!rows[0]) throw new Error('No visible resident found for the Contacts tests')
+  return rows[0].display_name
 }
 
 // Every active club (for the content-independent render smoke test). All clubs
@@ -199,6 +230,8 @@ async function deleteTestbotE2eNotifications(id) {
 }
 
 module.exports = {
+  getActiveSuggestedBooks,
+  getVisibleResidentName,
   deleteTestbotE2eNotifications,
   getNextScreening,
   getBookableScreening,
