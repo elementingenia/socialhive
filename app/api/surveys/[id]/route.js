@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { resolveMember, isAreaOwner, requireSurveyManage } from '@/lib/areaAuth'
 import { computeSurveyStatus, canSeeResults, isEligibleForSurvey } from '@/lib/surveys'
+import { canViewSurvey, notInAudienceReason, ownsWholeAudience, normalizeAudienceInput, canTargetAudience } from '@/lib/surveyAudience'
+import { surveyAccess, ownedAreaKeys, activeClubIds, writeAudience } from '@/lib/surveyAudienceServer'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,8 +71,13 @@ export async function GET(req, { params }) {
     .from('survey_responses').select('id, started_at, submitted_at')
     .eq('survey_id', survey.id).eq('member_id', member.id).maybeSingle()
 
+  // Targeted Surveys (2026-10-13): audience is resolved LIVE (answer A).
+  const access = await surveyAccess(survey, member)
+
   let eligibility = { eligible: true }
-  if (!myResponse && survey.eligibility_mode === 'per_household') {
+  if (!access.inAudience) {
+    eligibility = { eligible: false, reason: notInAudienceReason(access.labels) }
+  } else if (!myResponse && survey.eligibility_mode === 'per_household') {
     const { data: submitted } = await supabaseAdmin
       .from('survey_responses')
       .select('member_id, member:members!member_id(house_number)')
@@ -99,7 +106,14 @@ export async function GET(req, { params }) {
   }
 
   const canManage = !!member.is_admin || await isAreaOwner(member.id, 'hub', 'surveys')
-  const canManageEvent = canManage || isCoordinator
+  const ownedKeys = await ownedAreaKeys(member.id)
+  const canManageEvent = canManage || isCoordinator || ownsWholeAudience(ownedKeys, access.rows)
+
+  // Hidden from residents outside the audience unless visible_to_all
+  // (answer C) -- answer as if it doesn't exist.
+  if (!canViewSurvey({ survey, audienceRows: access.rows, inAudience: access.inAudience, canManageThis: canManageEvent })) {
+    return NextResponse.json({ error: 'Survey not found' }, { status: 404 })
+  }
 
   return NextResponse.json({
     survey: { ...survey, status: surveyStatus },
@@ -109,6 +123,9 @@ export async function GET(req, { params }) {
     canManageEvent,
     coordinatorIds,
     coordinatorNames,
+    audience: access.rows.map(r => ({ area_type: r.area_type, key: r.area_type === 'hub' ? r.hub_type : r.club_id })),
+    audienceLabels: access.labels,
+    inAudience: access.inAudience,
     myResponse: myResponse ? { id: myResponse.id, startedAt: myResponse.started_at, submittedAt: myResponse.submitted_at } : null,
     eligibility,
     turnout,
@@ -166,6 +183,27 @@ export async function PATCH(req, { params }) {
     patch.closes_at = body.closes_at || null
   }
 
+  // visible_to_all: display-only, editable until published. Only meaningful
+  // on a targeted survey -- checked against the audience below.
+  if (body.visible_to_all !== undefined) patch.visible_to_all = !!body.visible_to_all
+
+  let newAudience = null
+  if (body.audience !== undefined) {
+    if (surveyStatus !== 'draft') {
+      return NextResponse.json({ error: 'Who the survey is for can only be changed while it is still a Draft' }, { status: 400 })
+    }
+    const aud = normalizeAudienceInput(body.audience, await activeClubIds())
+    if (!aud.ok) return NextResponse.json({ error: aud.error }, { status: 400 })
+    const isGlobalManager = !!member.is_admin || await isAreaOwner(member.id, 'hub', 'surveys')
+    const ownedKeys = isGlobalManager ? new Set() : await ownedAreaKeys(member.id)
+    // A coordinator who isn't an Owner can't widen or move the audience.
+    if (!canTargetAudience({ isGlobalManager, ownedKeys }, aud.rows)) {
+      return NextResponse.json({ error: aud.rows.length ? 'You can only aim a survey at groups you own' : 'Only admins and Surveys Owners can send a survey to the whole community' }, { status: 403 })
+    }
+    newAudience = aud.rows
+    if (newAudience.length === 0) patch.visible_to_all = false
+  }
+
   if (surveyStatus === 'draft') {
     if (body.eligibility_mode !== undefined) {
       patch.eligibility_mode = body.eligibility_mode === 'per_household' ? 'per_household' : 'per_resident'
@@ -216,8 +254,13 @@ export async function PATCH(req, { params }) {
     await writeCoordinators(survey.id, body.coordinator_ids, member.id)
   }
 
+  if (newAudience) {
+    const audErr = await writeAudience(survey.id, newAudience)
+    if (audErr) return NextResponse.json({ error: audErr.message }, { status: 500 })
+  }
+
   if (Object.keys(patch).length === 0) {
-    const surveyOut = Array.isArray(body.coordinator_ids)
+    const surveyOut = (Array.isArray(body.coordinator_ids) || newAudience)
       ? await supabaseAdmin.from('surveys').select('*').eq('id', survey.id).single().then(r => r.data)
       : survey
     return NextResponse.json({ survey: { ...surveyOut, status: computeSurveyStatus(surveyOut) } })

@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { requireSurveyManage } from '@/lib/areaAuth'
 import { computeSurveyStatus } from '@/lib/surveys'
-import { notifyAllActiveMembers } from '@/lib/notifyAudience'
+import { notifyMemberIds } from '@/lib/notifyAudience'
+import { surveyRecipientIds } from '@/lib/surveyAudienceServer'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,7 +36,7 @@ export async function POST(req, { params }) {
     .from('surveys').update({ published_at: new Date().toISOString() }).eq('id', survey.id).select().single()
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
 
-  await notifyAllActiveMembers(supabaseAdmin, null, 'survey_results_published',
+  await notifyMemberIds(await surveyRecipientIds(survey), null, 'survey_results_published',
     `Survey results are in: "${survey.title}"`, { excludeMemberId: member?.id })
 
   return NextResponse.json({ survey: { ...updated, status: computeSurveyStatus(updated) } })

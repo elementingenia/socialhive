@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { requireAdminOrAreaOwner, resolveMember, isAreaOwner } from '@/lib/areaAuth'
+import { resolveMember, isAreaOwner } from '@/lib/areaAuth'
 import { computeSurveyStatus, canSeeResults } from '@/lib/surveys'
+import { isTargeted, isInAudience, canViewSurvey, audienceLabels, ownsWholeAudience, normalizeAudienceInput, canTargetAudience } from '@/lib/surveyAudience'
+import { loadAudiences, clubNamesFor, viewerMembership, ownedAreaKeys, audienceOptions, activeClubIds, writeAudience } from '@/lib/surveyAudienceServer'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,24 +44,34 @@ export async function GET(req) {
 
   const { data, error: qErr } = await supabaseAdmin
     .from('surveys')
-    .select('id, title, description, eligibility_mode, anonymous, results_visibility_outcome, results_visibility_turnout, opened_at, closes_at, published_at, created_at, archived')
+    .select('id, title, description, eligibility_mode, anonymous, visible_to_all, results_visibility_outcome, results_visibility_turnout, opened_at, closes_at, published_at, created_at, archived')
     .eq('archived', false)
     .order('created_at', { ascending: false })
   if (qErr) return NextResponse.json({ error: qErr.message }, { status: 500 })
 
   const canManage = !!member.is_admin || await isAreaOwner(member.id, 'hub', 'surveys')
 
-  const surveyIds = data.map(s => s.id)
+  // Targeted Surveys (2026-10-13): drop surveys aimed at groups the viewer
+  // isn't in (answer C -- hidden unless visible_to_all), using LIVE
+  // membership (answer A). Managers, the survey's own coordinators and
+  // Owners of every targeted area always see it.
+  const ownedKeys = await ownedAreaKeys(member.id)
+  const audiencesById = await loadAudiences(data.map(s => s.id))
+  const anyTargeted = Object.values(audiencesById).some(isTargeted)
+  const membership = anyTargeted ? await viewerMembership(member) : null
+  const clubNames = anyTargeted ? await clubNamesFor(Object.values(audiencesById)) : {}
+
+  const allIds = data.map(s => s.id)
   // Multiple coordinators per survey (survey_coordinators,
   // 104_survey_coordinators.sql -- replaces the old single coordinator_id
   // column, same join-table pattern every event-based hub already uses).
   const coordIdsBySurvey = {}
   const coordNamesBySurvey = {}
-  if (surveyIds.length > 0) {
+  if (allIds.length > 0) {
     const { data: ecRows } = await supabaseAdmin
       .from('survey_coordinators')
       .select('survey_id, member_id, members!member_id(name)')
-      .in('survey_id', surveyIds)
+      .in('survey_id', allIds)
       .is('replaced_at', null)
     for (const ec of ecRows || []) {
       (coordIdsBySurvey[ec.survey_id] = coordIdsBySurvey[ec.survey_id] || []).push(ec.member_id)
@@ -69,12 +81,21 @@ export async function GET(req) {
     }
   }
 
+  const accessById = {}
+  const visible = data.filter(s => {
+    const rows = audiencesById[s.id] || []
+    const canManageThis = canManage || (coordIdsBySurvey[s.id] || []).includes(member.id) || ownsWholeAudience(ownedKeys, rows)
+    const inAudience = !isTargeted(rows) || isInAudience(s, rows, membership.viewerKeys, membership.householdKeys)
+    accessById[s.id] = { canManageThis, inAudience, labels: isTargeted(rows) ? audienceLabels(rows, clubNames) : [] }
+    return canViewSurvey({ survey: s, audienceRows: rows, inAudience, canManageThis })
+  })
+
   // Response-count ("turnout"), same shape as Voting's votesCast --
   // gated per-survey by results_visibility_turnout AND coordinator-only
   // (Change Request #3 -- canSeeResults's isCoordinator, never a blanket
   // admin/owner bypass). Only SUBMITTED responses count -- an in-progress
   // draft isn't a completed response yet.
-  const turnoutEligibleIds = data
+  const turnoutEligibleIds = visible
     .filter(s => computeSurveyStatus(s) !== 'draft' && canSeeResults(s, { field: 'results_visibility_turnout', isCoordinator: (coordIdsBySurvey[s.id] || []).includes(member.id) }))
     .map(s => s.id)
   const responsesCountById = {}
@@ -86,29 +107,50 @@ export async function GET(req) {
     }
   }
 
-  const surveys = data.map(s => ({
+  const surveys = visible.map(s => ({
     ...s,
     status: computeSurveyStatus(s),
-    canManageEvent: canManage || (coordIdsBySurvey[s.id] || []).includes(member.id),
+    canManageEvent: accessById[s.id].canManageThis,
+    inAudience: accessById[s.id].inAudience,
+    audienceLabels: accessById[s.id].labels,
     coordinatorNames: coordNamesBySurvey[s.id] || [],
     responsesCount: turnoutEligibleIds.includes(s.id) ? (responsesCountById[s.id] || 0) : null,
   }))
-  return NextResponse.json({ surveys, isAdmin: !!member.is_admin, canManage })
+
+  // Who can start a new survey (answer B): admin / Surveys Owner (any
+  // audience) or an Owner of Show Time / a Group & Club (their own areas).
+  const options = (canManage || ownedKeys.size > 0) ? await audienceOptions({ isGlobalManager: canManage, ownedKeys }) : []
+  const canCreate = canManage || options.length > 0
+  return NextResponse.json({ surveys, isAdmin: !!member.is_admin, canManage, canCreate, audienceOptions: options })
 }
 
 // POST /api/surveys — create a new survey (Draft) + its items (questions
 // attached from the bank, each with its own required flag and order) in
-// one call. Admin or this hub's Owner only.
+// one call. Admin or this hub's Owner -- or (Targeted Surveys, 2026-10-13)
+// an Owner of Show Time / a Group & Club, for their own areas only.
 export async function POST(req) {
-  const { error, status, member } = await requireAdminOrAreaOwner(req, 'hub', 'surveys')
+  const { error, status, member } = await resolveMember(req)
   if (error) return NextResponse.json({ error }, { status })
 
   const body = await req.json().catch(() => ({}))
   const {
     title, description, eligibility_mode, anonymous,
     results_visibility_outcome, results_visibility_turnout,
-    coordinator_ids, closes_at, items,
+    coordinator_ids, closes_at, items, audience, visible_to_all,
   } = body
+
+  // Targeted Surveys (answer B): admin / Surveys Owner may target anything,
+  // including the whole community; an area Owner only areas they own.
+  const isGlobalManager = !!member.is_admin || await isAreaOwner(member.id, 'hub', 'surveys')
+  const ownedKeys = isGlobalManager ? new Set() : await ownedAreaKeys(member.id)
+  if (!isGlobalManager && ownedKeys.size === 0) {
+    return NextResponse.json({ error: 'Admins, Surveys Owners and group Owners only' }, { status: 403 })
+  }
+  const aud = normalizeAudienceInput(audience, await activeClubIds())
+  if (!aud.ok) return NextResponse.json({ error: aud.error }, { status: 400 })
+  if (!canTargetAudience({ isGlobalManager, ownedKeys }, aud.rows)) {
+    return NextResponse.json({ error: aud.rows.length ? 'You can only aim a survey at groups you own' : 'Choose which of your groups this survey is for' }, { status: 403 })
+  }
 
   if (!title || !String(title).trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 })
   // At least one coordinator is required -- same rule as every event-based
@@ -152,6 +194,7 @@ export async function POST(req) {
       description: description || null,
       eligibility_mode: eligibility_mode === 'per_household' ? 'per_household' : 'per_resident',
       anonymous: !!anonymous,
+      visible_to_all: aud.rows.length > 0 && !!visible_to_all,
       results_visibility_outcome: results_visibility_outcome === 'admin_only' ? 'admin_only' : 'residents',
       results_visibility_turnout: results_visibility_turnout === 'admin_only' ? 'admin_only' : 'residents',
       closes_at: closes_at || null,
@@ -173,6 +216,12 @@ export async function POST(req) {
     // roll back the survey so a failed items-insert doesn't leave an orphaned Draft
     await supabaseAdmin.from('surveys').delete().eq('id', survey.id)
     return NextResponse.json({ error: itemErr.message }, { status: 500 })
+  }
+
+  const audErr = await writeAudience(survey.id, aud.rows)
+  if (audErr) {
+    await supabaseAdmin.from('surveys').delete().eq('id', survey.id)
+    return NextResponse.json({ error: audErr.message }, { status: 500 })
   }
 
   await writeCoordinators(survey.id, coordinator_ids, member.id)
