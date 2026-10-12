@@ -180,7 +180,26 @@ async function createTestbotNotification() {
   return { id: row.id, message }
 }
 
+// Delete test notifications created by createTestbotNotification(). Called
+// before each run (sweeps leftovers from earlier runs) and after each run
+// whether it passed or failed. 2026-10-12: a failing notifications test left
+// its row unread every time -- 277 had piled up on testbot since 2026-08-25.
+// Only ever touches testbot's rows whose message carries the [e2e-check-]
+// marker, never a real notification.
+async function deleteTestbotE2eNotifications(id) {
+  const members = await supaGet(`members?username=ilike.testbot&select=id`, SUPABASE_SERVICE_KEY)
+  if (!members[0]) return
+  const filter = id
+    ? `id=eq.${id}`
+    : `message=like.*${encodeURIComponent('[e2e-check-')}*`
+  await fetch(`${SUPABASE_URL}/rest/v1/notifications?member_id=eq.${members[0].id}&${filter}`, {
+    method: 'DELETE',
+    headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` },
+  })
+}
+
 module.exports = {
+  deleteTestbotE2eNotifications,
   getNextScreening,
   getBookableScreening,
   getUpcomingBookclubEvent,
