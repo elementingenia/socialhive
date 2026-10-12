@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test')
-const { createTestbotNotification } = require('./helpers')
+const { createTestbotNotification, deleteTestbotE2eNotifications } = require('./helpers')
 
 // ── Notifications ──────────────────────────────────────────────────────────────
 // This test creates a fresh notification per run rather than depending on a
@@ -29,8 +29,18 @@ const { createTestbotNotification } = require('./helpers')
 // that doesn't depend on what else happens to be in the list or whether the
 // button is still present.
 test.describe('Notifications', () => {
+  // Always clean up, pass or fail (2026-10-12): a failed run used to leave its
+  // test notification unread on testbot forever.
+  let createdId = null
+  test.beforeEach(async () => { await deleteTestbotE2eNotifications() })
+  test.afterEach(async () => {
+    if (createdId) await deleteTestbotE2eNotifications(createdId)
+    createdId = null
+  })
+
   test('Bell shows unread badge, drawer displays it, ticking marks it done', async ({ page }) => {
     const { id, message } = await createTestbotNotification()
+    createdId = id
 
     await page.goto('/home')
     await page.waitForLoadState('networkidle')
