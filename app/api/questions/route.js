@@ -84,11 +84,12 @@ export async function GET(req) {
 
   // Badge count: things needing my attention (as answerer + as asker).
   if (searchParams.get("count")) {
-    const box = await answeringBoxQuestions(member)
+    const box = await answeringBoxQuestions(member, { openOnly: true })
     const toAnswer = box.filter(q => q.status === "open" || q.status === "followup").length
     const { data: mine } = await supabaseAdmin.from("questions")
-      .select("id, status, asker_seen_at").eq("asker_member_id", member.id)
-    const mineUnseen = (mine || []).filter(q => (q.status === "answered" || q.status === "closed") && !q.asker_seen_at).length
+      .select("id").eq("asker_member_id", member.id)
+      .in("status", ["answered", "closed"]).is("asker_seen_at", null)
+    const mineUnseen = (mine || []).length
     return NextResponse.json({ count: toAnswer + mineUnseen, toAnswer, mineUnseen })
   }
 
