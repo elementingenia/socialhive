@@ -159,6 +159,14 @@ const RAW_SECTIONS = [
     ],
   },
   {
+    id: "surveys", num: 12, title: "Surveys",
+    subs: [
+      { title: "Answering a survey",                    id: "sub-surveys-answer" },
+      { title: "Surveys for your group",                id: "sub-surveys-groups" },
+      { title: "Running a survey (Owner/admin only)",   id: "sub-surveys-ec" },
+    ],
+  },
+  {
     id: "special", num: 12, title: "Special Events",
     subs: [
       { title: "Special Events hub home",       id: "sub-special-home" },
@@ -1954,6 +1962,62 @@ export default function HelpGuidePage() {
                 <strong>Manage Voting</strong> (reached from the Voting page) — admins only. Turn it
                 off between voting periods so it doesn't sit unused on Home.
               </InfoBox>
+            </Subsection>
+          </Section>
+          <Section id="surveys" num={secNum("surveys")} title="Surveys">
+            <Step>
+              Surveys ask for your views on something. They only appear on Home while an admin has
+              Surveys switched on. If you don't see a Surveys tile, there's nothing to answer.
+            </Step>
+
+            <Subsection id="sub-surveys-answer" title="Answering a survey">
+              <Step>
+                Open the Surveys tile and tap the survey. Answer the questions, then tap{" "}
+                <strong>Submit</strong>. If you need to stop part way, tap{" "}
+                <strong>Save for later</strong> and come back any time before it closes.
+              </Step>
+              <Step>
+                Some surveys are <strong>one response per household</strong>. If someone else at
+                your address has already answered, you won't be asked again.
+              </Step>
+            </Subsection>
+
+            <Subsection id="sub-surveys-groups" title="Surveys for your group">
+              <Step>
+                A survey can be just for the members of one or more groups, such as Book Club or
+                Show Time. The survey card shows who it's for, for example{" "}
+                <strong>For: Book Club</strong>. You'll get a notification when it opens, and only
+                members can answer it.
+              </Step>
+              <Step>
+                If you join the group while the survey is open, you can still take part. On a{" "}
+                <strong>one response per household</strong> survey, your household can answer if
+                anyone at your address is a member.
+              </Step>
+              <InfoBox>
+                💡 You won't normally see surveys for groups you haven't joined. The person running
+                it can choose to let everyone see it, but only members can answer.
+              </InfoBox>
+            </Subsection>
+
+            <Subsection id="sub-surveys-ec" title="Running a survey (Owner/admin only)" ecOnly>
+              <Step>
+                Admins, the Surveys Owner, and the Owner of Show Time or a Group &amp; Club can tap{" "}
+                <strong>+ New Survey</strong>. Under <strong>Who is this for?</strong>, admins and
+                the Surveys Owner choose <strong>Whole community</strong> or{" "}
+                <strong>Members of selected groups</strong>. A group Owner can only pick the groups
+                they own.
+              </Step>
+              <Step>
+                Tick <strong>Let everyone see this survey</strong> if non-members should be able to
+                see it and its results. Leave it off to keep it to members only.
+              </Step>
+              <Step>
+                A new survey starts as a <strong>Draft</strong>. Use{" "}
+                <strong>Edit who this is for</strong> to change the groups while it's still a
+                Draft. Tapping <strong>Open this survey</strong> notifies only the people it's for
+                (everyone, for a whole community survey).
+              </Step>
             </Subsection>
           </Section>
           <Section id="special" num={secNum("special")} title="Special Events">

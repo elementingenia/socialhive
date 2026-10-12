@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { resolveMember } from '@/lib/areaAuth'
 import { computeSurveyStatus, isEligibleForSurvey, validateAnswerShape, isAnswerEmpty, resolveCommentText } from '@/lib/surveys'
+import { notInAudienceReason } from '@/lib/surveyAudience'
+import { surveyAccess } from '@/lib/surveyAudienceServer'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +20,10 @@ export async function GET(req, { params }) {
   const { data: survey, error: sErr } = await supabaseAdmin
     .from('surveys').select('*').eq('id', params.id).single()
   if (sErr || !survey) return NextResponse.json({ error: 'Survey not found' }, { status: 404 })
+
+  // Targeted Surveys: outside the audience = no response to resume.
+  const access = await surveyAccess(survey, member)
+  if (!access.inAudience) return NextResponse.json({ error: notInAudienceReason(access.labels) }, { status: 403 })
 
   const { data: response } = await supabaseAdmin
     .from('survey_responses').select('id, started_at, submitted_at')
@@ -90,6 +96,12 @@ export async function POST(req, { params }) {
   if (computeSurveyStatus(survey) !== 'open') {
     return NextResponse.json({ error: 'This survey is not currently open for responses' }, { status: 400 })
   }
+
+  // Targeted Surveys (2026-10-13): only the live audience may answer, even
+  // when the survey is visible to everyone (answers A/C/D). Enforced here,
+  // not just hidden in the UI.
+  const access = await surveyAccess(survey, member)
+  if (!access.inAudience) return NextResponse.json({ error: notInAudienceReason(access.labels) }, { status: 403 })
 
   const { data: cleanItems, error: ciErr } = await supabaseAdmin
     .from('survey_items')

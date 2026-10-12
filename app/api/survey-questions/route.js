@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
-import { requireAdminOrAreaOwner } from '@/lib/areaAuth'
+import { requireSurveyAuthor } from '@/lib/areaAuth'
 
 export const dynamic = 'force-dynamic'
 
 // Surveys' Question Bank -- see supabase/migrations/098_survey_question_bank.sql
 // for the full design. Admin/Owner-only end to end (this is a management
-// screen, not resident-facing -- residents only ever see a survey's own
+// screen, not resident-facing. Group Owners can read and add to it too
+// (Targeted Surveys, 2026-10-13) -- editing/archiving stays in [id]/route.js,
+// admin/Surveys Owner only -- residents only ever see a survey's own
 // attached items via app/api/surveys/[id], never the raw bank).
 
 const QUESTION_TYPES = ['single_choice', 'multi_choice', 'rating', 'free_text', 'yes_no']
@@ -17,7 +19,7 @@ const CHOICE_TYPES = ['single_choice', 'multi_choice']
 // question text when read back) but flagged, so the bank UI can grey them
 // out / hide them from "attach to a new survey" without losing history.
 export async function GET(req) {
-  const { error, status } = await requireAdminOrAreaOwner(req, 'hub', 'surveys')
+  const { error, status } = await requireSurveyAuthor(req)
   if (error) return NextResponse.json({ error }, { status })
 
   const { data: questions, error: qErr } = await supabaseAdmin
@@ -59,7 +61,7 @@ export async function GET(req) {
 // accepted (and required, min 2) for single_choice/multi_choice -- any
 // choices array is ignored for the other three types.
 export async function POST(req) {
-  const { error, status, member } = await requireAdminOrAreaOwner(req, 'hub', 'surveys')
+  const { error, status, member } = await requireSurveyAuthor(req)
   if (error) return NextResponse.json({ error }, { status })
 
   const body = await req.json().catch(() => ({}))

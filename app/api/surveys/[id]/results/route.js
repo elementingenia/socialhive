@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { resolveMember, isAreaOwner } from '@/lib/areaAuth'
 import { computeSurveyStatus, canSeeResults } from '@/lib/surveys'
+import { surveyAccess } from '@/lib/surveyAudienceServer'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,6 +71,12 @@ export async function GET(req, { params }) {
     }
     if (!canSeeResults(survey, { field: 'results_visibility_outcome', isCoordinator })) {
       return NextResponse.json({ error: 'Results for this survey are not visible to residents.' }, { status: 403 })
+    }
+    // Targeted Surveys (2026-10-13): "residents" means the survey's own
+    // audience, unless it was made visible to everyone (answer C).
+    const access = await surveyAccess(survey, member)
+    if (!access.inAudience && !survey.visible_to_all) {
+      return NextResponse.json({ error: 'Results for this survey are only visible to its members.' }, { status: 403 })
     }
     identityAllowed = false
   }

@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { requireSurveyManage } from '@/lib/areaAuth'
 import { computeSurveyStatus } from '@/lib/surveys'
-import { notifyAllActiveMembers } from '@/lib/notifyAudience'
+import { notifyMemberIds } from '@/lib/notifyAudience'
+import { surveyRecipientIds } from '@/lib/surveyAudienceServer'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,7 +50,7 @@ export async function POST(req, { params }) {
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
 
   const closesFmt = new Date(closesAt).toLocaleString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
-  await notifyAllActiveMembers(supabaseAdmin, null, 'survey_opened',
+  await notifyMemberIds(await surveyRecipientIds(survey), null, 'survey_opened',
     `New survey: "${survey.title}" — closes ${closesFmt}`, { excludeMemberId: member?.id })
 
   return NextResponse.json({ survey: { ...updated, status: computeSurveyStatus(updated) } })

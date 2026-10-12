@@ -78,6 +78,8 @@ export default function SurveysHubPage() {
   const [surveys, setSurveys] = useState(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [canManage, setCanManage] = useState(false)
+  const [canCreate, setCanCreate] = useState(false)
+  const [audienceOptions, setAudienceOptions] = useState([])
   const [showCreate, setShowCreate] = useState(false)
   const [error, setError] = useState("")
 
@@ -88,6 +90,8 @@ export default function SurveysHubPage() {
     setSurveys(json.surveys || [])
     setIsAdmin(!!json.isAdmin)
     setCanManage(!!json.canManage)
+    setCanCreate(!!json.canCreate)
+    setAudienceOptions(json.audienceOptions || [])
   }
   useEffect(() => { load() }, [])
 
@@ -98,7 +102,7 @@ export default function SurveysHubPage() {
         <h1 style={{ fontSize: "1.3rem", fontWeight: 800, margin: 0 }}>Surveys</h1>
       </div>
 
-      {canManage && (
+      {canCreate && (
         <div style={{ marginBottom: "1rem", display: "flex", gap: "0.5rem" }}>
           <button style={BTN_PRIMARY} onClick={() => setShowCreate(v => !v)}>
             {showCreate ? "Cancel" : "+ New Survey"}
@@ -109,7 +113,7 @@ export default function SurveysHubPage() {
 
       {error && <div style={{ color: "var(--terracotta)", marginBottom: "1rem" }}>{error}</div>}
 
-      {showCreate && <CreateSurveyForm onCreated={() => { setShowCreate(false); load() }} />}
+      {showCreate && <CreateSurveyForm canManage={canManage} audienceOptions={audienceOptions} onCreated={() => { setShowCreate(false); load() }} />}
 
       {surveys === null && <div style={{ color: "var(--text-dim)" }}>Loading…</div>}
       {surveys !== null && surveys.length === 0 && (
@@ -118,7 +122,7 @@ export default function SurveysHubPage() {
         </div>
       )}
       {(surveys || []).map(s => (
-        <SurveyCard key={s.id} survey={s} isAdmin={isAdmin} canManage={canManage} canManageEvent={s.canManageEvent} onChanged={load} />
+        <SurveyCard key={s.id} survey={s} isAdmin={isAdmin} canManage={canManage} canManageEvent={s.canManageEvent} audienceOptions={audienceOptions} onChanged={load} />
       ))}
     </div>
   )
@@ -225,9 +229,14 @@ function SurveyItemsEditor({ bank, selectedItems, setSelectedItems }) {
   )
 }
 
-function CreateSurveyForm({ onCreated }) {
+function CreateSurveyForm({ canManage, audienceOptions, onCreated }) {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
+  // Targeted Surveys: [] = whole community (admin / Surveys Owner only).
+  // A group Owner must always pick at least one of their own groups.
+  const [audience, setAudience] = useState([])
+  const [targeted, setTargeted] = useState(!canManage)
+  const [visibleToAll, setVisibleToAll] = useState(false)
   const [eligibilityMode, setEligibilityMode] = useState("per_resident")
   const [anonymous, setAnonymous] = useState(false)
   const [visOutcome, setVisOutcome] = useState("residents")
@@ -249,6 +258,7 @@ function CreateSurveyForm({ onCreated }) {
     if (!title.trim()) return setError("Title is required")
     if (coordinators.length === 0) return setError("At least one coordinator is required")
     if (selectedItems.length === 0) return setError("Pick at least one question from the bank")
+    if (targeted && audience.length === 0) return setError("Choose at least one group this survey is for")
     setSaving(true)
     const res = await authedFetch("/api/surveys", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -261,6 +271,8 @@ function CreateSurveyForm({ onCreated }) {
         results_visibility_turnout: visTurnout,
         coordinator_ids: coordinators.map(m => m.id),
         items: selectedItems,
+        audience: targeted ? audience : [],
+        visible_to_all: targeted && visibleToAll,
       }),
     })
     const json = await res.json().catch(() => ({}))
@@ -278,6 +290,14 @@ function CreateSurveyForm({ onCreated }) {
 
       <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Description (optional)</label>
       <textarea style={{ ...INPUT, marginBottom: "0.9rem", minHeight: "70px" }} value={description} onChange={e => setDescription(e.target.value)} />
+
+      <AudienceFields
+        canChooseCommunity={canManage}
+        options={audienceOptions}
+        targeted={targeted} setTargeted={setTargeted}
+        audience={audience} setAudience={setAudience}
+        visibleToAll={visibleToAll} setVisibleToAll={setVisibleToAll}
+      />
 
       <div style={{ marginBottom: "0.9rem" }}>
         <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Who can respond</label>
@@ -323,6 +343,122 @@ function CreateSurveyForm({ onCreated }) {
 
       {error && <div style={{ color: "var(--terracotta)", margin: "0.6rem 0", fontSize: "0.85rem" }}>{error}</div>}
       <button style={{ ...BTN_PRIMARY, marginTop: "0.6rem" }} disabled={saving} onClick={save}>{saving ? "Saving…" : "Save as Draft"}</button>
+    </div>
+  )
+}
+
+// Targeted Surveys (Iain, 2026-10-13) -- "Who is this for?". Whole community
+// (admin / Surveys Owner only) or members of one or more groups that have a
+// Join list (Show Time + Groups & Clubs), picked as tap-to-toggle pills, A-Z.
+// Non-members don't see a targeted survey unless "Let everyone see it" is on.
+function AudienceFields({ canChooseCommunity, options, targeted, setTargeted, audience, setAudience, visibleToAll, setVisibleToAll }) {
+  const isPicked = o => audience.some(a => a.area_type === o.area_type && a.key === o.key)
+  function toggle(o) {
+    setAudience(isPicked(o) ? audience.filter(a => !(a.area_type === o.area_type && a.key === o.key)) : [...audience, { area_type: o.area_type, key: o.key }])
+  }
+  return (
+    <div style={{ marginBottom: "0.9rem" }}>
+      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Who is this for?</label>
+      {canChooseCommunity && (
+        <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.5rem" }}>
+          <button type="button" style={typeBtnStyle(!targeted)} onClick={() => setTargeted(false)}>Whole community</button>
+          <button type="button" style={typeBtnStyle(targeted)} onClick={() => setTargeted(true)}>Members of selected groups</button>
+        </div>
+      )}
+      {targeted && (
+        <>
+          {options.length === 0 ? (
+            <div style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>No groups available to choose from.</div>
+          ) : (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginBottom: "0.4rem" }}>
+              {options.map(o => {
+                const on = isPicked(o)
+                return (
+                  <button key={`${o.area_type}:${o.key}`} type="button" onClick={() => toggle(o)} style={{
+                    padding: "0.35rem 0.75rem", borderRadius: "999px", fontSize: "0.82rem", fontWeight: 600, fontFamily: "inherit", cursor: "pointer",
+                    border: `1px solid ${on ? "var(--surveys)" : "var(--border)"}`,
+                    background: on ? "var(--surveys)" : "var(--surface)", color: on ? "#fff" : "var(--text)",
+                  }}>{on ? "✓ " : ""}{o.label}</button>
+                )
+              })}
+            </div>
+          )}
+          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginBottom: "0.5rem" }}>
+            Anyone who has joined any of these can take part. Membership is checked when they answer, so people who join later can still take part.
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.9rem" }}>
+            <input type="checkbox" checked={visibleToAll} onChange={e => setVisibleToAll(e.target.checked)} />
+            Let everyone see this survey
+          </label>
+          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "0.2rem" }}>
+            Off: only members see it. On: everyone can see it and its results, but only members can answer.
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// Edit who a survey is for. Groups can change while it's a Draft; "Let
+// everyone see it" can change any time before results are published.
+function SurveyAudienceEditor({ survey, detail, canManage, audienceOptions, onSaved }) {
+  const isDraft = survey.status === "draft"
+  const [open, setOpen] = useState(false)
+  const [targeted, setTargeted] = useState((detail.audience || []).length > 0)
+  const [audience, setAudience] = useState(detail.audience || [])
+  const [visibleToAll, setVisibleToAll] = useState(!!detail.survey?.visible_to_all)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState("")
+
+  // A coordinator who isn't an Owner can't move the audience (server
+  // refuses) -- only show the group picker to someone who can use it.
+  const canEditGroups = isDraft && (canManage || audienceOptions.length > 0)
+  if (!canEditGroups && (detail.audience || []).length === 0) return null
+
+  async function save() {
+    setErr("")
+    if (targeted && audience.length === 0) return setErr("Choose at least one group")
+    setSaving(true)
+    const body = canEditGroups
+      ? { audience: targeted ? audience : [], visible_to_all: targeted && visibleToAll }
+      : { visible_to_all: visibleToAll }
+    const res = await authedFetch(`/api/surveys/${survey.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    })
+    const json = await res.json().catch(() => ({}))
+    setSaving(false)
+    if (!res.ok) return setErr(json.error || "Could not save")
+    setOpen(false); onSaved()
+  }
+
+  if (!open) {
+    return (
+      <button style={{ ...BTN_GHOST, padding: "0.35rem 0.7rem", fontSize: "0.78rem", marginBottom: "0.6rem" }} onClick={() => setOpen(true)}>
+        Edit who this is for
+      </button>
+    )
+  }
+  return (
+    <div style={{ border: "1px solid var(--border)", borderRadius: "10px", padding: "0.75rem", marginBottom: "0.6rem" }}>
+      {canEditGroups ? (
+        <AudienceFields
+          canChooseCommunity={canManage}
+          options={audienceOptions}
+          targeted={targeted} setTargeted={setTargeted}
+          audience={audience} setAudience={setAudience}
+          visibleToAll={visibleToAll} setVisibleToAll={setVisibleToAll}
+        />
+      ) : (
+        <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.9rem", marginBottom: "0.6rem" }}>
+          <input type="checkbox" checked={visibleToAll} onChange={e => setVisibleToAll(e.target.checked)} />
+          Let everyone see this survey
+        </label>
+      )}
+      {err && <div style={{ color: "var(--terracotta)", fontSize: "0.85rem", marginBottom: "0.4rem" }}>{err}</div>}
+      <div style={{ display: "flex", gap: "0.5rem" }}>
+        <button style={{ ...BTN_PRIMARY, width: "auto" }} disabled={saving} onClick={save}>{saving ? "Saving…" : "Save"}</button>
+        <button style={BTN_GHOST} disabled={saving} onClick={() => setOpen(false)}>Cancel</button>
+      </div>
     </div>
   )
 }
@@ -525,7 +661,7 @@ function SurveyCoordinatorsEditor({ survey, detail, onSaved }) {
   )
 }
 
-function SurveyCard({ survey, isAdmin, canManage, canManageEvent, onChanged }) {
+function SurveyCard({ survey, isAdmin, canManage, canManageEvent, audienceOptions, onChanged }) {
   const router = useRouter()
   const [expanded, setExpanded] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
@@ -608,6 +744,12 @@ function SurveyCard({ survey, isAdmin, canManage, canManageEvent, onChanged }) {
           </span>
         </div>
 
+        {survey.audienceLabels?.length > 0 && (
+          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.2rem" }}>
+            For: <span style={{ fontWeight: 600, color: "var(--text)" }}>{survey.audienceLabels.join(", ")}</span>
+          </div>
+        )}
+
         {survey.coordinatorNames?.length > 0 && (
           <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: "0.2rem" }}>
             Coordinator{survey.coordinatorNames.length > 1 ? "s" : ""}: <span style={{ fontWeight: 600, color: "var(--surveys)" }}>{survey.coordinatorNames.join(", ")}</span>
@@ -641,6 +783,10 @@ function SurveyCard({ survey, isAdmin, canManage, canManageEvent, onChanged }) {
           <div style={{ marginTop: "0.75rem" }}>
             {survey.status !== "published" && canManageThis && (
               <SurveyCoordinatorsEditor survey={survey} detail={detail} onSaved={() => { onChanged(); loadDetail() }} />
+            )}
+
+            {survey.status !== "published" && canManageThis && (
+              <SurveyAudienceEditor survey={survey} detail={detail} canManage={canManage} audienceOptions={audienceOptions || []} onSaved={() => { onChanged(); setDetail(null) }} />
             )}
 
             {survey.status === "draft" && canManageThis && (
