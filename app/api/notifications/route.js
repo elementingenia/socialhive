@@ -19,6 +19,27 @@ export async function GET(req) {
   const member = await getMember(token)
   if (!member) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
 
+  // Badge count (2026-10-12, Vercel CPU limit): the header badge polls this
+  // and only needs a number. Same rules as the full list below -- the 50 most
+  // recent, unread, with expired event reminders auto-marked read -- but
+  // without the message text, event/club joins or club-notice lookups.
+  if (new URL(req.url).searchParams.get('count')) {
+    const { data, error } = await supabaseAdmin
+      .from('notifications')
+      .select('id, type, read_at, events(event_date, event_time)')
+      .eq('member_id', member.id)
+      .order('created_at', { ascending: false })
+      .limit(50)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const now = new Date()
+    const expiredIds = (data || []).filter(n => isExpiredEventReminder(n, now)).map(n => n.id)
+    if (expiredIds.length) {
+      await supabaseAdmin.from('notifications').update({ read_at: now.toISOString() }).in('id', expiredIds)
+    }
+    const count = (data || []).filter(n => !n.read_at && !expiredIds.includes(n.id)).length
+    return NextResponse.json({ count })
+  }
+
   const { data, error } = await supabaseAdmin
     .from('notifications')
     // club_id + club:clubs(slug) added (2026-09-22) so a club/Book Club
