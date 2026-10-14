@@ -155,7 +155,7 @@ function MyBookingsCard({ bookings, onViewAll, onOpenEvent }) {
   // Next Screening tile above (see isEventPast's own comment), reported by
   // Iain via screenshot 2026-09-02: a 2pm booking was still shown here at
   // 4pm the same day, after Next Screening had already correctly moved on.
-  const upcoming = bookings.filter(b => b.status !== 'cancelled' && b.events?.hub_type === 'movie' && !isEventPast(b.events))
+  const upcoming = bookings.filter(b => b.status !== 'cancelled' && b.events?.hub_type === 'movie' && !b.events?.archived && !isEventPast(b.events))
 
   // Group by event_id
   const grouped = {}
@@ -454,7 +454,7 @@ export default function MoviesHomePage() {
         .limit(5),
 
       supabase.from('bookings')
-        .select('id, event_id, status, seats, booked_at, events(id, event_date, event_time, title, hub_type, image_url, image_focal_x, image_focal_y, movie_snapshot, movies(id, title, poster_url, rating))')
+        .select('id, event_id, status, seats, booked_at, events(id, event_date, event_time, title, hub_type, archived, image_url, image_focal_x, image_focal_y, movie_snapshot, movies(id, title, poster_url, rating))')
         .eq('member_id', memberData.id)
         .neq('status', 'cancelled'),
 

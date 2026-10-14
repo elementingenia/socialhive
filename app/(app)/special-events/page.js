@@ -390,7 +390,7 @@ export default function SpecialEventsHome() {
         .limit(5),
       supabase
         .from("bookings")
-        .select("id, event_id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, events(id, title, event_date, event_time, hub_type, payment_required, location_type, location)")
+        .select("id, event_id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, events(id, title, event_date, event_time, hub_type, archived, payment_required, location_type, location)")
         .eq("member_id", member.id)
         .neq("status", "cancelled"),
       supabase.from("hub_settings").select("welcome_text").eq("hub_type", "special").single(),
@@ -431,7 +431,7 @@ export default function SpecialEventsHome() {
       setNextEventIsEC(false)
     }
 
-    setMyAllBookings((myBookingsRes.data || []).filter(b => b.events))
+    setMyAllBookings((myBookingsRes.data || []).filter(b => b.events && !b.events.archived))
     setWelcomeText(hubRes.data?.welcome_text || "")
     setLoading(false)
   }, [member?.id])
