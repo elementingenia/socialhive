@@ -393,7 +393,7 @@ export default function SocialHome() {
         .limit(5),
       supabase
         .from("bookings")
-        .select("id, event_id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, events(id, title, event_date, event_time, hub_type, payment_required, location_type, location)")
+        .select("id, event_id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, events(id, title, event_date, event_time, hub_type, archived, payment_required, location_type, location)")
         .eq("member_id", member.id)
         .neq("status", "cancelled"),
       supabase.from("hub_settings").select("welcome_text, enabled").eq("hub_type", "social").single(),
@@ -434,7 +434,7 @@ export default function SocialHome() {
       setNextEventIsEC(false)
     }
 
-    setMyAllBookings((myBookingsRes.data || []).filter(b => b.events))
+    setMyAllBookings((myBookingsRes.data || []).filter(b => b.events && !b.events.archived))
     // Same "Shown to residents" switch as every other Page Texts section
     // (2026-09-22) -- hidden means treat exactly like no text was saved.
     setWelcomeText(hubRes.data?.enabled !== false ? (hubRes.data?.welcome_text || "") : "")

@@ -41,13 +41,14 @@ export async function GET(req) {
   // resource PostgREST filters, which proved unreliable from a deployed route.
   const { data: rows, error } = await supa
     .from("bookings")
-    .select("id, member_id, seats, status, payment_status, payment_reminded_at, event_id, events!inner(id, title, cost, payment_required, payment_due_by)")
+    .select("id, member_id, seats, status, payment_status, payment_reminded_at, event_id, events!inner(id, title, cost, payment_required, payment_due_by, archived)")
     .eq("status", "confirmed")
     .eq("events.payment_required", true)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const due = (rows || []).filter(b => paymentReminderDue(b.events, b, todayStr))
+  // Never chase payment for a cancelled (archived) event (BUG-095).
+  const due = (rows || []).filter(b => !b.events?.archived && paymentReminderDue(b.events, b, todayStr))
 
   let reminded = 0
   for (const b of due) {

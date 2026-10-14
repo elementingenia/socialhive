@@ -198,11 +198,13 @@ export default function BookingsPage() {
     if (!member?.id) return
     const { data } = await supabase
       .from("bookings")
-      .select("id, status, seats, payment_status, booked_at, event_id, events(id, title, event_date, event_time, hub_type, club_id, clubs!club_id(name, colour, single_signup))")
+      .select("id, status, seats, payment_status, booked_at, event_id, events(id, title, event_date, event_time, hub_type, archived, club_id, clubs!club_id(name, colour, single_signup))")
       .eq("member_id", member.id)
       .neq("status", "cancelled")
 
-    setBookings(data || [])
+    // A cancelled event is archived, not deleted, and its bookings stay as
+    // they were (audit/refund history) -- so drop them here (BUG-095).
+    setBookings((data || []).filter(b => !b.events?.archived))
     setLoading(false)
   }, [member?.id])
 
