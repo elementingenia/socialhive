@@ -14,7 +14,7 @@ import { authedFetch } from "@/lib/getAuthToken"
 import { useOwners } from "@/lib/useOwners"
 import { clubCaps } from "@/lib/clubs"
 import { clubTextOn, clubInk } from "@/lib/clubColours"
-import { sydneyTodayStr, dateStrPlusDays, isEventPast } from "@/lib/date"
+import { sydneyTodayStr, dateStrPlusDays, isEventPast, daysUntilLabel } from "@/lib/date"
 import { bookingsClosed } from "@/lib/booking"
 import EventCoordinators from "@/components/EventCoordinators"
 import PastEventsAccordion from "@/components/PastEventsAccordion"
@@ -41,7 +41,7 @@ import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/att
 // status/reconciliation math.
 import { paymentSummary, reconciliationIsStale, isPaid as isPaymentPaid, isSubmitted as isPaymentSubmitted, isPartial as isPaymentPartial, seatsCost, remainingBalance, wholeDollar, balancePhrase, isRemindedToday } from "@/lib/payments"
 import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
-import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
+import { CopyLinkButton, AddToCalendarButton, BTN_STYLE as SHARE_BTN_STYLE } from "@/components/EventShareActions"
 import EventNotices from "@/components/EventNotices"
 import InviteNeighbourButton from "@/components/InviteNeighbourButton"
 import MenuButton from "@/components/MenuButton"
@@ -173,7 +173,7 @@ function BookingStrip({ isJoined, isWaitlisted = false, seats = 1, waitlistSeats
 }
 
 // ── Book Club Event Card ─────────────────────────────────────────────────────
-function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = null, seatCount = null, onOpen, onEdit = null, colour = "var(--purple)", showToast, club }) {
+function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlistInfo = null, seatCount = null, onOpen, onEdit = null, colour = "var(--purple)", showToast, club }) {
   const router = useRouter()
   const { member, isAdmin } = useUser()
   // Club Owner gets the same manage/EC-view options an admin has, scoped to
@@ -617,38 +617,43 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
       location={shareLocation} start={shareEvWindow.start} end={shareEvWindow.end} colour={colour} />
   )
 
+  const daysLabel = daysUntilLabel(event.event_date)
+  const canEdit = !!onEdit && (isAdmin || isOwner || isEC)
+  const editBtn = canEdit && (
+    <button type="button" onClick={(e) => { e.stopPropagation(); onEdit() }}
+      style={SHARE_BTN_STYLE(colour)} title="Edit this event">✎ Edit</button>
+  )
+
   return (
     <div onClick={blocked ? undefined : onOpen}
       style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",
         overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 16, cursor: blocked ? "default" : "pointer" }}>
-      {/* Card header */}
-      {/* Accessibility fix (2026-08-31): this row used to have no flexWrap and
-          no shrink/ellipsis protection on {label}, so at larger OS text-size
-          settings the row's total content width could exceed the card, and
-          because app/globals.css sets html{overflow-x:hidden} app-wide, the
-          overflow wasn't scrollable -- it just silently clipped the Edit
-          button off-screen with no way to reach it (reported live: a resident
-          on a phone with larger accessibility text couldn't see or tap Edit
-          in a club). minWidth:0+ellipsis keeps the common case unchanged;
-          flexWrap is the belt-and-braces fallback so Edit drops to its own
-          line rather than vanishing if it still doesn't fit. */}
-      <div style={{ background: colour, padding: "0.6rem 1rem", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "4px 8px" }}>
-        <span style={{ color: clubTextOn(colour), fontWeight: 700, fontSize: "0.85rem", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: "1 1 auto" }}>{label}</span>
-        <span style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "4px 8px", minWidth: 0 }}>
-          <span style={{ color: clubTextOn(colour), opacity: 0.85, fontSize: "0.78rem", fontWeight: 600 }}>{fmtDate(event.event_date)}{event.event_time ? ` · ${fmtTime(event.event_time)}` : ""}</span>
-          {onEdit && (isAdmin || isOwner || isEC) && (
-            <button onClick={(e) => { e.stopPropagation(); onEdit() }}
-              style={{ background: "rgba(255,255,255,0.9)", color: clubInk(colour), border: "none", borderRadius: 14,
-                padding: "3px 12px", fontWeight: 700, fontSize: "0.72rem", cursor: "pointer", fontFamily: "inherit", flexShrink: 0, whiteSpace: "nowrap" }}>✎ Edit</button>
+      {/* Card header (Iain, 2026-10-18, Melbourne Cup card as reference):
+          - With an image: the image is the header, with the countdown as a
+            small pill overlaid top-right so it always sits in the same spot.
+          - No image: a slim bar, "Next date" (first card on the page) or
+            "Upcoming" (2nd and later) left, countdown right, one line.
+          Date/time moved under the title; Edit moved to the action row.
+          flexWrap kept on the slim bar so nothing clips at large text
+          (2026-08-31 accessibility rule). */}
+      {event.image_url ? (
+        <div style={{ position: "relative" }}>
+          <img src={event.image_url} alt={event.title}
+            style={{ width: "100%", height: 140, objectFit: "cover", display: "block",
+              objectPosition: `${event.image_focal_x ?? 50}% ${event.image_focal_y ?? 50}%` }} />
+          {daysLabel && (
+            <span style={{ position: "absolute", top: 8, right: 8, background: "rgba(255,255,255,0.92)",
+              color: clubInk(colour), borderRadius: 20, padding: "0.2rem 0.6rem", fontSize: "0.72rem",
+              fontWeight: 700, whiteSpace: "nowrap", boxShadow: "0 1px 3px rgba(0,0,0,0.25)" }}>{daysLabel}</span>
           )}
-        </span>
-      </div>
-
-      {/* Event image — the theme cue; same focal-point treatment as Social */}
-      {event.image_url && (
-        <img src={event.image_url} alt={event.title}
-          style={{ width: "100%", height: 140, objectFit: "cover", display: "block",
-            objectPosition: `${event.image_focal_x ?? 50}% ${event.image_focal_y ?? 50}%` }} />
+        </div>
+      ) : (
+        <div style={{ background: colour, padding: "0.35rem 1rem", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "2px 8px" }}>
+          <span style={{ color: clubTextOn(colour), fontWeight: 700, fontSize: "0.78rem" }}>{isFirst ? "Next date" : "Upcoming"}</span>
+          {daysLabel && (
+            <span style={{ color: clubTextOn(colour), fontWeight: 700, fontSize: "0.78rem", whiteSpace: "nowrap" }}>{daysLabel}</span>
+          )}
+        </div>
       )}
 
       {/* Full rebuild to Iain's explicit numbered spec (2026-09-15, after
@@ -691,6 +696,13 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
         {event.title && (
           <div style={{ fontWeight: 800, fontSize: "1.05rem", lineHeight: 1.2, marginBottom: 4, color: "var(--text)" }}>
             {event.title}
+          </div>
+        )}
+
+        {/* Date + time, accent colour, directly under the title (2026-10-18) */}
+        {event.event_date && (
+          <div style={{ fontSize: "0.85rem", fontWeight: 600, color: clubInk(colour), marginBottom: 4 }}>
+            {fmtDate(event.event_date)}{event.event_time ? ` · ${fmtTime(event.event_time)}` : ""}
           </div>
         )}
 
@@ -761,9 +773,12 @@ function EventCard({ event, label, booking, myWaitlist = null, waitlistInfo = nu
         ) : shareCalendarBtn ? (
           <div>{shareCalendarBtn}</div>
         ) : null}
-        {shareUrl && shareEvWindow && (
+        {((shareUrl && shareEvWindow) || editBtn) && (
           <div style={{ marginTop: "0.15rem", display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: 4 }}>
-            <MenuButton event={event} colour={colour} />{" "}<InviteNeighbourButton event={event} colour={colour} />{" "}<CopyLinkButton url={shareUrl} colour={colour} />
+            {shareUrl && shareEvWindow && (
+              <><MenuButton event={event} colour={colour} />{" "}<InviteNeighbourButton event={event} colour={colour} />{" "}<CopyLinkButton url={shareUrl} colour={colour} /></>
+            )}
+            {editBtn}
           </div>
         )}
         {/* Bus driver -- same line as Social's tile */}
@@ -2957,6 +2972,16 @@ function ClubSocial({ club, colour, isAdmin }) {
   )
 }
 
+// Wraps an inline edit form and scrolls it into view once on open, so the
+// form appears where the organiser tapped Edit (2026-10-18).
+function InlineEditSlot({ children }) {
+  const ref = useRef(null)
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }, [])
+  return <div ref={ref} style={{ scrollMarginTop: 72 }}>{children}</div>
+}
+
 export default function ClubHome({ club }) {
   const { member, isAdmin } = useUser()
   // Club Owner gets the same create/edit/manage-events options an admin has,
@@ -3396,8 +3421,10 @@ export default function ClubHome({ club }) {
         </div>
       )}
 
-      {/* Admin event form */}
-      {showForm && (
+      {/* Admin event form -- top of the list for a NEW event only. Editing
+          renders the form in place of the clicked card (Iain, 2026-10-18:
+          the form used to open up here, off-screen from a lower card). */}
+      {showForm && !editEvent && (
         <AdminEventForm
           club={club}
           colour={colour}
@@ -3411,11 +3438,28 @@ export default function ClubHome({ club }) {
 
       {/* Activities — one parent card per activity; recurring ones nest their
           future dates beneath (Iain, 2026-07-21) */}
-      {activities.length ? activities.map(act => (
+      {activities.length ? activities.map((act, actIdx) => {
+        const editingParent = showForm && editEvent?.id === act.parent.id
+        const editingChild  = showForm && !editingParent && act.children.some(c => c.id === editEvent?.id)
+        const inlineForm = (editingParent || editingChild) && (
+          <InlineEditSlot>
+            <AdminEventForm
+              club={club}
+              colour={colour}
+              event={editEvent}
+              clubPattern={clubPattern}
+              members={members}
+              onSave={() => { setShowForm(false); setEditEvent(null); load() }}
+              onClose={() => { setShowForm(false); setEditEvent(null) }}
+            />
+          </InlineEditSlot>
+        )
+        return (
         <div key={act.key}>
+          {editingParent ? inlineForm : (
           <EventCard
             event={act.parent}
-            label={act.isSeries ? "Next date" : "Event"}
+            isFirst={actIdx === 0}
             booking={myBookings[act.parent.id]}
             myWaitlist={myBookings[act.parent.id]?.status === "confirmed" ? myWaitlists[act.parent.id] : null}
             waitlistInfo={waitlistInfo[act.parent.id]}
@@ -3426,10 +3470,13 @@ export default function ClubHome({ club }) {
             club={club}
             showToast={showToast}
           />
+          )}
+          {editingChild && inlineForm}
           <UpcomingDatesAccordion events={act.children} myBookings={myBookings} waitlistInfo={waitlistInfo}
             onOpen={openSlideOut} onEdit={!showForm ? (ev) => { setEditEvent(ev); setShowForm(true) } : null} colour={colour} club={club} />
         </div>
-      )) : (
+        )
+      }) : (
         <div style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",
           padding: "1.5rem", textAlign: "center", marginBottom: 16 }}>
           <div style={{ fontSize: "2rem", marginBottom: 8 }}>📚</div>

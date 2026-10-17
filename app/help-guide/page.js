@@ -1393,7 +1393,9 @@ export default function HelpGuidePage() {
                 every event in that club — attendee names, seat counts, payment status, and who's
                 bringing what. They can modify a resident's seat count, cancel bookings, and
                 create or edit the club's events and activities — the same options an admin has, just
-                restricted to their own club.
+                restricted to their own club. To change an event, tap <strong>✎ Edit</strong> in the
+                row of buttons beside <strong>Copy Link</strong> — the edit form opens right there,
+                in place of that event's card.
               </Step>
               <Step>
                 When creating or editing an event, a <strong>Booking</strong> choice at the top decides

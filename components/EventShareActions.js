@@ -31,7 +31,7 @@ import { buildGoogleCalendarUrl, buildIcsContent, buildCalendarDescription, down
 // Every handler stops event propagation -- a tile's own onClick opens the
 // event/booking detail, and these buttons sit inside that same clickable row.
 
-const BTN_STYLE = (colour) => ({
+export const BTN_STYLE = (colour) => ({
   display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700,
   padding: "3px 8px", borderRadius: 20, border: `1px solid ${colour}`, color: colour,
   background: "transparent", cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
