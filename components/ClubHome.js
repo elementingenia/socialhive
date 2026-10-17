@@ -41,7 +41,7 @@ import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/att
 // status/reconciliation math.
 import { paymentSummary, reconciliationIsStale, isPaid as isPaymentPaid, isSubmitted as isPaymentSubmitted, isPartial as isPaymentPartial, seatsCost, remainingBalance, wholeDollar, balancePhrase, isRemindedToday } from "@/lib/payments"
 import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
-import { CopyLinkButton, AddToCalendarButton, BTN_STYLE as SHARE_BTN_STYLE } from "@/components/EventShareActions"
+import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
 import EventNotices from "@/components/EventNotices"
 import InviteNeighbourButton from "@/components/InviteNeighbourButton"
 import MenuButton from "@/components/MenuButton"
@@ -620,8 +620,12 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
   const daysLabel = daysUntilLabel(event.event_date)
   const canEdit = !!onEdit && (isAdmin || isOwner || isEC)
   const editBtn = canEdit && (
-    <button type="button" onClick={(e) => { e.stopPropagation(); onEdit() }}
-      style={SHARE_BTN_STYLE(colour)} title="Edit this event">✎ Edit</button>
+    <button type="button" onClick={(e) => { e.stopPropagation(); onEdit() }} style={{
+      background: "var(--surface2)", border: "1px solid var(--border)",
+      borderRadius: "8px", padding: "0.2rem 0.6rem",
+      fontSize: "0.72rem", fontWeight: 700, cursor: "pointer",
+      color: "var(--text-dim)", fontFamily: "inherit", flexShrink: 0,
+    }}>Edit</button>
   )
 
   return (
@@ -629,30 +633,22 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
       style={{ background: "var(--surface)", borderRadius: 16, border: "1px solid var(--border)",
         overflow: "hidden", boxShadow: "var(--shadow)", marginBottom: 16, cursor: blocked ? "default" : "pointer" }}>
       {/* Card header (Iain, 2026-10-18, Melbourne Cup card as reference):
-          - With an image: the image is the header, with the countdown as a
-            small pill overlaid top-right so it always sits in the same spot.
+          - With an image: the image is the header.
           - No image: a slim bar, "Next date" (first card on the page) or
-            "Upcoming" (2nd and later) left, countdown right, one line.
-          Date/time moved under the title; Edit moved to the action row.
+            "Upcoming" (2nd and later).
+          Countdown ("In N days", club colour) and Edit (right-aligned) sit on
+          the title line, same as Social's tile; date/time directly under.
           flexWrap kept on the slim bar so nothing clips at large text
           (2026-08-31 accessibility rule). */}
       {event.image_url ? (
-        <div style={{ position: "relative" }}>
+        <div>
           <img src={event.image_url} alt={event.title}
             style={{ width: "100%", height: 140, objectFit: "cover", display: "block",
               objectPosition: `${event.image_focal_x ?? 50}% ${event.image_focal_y ?? 50}%` }} />
-          {daysLabel && (
-            <span style={{ position: "absolute", top: 8, right: 8, background: "rgba(255,255,255,0.92)",
-              color: clubInk(colour), borderRadius: 20, padding: "0.2rem 0.6rem", fontSize: "0.72rem",
-              fontWeight: 700, whiteSpace: "nowrap", boxShadow: "0 1px 3px rgba(0,0,0,0.25)" }}>{daysLabel}</span>
-          )}
         </div>
       ) : (
         <div style={{ background: colour, padding: "0.35rem 1rem", display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "2px 8px" }}>
           <span style={{ color: clubTextOn(colour), fontWeight: 700, fontSize: "0.78rem" }}>{isFirst ? "Next date" : "Upcoming"}</span>
-          {daysLabel && (
-            <span style={{ color: clubTextOn(colour), fontWeight: 700, fontSize: "0.78rem", whiteSpace: "nowrap" }}>{daysLabel}</span>
-          )}
         </div>
       )}
 
@@ -693,9 +689,17 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
              down the component, already renders last). */}
       <div style={{ padding: "0.9rem 1rem 0.7rem", borderBottom: "1px solid var(--border)" }}>
         {/* 1. Event name */}
-        {event.title && (
-          <div style={{ fontWeight: 800, fontSize: "1.05rem", lineHeight: 1.2, marginBottom: 4, color: "var(--text)" }}>
-            {event.title}
+        {(event.title || daysLabel || editBtn) && (
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "4px 8px", flexWrap: "wrap", marginBottom: 4 }}>
+            <div style={{ fontWeight: 800, fontSize: "1.05rem", lineHeight: 1.2, color: "var(--text)", flex: "1 1 auto", minWidth: 0 }}>
+              {event.title}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+              {daysLabel && (
+                <span style={{ color: clubInk(colour), fontSize: "0.78rem", fontWeight: 700, whiteSpace: "nowrap" }}>{daysLabel}</span>
+              )}
+              {editBtn}
+            </div>
           </div>
         )}
 
@@ -773,12 +777,9 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
         ) : shareCalendarBtn ? (
           <div>{shareCalendarBtn}</div>
         ) : null}
-        {((shareUrl && shareEvWindow) || editBtn) && (
+        {shareUrl && shareEvWindow && (
           <div style={{ marginTop: "0.15rem", display: "flex", flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", gap: 4 }}>
-            {shareUrl && shareEvWindow && (
-              <><MenuButton event={event} colour={colour} />{" "}<InviteNeighbourButton event={event} colour={colour} />{" "}<CopyLinkButton url={shareUrl} colour={colour} /></>
-            )}
-            {editBtn}
+            <MenuButton event={event} colour={colour} />{" "}<InviteNeighbourButton event={event} colour={colour} />{" "}<CopyLinkButton url={shareUrl} colour={colour} />
           </div>
         )}
         {/* Bus driver -- same line as Social's tile */}
