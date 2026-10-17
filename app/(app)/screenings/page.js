@@ -257,7 +257,9 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   const [open, setOpen]               = useState(false)
 
   useEffect(() => {
-    supabase.from('movies').select('id, title, poster_url, year').eq('we_own', false).eq('is_viewing_suggestion', true).order('title')
+    // Every film on the Suggestions list, owned or not (BUG-096: owned
+    // DVDs on Suggestions were hidden, e.g. The Bourne Identity).
+    supabase.from('movies').select('id, title, poster_url, year').eq('is_viewing_suggestion', true).order('title')
       .then(({ data }) => setMovies(data || []))
     if (event?.movie_id) {
       supabase.from('movies').select('id, title, poster_url, year').eq('id', event.movie_id).single()
