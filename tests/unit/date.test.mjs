@@ -5,7 +5,7 @@
 // UTC date, which is the wrong calendar day for part or all of every Sydney
 // day). Run: node tests/unit/date.test.mjs
 
-import { sydneyTodayStr, sydneyNowTimeStr, sydneyDateStrPlusDays, isEventPast, isEventUpcoming, localDateFromStr, eventHasEnded } from '../../lib/date.js'
+import { sydneyTodayStr, sydneyNowTimeStr, sydneyDateStrPlusDays, isEventPast, isEventUpcoming, localDateFromStr, eventHasEnded, daysUntilLabel } from '../../lib/date.js'
 
 let pass = 0, fail = 0
 const ok = (cond, msg) => { cond ? pass++ : (fail++, console.log('  ✗', msg)) }
@@ -30,6 +30,14 @@ ok(sydneyTodayStr(lateEveningSydney) === '2026-08-09', 'sydneyTodayStr agrees wi
 // DST sanity: AEDT (UTC+11) applies in January/summer.
 const summerInstant = new Date('2026-01-15T13:30:00Z') // 2026-01-16 00:30 AEDT
 ok(sydneyTodayStr(summerInstant) === '2026-01-16', 'sydneyTodayStr resolves the correct day across the AEDT (summer, UTC+11) offset too')
+
+// daysUntilLabel -- by Sydney calendar day, not UTC
+ok(daysUntilLabel('2026-08-09', earlyMorningSydney) === 'Today!', 'daysUntilLabel: same Sydney day is Today! (UTC still says yesterday)')
+ok(daysUntilLabel('2026-08-10', earlyMorningSydney) === 'Tomorrow', 'daysUntilLabel: next Sydney day is Tomorrow')
+ok(daysUntilLabel('2026-08-25', earlyMorningSydney) === 'In 16 days', 'daysUntilLabel: In N days')
+ok(daysUntilLabel('2026-08-08', earlyMorningSydney) === null, 'daysUntilLabel: past date gives null')
+ok(daysUntilLabel(null) === null, 'daysUntilLabel: no date gives null')
+ok(daysUntilLabel('2026-11-03', new Date('2026-10-17T20:30:00Z')) === 'In 16 days', 'daysUntilLabel: across AEDT start (Melbourne Cup example)')
 
 // sydneyNowTimeStr
 ok(sydneyNowTimeStr(new Date('2026-08-08T06:00:00Z')) === '16:00', 'sydneyNowTimeStr converts a UTC instant to Sydney HH:MM (winter, UTC+10)')
