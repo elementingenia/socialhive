@@ -6,7 +6,7 @@ import { authedFetch } from '@/lib/getAuthToken'
 import { computeFreeCost } from '@/lib/freeCost'
 import VoteScoreGrid from '@/components/VoteScoreGrid'
 import MovieScores from '@/components/MovieScores'
-import { communityAverages } from '@/lib/movieScores'
+import { communityAverages, interestScore, typicalVoteCount } from '@/lib/movieScores'
 import { sydneyTodayStr } from '@/lib/date'
 function parseGenres(g) {
   if (!g) return []
@@ -675,38 +675,15 @@ export default function LibraryPage() {
 
   const myVotes = Object.fromEntries(votes.filter(v=>v.member_id===member?.id).map(v=>[v.movie_id,v.score]))
   const unvoted = movies.filter(m => !myVotes[m.id])
-  // Only movies on this list (Object.values(avgVotes) feeds the community mean below).
+  // Only movies on this list (avgVotes feeds the typical vote count below).
   const allAverages = communityAverages(votes)
   const avgVotes = Object.fromEntries(movies.filter(m => allAverages[m.id]).map(m => [m.id, allAverages[m.id]]))
-  // Community score: a Bayesian-shrunk weighted rating (the same shape IMDb's
-  // classic "true Bayesian estimate" uses), not a raw average. A movie's own
-  // average is pulled toward the whole community's average in proportion to
-  // how few votes it has, so a single extreme vote on a lightly-voted movie
-  // can't dominate its ranking, and vote count is baked into the score itself
-  // rather than only breaking ties on an exact average match. Both the
-  // shrinkage threshold (m) and the community average (C) are computed live
-  // from current data every render, so this self-scales as more residents
-  // vote over time instead of needing a hand-tuned constant revisited later.
-  // Agreed with Iain, 2026-09-05, replacing the old average->count->IMDb
-  // lexicographic tiebreak (2026-08-31 fix, now superseded).
-  const votedStats = Object.values(avgVotes)
-  const communityMean = (() => {
-    if (votedStats.length === 0) return 0
-    const avgs = votedStats.map(v=>v.avg).sort((a,b)=>a-b)
-    const mid = Math.floor(avgs.length/2)
-    return avgs.length % 2 === 1 ? avgs[mid] : (avgs[mid-1]+avgs[mid])/2
-  })()
-  const shrinkM = (() => {
-    if (votedStats.length === 0) return 2
-    const counts = votedStats.map(v=>v.count).sort((a,b)=>a-b)
-    const p25 = counts[Math.floor(0.25*(counts.length-1))]
-    return Math.max(2, p25)
-  })()
-  const weightedScore = (id) => {
-    const s = avgVotes[id]
-    if (!s) return 0
-    return (s.count/(s.count+shrinkM))*s.avg + (shrinkM/(s.count+shrinkM))*communityMean
-  }
+  // Community sort ranks by interestScore() (lib/movieScores.js): a film's
+  // average pulled toward neutral until it has a typical number of voters,
+  // so resident interest (how many voted) carries weight. 2026-10-17,
+  // replacing the 2026-09-05 pull-toward-median version.
+  const typicalVotes = typicalVoteCount(avgVotes)
+  const weightedScore = (id) => interestScore(avgVotes[id], typicalVotes)
   const allGenres = [...new Set(movies.flatMap(m=>parseGenres(m.genre)))].sort()
 
   const filtered = movies.filter(m => {
@@ -719,12 +696,13 @@ export default function LibraryPage() {
   })
   const sorted = [...filtered].sort((a,b) => {
     if (sortBy==='community') {
-      // Highest Bayesian-weighted score first (see weightedScore above) --
-      // vote count is already part of the score, not a separate tiebreak.
-      // A genuine tie (rare with a continuous score) falls back to IMDb
-      // rating, same as before.
+      // Highest interest-weighted score first (see weightedScore above) --
+      // vote count is part of the score. A genuine tie falls back to the
+      // number of voters, then IMDb rating.
       const scoreDiff = weightedScore(b.id) - weightedScore(a.id)
       if (scoreDiff !== 0) return scoreDiff
+      const countDiff = (avgVotes[b.id]?.count||0) - (avgVotes[a.id]?.count||0)
+      if (countDiff !== 0) return countDiff
       return (parseFloat(b.rating_imdb)||0)-(parseFloat(a.rating_imdb)||0)
     }
     if (sortBy==='imdb') return (parseFloat(b.rating_imdb)||0)-(parseFloat(a.rating_imdb)||0)
