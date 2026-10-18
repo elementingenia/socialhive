@@ -1,8 +1,11 @@
 import assert from "node:assert/strict"
 import {
   isWeakStartingPin, generateStartingPin, sortForWalking, filterForScope, firstName,
-  cardLoginUrl, siteLabel, chunk, prefillUsername, buildWelcomeCardsHtml,
+  cardLoginUrl, siteLabel, chunk, prefillUsername, matchesResidentSearch,
 } from "../../lib/welcomeCards.js"
+import { buildWelcomeCardsPdf, qrRuns } from "../../lib/welcomeCardsPdf.js"
+import { PDFDocument } from "pdf-lib"
+import QRCode from "qrcode"
 
 let n = 0
 const t = (name, fn) => { fn(); n++ }
@@ -52,24 +55,45 @@ t("prefillUsername only accepts username-shaped values", () => {
   for (const bad of [null, "", "ab", "<script>", "a b c", "x".repeat(41)]) assert.equal(prefillUsername(bad), "", String(bad))
 })
 
-t("html escapes and pages by four", () => {
-  const cards = Array.from({ length: 5 }, (_, i) => ({ name: `R<${i}> Smith`, house_number: String(i + 1), username: `u${i}`, pin: "4826", qrSvg: "<svg></svg>" }))
-  const html = buildWelcomeCardsHtml(cards, { site: "elementhappenings.com.au", helpLine: "Ask <Iain>" })
-  assert.equal((html.match(/class="sheet"/g) || []).length, 2)
-  assert.equal((html.match(/class="card"/g) || []).length, 5)
-  assert.ok(html.includes("Welcome, R&lt;0&gt;"))
-  assert.ok(html.includes("Need help? Ask &lt;Iain&gt;"))
-  assert.ok(!html.includes("<Iain>"))
-  assert.ok(html.includes("5 cards"))
-  const noHelp = buildWelcomeCardsHtml(cards.slice(0, 1), { site: "x" })
-  assert.ok(!noHelp.includes("Need help?"))
-  assert.ok(noHelp.includes("1 card."))
+t("search: digits match the house number exactly, words match name or username", () => {
+  const m = { name: "Mary Jane Smith", username: "MaryS", house_number: "77" }
+  for (const q of ["", "  ", "77", "#77", "# 77", "077", "mary", "SMITH", "jane s", "marys"]) assert.equal(matchesResidentSearch(m, q), true, q)
+  for (const q of ["7", "17", "770", "bob", "#7"]) assert.equal(matchesResidentSearch(m, q), false, q)
+  assert.equal(matchesResidentSearch({ name: "No House", username: "nh" }, "12"), false)
+  assert.equal(matchesResidentSearch(null, "x"), false)
 })
 
-t("failed residents are listed on the sheet, escaped", () => {
-  const html = buildWelcomeCardsHtml([{ name: "A B", username: "ab", pin: "4826" }], { site: "x", failed: ["Marjorie <C>"] })
-  assert.ok(html.includes("No card for: Marjorie &lt;C&gt;"))
-  assert.ok(!buildWelcomeCardsHtml([], { site: "x" }).includes("No card for"))
-})
+const tests = [
+  (async () => {
+    // QR runs decode back to the same module grid the qrcode package made.
+    const url = "https://elementhappenings.com.au/login?u=MaryS"
+    const { size, runs } = qrRuns(url)
+    const mods = QRCode.create(url, { errorCorrectionLevel: "M" }).modules
+    assert.equal(size, mods.size)
+    let dark = 0
+    for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) if (mods.get(r, c)) dark++
+    assert.equal(runs.reduce((a, r) => a + r.w, 0), dark)
+    for (const r of runs) for (let c = r.x; c < r.x + r.w; c++) assert.ok(mods.get(r.y, c))
+    n++
+  })(),
+  (async () => {
+    // One PDF, four cards to an A4 page; awkward text never breaks the build.
+    const cards = Array.from({ length: 5 }, (_, i) => ({
+      name: i === 0 ? "Hēmi “Jim” O’Brien 😀" : `Resident ${i}`, house_number: String(i + 1),
+      username: i === 1 ? "averyveryverylongusername_x40" : `u${i}`, pin: "4826",
+      loginUrl: `https://elementhappenings.com.au/login?u=u${i}`,
+    }))
+    const bytes = await buildWelcomeCardsPdf(cards, { site: "elementhappenings.com.au", helpLine: "Ask Iain, house 77, 0400 000 000. ".repeat(4) })
+    const doc = await PDFDocument.load(bytes)
+    assert.equal(doc.getPageCount(), 2)
+    assert.equal(doc.getTitle(), "Welcome cards")
+    const [w, h] = [doc.getPage(0).getWidth(), doc.getPage(0).getHeight()]
+    assert.ok(Math.abs(w - 595.28) < 0.1 && Math.abs(h - 841.89) < 0.1)
+    const one = await PDFDocument.load(await buildWelcomeCardsPdf(cards.slice(0, 4), { site: "x" }))
+    assert.equal(one.getPageCount(), 1)
+    n += 1
+  })(),
+]
 
+await Promise.all(tests)
 console.log(`welcomeCards: ${n} tests passed`)

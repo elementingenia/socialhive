@@ -2,13 +2,17 @@
 import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { authedFetch } from "@/lib/getAuthToken"
-import { buildWelcomeCardsHtml } from "@/lib/welcomeCards"
+import { matchesResidentSearch } from "@/lib/welcomeCards"
 
 // Admin › Sign-in Help (Iain, 2026-10-09). Residents who have never signed
 // in, sorted by house number for walking round, with a printable welcome
 // card each (username, one-time password, QR code to sign in). "Everyone"
 // covers reprints for a resident who forgot their password. Printing resets
 // that resident's password, so it asks first.
+//
+// 2026-10-19 (Iain): search by name or house number; the Print action sits in
+// a bar fixed above the bottom nav so it's reachable without scrolling; the
+// cards come back as one PDF (lib/welcomeCardsPdf.js), not a web page.
 
 const inputStyle = {
   width: "100%", padding: "0.6rem 0.85rem", borderRadius: 10, border: "1px solid var(--border)",
@@ -50,6 +54,21 @@ function Tick({ on, onClick, label }) {
   )
 }
 
+// Fixed tray above BottomNav (60px + safe area). The right gutter leaves room
+// for the floating Find / Ask buttons, which sit over this corner.
+const trayStyle = {
+  position: "fixed", left: 0, right: 0, bottom: "calc(60px + env(safe-area-inset-bottom, 0px))",
+  background: "var(--surface)", borderTop: "1px solid var(--border)", boxShadow: "0 -4px 14px rgba(0,0,0,0.08)", zIndex: 80,
+}
+const trayInner = { maxWidth: 720, margin: "0 auto", padding: "0.65rem 84px 0.65rem 16px", display: "flex", flexDirection: "column", gap: "0.5rem" }
+
+function pdfUrl(base64) {
+  const bin = atob(base64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }))
+}
+
 const fmtDate = (iso) => new Date(iso).toLocaleDateString("en-AU", { timeZone: "Australia/Sydney", day: "numeric", month: "short" })
 
 export default function WelcomeCardsAdmin() {
@@ -65,6 +84,11 @@ export default function WelcomeCardsAdmin() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [msg, setMsg] = useState(null)
+  const [search, setSearch] = useState("")
+  const [printError, setPrintError] = useState(null)
+  // Set when some residents got no card: the PDF waits in the tray so the
+  // "No card for" message is seen before leaving the page (BUG-087).
+  const [result, setResult] = useState(null)
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -78,10 +102,10 @@ export default function WelcomeCardsAdmin() {
     setLoading(false)
   }, [scope])
 
-  useEffect(() => { setSelected(new Set()); setConfirming(false); load() }, [load])
+  useEffect(() => { setSelected(new Set()); setConfirming(false); setResult(null); load() }, [load])
 
   function toggle(id) {
-    setConfirming(false)
+    setConfirming(false); setResult(null); setPrintError(null)
     setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
 
@@ -97,31 +121,46 @@ export default function WelcomeCardsAdmin() {
     setBusy(false)
   }
 
+  function openPdf(url) {
+    const q = new URLSearchParams({ url, name: "Welcome cards.pdf", back: "/admin?tab=Residents&sub=SignInHelp" })
+    router.push(`/documents/view?${q.toString()}`)
+  }
+
   async function print() {
-    setBusy(true); setError(null); setMsg(null)
+    setBusy(true); setPrintError(null); setMsg(null); setResult(null)
     try {
       const r = await authedFetch("/api/admin/welcome-cards", { method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "print", member_ids: [...selected] }) })
       const d = await r.json()
-      if (!r.ok) throw new Error(d.error || "Could not print cards.")
-      setConfirming(false); setSelected(new Set())
-      if (d.failed?.length) setError(`No card for: ${d.failed.join(", ")} (password not changed). Try again.`)
-      if (d.cards?.length) {
-        const html = buildWelcomeCardsHtml(d.cards, { site: d.site, helpLine: d.helpLine, failed: d.failed })
-        const url = URL.createObjectURL(new Blob([html], { type: "text/html" }))
-        const q = new URLSearchParams({ url, name: "Welcome cards.html", back: "/admin?tab=Residents&sub=SignInHelp" })
-        router.push(`/documents/view?${q.toString()}`)
-        return
+      if (!r.ok) {
+        setConfirming(false); setSelected(new Set()); load()
+        throw new Error(d.error || "Could not print cards.")
       }
+      setConfirming(false); setSelected(new Set())
+      const url = d.pdf ? pdfUrl(d.pdf) : null
+      if (url && !d.failed?.length) { openPdf(url); return }
+      setResult({ url, count: d.count || 0, failed: d.failed || [] })
       load()
-    } catch (e) { setError(e.message) }
+    } catch (e) { setPrintError(e.message) }
     setBusy(false)
   }
 
-  const list = residents || []
-  const chosen = list.filter(m => selected.has(m.id))
+  const all = residents || []
+  const list = all.filter(m => matchesResidentSearch(m, search))
+  // Selection survives searching: tick #12, search for #40, tick them too.
+  const chosen = all.filter(m => selected.has(m.id))
   const chosenSignedIn = chosen.filter(m => m.signedIn).length
   const allOn = list.length > 0 && list.every(m => selected.has(m.id))
+  const trayOpen = chosen.length > 0 || confirming || !!result || !!printError
+
+  function toggleVisible() {
+    setConfirming(false); setResult(null); setPrintError(null)
+    setSelected(s => {
+      const n = new Set(s)
+      list.forEach(m => allOn ? n.delete(m.id) : n.add(m.id))
+      return n
+    })
+  }
   const helpDirty = helpDraft.trim() !== helpLine.trim()
 
   return (
@@ -149,10 +188,22 @@ export default function WelcomeCardsAdmin() {
         <Pill active={scope === "all"} onClick={() => setScope("all")}>Everyone</Pill>
         {list.length > 0 && (
           <span style={{ marginLeft: "auto" }}>
-            <Btn onClick={() => { setConfirming(false); setSelected(allOn ? new Set() : new Set(list.map(m => m.id))) }}>
-              {allOn ? "Clear" : "Select all"}
+            <Btn onClick={toggleVisible}>
+              {allOn ? (search.trim() ? "Untick these" : "Clear") : (search.trim() ? `Select these ${list.length}` : "Select all")}
             </Btn>
           </span>
+        )}
+      </div>
+
+      <div style={{ position: "relative" }}>
+        <input type="search" value={search} onChange={e => setSearch(e.target.value)} enterKeyHint="search"
+          placeholder="Find by name or house number" aria-label="Find a resident by name or house number"
+          style={{ ...inputStyle, paddingRight: search ? "2.4rem" : undefined }} />
+        {search && (
+          <button type="button" onClick={() => setSearch("")} aria-label="Clear search" style={{
+            position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)", width: 30, height: 30,
+            border: "none", background: "transparent", color: "var(--text-dim)", fontSize: "1.1rem", cursor: "pointer", fontFamily: "inherit",
+          }}>✕</button>
         )}
       </div>
 
@@ -163,7 +214,9 @@ export default function WelcomeCardsAdmin() {
         <div style={{ fontSize: "0.88rem", color: "var(--text-dim)" }}>Loading residents…</div>
       ) : list.length === 0 ? (
         <div style={{ fontSize: "0.9rem", color: "var(--text-dim)" }}>
-          {scope === "never" ? "Everyone has signed in at least once." : "No residents found."}
+          {all.length > 0 && search.trim()
+            ? `No ${scope === "never" ? "never-signed-in " : ""}resident matches “${search.trim()}”.${scope === "never" ? " Try Everyone." : ""}`
+            : scope === "never" ? "Everyone has signed in at least once." : "No residents found."}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
@@ -191,22 +244,52 @@ export default function WelcomeCardsAdmin() {
         </div>
       )}
 
-      {chosen.length > 0 && !confirming && (
-        <Btn tone="primary" full onClick={() => setConfirming(true)}>
-          Print {chosen.length} card{chosen.length === 1 ? "" : "s"}
-        </Btn>
-      )}
+      {trayOpen && <div aria-hidden style={{ height: confirming ? 170 : 110 }} />}
 
-      {confirming && chosen.length > 0 && (
-        <div style={{ background: "var(--surface)", border: "1px solid var(--amber)", borderRadius: 12, padding: "0.85rem", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-          <div style={{ fontSize: "0.9rem" }}>
-            Printing gives {chosen.length === 1 ? "this resident" : `these ${chosen.length} residents`} a new starting password.
-            {chosenSignedIn > 0 && <> <strong>{chosenSignedIn} already {chosenSignedIn === 1 ? "signs" : "sign"} in</strong>: their current password will stop working.</>}
-            {" "}Hand each card to the resident or put it in their letterbox.
-          </div>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <Btn tone="primary" onClick={print} disabled={busy}>{busy ? "Printing…" : "Yes, print"}</Btn>
-            <Btn onClick={() => setConfirming(false)} disabled={busy}>Cancel</Btn>
+      {trayOpen && (
+        <div style={trayStyle}>
+          <div style={trayInner}>
+            {printError && <div style={{ color: "#e53e3e", fontSize: "0.85rem", fontWeight: 600 }}>{printError}</div>}
+
+            {result && (
+              <>
+                {result.failed.length > 0 && (
+                  <div style={{ color: "#e53e3e", fontSize: "0.85rem", fontWeight: 600 }}>
+                    No card for: {result.failed.join(", ")}. Their password was not changed. Print again for {result.failed.length === 1 ? "them" : "these residents"}.
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  {result.url && <Btn tone="primary" onClick={() => openPdf(result.url)}>Open {result.count} card{result.count === 1 ? "" : "s"} (PDF)</Btn>}
+                  <Btn onClick={() => setResult(null)}>Close</Btn>
+                </div>
+              </>
+            )}
+
+            {!result && chosen.length > 0 && !confirming && (
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                <div style={{ fontSize: "0.85rem", color: "var(--text-dim)", flexShrink: 0 }}>{chosen.length} ticked</div>
+                <Btn onClick={() => { setSelected(new Set()); setPrintError(null) }}>Clear</Btn>
+                <div style={{ flex: 1 }}>
+                  <Btn tone="primary" full onClick={() => { setPrintError(null); setConfirming(true) }}>
+                    Print {chosen.length} card{chosen.length === 1 ? "" : "s"}
+                  </Btn>
+                </div>
+              </div>
+            )}
+
+            {!result && confirming && chosen.length > 0 && (
+              <>
+                <div style={{ fontSize: "0.88rem" }}>
+                  Printing gives {chosen.length === 1 ? "this resident" : `these ${chosen.length} residents`} a new starting password.
+                  {chosenSignedIn > 0 && <> <strong>{chosenSignedIn} already {chosenSignedIn === 1 ? "signs" : "sign"} in</strong>: their current password will stop working.</>}
+                  {" "}The cards open as one PDF: print on A4, cut along the dashed lines, and hand each card to the resident or put it in their letterbox.
+                </div>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <Btn tone="primary" onClick={print} disabled={busy}>{busy ? "Printing…" : "Yes, print"}</Btn>
+                  <Btn onClick={() => setConfirming(false)} disabled={busy}>Cancel</Btn>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
