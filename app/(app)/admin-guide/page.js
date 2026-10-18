@@ -954,10 +954,20 @@ export default function AdminGuidePage() {
                 (<strong>Not yet</strong> if a card went out and they haven't).
               </Step>
               <Step>
-                Tick residents (or <strong>Select all</strong>) and tap <strong>Print N cards</strong>.
+                Use the <strong>Find by name or house number</strong> box to go straight to someone. A house
+                number finds that house only (7 doesn't bring up 17 or 77); anything else matches the name
+                or username. Ticks stay put while you search, so you can find and tick several people in turn.
+              </Step>
+              <Step>
+                Tick residents (or <strong>Select all</strong>, which ticks everyone the search is showing).
+                A bar fixes itself just above the bottom menu showing how many are ticked, with
+                <strong> Print N cards</strong> — no need to scroll to the bottom of the list.
+              </Step>
+              <Step>
+                The cards open as <strong>one PDF</strong>: four to an A4 page, cut along the dashed lines.
+                Use <strong>Download</strong> or <strong>Open in browser</strong> in the viewer to print it.
                 Each card shows the website, their username, a <strong>starting password</strong>, a QR
                 code that opens the sign-in page with their username already filled in, and three steps.
-                Four cards print on one A4 page; cut along the dashed lines.
               </Step>
               <Step>
                 <strong>Printing resets the password</strong> — exactly like Reset PIN, including forcing

@@ -1,11 +1,11 @@
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { randomInt } from "crypto"
-import QRCode from "qrcode"
 import { newPinColumns } from "@/lib/pinAuth"
 import {
   HELP_SETTING_KEY, generateStartingPin, sortForWalking, filterForScope, cardLoginUrl, siteLabel,
 } from "@/lib/welcomeCards"
+import { buildWelcomeCardsPdf } from "@/lib/welcomeCardsPdf"
 
 // Admin › Sign-in Help (Iain, 2026-10-09). Lists residents who have never
 // signed in (or everyone, for reprints) and prints welcome cards. Printing a
@@ -105,9 +105,23 @@ export async function POST(req) {
     }).eq("id", m.id)
     if (upErr) { console.error("welcome-cards: member update failed", m.id, upErr.message); failed.push(m.name); continue }
 
-    const qrSvg = await QRCode.toString(cardLoginUrl(origin, m.username), { type: "svg", margin: 0, errorCorrectionLevel: "M" })
-    cards.push({ name: m.name, house_number: m.house_number, username: m.username, pin, qrSvg })
+    cards.push({ name: m.name, house_number: m.house_number, username: m.username, pin, loginUrl: cardLoginUrl(origin, m.username) })
   }
 
-  return NextResponse.json({ cards, failed, site: siteLabel(origin), helpLine: await readHelpLine() })
+  // One PDF for the whole print run (Iain, 2026-10-19), sent back base64 in
+  // the JSON so the failed list still arrives alongside it. Passwords are
+  // only ever in this response, never stored or logged in clear.
+  let pdf = null
+  if (cards.length) {
+    try {
+      const bytes = await buildWelcomeCardsPdf(cards, { site: siteLabel(origin), helpLine: await readHelpLine() })
+      pdf = Buffer.from(bytes).toString("base64")
+    } catch (e) {
+      // Passwords were already reset: say so plainly so the admin reprints.
+      console.error("welcome-cards: pdf build failed", e.message)
+      return NextResponse.json({ error: "Passwords were reset but the card PDF could not be made. Print these residents again.", failed }, { status: 500 })
+    }
+  }
+
+  return NextResponse.json({ count: cards.length, pdf, failed })
 }
