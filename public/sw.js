@@ -19,13 +19,17 @@ self.addEventListener("push", event => {
       badge: "/favicon-192x192.png",
       data: { url },
     })
-    // Badge count = number of not-yet-actioned OS notifications. Silently
-    // no-ops on browsers/platforms that don't support the Badging API
-    // (e.g. Android, which shows its own automatic dot instead).
+    // Badge count = the member's real unread count, sent by the server with
+    // each push (2026-10-22). The app itself keeps it in step while open
+    // (lib/appBadge.js), so reading alerts in the app now lowers/clears it.
+    // Fallback for an older payload: count of notifications on screen.
+    // Silently no-ops where the Badging API isn't supported (e.g. Android,
+    // which shows its own automatic dot instead).
     if ("setAppBadge" in navigator) {
       try {
-        const shown = await self.registration.getNotifications()
-        await navigator.setAppBadge(shown.length)
+        let n = Number.isInteger(data.badge) ? data.badge : (await self.registration.getNotifications()).length
+        if (n > 0) await navigator.setAppBadge(n)
+        else if ("clearAppBadge" in navigator) await navigator.clearAppBadge()
       } catch (_) {}
     }
   })())
