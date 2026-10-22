@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { resolveMember, isAreaOwner, requireVotingEventManage } from '@/lib/areaAuth'
-import { computeVotingStatus, canSeeResults, tallyBallots, isEligibleToVote } from '@/lib/voting'
+import { computeVotingStatus, canSeeResults, tallyBallots, isEligibleToVote, normalizeCoordinatorIds, validateClosesAt, cleanChoiceImageUrl, choiceImageStoragePath } from '@/lib/voting'
+import { votingCoordinatorsByEvent, setVotingCoordinators } from '@/lib/votingCoordinators'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +20,7 @@ export async function GET(req, { params }) {
 
   const { data: choices, error: cErr } = await supabaseAdmin
     .from('voting_choices')
-    .select('id, label, description, candidate_member_id, sort_order')
+    .select('id, label, description, candidate_member_id, image_url, sort_order')
     .eq('voting_event_id', event.id)
     .order('sort_order')
   if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 })
@@ -54,7 +55,8 @@ export async function GET(req, { params }) {
   // (Iain: "Only the assigned event coordinator/s should see results. NOT
   // Admins/Owners.") -- no blanket admin/owner bypass. See lib/voting.js's
   // canSeeResults() for the full rationale.
-  const isCoordinator = !!event.coordinator_id && event.coordinator_id === member.id
+  const coordinators = (await votingCoordinatorsByEvent([event.id]))[event.id] || []
+  const isCoordinator = coordinators.some(c => c.id === member.id)
   const showTurnout = votingStatus !== 'draft' && canSeeResults(event, { field: 'results_visibility_turnout', isCoordinator })
   const showOutcome = ['closed', 'published'].includes(votingStatus) && canSeeResults(event, { field: 'results_visibility_outcome', isCoordinator })
 
@@ -67,17 +69,11 @@ export async function GET(req, { params }) {
     const { data: ballots } = await supabaseAdmin
       .from('voting_ballots').select('choice_id').eq('voting_event_id', event.id)
     const tally = tallyBallots(ballots || [])
-    results = choices.map(c => ({ choice_id: c.id, label: c.label, votes: tally.get(c.id) || 0 }))
+    results = choices.map(c => ({ choice_id: c.id, label: c.label, image_url: c.image_url || null, votes: tally.get(c.id) || 0 }))
   }
 
   const canManage = !!member.is_admin || await isAreaOwner(member.id, 'hub', 'voting')
-  const canManageEvent = canManage || (!!event.coordinator_id && event.coordinator_id === member.id)
-
-  let coordinatorName = null
-  if (event.coordinator_id) {
-    const { data: coord } = await supabaseAdmin.from('members').select('name').eq('id', event.coordinator_id).maybeSingle()
-    coordinatorName = coord?.name || null
-  }
+  const canManageEvent = canManage || isCoordinator
 
   return NextResponse.json({
     event: { ...event, status: votingStatus },
@@ -85,7 +81,7 @@ export async function GET(req, { params }) {
     isAdmin: !!member.is_admin,
     canManage,
     canManageEvent,
-    coordinatorName,
+    coordinators,
     myParticipation: myParticipation ? { votedAt: myParticipation.cast_at } : null,
     eligibility,
     turnout,
@@ -100,7 +96,7 @@ export async function GET(req, { params }) {
 //
 // Draft: full edit, including eligibility_mode/vote_mode/choices -- nothing
 // has been voted on yet, so nothing to protect.
-// Open: metadata-only edit (title/description/closes_at/coordinator/
+// Open: metadata-only edit (title/description/closes_at/coordinators/
 // visibility toggles). eligibility_mode, vote_mode, max_selections,
 // allow_self_vote, and choices are locked once a vote is open -- changing
 // the ballot shape or the eligibility rule mid-vote would invalidate
@@ -108,7 +104,7 @@ export async function GET(req, { params }) {
 // voting_ballots rows by the time anyone's voted.
 // Closed/Published: no edits at all -- the vote is over.
 export async function PATCH(req, { params }) {
-  const { error, status } = await requireVotingEventManage(req, params.id)
+  const { error, status, member } = await requireVotingEventManage(req, params.id)
   if (error) return NextResponse.json({ error }, { status })
 
   const { data: event, error: eErr } = await supabaseAdmin
@@ -128,7 +124,11 @@ export async function PATCH(req, { params }) {
     patch.title = String(body.title).trim()
   }
   if (body.description !== undefined) patch.description = body.description ? String(body.description).trim() : null
-  if (body.coordinator_id !== undefined) patch.coordinator_id = body.coordinator_id || null
+  let coordIds = null
+  if (body.coordinator_ids !== undefined) {
+    coordIds = normalizeCoordinatorIds(body.coordinator_ids)
+    if (coordIds.length === 0) return NextResponse.json({ error: 'Choose at least one coordinator' }, { status: 400 })
+  }
   if (body.results_visibility_outcome !== undefined) {
     patch.results_visibility_outcome = body.results_visibility_outcome === 'admin_only' ? 'admin_only' : 'residents'
   }
@@ -138,10 +138,10 @@ export async function PATCH(req, { params }) {
   if (body.image_focal_x !== undefined) patch.image_focal_x = Number(body.image_focal_x) || 50
   if (body.image_focal_y !== undefined) patch.image_focal_y = Number(body.image_focal_y) || 50
   if (body.closes_at !== undefined) {
-    if (body.closes_at && new Date(body.closes_at).getTime() <= Date.now()) {
-      return NextResponse.json({ error: 'Closing date/time must be in the future' }, { status: 400 })
-    }
-    patch.closes_at = body.closes_at || null
+    // Required (Iain, 2026-10-22) -- can be moved, not cleared.
+    const closesErr = validateClosesAt(body.closes_at)
+    if (closesErr) return NextResponse.json({ error: closesErr }, { status: 400 })
+    patch.closes_at = new Date(body.closes_at).toISOString()
   }
 
   // Draft-only fields -- ballot shape isn't real yet, safe to change.
@@ -163,18 +163,30 @@ export async function PATCH(req, { params }) {
           label: String(c.label).trim(),
           description: c.description || null,
           candidate_member_id: c.candidate_member_id || null,
+          image_url: cleanChoiceImageUrl(c.image_url, process.env.NEXT_PUBLIC_SUPABASE_URL),
           sort_order: i,
         }))
       if (cleanChoices.length < 2) return NextResponse.json({ error: 'At least two choices are required' }, { status: 400 })
+      // Option images no longer used by any choice are removed from Storage
+      // so a replaced or deleted picture doesn't linger.
+      const { data: oldChoices } = await supabaseAdmin.from('voting_choices').select('image_url').eq('voting_event_id', event.id)
+      const keep = new Set(cleanChoices.map(c => choiceImageStoragePath(c.image_url)).filter(Boolean))
+      const stale = (oldChoices || []).map(c => choiceImageStoragePath(c.image_url)).filter(p => p && !keep.has(p))
       // Draft only, so no voting_ballots rows can reference the old choice
       // ids yet -- safe to replace wholesale rather than diff/patch.
       const { error: delErr } = await supabaseAdmin.from('voting_choices').delete().eq('voting_event_id', event.id)
       if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
       const { error: insErr } = await supabaseAdmin.from('voting_choices').insert(cleanChoices)
       if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
+      if (stale.length) await supabaseAdmin.storage.from('event-images').remove(stale)
     }
   } else if (body.eligibility_mode !== undefined || body.vote_mode !== undefined || body.choices !== undefined || body.allow_self_vote !== undefined) {
     return NextResponse.json({ error: 'Voting rules and choices can only be changed while this vote is still a Draft' }, { status: 400 })
+  }
+
+  if (coordIds) {
+    const coordErr = await setVotingCoordinators(event.id, coordIds, member?.id)
+    if (coordErr) return NextResponse.json({ error: coordErr }, { status: 500 })
   }
 
   if (Object.keys(patch).length === 0) return NextResponse.json({ event: { ...event, status: votingStatus } })

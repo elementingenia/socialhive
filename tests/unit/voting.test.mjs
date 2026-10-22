@@ -5,6 +5,7 @@ import {
   VOTING_STATUS, computeVotingStatus, isVotingOpen, normalizeHouseNumber,
   householdAlreadyVoted, isEligibleToVote, validateSelfVote,
   validateBallotSelection, tallyBallots, householdAnomalyReport, canSeeResults,
+  normalizeCoordinatorIds, validateClosesAt, cleanChoiceImageUrl, choiceImageStoragePath,
 } from '../../lib/voting.js'
 
 let pass = 0, fail = 0
@@ -126,6 +127,29 @@ ok(canSeeResults({ results_visibility_outcome: 'residents' }, { field: 'results_
   'residents visibility => any viewer can see')
 ok(canSeeResults({ results_visibility_outcome: 'admin_only' }, { field: 'results_visibility_outcome' }) === false,
   'admin_only + no isCoordinator passed at all (e.g. a plain admin/owner who is not this event\'s coordinator) => cannot see')
+
+// ── 139: coordinators, closing date, option images ─────────────────────────
+ok(normalizeCoordinatorIds(['a', 'b', 'a', '', null, 3]).join(',') === 'a,b', 'coordinator ids: dedupe, drop blanks/non-strings, keep order')
+ok(normalizeCoordinatorIds(undefined).length === 0, 'coordinator ids: non-array => empty (caller rejects)')
+
+const NOW = new Date('2026-10-22T04:00:00Z')
+ok(validateClosesAt(null, NOW) === 'Closing date/time is required', 'closes_at: missing => required')
+ok(validateClosesAt('not a date', NOW) === 'Closing date/time is not a valid date', 'closes_at: garbage => invalid')
+ok(validateClosesAt('2026-10-22T03:00:00Z', NOW) === 'Closing date/time must be in the future', 'closes_at: past => rejected')
+ok(validateClosesAt('2026-10-22T04:00:00Z', NOW) !== null, 'closes_at: exactly now => rejected')
+ok(validateClosesAt('2026-10-30T07:00:00Z', NOW) === null, 'closes_at: future => ok')
+
+const SB = 'https://abc.supabase.co'
+const good = `${SB}/storage/v1/object/public/event-images/voting/choices/1b2c3d4e-0000-4000-8000-123456789abc.webp`
+ok(cleanChoiceImageUrl(good, SB) === good, 'image url: our own voting/choices upload => kept')
+ok(cleanChoiceImageUrl(good, SB + '/') === good, 'image url: trailing slash on base tolerated')
+ok(cleanChoiceImageUrl('https://evil.example/x.webp', SB) === null, 'image url: foreign host => dropped')
+ok(cleanChoiceImageUrl(`${SB}/storage/v1/object/public/event-images/voting/abc/cover.webp`, SB) === null, 'image url: other path in bucket => dropped')
+ok(cleanChoiceImageUrl(`${SB}/storage/v1/object/public/event-images/voting/choices/../x.webp`, SB) === null, 'image url: path tricks => dropped')
+ok(cleanChoiceImageUrl(null, SB) === null && cleanChoiceImageUrl(good, '') === null, 'image url: empty inputs => null')
+ok(choiceImageStoragePath(good) === 'voting/choices/1b2c3d4e-0000-4000-8000-123456789abc.webp', 'storage path from url')
+ok(choiceImageStoragePath(`${SB}/storage/v1/object/public/event-images/voting/abc/cover.webp`) === null, 'storage path: never a cover image')
+ok(choiceImageStoragePath(null) === null, 'storage path: null => null')
 
 console.log(`\nvoting.test.mjs: ${pass} passed, ${fail} failed`)
 if (fail > 0) process.exit(1)
