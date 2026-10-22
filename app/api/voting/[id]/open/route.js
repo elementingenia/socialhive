@@ -54,7 +54,7 @@ export async function POST(req, { params }) {
     .from('voting_events').update({ opened_at: new Date().toISOString(), closes_at: closesAt }).eq('id', event.id).select().single()
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
 
-  const closesFmt = new Date(closesAt).toLocaleString('en-AU', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+  const closesFmt = new Date(closesAt).toLocaleString('en-AU', { timeZone: 'Australia/Sydney', weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
   await notifyAllActiveMembers(supabaseAdmin, null, 'voting_opened',
     `Voting is now open: "${event.title}" — closes ${closesFmt}`, { excludeMemberId: member?.id })
 

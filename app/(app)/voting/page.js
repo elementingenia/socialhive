@@ -11,6 +11,8 @@ import EventImagePicker from "@/components/EventImagePicker"
 import EventCoordinators from "@/components/EventCoordinators"
 import { useUser } from "@/lib/UserContext"
 import { isHtmlContent } from "@/lib/richText"
+import { resizeForUpload } from "@/lib/clientImageResize"
+import ImageCarouselModal from "@/components/ImageCarouselModal"
 
 const INPUT = {
   width: "100%", padding: "0.75rem 1rem", borderRadius: "10px",
@@ -203,7 +205,10 @@ function CreateEventForm({ onCreated }) {
   const [allowSelfVote, setAllowSelfVote] = useState(true)
   const [visOutcome, setVisOutcome] = useState("residents")
   const [visTurnout, setVisTurnout] = useState("residents")
-  const [coordinator, setCoordinator] = useState(null)
+  // Iain, 2026-10-22: several coordinators "like events", at least one
+  // required; closing date required up front (was only asked at Open).
+  const [coordinators, setCoordinators] = useState([])
+  const [closesAt, setClosesAt] = useState("")
   // Each choice is either free text (a plain option like "Yes"/"No", or a
   // motion name) or a resident (a real member_id) -- Iain, 2026-09-02: a
   // resident option is imperative, since "Allow candidates to vote for
@@ -212,8 +217,8 @@ function CreateEventForm({ onCreated }) {
   // member_id. Free-text choices are unaffected by that toggle -- there's
   // no "self" to detect.
   const [choices, setChoices] = useState([
-    { type: "text", label: "", candidate_member_id: null },
-    { type: "text", label: "", candidate_member_id: null },
+    { type: "text", label: "", candidate_member_id: null, image_url: null },
+    { type: "text", label: "", candidate_member_id: null, image_url: null },
   ])
   const [members, setMembers] = useState([])
   const [saving, setSaving] = useState(false)
@@ -227,7 +232,7 @@ function CreateEventForm({ onCreated }) {
   function setChoice(i, patch) {
     setChoices(cs => cs.map((c, idx) => idx === i ? { ...c, ...patch } : c))
   }
-  function addChoice() { setChoices(cs => [...cs, { type: "text", label: "", candidate_member_id: null }]) }
+  function addChoice() { setChoices(cs => [...cs, { type: "text", label: "", candidate_member_id: null, image_url: null }]) }
   function removeChoice(i) { setChoices(cs => cs.filter((_, idx) => idx !== i)) }
 
   // Iain, 2026-09-03 round-3 review: "How Many choices a voter can pick
@@ -254,6 +259,9 @@ function CreateEventForm({ onCreated }) {
     if (cleanChoices.some(c => c.type === "resident" && !c.candidate_member_id)) {
       return setError("Pick a resident for every resident choice, or switch it to free text")
     }
+    if (!closesAt) return setError("Set a closing date/time")
+    if (new Date(closesAt).getTime() <= Date.now()) return setError("Closing date/time must be in the future")
+    if (coordinators.length === 0) return setError("Choose at least one coordinator")
 
     setSaving(true)
     const res = await authedFetch("/api/voting", {
@@ -268,8 +276,9 @@ function CreateEventForm({ onCreated }) {
         allow_self_vote: allowSelfVote,
         results_visibility_outcome: visOutcome,
         results_visibility_turnout: visTurnout,
-        coordinator_id: coordinator || null,
-        choices: cleanChoices.map(c => ({ label: c.label, candidate_member_id: c.candidate_member_id || null })),
+        coordinator_ids: coordinators.map(m => m.id),
+        closes_at: new Date(closesAt).toISOString(),
+        choices: cleanChoices.map(c => ({ label: c.label, candidate_member_id: c.candidate_member_id || null, image_url: c.image_url || null })),
       }),
     })
     const json = await res.json().catch(() => ({}))
@@ -289,14 +298,19 @@ function CreateEventForm({ onCreated }) {
       <textarea style={{ ...INPUT, marginBottom: "0.6rem", minHeight: "70px" }} value={description} onChange={e => setDescription(e.target.value)} />
 
       <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontStyle: "italic", marginBottom: "0.9rem" }}>
-        You'll be able to add an image once you've created the vote -- edit it from there.
+        You'll be able to add a cover image once you've created the vote -- edit it from there.
+      </div>
+
+      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Closing date/time</label>
+      <div style={{ marginBottom: "0.9rem" }}>
+        <ClosingDateTimeField value={closesAt} onChange={setClosesAt} />
       </div>
 
       <label style={{ fontSize: "0.8rem", color: "var(--text-dim)" }}>Choices</label>
       {choices.map((c, i) => {
         const takenIds = new Set(choices.filter((_, idx) => idx !== i).map(o => o.candidate_member_id).filter(Boolean))
         return (
-          <ChoiceRow key={i} choice={c} index={i} members={members} takenIds={takenIds}
+          <ChoiceRow key={i} choice={c} index={i} members={members} takenIds={takenIds} eventId={null}
             onChange={patch => setChoice(i, patch)}
             onRemove={choices.length > 2 ? () => removeChoice(i) : null} />
         )
@@ -358,9 +372,9 @@ function CreateEventForm({ onCreated }) {
         </div>
       </div>
 
-      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Coordinator (optional)</label>
+      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Coordinators</label>
       <div style={{ marginBottom: "0.8rem" }}>
-        <CoordPicker members={members} value={coordinator} onChange={setCoordinator} />
+        <CoordinatorsPicker members={members} value={coordinators} onChange={setCoordinators} />
       </div>
 
       {error && <div style={{ color: "var(--terracotta)", marginBottom: "0.6rem", fontSize: "0.85rem" }}>{error}</div>}
@@ -375,8 +389,35 @@ function CreateEventForm({ onCreated }) {
 // anything -- see validateSelfVote in lib/voting.js). Resident search is
 // live/2-char-minimum per this app's dropdown-with-many-options convention
 // (Info > Contacts, OwnersManager.js), not a native <select> of 165 names.
-function ChoiceRow({ choice, index, members, takenIds, onChange, onRemove }) {
+function ChoiceRow({ choice, index, members, takenIds, eventId, onChange, onRemove }) {
   const [search, setSearch] = useState("")
+  const [uploading, setUploading] = useState(false)
+  const [imgError, setImgError] = useState("")
+  const fileRef = useRef(null)
+
+  // Option image (Iain, 2026-10-22). Uploaded straight away so the
+  // thumbnail shows; it's only attached to the option when the vote is
+  // saved. Shrunk in the browser first so phone photos stay under Vercel's
+  // 4.5MB request limit.
+  async function uploadImage(file) {
+    if (!file) return
+    setImgError(""); setUploading(true)
+    try {
+      const small = await resizeForUpload(file)
+      const fd = new FormData()
+      fd.append("file", small)
+      const qs = eventId ? `?event_id=${encodeURIComponent(eventId)}` : ""
+      const res = await authedFetch(`/api/voting/choice-image${qs}`, { method: "POST", body: fd })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(json.error || "Could not upload that image")
+      onChange({ image_url: json.image_url })
+    } catch (err) {
+      setImgError(err.message || "Could not upload that image")
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ""
+    }
+  }
 
   const results = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -421,63 +462,116 @@ function ChoiceRow({ choice, index, members, takenIds, onChange, onRemove }) {
           )}
         </div>
       )}
+
+      <input ref={fileRef} type="file" accept="image/*" style={{ display: "none" }} onChange={e => uploadImage(e.target.files?.[0])} />
+      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "0.45rem", flexWrap: "wrap" }}>
+        {choice.image_url && <ChoiceThumb url={choice.image_url} alt={choice.label} size={48} />}
+        <button type="button" style={{ ...BTN_GHOST, padding: "0.3rem 0.6rem", fontSize: "0.78rem" }} disabled={uploading} onClick={() => fileRef.current?.click()}>
+          {uploading ? "Uploading…" : choice.image_url ? "Change image" : "+ Add image"}
+        </button>
+        {choice.image_url && !uploading && (
+          <button type="button" style={{ ...BTN_GHOST, padding: "0.3rem 0.6rem", fontSize: "0.78rem", color: "var(--terracotta)", borderColor: "var(--terracotta)" }} onClick={() => onChange({ image_url: null })}>Remove image</button>
+        )}
+      </div>
+      {imgError && <div style={{ color: "var(--terracotta)", fontSize: "0.8rem", marginTop: "0.3rem" }}>{imgError}</div>}
     </div>
   )
 }
 
-// Coordinator picker for a voting event -- same custom dropdown-with-search
-// pattern as Show Time/Social/Clubs' own CoordPicker (app/(app)/screenings/
-// page.js), not a native <select> of every resident's name, and not shared
-// as a component since each hub's copy has already drifted slightly (colour
-// token, "username" fallback) -- kept local and voting-coloured here too.
-function CoordPicker({ members, value, onChange }) {
-  const chosen = members.find(m => m.id === value) || null
-  const [query, setQuery] = useState("")
+// Small, clear option image; tap to see it full size. When `onOpen` is
+// given the parent shows the viewer (so it can page through every option's
+// image); otherwise this thumbnail opens its own single-image viewer.
+// Stops the tap reaching a surrounding <label>, so tapping the picture on
+// the ballot doesn't also tick that option.
+function ChoiceThumb({ url, alt, size = 56, onOpen }) {
   const [open, setOpen] = useState(false)
+  function handle(e) {
+    e.preventDefault(); e.stopPropagation()
+    if (onOpen) onOpen(); else setOpen(true)
+  }
+  return (
+    <>
+      <button type="button" onClick={handle} aria-label={`View image for ${alt || "this option"}`}
+        style={{ width: size, height: size, flex: "0 0 auto", padding: 0, border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", background: "var(--surface2)", cursor: "zoom-in" }}>
+        <img src={url} alt={alt || ""} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+      </button>
+      {open && <ImageCarouselModal photos={[{ url }]} startIndex={0} onClose={() => setOpen(false)} />}
+    </>
+  )
+}
+
+// Coordinators picker for a vote -- several allowed, at least one required
+// (Iain, 2026-10-22: "like events"). Same chips + search dropdown as
+// Surveys' CoordinatorsPicker (app/(app)/surveys/page.js) and Social's
+// ECPicker, coloured for Voting. `value` is an array of { id, name }.
+function CoordinatorsPicker({ members = [], value, onChange }) {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState("")
   const containerRef = useRef(null)
 
-  const filtered = members.filter(m => !query || (m.name || "").toLowerCase().includes(query.toLowerCase()))
-
   useEffect(() => {
-    function handleClick(e) {
-      if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false)
-    }
-    document.addEventListener("mousedown", handleClick)
-    return () => document.removeEventListener("mousedown", handleClick)
+    function handler(e) { if (containerRef.current && !containerRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener("mousedown", handler)
+    return () => document.removeEventListener("mousedown", handler)
   }, [])
 
+  const excluded = value.map(m => m.id)
+  const pool = members.filter(m => !excluded.includes(m.id))
+  const filtered = pool.filter(m => !query || (m.name || "").toLowerCase().includes(query.toLowerCase()))
+
+  function pick(m) { onChange([...value, { id: m.id, name: m.name }]); setOpen(false); setQuery("") }
+  function remove(id) { onChange(value.filter(m => m.id !== id)) }
+
   return (
-    <div ref={containerRef} style={{ position: "relative" }}>
-      <div onClick={() => { setOpen(o => !o); setQuery("") }}
-        role="button" tabIndex={0} aria-haspopup="listbox" aria-expanded={open}
-        onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); setQuery("") } }}
-        style={{ ...INPUT, color: chosen ? "var(--text)" : "var(--text-dim)", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", border: `1.5px solid ${open ? "var(--voting)" : "var(--border)"}` }}>
-        <span>{chosen ? chosen.name : "— No coordinator —"}</span>
-        <span style={{ color: "var(--text-dim)", fontSize: "0.8rem" }}>▾</span>
-      </div>
-      {open && (
-        <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "0 4px 20px rgba(0,0,0,0.12)", zIndex: 60, overflow: "hidden" }}>
-          <div style={{ padding: "0.5rem 0.75rem", borderBottom: "1px solid var(--border)" }}>
-            <input autoFocus type="text" placeholder="Search name…" value={query} onChange={e => setQuery(e.target.value)}
-              style={{ width: "100%", border: "none", background: "transparent", color: "var(--text)", fontSize: "0.9rem", outline: "none", fontFamily: "inherit" }} />
-          </div>
-          <div style={{ maxHeight: 300, overflowY: "auto" }}>
-            {value && (
-              <div onClick={() => { onChange(null); setOpen(false) }}
-                style={{ padding: "0.65rem 1rem", cursor: "pointer", fontSize: "0.85rem", color: "var(--text-dim)", borderBottom: "1px solid var(--border)" }}>
-                — Clear selection —
-              </div>
-            )}
-            {filtered.map(m => (
-              <div key={m.id} onClick={() => { onChange(m.id); setOpen(false) }}
-                style={{ padding: "0.65rem 1rem", cursor: "pointer", background: m.id === value ? "rgba(124,58,237,0.08)" : "transparent", borderBottom: "1px solid var(--border)", fontWeight: m.id === value ? 700 : 400, fontSize: "0.88rem", color: m.id === value ? "var(--voting)" : "var(--text)" }}>
-                {m.name}
-              </div>
-            ))}
-            {filtered.length === 0 && <div style={{ padding: "0.9rem 1rem", fontSize: "0.85rem", color: "var(--text-dim)" }}>No match</div>}
-          </div>
+    <div ref={containerRef}>
+      {value.length > 0 && (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginBottom: "0.5rem" }}>
+          {value.map(m => (
+            <span key={m.id} style={{
+              display: "inline-flex", alignItems: "center", gap: "0.3rem",
+              background: "rgba(124,58,237,0.10)", color: "var(--voting)",
+              border: "1px solid var(--voting)",
+              borderRadius: "20px", padding: "0.2rem 0.6rem 0.2rem 0.75rem",
+              fontSize: "0.82rem", fontWeight: 600,
+            }}>
+              {m.name}
+              <button type="button" onClick={() => remove(m.id)} aria-label={`Remove ${m.name}`}
+                style={{ background: "none", border: "none", color: "var(--voting)", cursor: "pointer", fontSize: "1rem", lineHeight: 1, padding: 0 }}>×</button>
+            </span>
+          ))}
         </div>
       )}
+
+      <div style={{ position: "relative" }}>
+        <div onClick={() => { setOpen(o => !o); setQuery("") }}
+          role="button" tabIndex={0} aria-haspopup="listbox" aria-expanded={open}
+          onKeyDown={e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(o => !o); setQuery("") } }}
+          style={{ ...INPUT, display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer", border: `1.5px solid ${open ? "var(--voting)" : "var(--border)"}` }}>
+          <span style={{ color: "var(--text-dim)" }}>{value.length === 0 ? "Select coordinator…" : "Add another coordinator…"}</span>
+          <span style={{ color: "var(--text-dim)", fontSize: "0.75rem", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}>▾</span>
+        </div>
+
+        {open && (
+          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 60, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "0 8px 24px rgba(0,0,0,0.12)", overflow: "hidden" }}>
+            <div style={{ padding: "0.5rem 0.75rem", borderBottom: "1px solid var(--border)" }}>
+              <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Search name…"
+                style={{ width: "100%", border: "none", background: "transparent", color: "var(--text)", fontSize: "0.9rem", outline: "none", fontFamily: "inherit" }} />
+            </div>
+            <div style={{ maxHeight: 260, overflowY: "auto" }}>
+              {filtered.map(m => (
+                <div key={m.id} onClick={() => pick(m)} style={{ padding: "0.65rem 1rem", cursor: "pointer", borderBottom: "1px solid var(--border)", fontSize: "0.88rem", color: "var(--text)" }}>
+                  {m.name}
+                </div>
+              ))}
+              {filtered.length === 0 && (
+                <div style={{ padding: "0.65rem 1rem", color: "var(--text-dim)", fontSize: "0.85rem" }}>
+                  {query ? `No match for "${query}"` : "Everyone is already added"}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -544,7 +638,11 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
   const [expanded, setExpanded] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [detail, setDetail] = useState(null)
-  const [closesAtInput, setClosesAtInput] = useState("")
+  // Closing date is now set at create (Iain, 2026-10-22); prefill it here
+  // so Open just confirms it (it can still be changed before opening).
+  const [closesAtInput, setClosesAtInput] = useState(event.closes_at ? toLocalDatetimeInput(new Date(event.closes_at)) : "")
+  // Full-size option image viewer: index into the vote's option images.
+  const [viewerIndex, setViewerIndex] = useState(null)
   const [selected, setSelected] = useState([])
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState("")
@@ -568,7 +666,7 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
   useEffect(() => { if (expanded && !detail) loadDetail() }, [expanded, detail])
 
   // detail.canManageEvent is fresher (recomputed server-side against the
-  // latest coordinator_id) than the list-derived canManageEvent prop -- use
+  // latest coordinators) than the list-derived canManageEvent prop -- use
   // it once loaded, fall back to the prop before the detail fetch resolves.
   const canManageThis = detail ? !!detail.canManageEvent : !!canManageEvent
 
@@ -706,6 +804,15 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
   // (eligibility, participation, choices).
   const closesLabel = fmtClosesAt(event.closes_at)
   const isClosedOrPublished = event.status === "closed" || event.status === "published"
+  const coordinatorNames = (event.coordinators || []).map(c => c.name).filter(Boolean)
+
+  // Every option image on this vote, in ballot order, for the viewer.
+  const choicePhotos = (detail?.choices || []).filter(c => c.image_url).map(c => ({ url: c.image_url, choiceId: c.id }))
+  function openChoiceImage(choiceId) {
+    const i = choicePhotos.findIndex(p => p.choiceId === choiceId)
+    if (i >= 0) setViewerIndex(i)
+  }
+  const imageByChoice = Object.fromEntries((detail?.choices || []).map(c => [c.id, c.image_url || null]))
 
   return (
     <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px", overflow: "hidden", marginBottom: "0.75rem" }}>
@@ -763,15 +870,15 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
           "event" would silently misroute the question to every admin
           instead of this event's real coordinator/Voting hub Owner. See
           migration 093's own comment for the full reasoning. */}
-      {(event.coordinatorName || (event.status === "open" && canManageThis)) && (
+      {(coordinatorNames.length > 0 || (event.status === "open" && canManageThis)) && (
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.2rem" }}>
           <div style={{ flex: "1 1 auto", minWidth: 0 }}>
-            {event.coordinatorName && (
+            {coordinatorNames.length > 0 && (
               <EventCoordinators
                 contextType="voting_event"
                 eventId={event.id}
                 eventTitle={event.title}
-                names={[event.coordinatorName]}
+                names={coordinatorNames}
                 colour="var(--voting)"
               />
             )}
@@ -841,6 +948,7 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
         <EditEventForm
           event={detail.event}
           choices={detail.choices}
+          coordinators={detail.coordinators || []}
           onSaved={() => { setEditing(false); onChanged(); loadDetail() }}
           onCancel={() => setEditing(false)}
         />
@@ -915,13 +1023,14 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
                 // never as something visible at the moment of choosing.
                 const isSelfBlocked = detail.event.allow_self_vote === false && c.candidate_member_id && c.candidate_member_id === member?.id
                 return (
-                  <label key={c.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0", borderBottom: "1px solid var(--border)", opacity: (atMax || isSelfBlocked) ? 0.5 : 1 }}>
+                  <label key={c.id} style={{ display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.5rem 0", borderBottom: "1px solid var(--border)", opacity: (atMax || isSelfBlocked) ? 0.5 : 1 }}>
                     <input
                       type={detail.event.vote_mode === "single" ? "radio" : "checkbox"}
                       name="voting-choice" checked={selected.includes(c.id)} disabled={atMax || isSelfBlocked}
                       onChange={() => toggleChoice(c.id)}
                     />
-                    <span>
+                    {c.image_url && <ChoiceThumb url={c.image_url} alt={c.label} size={56} onOpen={() => openChoiceImage(c.id)} />}
+                    <span style={{ minWidth: 0 }}>
                       {c.label}
                       {isSelfBlocked && <span style={{ marginLeft: "0.4rem", fontSize: "0.72rem", color: "var(--text-dim)", fontStyle: "italic" }}>(you can't vote for yourself in this ballot)</span>}
                     </span>
@@ -962,8 +1071,12 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
           {(event.status === "closed" || event.status === "published") && (
             <div style={{ marginBottom: "0.6rem" }}>
               {detail.results && detail.results.map(r => (
-                <div key={r.choice_id} style={{ display: "flex", justifyContent: "space-between", padding: "0.3rem 0" }}>
-                  <span>{r.label}</span><strong>{r.votes}</strong>
+                <div key={r.choice_id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.6rem", padding: "0.3rem 0" }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.6rem", minWidth: 0 }}>
+                    {imageByChoice[r.choice_id] && <ChoiceThumb url={imageByChoice[r.choice_id]} alt={r.label} size={44} onOpen={() => openChoiceImage(r.choice_id)} />}
+                    <span>{r.label}</span>
+                  </span>
+                  <strong>{r.votes}</strong>
                 </div>
               ))}
               {!detail.results && <div style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>The outcome isn't visible to you for this vote.</div>}
@@ -981,6 +1094,9 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
           {msg && <div style={{ fontSize: "0.85rem", color: "var(--terracotta)" }}>{msg}</div>}
         </div>
       )}
+      {viewerIndex !== null && choicePhotos.length > 0 && (
+        <ImageCarouselModal photos={choicePhotos} startIndex={viewerIndex} onClose={() => setViewerIndex(null)} />
+      )}
       </div>
     </div>
   )
@@ -988,12 +1104,12 @@ function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
 
 // Edit an existing event -- Draft gets the full create-form field set
 // (eligibility/vote mode/choices included, since nothing has been voted on
-// yet); Open is metadata-only (title/description/closing time/coordinator/
+// yet); Open is metadata-only (title/description/closing time/coordinators/
 // visibility) -- eligibility_mode, vote_mode and choices are locked server-
 // side once a vote is open (see the PATCH route's own comment for why).
 // Iain, 2026-09-02 review: "When an event is in draft or open once created
 // there is no Edit option for the Admin/Owner/EC."
-function EditEventForm({ event, choices: initialChoices, onSaved, onCancel }) {
+function EditEventForm({ event, choices: initialChoices, coordinators: initialCoordinators, onSaved, onCancel }) {
   const isDraft = event.status === "draft"
   const [title, setTitle] = useState(event.title || "")
   const [description, setDescription] = useState(event.description || "")
@@ -1003,10 +1119,10 @@ function EditEventForm({ event, choices: initialChoices, onSaved, onCancel }) {
   const [allowSelfVote, setAllowSelfVote] = useState(event.allow_self_vote !== false)
   const [visOutcome, setVisOutcome] = useState(event.results_visibility_outcome || "residents")
   const [visTurnout, setVisTurnout] = useState(event.results_visibility_turnout || "residents")
-  const [coordinator, setCoordinator] = useState(event.coordinator_id || null)
+  const [coordinators, setCoordinators] = useState(initialCoordinators || [])
   const [closesAt, setClosesAt] = useState(event.closes_at ? toLocalDatetimeInput(new Date(event.closes_at)) : "")
   const [choices, setChoices] = useState(
-    (initialChoices || []).map(c => ({ type: c.candidate_member_id ? "resident" : "text", label: c.label, candidate_member_id: c.candidate_member_id || null }))
+    (initialChoices || []).map(c => ({ type: c.candidate_member_id ? "resident" : "text", label: c.label, candidate_member_id: c.candidate_member_id || null, image_url: c.image_url || null }))
   )
   const [members, setMembers] = useState([])
   const [saving, setSaving] = useState(false)
@@ -1017,7 +1133,7 @@ function EditEventForm({ event, choices: initialChoices, onSaved, onCancel }) {
   }, [])
 
   function setChoice(i, patch) { setChoices(cs => cs.map((c, idx) => idx === i ? { ...c, ...patch } : c)) }
-  function addChoice() { setChoices(cs => [...cs, { type: "text", label: "", candidate_member_id: null }]) }
+  function addChoice() { setChoices(cs => [...cs, { type: "text", label: "", candidate_member_id: null, image_url: null }]) }
   function removeChoice(i) { setChoices(cs => cs.filter((_, idx) => idx !== i)) }
 
   // Same bound-to-actual-choices fix as CreateEventForm -- see its comment.
@@ -1032,13 +1148,16 @@ function EditEventForm({ event, choices: initialChoices, onSaved, onCancel }) {
   async function save() {
     setError("")
     if (!title.trim()) return setError("Title is required")
+    if (!closesAt) return setError("Set a closing date/time")
+    if (new Date(closesAt).getTime() <= Date.now()) return setError("Closing date/time must be in the future")
+    if (coordinators.length === 0) return setError("Choose at least one coordinator")
     const payload = {
       title: title.trim(),
       description: description.trim() || null,
-      coordinator_id: coordinator || null,
+      coordinator_ids: coordinators.map(m => m.id),
       results_visibility_outcome: visOutcome,
       results_visibility_turnout: visTurnout,
-      closes_at: closesAt ? new Date(closesAt).toISOString() : null,
+      closes_at: new Date(closesAt).toISOString(),
     }
     if (isDraft) {
       const cleanChoices = choices.map(c => ({ ...c, label: (c.label || "").trim() })).filter(c => c.label)
@@ -1050,7 +1169,7 @@ function EditEventForm({ event, choices: initialChoices, onSaved, onCancel }) {
       payload.vote_mode = voteMode
       payload.max_selections = voteMode === "multi" ? Number(maxSelections) || null : null
       payload.allow_self_vote = allowSelfVote
-      payload.choices = cleanChoices.map(c => ({ label: c.label, candidate_member_id: c.candidate_member_id || null }))
+      payload.choices = cleanChoices.map(c => ({ label: c.label, candidate_member_id: c.candidate_member_id || null, image_url: c.image_url || null }))
     }
 
     setSaving(true)
@@ -1106,7 +1225,7 @@ function EditEventForm({ event, choices: initialChoices, onSaved, onCancel }) {
           {choices.map((c, i) => {
             const takenIds = new Set(choices.filter((_, idx) => idx !== i).map(o => o.candidate_member_id).filter(Boolean))
             return (
-              <ChoiceRow key={i} choice={c} index={i} members={members} takenIds={takenIds}
+              <ChoiceRow key={i} choice={c} index={i} members={members} takenIds={takenIds} eventId={event.id}
                 onChange={patch => setChoice(i, patch)}
                 onRemove={choices.length > 2 ? () => removeChoice(i) : null} />
             )
@@ -1172,9 +1291,9 @@ function EditEventForm({ event, choices: initialChoices, onSaved, onCancel }) {
         </div>
       </div>
 
-      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Coordinator (optional)</label>
+      <label style={{ fontSize: "0.8rem", color: "var(--text-dim)", display: "block", marginBottom: "0.3rem" }}>Coordinators</label>
       <div style={{ marginBottom: "0.8rem" }}>
-        <CoordPicker members={members} value={coordinator} onChange={setCoordinator} />
+        <CoordinatorsPicker members={members} value={coordinators} onChange={setCoordinators} />
       </div>
 
       {error && <div style={{ color: "var(--terracotta)", marginBottom: "0.6rem", fontSize: "0.85rem" }}>{error}</div>}

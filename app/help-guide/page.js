@@ -155,7 +155,7 @@ const RAW_SECTIONS = [
     subs: [
       { title: "Casting your vote",                id: "sub-voting-cast" },
       { title: "Results and turnout",               id: "sub-voting-results" },
-      { title: "Running a vote (Owner/admin only)",  id: "sub-voting-ec" },
+      { title: "Running a vote (Owner/admin/coordinator)",  id: "sub-voting-ec" },
     ],
   },
   {
@@ -1915,6 +1915,11 @@ export default function HelpGuidePage() {
                 it afterwards, and the app won't let you vote twice.
               </Step>
               <Step>
+                Some options have a small picture next to them. Tap the picture to see it full
+                size, then use the arrows to look through the other options' pictures. Tapping a
+                picture doesn't choose that option — tick the circle or box to choose.
+              </Step>
+              <Step>
                 Some votes are set up as <strong>one vote per household</strong> rather than one per
                 resident. If someone else at your address has already voted, you won't be able to
                 vote again — and if your unit's house number isn't registered against your account,
@@ -1936,17 +1941,30 @@ export default function HelpGuidePage() {
               </Step>
             </Subsection>
 
-            <Subsection id="sub-voting-ec" title="Running a vote (Owner/admin only)" ecOnly>
+            <Subsection id="sub-voting-ec" title="Running a vote (Owner/admin/coordinator)" ecOnly>
               <Step>
                 An admin, or this hub's Owner, can start a new vote from the Voting page — set a
-                title, add choices, decide who's eligible (every resident, or one per household), how
-                many choices someone can pick, whether a candidate can vote for themselves, and who
-                gets to see the outcome and turnout.
+                title, the closing date/time, the choices, who's eligible (every resident, or one per
+                household), how many choices someone can pick, whether a candidate can vote for
+                themselves, and who gets to see the outcome and turnout. The closing date/time is
+                required.
+              </Step>
+              <Step>
+                Each choice can have a picture — tap <strong>+ Add image</strong> under the choice.
+                Use <strong>Change image</strong> or <strong>Remove image</strong> to swap or drop it.
+                Pictures, like the choices themselves, can only be changed while the vote is a
+                Draft.
+              </Step>
+              <Step>
+                Add one or more <strong>Coordinators</strong> — at least one is required. Every
+                coordinator can edit, open, close and publish that vote, sees its results, and
+                receives questions residents ask about it. Tap the × on a name to remove them.
               </Step>
               <Step>
                 A new vote starts as a <strong>Draft</strong> — nothing is visible to residents until
-                you set a closing date/time and tap <strong>Open this vote</strong>. It closes
-                automatically once that date/time passes; nobody needs to do anything for that part.
+                you tap <strong>Open this vote</strong> (you can adjust the closing date/time there
+                first). It closes automatically once that date/time passes; nobody needs to do
+                anything for that part.
               </Step>
               <Step>
                 Tapping <strong>Open this vote</strong> sends every active resident a notification

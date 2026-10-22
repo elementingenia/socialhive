@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { requireAdminOrAreaOwner, resolveMember, isAreaOwner } from '@/lib/areaAuth'
-import { computeVotingStatus, canSeeResults } from '@/lib/voting'
+import { computeVotingStatus, canSeeResults, normalizeCoordinatorIds, validateClosesAt, cleanChoiceImageUrl } from '@/lib/voting'
+import { votingCoordinatorsByEvent, setVotingCoordinators } from '@/lib/votingCoordinators'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,22 +16,17 @@ export async function GET(req) {
 
   const { data, error: qErr } = await supabaseAdmin
     .from('voting_events')
-    .select('id, title, description, eligibility_mode, vote_mode, max_selections, allow_self_vote, results_visibility_outcome, results_visibility_turnout, coordinator_id, image_url, image_focal_x, image_focal_y, opened_at, closes_at, published_at, created_at, archived')
+    .select('id, title, description, eligibility_mode, vote_mode, max_selections, allow_self_vote, results_visibility_outcome, results_visibility_turnout, image_url, image_focal_x, image_focal_y, opened_at, closes_at, published_at, created_at, archived')
     .eq('archived', false)
     .order('created_at', { ascending: false })
   if (qErr) return NextResponse.json({ error: qErr.message }, { status: 500 })
 
   const canManage = !!member.is_admin || await isAreaOwner(member.id, 'hub', 'voting')
 
-  // Coordinator names, batched in one query rather than N+1 -- round-5
-  // review moves the coordinator label onto the always-visible tile (it
-  // used to only appear once expanded), so the list route needs it too.
-  const coordinatorIds = [...new Set(data.map(e => e.coordinator_id).filter(Boolean))]
-  const coordinatorNames = {}
-  if (coordinatorIds.length > 0) {
-    const { data: coords } = await supabaseAdmin.from('members').select('id, name').in('id', coordinatorIds)
-    for (const c of coords || []) coordinatorNames[c.id] = c.name
-  }
+  // Coordinators, batched in one query (voting_coordinators, 139) -- a vote
+  // can have several, shown on the always-visible tile.
+  const coordsByEvent = await votingCoordinatorsByEvent(data.map(e => e.id))
+  const isCoord = e => (coordsByEvent[e.id] || []).some(c => c.id === member.id)
 
   // Votes-cast count, same tile-level move -- round-5 review, item 6:
   // "number of votes already cast would be a useful data point to show at
@@ -45,7 +41,7 @@ export async function GET(req) {
   // computed per event -- no blanket admin/owner bypass. See lib/voting.js's
   // canSeeResults() for the full rationale.
   const turnoutEligibleIds = data
-    .filter(e => computeVotingStatus(e) !== 'draft' && canSeeResults(e, { field: 'results_visibility_turnout', isCoordinator: !!e.coordinator_id && e.coordinator_id === member.id }))
+    .filter(e => computeVotingStatus(e) !== 'draft' && canSeeResults(e, { field: 'results_visibility_turnout', isCoordinator: isCoord(e) }))
     .map(e => e.id)
   const votesCastById = {}
   if (turnoutEligibleIds.length > 0) {
@@ -63,8 +59,8 @@ export async function GET(req) {
   const events = data.map(e => ({
     ...e,
     status: computeVotingStatus(e),
-    canManageEvent: canManage || (!!e.coordinator_id && e.coordinator_id === member.id),
-    coordinatorName: e.coordinator_id ? (coordinatorNames[e.coordinator_id] || null) : null,
+    canManageEvent: canManage || isCoord(e),
+    coordinators: coordsByEvent[e.id] || [],
     votesCast: turnoutEligibleIds.includes(e.id) ? (votesCastById[e.id] || 0) : null,
   }))
   return NextResponse.json({ events, isAdmin: !!member.is_admin, canManage })
@@ -82,7 +78,7 @@ export async function POST(req) {
   const {
     title, description, eligibility_mode, vote_mode, max_selections,
     allow_self_vote, results_visibility_outcome, results_visibility_turnout,
-    coordinator_id, closes_at, choices,
+    coordinator_ids, closes_at, choices,
   } = body
 
   if (!title || !String(title).trim()) return NextResponse.json({ error: 'Title is required' }, { status: 400 })
@@ -90,6 +86,10 @@ export async function POST(req) {
   if (vote_mode === 'multi' && max_selections != null && Number(max_selections) < 1) {
     return NextResponse.json({ error: 'Max selections must be at least 1' }, { status: 400 })
   }
+  const coordIds = normalizeCoordinatorIds(coordinator_ids)
+  if (coordIds.length === 0) return NextResponse.json({ error: 'Choose at least one coordinator' }, { status: 400 })
+  const closesErr = validateClosesAt(closes_at)
+  if (closesErr) return NextResponse.json({ error: closesErr }, { status: 400 })
 
   const { data: event, error: insErr } = await supabaseAdmin
     .from('voting_events')
@@ -102,8 +102,7 @@ export async function POST(req) {
       allow_self_vote: allow_self_vote !== false,
       results_visibility_outcome: results_visibility_outcome === 'admin_only' ? 'admin_only' : 'residents',
       results_visibility_turnout: results_visibility_turnout === 'admin_only' ? 'admin_only' : 'residents',
-      coordinator_id: coordinator_id || null,
-      closes_at: closes_at || null,
+      closes_at: new Date(closes_at).toISOString(),
       created_by: member.id,
     })
     .select()
@@ -117,6 +116,7 @@ export async function POST(req) {
       label: String(c.label).trim(),
       description: c.description || null,
       candidate_member_id: c.candidate_member_id || null,
+      image_url: cleanChoiceImageUrl(c.image_url, process.env.NEXT_PUBLIC_SUPABASE_URL),
       sort_order: i,
     }))
   const { error: choiceErr } = await supabaseAdmin.from('voting_choices').insert(choiceRows)
@@ -124,6 +124,12 @@ export async function POST(req) {
     // roll back the event so a failed choice-insert doesn't leave an orphaned Draft
     await supabaseAdmin.from('voting_events').delete().eq('id', event.id)
     return NextResponse.json({ error: choiceErr.message }, { status: 500 })
+  }
+
+  const coordErr = await setVotingCoordinators(event.id, coordIds, member.id)
+  if (coordErr) {
+    await supabaseAdmin.from('voting_events').delete().eq('id', event.id)
+    return NextResponse.json({ error: coordErr }, { status: 500 })
   }
 
   return NextResponse.json({ event: { ...event, status: computeVotingStatus(event) } }, { status: 201 })
