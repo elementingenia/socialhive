@@ -6,6 +6,7 @@ import { getAuthToken } from '@/lib/getAuthToken'
 import { useUser } from '@/lib/UserContext'
 import { useRouter } from 'next/navigation'
 import { computeFreeCost, normaliseService } from '@/lib/freeCost'
+import { HiveFundsAudienceSwitch } from '@/components/HiveFunds'
 import { PageTextsIcon, MoviesIcon, SocialIcon, BarIcon, BookClubIcon, ClubsIcon, InfoIcon, BookingsIcon, VotingIcon, OccasionalActivitiesIcon, CommitteeIcon, UptakeIcon, InterestsIcon, NewFeaturesIcon } from '@/components/NavIcons'
 import OwnersManager from '@/components/OwnersManager'
 import UptakeStats from '@/components/UptakeStats'
@@ -1221,6 +1222,7 @@ function HubSettingsTab() {
             {isOpen && (
               <div style={{ padding: '0 1rem 1rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                 {area.sections.map(k => <HubTextSection key={k} sectionKey={k} />)}
+                {area.fundKey && <HiveFundsAudienceSwitch fund={area.fundKey} colour={area.colour} />}
                 {area.ownerKey && (
                   <div>
                     <div style={{ fontWeight: 800, color: area.colour, marginBottom: '0.5rem' }}>Owners</div>
