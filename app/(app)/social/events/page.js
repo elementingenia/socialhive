@@ -6,6 +6,7 @@ import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
 import { getAuthToken, authedFetch } from "@/lib/getAuthToken"
+import { HiveEventFinances } from "@/components/HiveFunds"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import { BusIcon } from "@/components/NavIcons"
@@ -2045,6 +2046,8 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
           )}
         </div>
       )}
+      {/* Hive Funds breakdown (2026-10-23) -- renders nothing unless switched on for this viewer */}
+      <HiveEventFinances eventId={event.id} />
     </div>
   )
 }

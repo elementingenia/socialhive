@@ -83,6 +83,7 @@ const RAW_SECTIONS = [
     subs: [
       { title: "What assigning an Owner actually routes", id: "sub-owners-how" },
       { title: "The fallback chain when nobody's assigned", id: "sub-owners-fallback" },
+      { title: "Hive Funds ledger — who can see it", id: "sub-owners-hivefunds" },
     ],
   },
   {
@@ -777,6 +778,29 @@ export default function AdminGuidePage() {
                 💡 App admins always receive general/Home questions regardless of this screen — that's why
                 admins don't need to be listed as an Owner anywhere just to keep the fallback working.
               </InfoBox>
+            </Subsection>
+            <Subsection id="sub-owners-hivefunds" title="Hive Funds ledger — who can see it">
+              <Step>
+                Open <strong>Admin › Hub Settings › Social Hive</strong>. Under the page text is the{" "}
+                <strong>Hive Funds ledger</strong> switch with three settings: <strong>Hidden from
+                everyone</strong>, <strong>Admins, Owners and Event Coordinators</strong> (anyone coordinating
+                a Social event), or <strong>Every resident</strong>. Hidden means nobody sees the tile,
+                the funds page or the Finances strip on event cards — admins included.
+              </Step>
+              <Step>
+                To set it up: switch to Admins, Owners and Event Coordinators, open <strong>Hive Funds</strong>{" "}
+                from Social Hive's home page and press <strong>Declare starting balance</strong>. Use{" "}
+                <strong>I've counted the cash</strong>: enter the total in the tin and the app takes off
+                money already paid for events on or after that date and any refunds still owed, because
+                those are counted from the booking records. Events dated before the starting balance
+                date are left out. Declaring again replaces it; the old one stays on record.
+              </Step>
+              <Step>
+                Who can do what: Event Coordinators add outgoings and the adjustment on their own events.
+                Admins and Social Owners can do that on any Social event, enter money between events, and
+                finalise an event. Only admins declare the starting balance, change this switch, or reopen
+                a finalised event (with a reason, kept on record).
+              </Step>
             </Subsection>
           </Section>
 

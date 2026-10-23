@@ -89,6 +89,7 @@ const RAW_SECTIONS = [
       { title: "Viewing and booking events",   id: "sub-social-events" },
       { title: "Event detail & booking",       id: "sub-social-detail" },
       { title: "Riding the Community Bus",     id: "sub-social-bus" },
+      { title: "Hive Funds — where the money goes", id: "sub-social-funds" },
       { title: "Coordinator panel (EC only)",  id: "sub-social-ec" },
     ],
   },
@@ -1171,6 +1172,33 @@ export default function HelpGuidePage() {
                 💡 The bus has its own seat limit, separate from the event's. Once it's full, the bus
                 checkbox disables and shows <strong>Bus is full</strong> — you can still book the event
                 itself, you just won't have a bus seat. There's no waitlist for the bus.
+              </InfoBox>
+            </Subsection>
+            <Subsection id="sub-social-funds" title="Hive Funds — where the money goes">
+              <Step>
+                When it's switched on, Social Hive's home page shows a <strong>💰 Hive Funds</strong> tile:
+                the money the Hive holds, what's been collected and spent for upcoming events, any
+                refunds still owed back to residents, and the <strong>Balance as it stands</strong>. Tap
+                it for the full detail — every event's breakdown and any money spent or received
+                between events.
+              </Step>
+              <Step>
+                Each event card also has a <strong>💰 Finances</strong> strip. Tap <strong>▼ Show</strong> to
+                see the Hive funds before the event, each outgoing (with a receipt where one was
+                added), the money collected from residents, any adjustment and its reason, the event
+                result, and the amount carried forward. No resident names are shown against payments.
+              </Step>
+              <Step>
+                <strong>Collected from residents</strong> comes straight from the Paid/Unpaid records, so
+                it always matches the attendee list. Money the records don't cover — cash on the door,
+                say — is entered separately as an <strong>Adjustment</strong> with a note explaining it.
+              </Step>
+              <InfoBox>
+                💡 Event Coordinators can add outgoings (<strong>+ Add an outgoing</strong>) and the adjustment
+                on their own events. Admins and Social Owners can do this on any event, enter money in or
+                out between events, and press <strong>Finalise finances</strong> once an event is done —
+                that fixes its figures and moves the result into Funds held. Only an admin can reopen a
+                finalised event, and the reason is kept on record.
               </InfoBox>
             </Subsection>
 

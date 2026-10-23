@@ -13,6 +13,7 @@ import { bbToHtml } from "@/components/RichEditor"
 import { BusIcon } from "@/components/NavIcons"
 import { ContactBar } from "@/components/OwnersManager"
 import ManageLink from "@/components/ManageLink"
+import { HiveFundsTile } from "@/components/HiveFunds"
 import { useOwners } from "@/lib/useOwners"
 import { FormattedText } from "@/lib/textFormatter"
 import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted, balancePhrase } from "@/lib/payments"
@@ -490,6 +491,8 @@ export default function SocialHome() {
       />
 
       <MyBookingsCard bookings={myAllBookings} onViewAll={() => router.push("/social/events")} />
+
+      <HiveFundsTile fund="social" />
 
       {fullEvent && (
         <EventSlideOut event={fullEvent} onClose={() => setFullEvent(null)}
