@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server"
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { requireAdminOrAreaOwner } from "@/lib/areaAuth"
+import { isValidNight } from "@/lib/suggestionList"
 
 export const dynamic = "force-dynamic"
 
 // Show Time > Suggestions list management (2026-10-25, lib/suggestionList.js).
 // Admins and Show Time Owners only.
-//   { action: "set_night", night: "action" | "sunday" }  -- move to the other tab
+//   { action: "set_night", night: "action" | "sunday" | "both" }  -- choose tab(s)
 //   { action: "retire" }                                -- hide from residents
 //   { action: "restore" }                               -- bring back; restarts the 60-day clock
 export async function PATCH(req, { params }) {
@@ -19,7 +20,7 @@ export async function PATCH(req, { params }) {
 
   let patch
   if (body.action === "set_night") {
-    if (body.night !== "action" && body.night !== "sunday") return NextResponse.json({ error: "Choose Action Night or Sunday Night" }, { status: 400 })
+    if (!isValidNight(body.night)) return NextResponse.json({ error: "Choose Sunday Night, Action Night or Both" }, { status: 400 })
     patch = { showtime_night: body.night }
   } else if (body.action === "retire") {
     patch = { suggestion_retired_at: new Date().toISOString() }

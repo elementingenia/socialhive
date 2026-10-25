@@ -3,7 +3,7 @@
 //
 //   npm run test:unit
 
-import { guessNight, nightFor, daysOnList, isNew, suggestionStatus, voteSpread, voteSpreadLabel, rateQueue } from '../../lib/suggestionList.js'
+import { guessNight, nightFor, inNight, isValidNight, daysOnList, isNew, suggestionStatus, voteSpread, voteSpreadLabel, rateQueue } from '../../lib/suggestionList.js'
 
 let pass = 0, fail = 0
 const ok = (cond, msg) => { cond ? pass++ : (fail++, console.log('  ✗', msg)) }
@@ -22,6 +22,12 @@ eq(guessNight('Crime, Mystery'), 'sunday', 'Crime alone is not action')
 eq(nightFor({ genre: 'Thriller, Drama', showtime_night: 'sunday' }), 'sunday', 'admin override wins')
 eq(nightFor({ genre: 'Drama', showtime_night: 'action' }), 'action', 'override to action')
 eq(nightFor({ genre: 'Action', showtime_night: 'junk' }), 'action', 'bad override ignored')
+eq(nightFor({ genre: 'Drama', showtime_night: 'both' }), 'both', 'both override')
+ok(inNight({ genre: 'Drama', showtime_night: 'both' }, 'action'), 'both shows in action tab')
+ok(inNight({ genre: 'Drama', showtime_night: 'both' }, 'sunday'), 'both shows in sunday tab')
+ok(inNight({ genre: 'Thriller' }, 'action') && !inNight({ genre: 'Thriller' }, 'sunday'), 'guessed action only in action tab')
+ok(!inNight({ genre: 'Thriller', showtime_night: 'sunday' }, 'action'), 'override sunday leaves action tab')
+ok(isValidNight('both') && isValidNight('action') && isValidNight('sunday') && !isValidNight('x') && !isValidNight(null), 'valid night values')
 
 // ── clock ──
 eq(Math.round(daysOnList({ added_at: ago(10) }, NOW)), 10, 'days from added_at')

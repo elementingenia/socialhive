@@ -1036,7 +1036,8 @@ export default function HelpGuidePage() {
               </Step>
               <Step>
                 Films are split into two tabs at the top: <strong>Sunday Night</strong> and{" "}
-                <strong>Action Night</strong>. The page remembers the tab you last used. Newly added films
+                <strong>Action Night</strong> (some films appear in both). The page remembers the tab you
+                last used. Newly added films
                 show a <strong>NEW</strong> badge for their first 14 days. After that, films with fewer
                 than 3 votes move to the <strong>Others</strong> section at the bottom &mdash; tap it to open
                 the list. A film moves back up as soon as it has 3 votes, so please rate the ones you&apos;d

@@ -9,7 +9,7 @@ import MovieScores from '@/components/MovieScores'
 import { communityAverages, interestScore, typicalVoteCount } from '@/lib/movieScores'
 import { sydneyTodayStr } from '@/lib/date'
 import { useOwners } from '@/lib/useOwners'
-import { NIGHTS, nightFor, suggestionStatus, voteSpread, voteSpreadLabel, rateQueue } from '@/lib/suggestionList'
+import { NIGHTS, NIGHT_CHOICES, nightFor, inNight, suggestionStatus, voteSpread, voteSpreadLabel, rateQueue } from '@/lib/suggestionList'
 
 const TAB_KEY = 'showtime_suggestions_tab'
 function parseGenres(g) {
@@ -308,8 +308,8 @@ function ManageSuggestion({ movie, votes, statusInfo, onChanged, addToast }) {
       <div>
         <div style={{ fontSize:'0.78rem', color:'var(--text-dim)', marginBottom:'0.35rem' }}>Shown under</div>
         <div style={{ display:'flex', gap:'0.4rem' }}>
-          {NIGHTS.map(n => (
-            <button key={n.key} disabled={busy || night===n.key} onClick={()=>act({ action:'set_night', night:n.key }, `Moved to ${n.full}`)} style={pill(night===n.key)}>{n.label}</button>
+          {NIGHT_CHOICES.map(n => (
+            <button key={n.key} disabled={busy || night===n.key} onClick={()=>act({ action:'set_night', night:n.key }, n.done)} style={pill(night===n.key)}>{n.label}</button>
           ))}
         </div>
       </div>
@@ -761,10 +761,10 @@ export default function LibraryPage() {
   const statusOf = Object.fromEntries(movies.map(m => [m.id, suggestionStatus(m, avgVotes[m.id], { now, scheduled: scheduledIds.has(m.id) })]))
   const voteCounts = Object.fromEntries(Object.entries(allAverages).map(([id, a]) => [id, a.count]))
   const unvoted = rateQueue(movies.filter(m => !myVotes[m.id]), voteCounts, { now, scheduledIds })
-  const inTab = movies.filter(m => nightFor(m) === night)
+  const inTab = movies.filter(m => inNight(m, night))
   // Genre chips come from the films in this tab only.
   const allGenres = [...new Set(inTab.flatMap(m=>parseGenres(m.genre)))].sort()
-  const tabCounts = Object.fromEntries(NIGHTS.map(n => [n.key, movies.filter(m => nightFor(m) === n.key && statusOf[m.id]?.status !== 'retired').length]))
+  const tabCounts = Object.fromEntries(NIGHTS.map(n => [n.key, movies.filter(m => inNight(m, n.key) && statusOf[m.id]?.status !== 'retired').length]))
 
   const filtered = inTab.filter(m => {
     const matchSearch = !search || m.title.toLowerCase().includes(search.toLowerCase()) || (m.actors||'').toLowerCase().includes(search.toLowerCase())

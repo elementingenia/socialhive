@@ -588,8 +588,9 @@ export default function AdminGuidePage() {
                 On <strong>Show Time › Suggestions</strong>, admins and Show Time Owners get extra tools in
                 each film&apos;s detail sheet, under <strong>Admin &amp; Owner</strong>:
                 <strong> Votes</strong> shows the spread of scores (e.g. &quot;7 votes: 3 × 8, 2 × 5, 2 ×
-                1&quot;), never who voted; <strong>Shown under</strong> moves the film between{" "}
-                <strong>Sunday Night</strong> and <strong>Action Night</strong>; and{" "}
+                1&quot;), never who voted; <strong>Shown under</strong> puts the film under{" "}
+                <strong>Sunday Night</strong>, <strong>Action Night</strong> or <strong>Both</strong>{" "}
+                (it can be changed any time, and counts in both tabs&apos; totals when set to Both); and{" "}
                 <strong>Retire from the list</strong> / <strong>Bring back to the list</strong>.
               </Step>
               <Step>
