@@ -97,8 +97,9 @@ const RAW_SECTIONS = [
     ],
   },
   {
-    id: "tools", num: 8, title: "Show Time › Enrich — DVD Library Enrichment",
+    id: "tools", num: 8, title: "Show Time — Pick a Film & DVD Library Enrichment",
     subs: [
+      { title: "Pick a Film — the Fair Pick ranking", id: "sub-tools-fairpick" },
       { title: "Running enrichment",   id: "sub-tools-run" },
       { title: "Failure catalogue",    id: "sub-tools-fail" },
     ],
@@ -896,7 +897,37 @@ export default function AdminGuidePage() {
             </Subsection>
           </Section>
 
-          <Section id="tools" num={8} title="Show Time › Enrich — DVD Library Enrichment">
+          <Section id="tools" num={8} title="Show Time — Pick a Film & DVD Library Enrichment">
+            <Subsection id="sub-tools-fairpick" title="Pick a Film — the Fair Pick ranking">
+              <Step>
+                Open <strong>Show Time › ⚙ Manage</strong>. <strong>Pick a Film</strong> is at the top,
+                for admins and Show Time Owners only. Choose <strong>Sunday Night</strong> or{" "}
+                <strong>Action Night</strong> (same tabs as Suggestions). Each film shows its rank, a label
+                (<strong>Strong pick</strong>, <strong>Good pick</strong> or <strong>Lukewarm</strong>),
+                the vote count and plain average, and <strong>Split opinion</strong> when voters
+                strongly disagree.
+              </Step>
+              <Step>
+                <strong>How the rank is worked out.</strong> Each vote is compared with how that person
+                usually scores, so a 1 from someone who often gives 1s counts for less than a 1 from
+                someone who usually gives 8s. A low score can only pull a film down a little, so no one
+                can veto a film. Votes count by Show Time screenings booked (not cancelled) in the last
+                year: none 25%, one 50%, two 75%, three or more in full. No one voter can carry more than
+                a third of a film&apos;s score. Films with fewer than 3 votes sit under{" "}
+                <strong>Needs more votes</strong>, unranked.
+              </Step>
+              <Step>
+                Left out: films booked for an upcoming showing, films shown in the last year, and
+                retired suggestions. <strong>On DVD only</strong> narrows to films we own;{" "}
+                <strong>Include films shown over a year ago</strong> adds older repeats back in.
+              </Step>
+              <Step>
+                Voter names are never shown by default. Tap <strong>Show who voted</strong> on a film to
+                see that film&apos;s voters, their score, screenings attended and why a vote counted less.
+                Names clear when you change night or filter, or leave the screen. Residents&apos; own
+                Suggestions scores are unchanged.
+              </Step>
+            </Subsection>
             <Subsection id="sub-tools-run" title="Running enrichment">
               <Step>
                 Admins run this from <strong>Admin › Show Time › Enrich</strong>. Show Time&apos;s Owners
