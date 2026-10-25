@@ -1123,6 +1123,12 @@ export default function HelpGuidePage() {
                 and not at all if a recap has already been posted. (An event with no End Time counts
                 as finished at the end of its day.)
               </Step>
+              <Step>
+                Show Time Owners: <strong>Show Time › ⚙ Manage › Pick a Film</strong> ranks suggested
+                films for Sunday Night and Action Night to help choose the next screening. It gives
+                more weight to regular attenders and less to habitual low scores. Voter names appear
+                only when you tap <strong>Show who voted</strong> on a film.
+              </Step>
             </Subsection>
           </Section>
 
