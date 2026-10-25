@@ -1034,6 +1034,20 @@ export default function HelpGuidePage() {
                 including plot, cast, IMDb rating, and the community voting score. You can rate the
                 film from this detail view.
               </Step>
+              <Step>
+                Films are split into two tabs at the top: <strong>Sunday Night</strong> and{" "}
+                <strong>Action Night</strong> (some films appear in both). The page remembers the tab you
+                last used. Newly added films
+                show a <strong>NEW</strong> badge for their first 14 days. After that, films with fewer
+                than 3 votes move to the <strong>Others</strong> section at the bottom &mdash; tap it to open
+                the list. A film moves back up as soon as it has 3 votes, so please rate the ones you&apos;d
+                like to see. Films that stay on the list for more than 60 days with fewer than 3 votes
+                are retired and no longer shown.
+              </Step>
+              <Step>
+                <strong>Rate a Film</strong> shows the newest films first, then films that still need
+                votes.
+              </Step>
             </Subsection>
 
             <Subsection id="sub-movies-dvd" title="DVD library">

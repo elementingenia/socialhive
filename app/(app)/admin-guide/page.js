@@ -58,6 +58,7 @@ const RAW_SECTIONS = [
     id: "showtime", num: 3, title: "Show Time Admin",
     subs: [
       { title: "Suggested — read-only, no actions here", id: "sub-st-suggested" },
+      { title: "Suggestions list — tabs, Others, retiring, vote spread", id: "sub-st-suggestions-list" },
       { title: "Ownership — what adding a record actually changes", id: "sub-st-ownership" },
       { title: "Streaming — what the service list controls", id: "sub-st-streaming" },
     ],
@@ -580,6 +581,29 @@ export default function AdminGuidePage() {
                 any resident has a private-ownership record for it under Ownership. There's nothing to
                 click to change data here — it's a FREE-vs-COST reference before you schedule a screening,
                 fed entirely by what you set in the two sub-tabs below.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-st-suggestions-list" title="Suggestions list — tabs, Others, retiring, vote spread">
+              <Step>
+                On <strong>Show Time › Suggestions</strong>, admins and Show Time Owners get extra tools in
+                each film&apos;s detail sheet, under <strong>Admin &amp; Owner</strong>:
+                <strong> Votes</strong> shows the spread of scores (e.g. &quot;7 votes: 3 × 8, 2 × 5, 2 ×
+                1&quot;), never who voted; <strong>Shown under</strong> puts the film under{" "}
+                <strong>Sunday Night</strong>, <strong>Action Night</strong> or <strong>Both</strong>{" "}
+                (it can be changed any time, and counts in both tabs&apos; totals when set to Both); and{" "}
+                <strong>Retire from the list</strong> / <strong>Bring back to the list</strong>.
+              </Step>
+              <Step>
+                Which tab a film is in: whatever an admin/Owner chose, otherwise Action Night if its genres
+                include Action or Thriller, else Sunday Night. New films get 14 days in the main list with a
+                NEW badge. After that, under 3 votes puts a film in <strong>Others</strong> (collapsed).
+                Over 60 days with under 3 votes retires it automatically. Over 60 days with 3&ndash;4 votes
+                and an average below 7 shows <strong>⚑ Consider retiring</strong> &mdash; the choice is
+                yours. A film booked for an upcoming showing is never retired, flagged or put in Others.
+              </Step>
+              <Step>
+                Retired films are in the <strong>Retired</strong> section at the bottom, visible only to
+                admins and Owners. Bringing one back keeps its votes and restarts its 60-day clock.
               </Step>
             </Subsection>
             <Subsection id="sub-st-ownership" title="Ownership — what adding a record actually changes">
