@@ -17,6 +17,7 @@ import { ContactBar } from '@/components/OwnersManager'
 import VoteScoreGrid from '@/components/VoteScoreGrid'
 import MovieScores from '@/components/MovieScores'
 import { communityAverages } from '@/lib/movieScores'
+import { rateQueue } from '@/lib/suggestionList'
 import ManageLink from '@/components/ManageLink'
 import { useUser } from '@/lib/UserContext'
 import { useOwners } from '@/lib/useOwners'
@@ -459,7 +460,7 @@ export default function MoviesHomePage() {
         .neq('status', 'cancelled'),
 
       supabase.from('movies')
-        .select('id, title, poster_url, genre, year, runtime, rating, rating_imdb, rating_rt, imdb_id')
+        .select('id, title, poster_url, genre, year, runtime, rating, rating_imdb, rating_rt, imdb_id, added_at, suggestion_retired_at, suggestion_clock_from')
         .eq('we_own', false)
         .eq('is_viewing_suggestion', true)
         .order('added_at', { ascending: false })
@@ -505,15 +506,23 @@ export default function MoviesHomePage() {
     }
 
     const votedIds = new Set((votesData || []).map(v => v.movie_id))
-    const toRate = (moviesData || []).filter(m => !votedIds.has(m.id))
-    setUnvoted(toRate)
+    const notVoted = (moviesData || []).filter(m => !votedIds.has(m.id))
     // Community score for the Rate a Film card -- everyone's votes on the
     // movies being offered (votes_read RLS allows any signed-in resident).
-    if (toRate.length) {
-      supabase.from('votes').select('movie_id, score').in('movie_id', toRate.map(m => m.id))
-        .then(({ data: allVotes }) => setAvgVotes(communityAverages(allVotes)))
+    // Vote counts also decide the order (lib/suggestionList.js rateQueue):
+    // new films first, then films under 3 votes; retired films dropped.
+    if (notVoted.length) {
+      const scheduledIds = new Set((eventsData || []).map(ev => ev.movie_id).filter(Boolean))
+      supabase.from('votes').select('movie_id, score').in('movie_id', notVoted.map(m => m.id))
+        .then(({ data: allVotes }) => {
+          const avgs = communityAverages(allVotes)
+          const counts = Object.fromEntries(Object.entries(avgs).map(([id, a]) => [id, a.count]))
+          setAvgVotes(avgs)
+          setUnvoted(rateQueue(notVoted, counts, { scheduledIds }))
+        })
     } else {
       setAvgVotes({})
+      setUnvoted([])
     }
     setLoading(false)
   }, [])

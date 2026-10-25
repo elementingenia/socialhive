@@ -8,6 +8,10 @@ import VoteScoreGrid from '@/components/VoteScoreGrid'
 import MovieScores from '@/components/MovieScores'
 import { communityAverages, interestScore, typicalVoteCount } from '@/lib/movieScores'
 import { sydneyTodayStr } from '@/lib/date'
+import { useOwners } from '@/lib/useOwners'
+import { NIGHTS, nightFor, suggestionStatus, voteSpread, voteSpreadLabel, rateQueue } from '@/lib/suggestionList'
+
+const TAB_KEY = 'showtime_suggestions_tab'
 function parseGenres(g) {
   if (!g) return []
   return g.split(/[,|\/]/).map(x => x.trim()).filter(Boolean)
@@ -276,7 +280,55 @@ function SuggestOverlay({ children, onClose }) {
   )
 }
 
-function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClose, onVoted, onDeleted, addToast, freeCostData }) {
+// Admin / Show Time Owner tools on a film (2026-10-25, lib/suggestionList.js):
+// vote spread (scores only, never names), move tab, retire / bring back.
+function ManageSuggestion({ movie, votes, statusInfo, onChanged, addToast }) {
+  const [busy, setBusy] = useState(false)
+  const spread = voteSpread(votes, movie.id)
+  const night = nightFor(movie)
+  const retired = statusInfo?.status === 'retired'
+  async function act(body, okMsg) {
+    setBusy(true)
+    const res = await authedFetch(`/api/movies/${movie.id}/suggestion`, { method:'PATCH', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(body) })
+    setBusy(false)
+    if (!res.ok) { const d = await res.json().catch(()=>({})); addToast(d.error || 'Update failed', 'error'); return }
+    addToast(okMsg); onChanged()
+  }
+  const pill = (active) => ({ flex:1, padding:'0.5rem', borderRadius:'10px', border:'1.5px solid', borderColor:active?'var(--teal)':'var(--border)', background:active?'var(--teal)':'var(--surface)', color:active?'#fff':'var(--text)', fontSize:'0.8rem', fontWeight:600, cursor:busy?'not-allowed':'pointer', fontFamily:'inherit' })
+  return (
+    <div style={{ borderTop:'1px solid var(--border)', paddingTop:'0.75rem', display:'flex', flexDirection:'column', gap:'0.6rem' }}>
+      <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.06em' }}>Admin &amp; Owner</div>
+      <div style={{ fontSize:'0.85rem' }}><strong>Votes:</strong> {voteSpreadLabel(spread)}</div>
+      {statusInfo?.flagged && (
+        <div style={{ fontSize:'0.8rem', color:'var(--amber-dark)', fontWeight:600 }}>⚑ Consider retiring: on the list over 60 days with few votes and an average under 7.</div>
+      )}
+      {retired && (
+        <div style={{ fontSize:'0.8rem', color:'var(--text-dim)' }}>{statusInfo.autoRetired ? 'Retired automatically: on the list over 60 days with fewer than 3 votes.' : 'Retired by an admin or Owner.'} Residents can&apos;t see it.</div>
+      )}
+      <div>
+        <div style={{ fontSize:'0.78rem', color:'var(--text-dim)', marginBottom:'0.35rem' }}>Shown under</div>
+        <div style={{ display:'flex', gap:'0.4rem' }}>
+          {NIGHTS.map(n => (
+            <button key={n.key} disabled={busy || night===n.key} onClick={()=>act({ action:'set_night', night:n.key }, `Moved to ${n.full}`)} style={pill(night===n.key)}>{n.label}</button>
+          ))}
+        </div>
+      </div>
+      {retired ? (
+        <button disabled={busy} onClick={()=>act({ action:'restore' }, `${movie.title} is back on the list`)}
+          style={{ background:'var(--teal)', color:'#fff', border:'none', borderRadius:'10px', fontSize:'0.82rem', fontWeight:600, padding:'0.55rem', cursor:busy?'not-allowed':'pointer', width:'100%', fontFamily:'inherit' }}>
+          ↩ Bring back to the list
+        </button>
+      ) : (
+        <button disabled={busy} onClick={()=>act({ action:'retire' }, `${movie.title} retired`)}
+          style={{ background:'none', border:'1px solid var(--border)', borderRadius:'10px', color:'var(--text)', fontSize:'0.82rem', fontWeight:600, padding:'0.55rem', cursor:busy?'not-allowed':'pointer', width:'100%', fontFamily:'inherit' }}>
+          Retire from the list
+        </button>
+      )}
+    </div>
+  )
+}
+
+function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, canManage, votes, statusInfo, onChanged, session, onClose, onVoted, onDeleted, addToast, freeCostData }) {
   const [voting, setVoting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -365,6 +417,7 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, session, onClo
           <div style={{ borderTop:'1px solid var(--border)', paddingTop:'0.75rem' }}>
             <VoteGrid current={myVote} onVote={handleVote} onRemove={handleRemove} loading={voting} />
           </div>
+          {canManage && <ManageSuggestion movie={movie} votes={votes} statusInfo={statusInfo} onChanged={onChanged} addToast={addToast} />}
           {isAdmin && (
             <button onClick={()=>setConfirmDelete(true)} disabled={deleting}
               style={{ background:'none', border:'1px solid var(--danger)', borderRadius:'10px', color:'var(--danger)', fontSize:'0.82rem', fontWeight:600, padding:'0.55rem', cursor:deleting?'not-allowed':'pointer', width:'100%', opacity:deleting?0.5:1 }}>
@@ -573,7 +626,7 @@ function SuggestSheet({ session, onClose, onAdded, addToast, maxHeight }) {
   )
 }
 
-function MovieCard({ movie, myVote, avgData, isAdmin, freeCostData, onClick }) {
+function MovieCard({ movie, myVote, avgData, isAdmin, freeCostData, isNew, flagged, onClick }) {
   const genres = parseGenres(movie.genre)
   const leadActor = movie.actors?.split(',')[0]?.trim()
   return (
@@ -583,8 +636,10 @@ function MovieCard({ movie, myVote, avgData, isAdmin, freeCostData, onClick }) {
         : <div style={{ width:65, background:'var(--surface2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.5rem', flexShrink:0 }}>🎬</div>}
       <div style={{ flex:1, padding:'0.55rem 0.65rem', overflow:'hidden' }}>
         <div style={{ fontWeight:700, fontSize:'0.88rem', lineHeight:1.2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+          {isNew && <span style={{ background:'var(--teal)', color:'#fff', borderRadius:'20px', padding:'0.05rem 0.4rem', fontSize:'0.62rem', fontWeight:700, marginRight:'0.35rem', verticalAlign:'middle' }}>NEW</span>}
           {movie.title}{movie.rating && <span style={{ fontWeight: 400, fontSize: '0.75em', verticalAlign: 'baseline', color: 'var(--text-dim)' }}> ({movie.rating})</span>}
         </div>
+        {flagged && <div style={{ color:'var(--amber-dark)', fontSize:'0.68rem', fontWeight:700, marginTop:'0.1rem' }}>⚑ Consider retiring</div>}
         {leadActor && (
           <div style={{ color:'var(--text-dim)', fontSize:'0.72rem', marginTop:'0.1rem', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
             {leadActor}
@@ -626,6 +681,10 @@ export default function LibraryPage() {
   const [introExpanded, setIntroExpanded] = useState(false)
   const [screenedMovies, setScreenedMovies] = useState([])
   const [screenedExpanded, setScreenedExpanded] = useState(false)
+  const [othersExpanded, setOthersExpanded] = useState(false)
+  const [retiredExpanded, setRetiredExpanded] = useState(false)
+  const [scheduledIds, setScheduledIds] = useState(new Set())
+  const [night, setNight] = useState('sunday')
   const [streamingServices, setStreamingServices] = useState([])
   const [dvdTmdbIds,        setDvdTmdbIds]        = useState(new Set())
   const [dvdImdbIds,        setDvdImdbIds]        = useState(new Set())
@@ -649,6 +708,7 @@ export default function LibraryPage() {
       supabase.from('movie_ownership').select('movie_id, ownership_type, members(name)'),
     ])
     const scheduledMovieIds = new Set((futureEventsData||[]).map(e => e.movie_id))
+    setScheduledIds(scheduledMovieIds)
     // Movies with only past events (not also scheduled for the future) go to screened bucket
     const pastMovieIds = new Set((pastEventsData||[]).map(e => e.movie_id))
     const onlyScreenedIds = new Set([...pastMovieIds].filter(id => !scheduledMovieIds.has(id)))
@@ -673,8 +733,19 @@ export default function LibraryPage() {
     loadData()
   }, [loadData])
 
+  // Last tab used is remembered on this device (Iain, 2026-10-25).
+  useEffect(() => {
+    try { const t = localStorage.getItem(TAB_KEY); if (t === 'action' || t === 'sunday') setNight(t) } catch {}
+  }, [])
+  function chooseNight(k) {
+    setNight(k)
+    try { localStorage.setItem(TAB_KEY, k) } catch {}
+  }
+
+  const { owners } = useOwners('hub', 'movie')
+  const canManage = !!member && (member.is_admin || owners.some(o => o.id === member.id))
+
   const myVotes = Object.fromEntries(votes.filter(v=>v.member_id===member?.id).map(v=>[v.movie_id,v.score]))
-  const unvoted = movies.filter(m => !myVotes[m.id])
   // Only movies on this list (avgVotes feeds the typical vote count below).
   const allAverages = communityAverages(votes)
   const avgVotes = Object.fromEntries(movies.filter(m => allAverages[m.id]).map(m => [m.id, allAverages[m.id]]))
@@ -684,9 +755,18 @@ export default function LibraryPage() {
   // replacing the 2026-09-05 pull-toward-median version.
   const typicalVotes = typicalVoteCount(avgVotes)
   const weightedScore = (id) => interestScore(avgVotes[id], typicalVotes)
-  const allGenres = [...new Set(movies.flatMap(m=>parseGenres(m.genre)))].sort()
 
-  const filtered = movies.filter(m => {
+  // List rules (lib/suggestionList.js): New / main / Others / Retired.
+  const now = new Date()
+  const statusOf = Object.fromEntries(movies.map(m => [m.id, suggestionStatus(m, avgVotes[m.id], { now, scheduled: scheduledIds.has(m.id) })]))
+  const voteCounts = Object.fromEntries(Object.entries(allAverages).map(([id, a]) => [id, a.count]))
+  const unvoted = rateQueue(movies.filter(m => !myVotes[m.id]), voteCounts, { now, scheduledIds })
+  const inTab = movies.filter(m => nightFor(m) === night)
+  // Genre chips come from the films in this tab only.
+  const allGenres = [...new Set(inTab.flatMap(m=>parseGenres(m.genre)))].sort()
+  const tabCounts = Object.fromEntries(NIGHTS.map(n => [n.key, movies.filter(m => nightFor(m) === n.key && statusOf[m.id]?.status !== 'retired').length]))
+
+  const filtered = inTab.filter(m => {
     const matchSearch = !search || m.title.toLowerCase().includes(search.toLowerCase()) || (m.actors||'').toLowerCase().includes(search.toLowerCase())
     let matchGenre = true
     if (genreFilter==='unscored') matchGenre = !myVotes[m.id]
@@ -708,6 +788,22 @@ export default function LibraryPage() {
     if (sortBy==='imdb') return (parseFloat(b.rating_imdb)||0)-(parseFloat(a.rating_imdb)||0)
     return a.title.localeCompare(b.title)
   })
+
+  const mainList = sorted.filter(m => statusOf[m.id]?.status === 'main')
+  const othersList = sorted.filter(m => statusOf[m.id]?.status === 'others')
+  const retiredList = canManage ? sorted.filter(m => statusOf[m.id]?.status === 'retired') : []
+  const freeCostFor = (m) => member?.is_admin ? computeFreeCost(m, { streamingServices, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecords.filter(o => o.movie_id === m.id) }) : null
+  const card = (m) => (
+    <MovieCard key={m.id} movie={m} myVote={myVotes[m.id]} avgData={avgVotes[m.id]} isAdmin={member?.is_admin} freeCostData={freeCostFor(m)}
+      isNew={statusOf[m.id]?.isNew} flagged={canManage && statusOf[m.id]?.flagged} onClick={()=>setSelectedId(m.id)} />
+  )
+  const sectionHeader = (label, count, expanded, toggle) => (
+    <button onClick={toggle}
+      style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:10, padding:'0.65rem 1rem', cursor:'pointer', fontFamily:'inherit' }}>
+      <span style={{ fontSize:'0.8rem', fontWeight:700, color:'var(--text-dim)', letterSpacing:'0.05em', textTransform:'uppercase' }}>{label} ({count})</span>
+      <span style={{ color:'var(--text-dim)', fontSize:'0.85rem' }}>{expanded ? '▲' : '▼'}</span>
+    </button>
+  )
 
   const selectedMovie = selectedId ? movies.find(m=>m.id===selectedId) : null
 
@@ -734,6 +830,15 @@ export default function LibraryPage() {
           </div>
         </div>
 
+        <div style={{ display:'flex', gap:'0.4rem', marginBottom:'0.85rem' }}>
+          {NIGHTS.map(n => (
+            <button key={n.key} onClick={()=>chooseNight(n.key)}
+              style={{ flex:1, padding:'0.65rem 0.25rem', borderRadius:'12px', border:'1.5px solid', borderColor:night===n.key?'var(--teal)':'var(--border)', background:night===n.key?'var(--teal)':'var(--surface)', color:night===n.key?'#fff':'var(--text)', fontSize:'0.88rem', fontWeight:700, cursor:'pointer', fontFamily:'inherit' }}>
+              {n.label} ({tabCounts[n.key] || 0})
+            </button>
+          ))}
+        </div>
+
         <div style={{ position:'relative', marginBottom:'1rem' }}>
           <span style={{ position:'absolute', left:'0.85rem', top:'50%', transform:'translateY(-50%)', color:'var(--text-dim)' }}>🔍</span>
           <input placeholder="Search movies…" value={search} onChange={e=>setSearch(e.target.value)}
@@ -742,7 +847,7 @@ export default function LibraryPage() {
 
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.75rem' }}>
           <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--teal)', letterSpacing:'0.08em', textTransform:'uppercase' }}>
-            ✦ {sorted.length} film{sorted.length!==1?'s':''} — tap to view &amp; vote
+            ✦ {mainList.length} film{mainList.length!==1?'s':''} — tap to view &amp; vote
           </div>
           <div style={{ display:'flex', gap:'0.45rem', alignItems:'center' }}>
             {!swiperDone && unvoted.length > 0 && member?.id && (
@@ -787,14 +892,36 @@ export default function LibraryPage() {
 
         {loading ? (
           <div style={{ display:'flex', justifyContent:'center', padding:'3rem' }}><div className="spinner" /></div>
-        ) : sorted.length===0 ? (
+        ) : mainList.length===0 && othersList.length===0 && retiredList.length===0 ? (
           <div style={{ textAlign:'center', color:'var(--text-dim)', padding:'3rem', fontSize:'0.9rem' }}>No movies match your filter.</div>
         ) : (
-          <div style={{ display:'flex', flexDirection:'column', gap:'0.65rem' }}>
-            {sorted.map(m=>(
-              <MovieCard key={m.id} movie={m} myVote={myVotes[m.id]} avgData={avgVotes[m.id]} isAdmin={member?.is_admin} freeCostData={member?.is_admin ? computeFreeCost(m, { streamingServices, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecords.filter(o => o.movie_id === m.id) }) : null} onClick={()=>setSelectedId(m.id)} />
-            ))}
-          </div>
+          <>
+            {mainList.length > 0 && (
+              <div style={{ display:'flex', flexDirection:'column', gap:'0.65rem' }}>
+                {mainList.map(card)}
+              </div>
+            )}
+            {othersList.length > 0 && (
+              <div style={{ marginTop:'1.5rem' }}>
+                {sectionHeader('Others — fewer than 3 votes', othersList.length, othersExpanded, ()=>setOthersExpanded(e=>!e))}
+                {othersExpanded && (
+                  <div style={{ display:'flex', flexDirection:'column', gap:'0.65rem', marginTop:'0.65rem' }}>
+                    {othersList.map(card)}
+                  </div>
+                )}
+              </div>
+            )}
+            {retiredList.length > 0 && (
+              <div style={{ marginTop:'1rem' }}>
+                {sectionHeader('Retired — admins & Owners only', retiredList.length, retiredExpanded, ()=>setRetiredExpanded(e=>!e))}
+                {retiredExpanded && (
+                  <div style={{ display:'flex', flexDirection:'column', gap:'0.65rem', marginTop:'0.65rem' }}>
+                    {retiredList.map(card)}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
 
         {screenedMovies.length > 0 && (
@@ -831,6 +958,10 @@ export default function LibraryPage() {
             avgData={avgVotes[selectedMovie.id]}
             memberId={member?.id}
             isAdmin={member?.is_admin}
+            canManage={canManage}
+            votes={votes}
+            statusInfo={statusOf[selectedMovie.id]}
+            onChanged={loadData}
             session={session}
             onClose={()=>setSelectedId(null)}
             onVoted={loadData}
