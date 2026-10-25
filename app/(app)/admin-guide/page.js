@@ -918,8 +918,9 @@ export default function AdminGuidePage() {
                 <strong>How the rank is worked out.</strong> Each vote is compared with how that person
                 usually scores, so a 1 from someone who often gives 1s counts for less than a 1 from
                 someone who usually gives 8s. A low score can only pull a film down a little, so no one
-                can veto a film. Votes count by Show Time screenings booked (not cancelled) in the last
-                year: none 25%, one 50%, two 75%, three or more in full. No one voter can carry more than
+                can veto a film. Votes count by film screenings attended in the last year (their own
+                booking, or named as a seat on someone else&apos;s booking, not cancelled; sport,
+                demos and other non-film Show Time events don&apos;t count): none 25%, one 50%, two 75%, three or more in full. No one voter can carry more than
                 a third of a film&apos;s score. Films with fewer than 3 votes sit under{" "}
                 <strong>Needs more votes</strong>, unranked.
               </Step>
