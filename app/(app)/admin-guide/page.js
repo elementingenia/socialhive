@@ -799,6 +799,13 @@ export default function AdminGuidePage() {
                 login (see Section 9) can be tagged in a category but will never receive or be able to
                 answer a question that way.
               </Step>
+              <Step>
+                <strong>If nobody answers.</strong> After 5 days, a question asked on an event is passed up
+                to that event&apos;s club or hub Owner(s) — if they weren&apos;t the ones asked in the first
+                place. If it&apos;s still unanswered 5 days after that, every admin is told and it appears in
+                every admin&apos;s Questions list. Questions with no Owner above them (hub, club, Contacts
+                category, general) go to the admins after the first 5 days. Test accounts never receive these.
+              </Step>
               <InfoBox>
                 💡 App admins always receive general/Home questions regardless of this screen — that's why
                 admins don't need to be listed as an Owner anywhere just to keep the fallback working.
