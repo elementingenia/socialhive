@@ -54,6 +54,14 @@ eq(st({ added_at: ago(200), suggestion_clock_from: ago(2) }, { count: 0 }).statu
 eq(st({ added_at: ago(200) }, { count: 0 }, { scheduled: true }).status, 'main', 'scheduled never retired')
 eq(st({ added_at: ago(200), suggestion_retired_at: ago(1) }, { count: 0 }, { scheduled: true }).status, 'main', 'scheduled beats manual retire')
 eq(st({ added_at: ago(30) }, { count: 1 }, { scheduled: true }).status, 'main', 'scheduled never in Others')
+// Consider retiring uses the Fair Pick relative score when given (2026-10-26)
+eq(st({ added_at: ago(61) }, { count: 4, avg: 6.2 }, { fairRelative: 0.2 }).flagged, false, 'low average but voters rated it above their norm -> not flagged')
+eq(st({ added_at: ago(61) }, { count: 4, avg: 8.5 }, { fairRelative: -0.3 }).flagged, true, 'high average but below voters norm -> flagged')
+eq(st({ added_at: ago(61) }, { count: 4, avg: 8.5 }, { fairRelative: -0.3 }).flagBasis, 'fair', 'flag basis fair')
+eq(st({ added_at: ago(61) }, { count: 4, avg: 8.5 }, { fairRelative: 0 }).flagged, false, 'exactly at norm -> not flagged')
+eq(st({ added_at: ago(61) }, { count: 4, avg: 6.2 }).flagBasis, 'average', 'no relative score -> plain average rule')
+eq(st({ added_at: ago(61) }, { count: 5, avg: 3 }, { fairRelative: -1 }).flagged, false, '5+ votes never flagged')
+eq(st({ added_at: ago(30) }, { count: 4, avg: 3 }, { fairRelative: -1 }).flagged, false, 'under 60 days never flagged')
 
 // ── spread ──
 const votes = [

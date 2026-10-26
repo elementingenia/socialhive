@@ -599,8 +599,10 @@ export default function AdminGuidePage() {
                 include Action or Thriller, else Sunday Night. New films get 14 days in the main list with a
                 NEW badge. After that, under 3 votes puts a film in <strong>Others</strong> (collapsed).
                 Over 60 days with under 3 votes retires it automatically. Over 60 days with 3&ndash;4 votes
-                and an average below 7 shows <strong>⚑ Consider retiring</strong> &mdash; the choice is
-                yours. A film booked for an upcoming showing is never retired, flagged or put in Others.
+                where its voters rated it below their own usual scores, weighted by
+                attendance as in Pick a Film (Section 8), shows <strong>⚑ Consider retiring</strong>{" "}
+                &mdash; the choice is yours. So a film sunk only by habitual low scorers or non-attenders
+                isn&apos;t flagged. A film booked for an upcoming showing is never retired, flagged or put in Others.
               </Step>
               <Step>
                 Retired films are in the <strong>Retired</strong> section at the bottom, visible only to

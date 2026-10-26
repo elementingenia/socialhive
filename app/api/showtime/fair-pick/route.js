@@ -3,7 +3,7 @@ import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { requireAdminOrAreaOwner } from "@/lib/areaAuth"
 import { NIGHTS, inNight, suggestionStatus } from "@/lib/suggestionList"
 import { communityAverages } from "@/lib/movieScores"
-import { rankFilms } from "@/lib/fairPick"
+import { rankFilms, voterProfiles, relativeScore } from "@/lib/fairPick"
 import { loadVotes, loadAttendance, loadShowings } from "@/lib/fairPickData"
 import { sydneyDateStrPlusDays } from "@/lib/date"
 
@@ -57,7 +57,14 @@ export async function GET(req) {
       })
       nights[n.key] = { ranked: ranked.map(strip), needsVotes: needsVotes.map(strip), typical }
     }
-    return NextResponse.json({ nights })
+    // Relative score for EVERY voted film (not just candidates) for the
+    // Suggestions "Consider retiring" flag -- numbers only, no names.
+    const profiles = voterProfiles(votes)
+    const byFilm = {}
+    for (const v of votes) (byFilm[v.movie_id] || (byFilm[v.movie_id] = [])).push(v)
+    const relative = {}
+    for (const [id, rows] of Object.entries(byFilm)) relative[id] = relativeScore(rows, profiles, attendance)
+    return NextResponse.json({ nights, relative })
   } catch (e) {
     return NextResponse.json({ error: e.message || "Could not load the ranking" }, { status: 500 })
   }
