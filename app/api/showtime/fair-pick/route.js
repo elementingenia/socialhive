@@ -4,7 +4,7 @@ import { requireAdminOrAreaOwner } from "@/lib/areaAuth"
 import { NIGHTS, inNight, suggestionStatus } from "@/lib/suggestionList"
 import { communityAverages } from "@/lib/movieScores"
 import { rankFilms, voterProfiles, relativeScore } from "@/lib/fairPick"
-import { loadVotes, loadAttendance, loadShowings } from "@/lib/fairPickData"
+import { loadVotes, loadAttendance, loadShowings, loadFairPickConfig } from "@/lib/fairPickData"
 import { sydneyDateStrPlusDays } from "@/lib/date"
 
 export const dynamic = "force-dynamic"
@@ -14,31 +14,32 @@ export const dynamic = "force-dynamic"
 // names come only from ./voters, on request, one film at a time.
 //
 // Candidates: films with at least one vote that are not booked for an
-// upcoming showing, not shown in the last 12 months, and not retired from
-// Suggestions (same rule residents see, lib/suggestionList.js).
-const RECENT_SHOWN_DAYS = 365
+// upcoming showing, not shown within recentShownDays (settings), and not
+// retired from Suggestions (same rule residents see, lib/suggestionList.js).
+// All numbers come from Admin > Hub Settings > Show Time (lib/fairPick.js).
 
 export async function GET(req) {
   const auth = await requireAdminOrAreaOwner(req, "hub", "movie")
   if (auth.error) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
   try {
+    const { config } = await loadFairPickConfig()
     const [votes, attendance, showings, moviesRes] = await Promise.all([
       loadVotes(),
-      loadAttendance(),
+      loadAttendance(config.attendanceDays),
       loadShowings(),
       supa.from("movies").select("id, title, year, genre, poster_url, we_own, showtime_night, suggestion_retired_at, suggestion_clock_from, added_at"),
     ])
     if (moviesRes.error) throw new Error(moviesRes.error.message)
 
     const averages = communityAverages(votes)
-    const recentCutoff = sydneyDateStrPlusDays(-RECENT_SHOWN_DAYS)
+    const recentCutoff = config.recentShownDays > 0 ? sydneyDateStrPlusDays(-config.recentShownDays) : null
     const candidates = []
     for (const m of moviesRes.data || []) {
       if (!averages[m.id]) continue
       const s = showings[m.id]
       if (s?.upcoming) continue
-      if (s?.lastShown && s.lastShown >= recentCutoff) continue
+      if (recentCutoff && s?.lastShown && s.lastShown >= recentCutoff) continue
       if (suggestionStatus(m, averages[m.id]).status === "retired") continue
       candidates.push({
         id: m.id, title: m.title, year: m.year, poster_url: m.poster_url,
@@ -49,7 +50,7 @@ export async function GET(req) {
 
     const nights = {}
     for (const n of NIGHTS) {
-      const { ranked, needsVotes, typical } = rankFilms(candidates.filter(m => inNight(m, n.key)), votes, attendance)
+      const { ranked, needsVotes, typical } = rankFilms(candidates.filter(m => inNight(m, n.key)), votes, attendance, config)
       const strip = f => ({
         id: f.id, title: f.title, year: f.year, poster_url: f.poster_url, we_own: f.we_own,
         lastShown: f.lastShown, count: f.count, avg: f.avg, score: f.score,
@@ -59,12 +60,12 @@ export async function GET(req) {
     }
     // Relative score for EVERY voted film (not just candidates) for the
     // Suggestions "Consider retiring" flag -- numbers only, no names.
-    const profiles = voterProfiles(votes)
+    const profiles = voterProfiles(votes, config)
     const byFilm = {}
     for (const v of votes) (byFilm[v.movie_id] || (byFilm[v.movie_id] = [])).push(v)
     const relative = {}
-    for (const [id, rows] of Object.entries(byFilm)) relative[id] = relativeScore(rows, profiles, attendance)
-    return NextResponse.json({ nights, relative })
+    for (const [id, rows] of Object.entries(byFilm)) relative[id] = relativeScore(rows, profiles, attendance, config)
+    return NextResponse.json({ nights, relative, config })
   } catch (e) {
     return NextResponse.json({ error: e.message || "Could not load the ranking" }, { status: 500 })
   }

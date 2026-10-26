@@ -4,7 +4,8 @@
 
 import {
   attendanceWeight, voterProfiles, voteValue, typicalCount, filmVotes, fairScore,
-  rankFilms, pickLabel, voteNotes, relativeScore, MIN_SPREAD, DOWN_CAP, UP_CAP,
+  rankFilms, pickLabel, voteNotes, relativeScore, MIN_SPREAD,
+  DEFAULT_FAIR_PICK_CONFIG, parseFairPickConfig, validateFairPickConfig, cloneDefaults, bucketSummary, DOWN_CAP, UP_CAP,
 } from '../../lib/fairPick.js'
 
 let pass = 0, fail = 0
@@ -51,9 +52,9 @@ eq(typicalCount([]), 2, 'no films -> 2')
 {
   const votes = [{ movie_id: 'f', member_id: 'a', score: 9 }]
   const fv = filmVotes(votes, voterProfiles(votes), { a: 5 }, 2)
-  near(fv[0].weight, 1, 'one full voter with typical 2: total 3, cap 1 -> not capped')
+  near(fv[0].weight, 0.99, 'one full voter with typical 2: total 3, cap 33% = 0.99')
   const fv2 = filmVotes(votes, voterProfiles(votes), { a: 5 }, 1)
-  near(fv2[0].weight, 2 / 3, 'typical 1: total 2, cap 2/3 -> capped')
+  near(fv2[0].weight, 0.66, 'typical 1: total 2, cap 33% = 0.66')
   ok(fv2[0].shareCapped, 'share cap is reported')
 }
 
@@ -114,6 +115,45 @@ eq([0.5, 0.2, 0.0].map(pickLabel), ['Strong pick', 'Good pick', 'Lukewarm'], 'la
   eq(n, ['Counts 25%', 'Low score capped', 'Usually scores low (average 4.0)'], 'notes for a discounted vote')
   eq(voteNotes({ score: 8, attended: 4, attendanceWeight: 1, cappedDown: false, shareCapped: false }, { mean: 7, spread: 2, count: 20 }),
     [], 'full-value vote has no notes')
+}
+
+// ── Configurable settings (2026-10-27) ──
+{
+  const d = cloneDefaults()
+  eq(validateFairPickConfig(d), null, 'defaults are valid')
+  eq(bucketSummary(d.attendanceBuckets), '0: 25% · 1: 50% · 2: 75% · 3+: 100%', 'default bucket summary')
+  eq(bucketSummary([{ from: 0, weight: 20 }, { from: 2, weight: 60 }, { from: 5, weight: 100 }]), '0–1: 20% · 2–4: 60% · 5+: 100%', 'ranges in summary')
+
+  const custom = { ...d, attendanceBuckets: [{ from: 5, weight: 100 }, { from: 0, weight: 10 }, { from: 2, weight: 60 }] }
+  eq([0, 1, 2, 4, 5, 9].map(n => attendanceWeight(n, custom)), [0.1, 0.1, 0.6, 0.6, 1, 1], 'custom buckets, unsorted input')
+  eq(attendanceWeight(3, { ...d, attendanceBuckets: [{ from: 0, weight: 100 }] }), 1, 'single bucket = everyone full weight')
+
+  ok(validateFairPickConfig({ ...d, attendanceBuckets: [{ from: 1, weight: 50 }] }), 'must have a bucket at 0')
+  ok(validateFairPickConfig({ ...d, attendanceBuckets: [{ from: 0, weight: 50 }, { from: 0, weight: 60 }] }), 'duplicate start rejected')
+  ok(validateFairPickConfig({ ...d, attendanceBuckets: [{ from: 0, weight: 120 }] }), 'weight over 100 rejected')
+  ok(validateFairPickConfig({ ...d, attendanceBuckets: [{ from: 0, weight: 0 }] }), 'all-zero weights rejected')
+  ok(validateFairPickConfig({ ...d, attendanceBuckets: [{ from: 0.5, weight: 50 }] }), 'fractional screenings rejected')
+  ok(validateFairPickConfig({ ...d, attendanceBuckets: [] }), 'no buckets rejected')
+  ok(validateFairPickConfig({ ...d, attendanceDays: 10 }), 'attendance days below range rejected')
+  ok(validateFairPickConfig({ ...d, minRankedVotes: 2.5 }), 'whole number required')
+  ok(validateFairPickConfig({ ...d, strongScore: 0.1, goodScore: 0.2 }), 'strong must exceed good')
+  ok(validateFairPickConfig({ ...d, downCap: NaN }), 'NaN rejected')
+  eq(validateFairPickConfig({ ...d, recentShownDays: 0 }), null, '0 recent days allowed')
+
+  eq(parseFairPickConfig(null), cloneDefaults(), 'nothing saved -> defaults')
+  eq(parseFairPickConfig('not json'), cloneDefaults(), 'bad JSON -> defaults')
+  eq(parseFairPickConfig(JSON.stringify({ attendanceDays: 5 })), cloneDefaults(), 'invalid saved value -> defaults, never broken')
+  eq(parseFairPickConfig(JSON.stringify({ attendanceDays: 180 })).attendanceDays, 180, 'partial save merges with defaults')
+  eq(parseFairPickConfig(JSON.stringify({ attendanceDays: 180 })).attendanceBuckets, cloneDefaults().attendanceBuckets, 'buckets default when not saved')
+  ok(Object.isFrozen(DEFAULT_FAIR_PICK_CONFIG), 'defaults cannot be mutated')
+
+  // Config flows through ranking: raising minRankedVotes moves films to needsVotes
+  const v = [], add = (m, f, s) => v.push({ movie_id: f, member_id: m, score: s })
+  ;['a', 'b', 'c'].forEach(m => { add(m, 'x', 8); add(m, 'y', 6) })
+  const films = [{ id: 'x' }, { id: 'y' }]
+  eq(rankFilms(films, v, {}).ranked.length, 2, '3 votes ranked by default')
+  eq(rankFilms(films, v, {}, { ...d, minRankedVotes: 4 }).ranked.length, 0, 'minRankedVotes 4 -> none ranked')
+  eq(voteNotes({ score: 5, attended: 9, attendanceWeight: 1, cappedDown: false, shareCapped: true }, null, { ...d, maxVoterSharePct: 40 }), ['Capped at 40% of this film'], 'note uses configured share')
 }
 
 console.log(`fairPick: ${pass} passed, ${fail} failed`)

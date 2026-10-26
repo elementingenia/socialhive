@@ -100,6 +100,7 @@ const RAW_SECTIONS = [
     id: "tools", num: 8, title: "Show Time — Pick a Film & DVD Library Enrichment",
     subs: [
       { title: "Pick a Film — the Fair Pick ranking", id: "sub-tools-fairpick" },
+      { title: "Pick a Film settings", id: "sub-tools-fairpick-settings" },
       { title: "Running enrichment",   id: "sub-tools-run" },
       { title: "Failure catalogue",    id: "sub-tools-fail" },
     ],
@@ -922,20 +923,47 @@ export default function AdminGuidePage() {
                 someone who usually gives 8s. A low score can only pull a film down a little, so no one
                 can veto a film. Votes count by film screenings attended in the last year (their own
                 booking, or named as a seat on someone else&apos;s booking, not cancelled; sport,
-                demos and other non-film Show Time events don&apos;t count): none 25%, one 50%, two 75%, three or more in full. No one voter can carry more than
-                a third of a film&apos;s score. Films with fewer than 3 votes sit under{" "}
-                <strong>Needs more votes</strong>, unranked.
+                demos and other non-film Show Time events don&apos;t count). The starting settings: none 25%,
+                one 50%, two 75%, three or more in full; no one voter can carry more than 33% of a
+                film&apos;s score; films with fewer than 3 votes sit under <strong>Needs more votes</strong>,
+                unranked. All of these can be changed (see Pick a Film settings below).
               </Step>
               <Step>
-                Left out: films booked for an upcoming showing, films shown in the last year, and
-                retired suggestions. <strong>On DVD only</strong> narrows to films we own;{" "}
-                <strong>Include films shown over a year ago</strong> adds older repeats back in.
+                Left out: films booked for an upcoming showing, films shown recently (the last year to
+                start with), and retired suggestions. <strong>On DVD only</strong> narrows to films we own;{" "}
+                <strong>Include films shown before</strong> adds older repeats back in.
               </Step>
               <Step>
                 Voter names are never shown by default. Tap <strong>Show who voted</strong> on a film to
                 see that film&apos;s voters, their score, screenings attended and why a vote counted less.
                 Names clear when you change night or filter, or leave the screen. Residents&apos; own
                 Suggestions scores are unchanged.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-tools-fairpick-settings" title="Pick a Film settings">
+              <Step>
+                Open <strong>Admin › Hub Settings › Show Time</strong>. <strong>Pick a Film settings</strong>{" "}
+                sits under the page texts. Admins can change it; Show Time Owners see the effect in
+                Pick a Film but can&apos;t edit the settings.
+              </Step>
+              <Step>
+                <strong>Attendance weighting</strong> is a list of buckets: &ldquo;From N screenings, counts
+                W%&rdquo;. The highest bucket covers that many or more. Tap <strong>+ Add bucket</strong> to
+                add one, ✕ to remove one, or edit the numbers. One bucket must start at 0 so every voter is
+                covered. The line under the buckets shows the result, e.g. &ldquo;0: 25% · 1: 50% · 2: 75%
+                · 3+: 100%&rdquo;.
+              </Step>
+              <Step>
+                Also editable: the attendance period, how recently shown films are left out (0 leaves none
+                out), votes needed to be ranked, and the most one voter can carry. Under{" "}
+                <strong>Scoring details</strong>: the low- and high-score limits, the scoring-habit floor,
+                and the levels for Strong pick, Good pick and Split opinion. Each field shows its allowed
+                range.
+              </Step>
+              <Step>
+                Tap <strong>Save</strong>. Pick a Film and the Suggestions <strong>Consider retiring</strong>{" "}
+                flag use the new settings straight away. <strong>Undo changes</strong> drops unsaved edits;{" "}
+                <strong>Reset to starting settings</strong> fills in the originals for you to save.
               </Step>
             </Subsection>
             <Subsection id="sub-tools-run" title="Running enrichment">
