@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { requireAdminOrAreaOwner } from "@/lib/areaAuth"
 import { voterProfiles, filmVotes, typicalCount, voteNotes } from "@/lib/fairPick"
-import { loadVotes, loadAttendance } from "@/lib/fairPickData"
+import { loadVotes, loadAttendance, loadFairPickConfig } from "@/lib/fairPickData"
 import { resolveMemberName } from "@/lib/memberName"
 
 export const dynamic = "force-dynamic"
@@ -22,11 +22,12 @@ export async function GET(req) {
   if (!movieId) return NextResponse.json({ error: "Missing film" }, { status: 400 })
 
   try {
-    const [votes, attendance] = await Promise.all([loadVotes(), loadAttendance()])
-    const profiles = voterProfiles(votes)
+    const { config } = await loadFairPickConfig()
+    const [votes, attendance] = await Promise.all([loadVotes(), loadAttendance(config.attendanceDays)])
+    const profiles = voterProfiles(votes, config)
     const mine = votes.filter(v => v.movie_id === movieId)
     const typical = Math.max(2, Number(url.searchParams.get("typical")) || typicalCount([mine.length]))
-    const rows = filmVotes(mine, profiles, attendance, typical)
+    const rows = filmVotes(mine, profiles, attendance, typical, config)
 
     const ids = [...new Set(rows.map(r => r.member_id))]
     const { data: members, error } = ids.length
@@ -42,7 +43,7 @@ export async function GET(req) {
         name: m?.hide_name ? `${name} (P)` : name,
         score: r.score,
         attended: r.attended,
-        notes: voteNotes(r, profiles[r.member_id]),
+        notes: voteNotes(r, profiles[r.member_id], config),
       }
     }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
 

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react"
 import { authedFetch } from "@/lib/getAuthToken"
 import { NIGHTS } from "@/lib/suggestionList"
+import { bucketSummary } from "@/lib/fairPick"
 
 // Show Time > Manage > Pick a Film (Element_Happenings_ShowTime_Fair_Pick_
 // Scope_v1, Iain 2026-10-26). Ranks films per night by the Fair Pick score
@@ -14,6 +15,13 @@ function monthYear(dateStr) {
   if (!dateStr) return ""
   const [y, m] = dateStr.split("-").map(Number)
   return `${MONTHS[m - 1]} ${y}`
+}
+
+// "the last year" / "the last 180 days"
+function periodText(days) {
+  if (days === 365) return "the last year"
+  if (days === 730) return "the last 2 years"
+  return `the last ${days} days`
 }
 
 const LABEL_STYLE = {
@@ -32,7 +40,7 @@ const pill = (active) => ({
 
 const tag = { fontSize: "0.72rem", fontWeight: 700, padding: "0.15rem 0.5rem", borderRadius: 999, whiteSpace: "nowrap" }
 
-function VoterList({ film, typical }) {
+function VoterList({ film, typical, period }) {
   const [state, setState] = useState({ loading: true })
   useEffect(() => {
     let live = true
@@ -54,7 +62,7 @@ function VoterList({ film, typical }) {
             <span style={{ fontWeight: 700 }}>{v.score}/10</span>
           </div>
           <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
-            {v.attended} screening{v.attended === 1 ? "" : "s"} in the last year
+            {v.attended} film screening{v.attended === 1 ? "" : "s"} in {period}
             {v.notes.length > 0 && ` · ${v.notes.join(" · ")}`}
           </div>
         </div>
@@ -63,7 +71,7 @@ function VoterList({ film, typical }) {
   )
 }
 
-function FilmRow({ film, rank, typical, open, onToggle }) {
+function FilmRow({ film, rank, typical, period, open, onToggle }) {
   return (
     <div style={{ padding: "0.7rem 0.8rem", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12 }}>
       <div style={{ display: "flex", gap: "0.6rem", alignItems: "flex-start" }}>
@@ -86,7 +94,7 @@ function FilmRow({ film, rank, typical, open, onToggle }) {
               fontWeight: 600, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit" }}>
             {open ? "Hide who voted ▲" : "Show who voted ▼"}
           </button>
-          {open && <VoterList film={film} typical={typical} />}
+          {open && <VoterList film={film} typical={typical} period={period} />}
         </div>
       </div>
     </div>
@@ -95,6 +103,7 @@ function FilmRow({ film, rank, typical, open, onToggle }) {
 
 export default function FairPickPanel() {
   const [data, setData] = useState(null)
+  const [config, setConfig] = useState(null)
   const [error, setError] = useState(null)
   const [night, setNight] = useState("sunday")
   const [dvdOnly, setDvdOnly] = useState(false)
@@ -106,7 +115,7 @@ export default function FairPickPanel() {
   useEffect(() => {
     authedFetch("/api/showtime/fair-pick")
       .then(r => r.json().then(d => ({ ok: r.ok, d })))
-      .then(({ ok, d }) => ok ? setData(d.nights) : setError(d.error || "Could not load the ranking"))
+      .then(({ ok, d }) => { if (ok) { setData(d.nights); setConfig(d.config) } else setError(d.error || "Could not load the ranking") })
       .catch(() => setError("Could not load the ranking"))
   }, [])
 
@@ -130,13 +139,14 @@ export default function FairPickPanel() {
           {showHow ? "Hide" : "How it works"}
         </button>
       </div>
-      {showHow && (
+      {showHow && config && (
         <ul style={{ fontSize: "0.82rem", color: "var(--text-dim)", margin: "0 0 0.75rem", paddingLeft: "1.1rem", lineHeight: 1.45 }}>
           <li>Each vote is compared with how that person usually scores. A 1 from someone who often gives 1s counts for less than a 1 from someone who usually gives 8s.</li>
           <li>One low score can only pull a film down a little, so no one can veto a film.</li>
-          <li>Votes count by screenings attended in the last year: none 25%, one 50%, two 75%, three or more in full.</li>
-          <li>No one voter can carry more than a third of a film&apos;s score. Films with fewer than 3 votes are listed under Needs more votes.</li>
-          <li>Booked films, films shown in the last year and retired suggestions are left out.</li>
+          <li>Votes count by film screenings attended in {periodText(config.attendanceDays)} (their own booking or a named seat): {bucketSummary(config.attendanceBuckets)}.</li>
+          <li>No one voter can carry more than {config.maxVoterSharePct}% of a film&apos;s score. Films with fewer than {config.minRankedVotes} votes are listed under Needs more votes.</li>
+          <li>Booked films, retired suggestions{config.recentShownDays > 0 ? ` and films shown in ${periodText(config.recentShownDays)}` : ""} are left out.</li>
+          <li>Admins can change these settings in Admin › Hub Settings › Show Time.</li>
         </ul>
       )}
 
@@ -147,7 +157,7 @@ export default function FairPickPanel() {
       </div>
       <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginBottom: "0.75rem" }}>
         <button onClick={() => setDvdOnly(v => !v)} style={pill(dvdOnly)}>On DVD only</button>
-        <button onClick={() => setIncludeShown(v => !v)} style={pill(includeShown)}>Include films shown over a year ago</button>
+        <button onClick={() => setIncludeShown(v => !v)} style={pill(includeShown)}>Include films shown before</button>
       </div>
 
       {error && <div style={{ color: "var(--red, #c0392b)", fontSize: "0.88rem" }}>{error}</div>}
@@ -156,10 +166,10 @@ export default function FairPickPanel() {
       {data && (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           {ranked.length === 0 && (
-            <div style={{ fontSize: "0.88rem", color: "var(--text-dim)" }}>No films with 3 or more votes match these filters.</div>
+            <div style={{ fontSize: "0.88rem", color: "var(--text-dim)" }}>No films with {config.minRankedVotes} or more votes match these filters.</div>
           )}
           {ranked.map((f, i) => (
-            <FilmRow key={f.id} film={f} rank={i + 1} typical={n.typical} open={openId === f.id} onToggle={() => toggle(f.id)} />
+            <FilmRow key={f.id} film={f} rank={i + 1} typical={n.typical} period={periodText(config.attendanceDays)} open={openId === f.id} onToggle={() => toggle(f.id)} />
           ))}
 
           {needs.length > 0 && (
@@ -172,7 +182,7 @@ export default function FairPickPanel() {
               {showNeeds && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.4rem" }}>
                   {needs.map(f => (
-                    <FilmRow key={f.id} film={f} rank={null} typical={n.typical} open={openId === f.id} onToggle={() => toggle(f.id)} />
+                    <FilmRow key={f.id} film={f} rank={null} typical={n.typical} period={periodText(config.attendanceDays)} open={openId === f.id} onToggle={() => toggle(f.id)} />
                   ))}
                 </div>
               )}
