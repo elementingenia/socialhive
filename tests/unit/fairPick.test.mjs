@@ -4,7 +4,7 @@
 
 import {
   attendanceWeight, voterProfiles, voteValue, typicalCount, filmVotes, fairScore,
-  rankFilms, pickLabel, voteNotes, MIN_SPREAD, DOWN_CAP, UP_CAP,
+  rankFilms, pickLabel, voteNotes, relativeScore, MIN_SPREAD, DOWN_CAP, UP_CAP,
 } from '../../lib/fairPick.js'
 
 let pass = 0, fail = 0
@@ -87,6 +87,21 @@ eq(typicalCount([]), 2, 'no films -> 2')
   near(ranked[0].avg, 7, 'avg is the plain average')
   ok(typeof ranked[0].label === 'string', 'ranked films get a label')
   eq(needsVotes[0].label, undefined, 'needs-more-votes films get no label')
+}
+
+// Relative score: against voters' own norms, no pull toward neutral
+{
+  const all = [
+    { movie_id: 'p', member_id: 'a', score: 5 }, { movie_id: 'q', member_id: 'a', score: 5 },
+    { movie_id: 'f', member_id: 'a', score: 9 }, { movie_id: 'g', member_id: 'a', score: 3 },
+    { movie_id: 'p', member_id: 'h', score: 1 }, { movie_id: 'q', member_id: 'h', score: 1 },
+    { movie_id: 'f', member_id: 'h', score: 1 }, { movie_id: 'g', member_id: 'h', score: 1 },
+  ]
+  const prof = voterProfiles(all)
+  const att = { a: 5, h: 5 }
+  ok(relativeScore(all.filter(v => v.movie_id === 'f'), prof, att) > 0, 'average 5 but above the regular voter\'s norm, habitual 1-giver neutral -> positive')
+  ok(relativeScore(all.filter(v => v.movie_id === 'g'), prof, att) < 0, 'below the regular voter\'s norm -> negative')
+  eq(relativeScore([], prof, att), 0, 'no votes -> 0')
 }
 
 eq(rankFilms([], [], {}).ranked, [], 'empty input')

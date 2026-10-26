@@ -300,7 +300,11 @@ function ManageSuggestion({ movie, votes, statusInfo, onChanged, addToast }) {
       <div style={{ fontSize:'0.72rem', fontWeight:700, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.06em' }}>Admin &amp; Owner</div>
       <div style={{ fontSize:'0.85rem' }}><strong>Votes:</strong> {voteSpreadLabel(spread)}</div>
       {statusInfo?.flagged && (
-        <div style={{ fontSize:'0.8rem', color:'var(--amber-dark)', fontWeight:600 }}>⚑ Consider retiring: on the list over 60 days with few votes and an average under 7.</div>
+        <div style={{ fontSize:'0.8rem', color:'var(--amber-dark)', fontWeight:600 }}>
+          {statusInfo.flagBasis === 'fair'
+            ? '⚑ Consider retiring: on the list over 60 days with few votes, and its voters rated it below their usual scores (allowing for attendance).'
+            : '⚑ Consider retiring: on the list over 60 days with few votes and an average under 7.'}
+        </div>
       )}
       {retired && (
         <div style={{ fontSize:'0.8rem', color:'var(--text-dim)' }}>{statusInfo.autoRetired ? 'Retired automatically: on the list over 60 days with fewer than 3 votes.' : 'Retired by an admin or Owner.'} Residents can&apos;t see it.</div>
@@ -745,6 +749,21 @@ export default function LibraryPage() {
   const { owners } = useOwners('hub', 'movie')
   const canManage = !!member && (member.is_admin || owners.some(o => o.id === member.id))
 
+  // Fair Pick relative scores (lib/fairPick.js relativeScore) for the
+  // admin/Owner "Consider retiring" flag (Iain, 2026-10-26). Server-only: it
+  // needs attendance, which residents can't read. null until loaded -- flags
+  // stay hidden until then so they don't flicker from the plain-average rule.
+  const [fairRel, setFairRel] = useState(null)
+  useEffect(() => {
+    if (!canManage) return
+    let live = true
+    authedFetch('/api/showtime/fair-pick')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (live) setFairRel(d?.relative || {}) })
+      .catch(() => { if (live) setFairRel({}) })
+    return () => { live = false }
+  }, [canManage, votes.length])
+
   const myVotes = Object.fromEntries(votes.filter(v=>v.member_id===member?.id).map(v=>[v.movie_id,v.score]))
   // Only movies on this list (avgVotes feeds the typical vote count below).
   const allAverages = communityAverages(votes)
@@ -758,7 +777,7 @@ export default function LibraryPage() {
 
   // List rules (lib/suggestionList.js): New / main / Others / Retired.
   const now = new Date()
-  const statusOf = Object.fromEntries(movies.map(m => [m.id, suggestionStatus(m, avgVotes[m.id], { now, scheduled: scheduledIds.has(m.id) })]))
+  const statusOf = Object.fromEntries(movies.map(m => [m.id, suggestionStatus(m, avgVotes[m.id], { now, scheduled: scheduledIds.has(m.id), fairRelative: fairRel?.[m.id] ?? null })]))
   const voteCounts = Object.fromEntries(Object.entries(allAverages).map(([id, a]) => [id, a.count]))
   const unvoted = rateQueue(movies.filter(m => !myVotes[m.id]), voteCounts, { now, scheduledIds })
   const inTab = movies.filter(m => inNight(m, night))
@@ -795,7 +814,7 @@ export default function LibraryPage() {
   const freeCostFor = (m) => member?.is_admin ? computeFreeCost(m, { streamingServices, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecords.filter(o => o.movie_id === m.id) }) : null
   const card = (m) => (
     <MovieCard key={m.id} movie={m} myVote={myVotes[m.id]} avgData={avgVotes[m.id]} isAdmin={member?.is_admin} freeCostData={freeCostFor(m)}
-      isNew={statusOf[m.id]?.isNew} flagged={canManage && statusOf[m.id]?.flagged} onClick={()=>setSelectedId(m.id)} />
+      isNew={statusOf[m.id]?.isNew} flagged={canManage && fairRel !== null && statusOf[m.id]?.flagged} onClick={()=>setSelectedId(m.id)} />
   )
   const sectionHeader = (label, count, expanded, toggle) => (
     <button onClick={toggle}
@@ -960,7 +979,7 @@ export default function LibraryPage() {
             isAdmin={member?.is_admin}
             canManage={canManage}
             votes={votes}
-            statusInfo={statusOf[selectedMovie.id]}
+            statusInfo={fairRel === null ? { ...statusOf[selectedMovie.id], flagged: false } : statusOf[selectedMovie.id]}
             onChanged={loadData}
             session={session}
             onClose={()=>setSelectedId(null)}
