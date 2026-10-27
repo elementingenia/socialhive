@@ -1131,8 +1131,8 @@ export default function HelpGuidePage() {
               <Step>
                 Show Time Owners: <strong>Show Time › ⚙ Manage › Pick a Film</strong> ranks suggested
                 films for Sunday Night and Action Night to help choose the next screening. It gives
-                more weight to regular attenders and less to habitual low scores. Voter names appear
-                only when you tap <strong>Show who voted</strong> on a film.
+                more weight to regular attenders and less to habitual low scores. Tap a film to see its
+                full details, links to IMDb and Rotten Tomatoes, and who voted with which score.
               </Step>
             </Subsection>
           </Section>

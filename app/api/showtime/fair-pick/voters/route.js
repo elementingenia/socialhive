@@ -7,7 +7,8 @@ import { resolveMemberName } from "@/lib/memberName"
 
 export const dynamic = "force-dynamic"
 
-// Who voted for one film, for Show Time > Manage > Pick a Film. Admins and
+// One film's full details + who voted, for the Pick a Film film sheet
+// (Show Time > Manage, tap a film; Iain 2026-10-27). Admins and
 // Show Time Owners only (Iain, 2026-10-26: names are never shown by default,
 // only when asked for, one film at a time). Private residents show their
 // real name with "(P)", same as the attendee-list convention for managers.
@@ -29,6 +30,12 @@ export async function GET(req) {
     const typical = Math.max(2, Number(url.searchParams.get("typical")) || typicalCount([mine.length]))
     const rows = filmVotes(mine, profiles, attendance, typical, config)
 
+    const { data: film, error: filmErr } = await supa.from("movies")
+      .select("id, title, year, genre, plot, poster_url, runtime, director, actors, rating, rating_imdb, rating_rt, imdb_id, we_own")
+      .eq("id", movieId).maybeSingle()
+    if (filmErr) throw new Error(filmErr.message)
+    if (!film) return NextResponse.json({ error: "Film not found" }, { status: 404 })
+
     const ids = [...new Set(rows.map(r => r.member_id))]
     const { data: members, error } = ids.length
       ? await supa.from("members").select("id, name, display_name, hide_name").in("id", ids)
@@ -47,7 +54,7 @@ export async function GET(req) {
       }
     }).sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
 
-    return NextResponse.json({ voters })
+    return NextResponse.json({ film, voters })
   } catch (e) {
     return NextResponse.json({ error: e.message || "Could not load voters" }, { status: 500 })
   }

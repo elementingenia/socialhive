@@ -934,10 +934,13 @@ export default function AdminGuidePage() {
                 <strong>Include films shown before</strong> adds older repeats back in.
               </Step>
               <Step>
-                Voter names are never shown by default. Tap <strong>Show who voted</strong> on a film to
-                see that film&apos;s voters, their score, screenings attended and why a vote counted less.
-                Names clear when you change night or filter, or leave the screen. Residents&apos; own
-                Suggestions scores are unchanged.
+                Each film tile shows a small poster. Tap a film to open its details: poster, year,
+                running time and classification, the community score, IMDb and Rotten Tomatoes (tap
+                either to open that site), genres, director, cast and plot. Below that,{" "}
+                <strong>Who voted</strong> lists every voter&apos;s score from highest to lowest, with
+                their film screenings attended and why a vote counted less. Voter names load only when you
+                open a film and aren&apos;t on the list itself. Residents&apos; own Suggestions scores are
+                unchanged.
               </Step>
             </Subsection>
             <Subsection id="sub-tools-fairpick-settings" title="Pick a Film settings">
