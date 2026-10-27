@@ -4,6 +4,8 @@ import { NextResponse } from "next/server"
 import { isValidDisplayName } from "@/lib/memberName"
 import { normaliseHouseNumber, resolveStreetId } from "@/lib/address"
 import { loadStreets, withStreetNames } from "@/lib/streetsServer"
+import { avatarUrlAllowed, resolveAvatarForSave, isProfilePhotoUrl, DEFAULT_AVATAR } from "@/lib/profilePhoto"
+import { removeStoredPhoto } from "@/lib/profilePhotoServer"
 
 
 async function getMember(req) {
@@ -71,6 +73,21 @@ export async function PATCH(req) {
     updates.street_id = st.value
   }
 
+  // Avatar / profile photo (2026-10-27). A save can keep the stored photo,
+  // pick a drawn avatar or clear it -- photos are only set by
+  // /api/profile/photo. A Private resident can't keep a photo, so turning
+  // Private on swaps it for a drawn avatar (lib/profilePhoto.js).
+  const effectiveHide = "hide_name" in updates ? !!updates.hide_name : !!member.hide_name
+  if ("avatar_url" in updates) {
+    if (!avatarUrlAllowed(updates.avatar_url, member.avatar_url))
+      return NextResponse.json({ error: "That picture can't be used." }, { status: 400 })
+    updates.avatar_url = resolveAvatarForSave({ next: updates.avatar_url, hideName: effectiveHide })
+  } else if (effectiveHide && isProfilePhotoUrl(member.avatar_url)) {
+    updates.avatar_url = DEFAULT_AVATAR
+  }
+  const photoToDelete = isProfilePhotoUrl(member.avatar_url) && "avatar_url" in updates && updates.avatar_url !== member.avatar_url
+    ? member.avatar_url : null
+
   // Try full update; if new columns don't exist yet, retry with only base columns
   let { data, error } = await supabase
     .from("members").update(updates).eq("id", member.id)
@@ -88,6 +105,7 @@ export async function PATCH(req) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
+  if (photoToDelete) await removeStoredPhoto(photoToDelete)
   const [withName] = await withStreetNames(supabase, [data])
   return NextResponse.json(withName)
 }
