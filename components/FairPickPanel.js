@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { authedFetch } from "@/lib/getAuthToken"
 import { NIGHTS } from "@/lib/suggestionList"
 import { bucketSummary } from "@/lib/fairPick"
+import { Sheet } from "@/components/Sheet"
 
 // Show Time > Manage > Pick a Film (Element_Happenings_ShowTime_Fair_Pick_
 // Scope_v1, Iain 2026-10-26). Ranks films per night by the Fair Pick score
@@ -40,64 +41,141 @@ const pill = (active) => ({
 
 const tag = { fontSize: "0.72rem", fontWeight: 700, padding: "0.15rem 0.5rem", borderRadius: 999, whiteSpace: "nowrap" }
 
-function VoterList({ film, typical, period }) {
+const NIGHT_LABEL = Object.fromEntries(NIGHTS.map(n => [n.key, n.label]))
+const DVD_CHIP = { background: "var(--teal)", color: "#fff", borderRadius: 20, fontWeight: 700, whiteSpace: "nowrap" }
+const chip = { background: "var(--surface2)", color: "var(--text-dim)", borderRadius: 20, padding: "0.2rem 0.6rem", fontSize: "0.75rem", whiteSpace: "nowrap" }
+
+function Poster({ url, w, h }) {
+  return url
+    ? <img src={url} alt="" style={{ width: w, height: h, objectFit: "cover", borderRadius: 6, flexShrink: 0 }} />
+    : <div style={{ width: w, height: h, borderRadius: 6, flexShrink: 0, background: "var(--surface2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: w > 50 ? "1.8rem" : "1.1rem" }}>🎬</div>
+}
+
+// Tap a film: full details + every voter, highest score first (Iain,
+// 2026-10-27, "like a coordinator view"). Names load only when a film is
+// opened -- still on request, one film at a time.
+function FilmSheet({ entry, typical, period, nightKey, onClose }) {
+  const { film: f, rank } = entry
   const [state, setState] = useState({ loading: true })
   useEffect(() => {
     let live = true
-    authedFetch(`/api/showtime/fair-pick/voters?movie=${encodeURIComponent(film.id)}&typical=${typical}`)
+    authedFetch(`/api/showtime/fair-pick/voters?movie=${encodeURIComponent(f.id)}&typical=${typical}`)
       .then(r => r.json().then(d => ({ ok: r.ok, d })))
-      .then(({ ok, d }) => { if (live) setState(ok ? { voters: d.voters } : { error: d.error || "Could not load voters" }) })
-      .catch(() => { if (live) setState({ error: "Could not load voters" }) })
+      .then(({ ok, d }) => { if (live) setState(ok ? { film: d.film, voters: d.voters } : { error: d.error || "Could not load this film" }) })
+      .catch(() => { if (live) setState({ error: "Could not load this film" }) })
     return () => { live = false }
-  }, [film.id, typical])
+  }, [f.id, typical])
 
-  if (state.loading) return <div style={{ padding: "0.5rem 0", color: "var(--text-dim)", fontSize: "0.85rem" }}>Loading…</div>
-  if (state.error) return <div style={{ padding: "0.5rem 0", color: "var(--red, #c0392b)", fontSize: "0.85rem" }}>{state.error}</div>
+  const m = { ...f, ...(state.film || {}) }
+  const genres = (m.genre || "").split(",").map(g => g.trim()).filter(Boolean)
+  const imdbUrl = m.imdb_id ? `https://www.imdb.com/title/${m.imdb_id}/` : null
+  const rtUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(m.title || "")}`
+  const big = { fontSize: "1.3rem", fontWeight: 800, textDecoration: "none" }
+  const small = { fontSize: "0.7rem", color: "var(--text-dim)" }
+
   return (
-    <div style={{ marginTop: "0.5rem", borderTop: "1px solid var(--border)", paddingTop: "0.4rem" }}>
-      {state.voters.map((v, i) => (
-        <div key={i} style={{ padding: "0.35rem 0", borderBottom: i < state.voters.length - 1 ? "1px solid var(--border)" : "none" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap", fontSize: "0.88rem" }}>
-            <span style={{ fontWeight: 600, minWidth: 0 }}>{v.name}</span>
-            <span style={{ fontWeight: 700 }}>{v.score}/10</span>
-          </div>
-          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
-            {v.attended} film screening{v.attended === 1 ? "" : "s"} in {period}
-            {v.notes.length > 0 && ` · ${v.notes.join(" · ")}`}
+    <Sheet open onClose={onClose} title={rank != null ? `#${rank} on ${NIGHT_LABEL[nightKey]}` : "Needs more votes"}>
+      <div style={{ padding: "1rem 1.25rem 1.5rem", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+        <div style={{ display: "flex", gap: "0.9rem" }}>
+          <Poster url={m.poster_url} w={80} h={120} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 800, fontSize: "1.15rem", lineHeight: 1.2 }}>
+              {m.title}{m.rating && <span style={{ fontWeight: 400, fontSize: "0.75em", color: "var(--text-dim)" }}> ({m.rating})</span>}
+            </div>
+            <div style={{ color: "var(--text-dim)", fontSize: "0.85rem", marginTop: "0.2rem" }}>
+              {[m.year, m.runtime].filter(Boolean).join(" · ")}
+            </div>
+            <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", marginTop: "0.45rem" }}>
+              {m.label && <span style={{ ...tag, ...LABEL_STYLE[m.label] }}>{m.label}</span>}
+              {m.split && <span style={{ ...tag, background: "var(--surface2)", color: "var(--amber)", border: "1px solid var(--amber)" }}>Split opinion</span>}
+              {m.we_own && <span style={{ ...DVD_CHIP, padding: "0.15rem 0.55rem", fontSize: "0.72rem" }}>📀 On DVD</span>}
+            </div>
           </div>
         </div>
-      ))}
-    </div>
+
+        <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ ...big, color: "var(--teal)" }}>{m.avg != null ? m.avg.toFixed(1) : "–"}</div>
+            <div style={small}>Community ({m.count})</div>
+          </div>
+          {m.rating_imdb && (
+            <div style={{ textAlign: "center" }}>
+              {imdbUrl
+                ? <a href={imdbUrl} target="_blank" rel="noopener noreferrer" style={{ ...big, color: "var(--amber-dark)" }}>★ {m.rating_imdb}</a>
+                : <div style={{ ...big, color: "var(--amber-dark)" }}>★ {m.rating_imdb}</div>}
+              <div style={small}>IMDb</div>
+            </div>
+          )}
+          {m.rating_rt && (
+            <div style={{ textAlign: "center" }}>
+              <a href={rtUrl} target="_blank" rel="noopener noreferrer" style={{ ...big, color: "#fa320a" }}>🍅 {m.rating_rt}</a>
+              <div style={small}>Rotten Tomatoes</div>
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", fontSize: "0.85rem" }}>
+          {imdbUrl && <a href={imdbUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--teal)", fontWeight: 600 }}>Open on IMDb ↗</a>}
+          <a href={rtUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--teal)", fontWeight: 600 }}>Open on Rotten Tomatoes ↗</a>
+        </div>
+
+        {(genres.length > 0 || m.lastShown) && (
+          <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+            {genres.map(g => <span key={g} style={chip}>{g}</span>)}
+            {m.lastShown && <span style={chip}>Last shown {monthYear(m.lastShown)}</span>}
+          </div>
+        )}
+        {m.director && <div style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}><strong>Director:</strong> {m.director}</div>}
+        {m.actors && <div style={{ fontSize: "0.85rem", color: "var(--text-dim)" }}><strong>Cast:</strong> {m.actors}</div>}
+        {m.plot && <div style={{ fontSize: "0.88rem", lineHeight: 1.55 }}>{m.plot}</div>}
+
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: "0.75rem" }}>
+          <div style={{ fontWeight: 800, fontSize: "0.95rem", marginBottom: "0.35rem" }}>
+            Who voted{state.voters ? ` (${state.voters.length})` : ""}
+          </div>
+          {state.loading && <div style={{ color: "var(--text-dim)", fontSize: "0.85rem" }}>Loading…</div>}
+          {state.error && <div style={{ color: "var(--red, #c0392b)", fontSize: "0.85rem" }}>{state.error}</div>}
+          {state.voters?.map((v, i) => (
+            <div key={i} style={{ padding: "0.45rem 0", borderBottom: i < state.voters.length - 1 ? "1px solid var(--border)" : "none" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", fontSize: "0.9rem" }}>
+                <span style={{ fontWeight: 600, minWidth: 0 }}>{v.name}</span>
+                <span style={{ fontWeight: 800, color: "var(--teal)", whiteSpace: "nowrap" }}>{v.score}/10</span>
+              </div>
+              <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
+                {v.attended} film screening{v.attended === 1 ? "" : "s"} in {period}
+                {v.notes.length > 0 && ` · ${v.notes.join(" · ")}`}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Sheet>
   )
 }
 
-function FilmRow({ film, rank, typical, period, open, onToggle }) {
+function FilmRow({ film, rank, onOpen }) {
   return (
-    <div style={{ padding: "0.7rem 0.8rem", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12 }}>
-      <div style={{ display: "flex", gap: "0.6rem", alignItems: "flex-start" }}>
-        {rank != null && (
-          <div style={{ fontWeight: 800, fontSize: "1.05rem", color: "var(--teal)", minWidth: "1.6rem", textAlign: "right" }}>{rank}</div>
-        )}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontWeight: 700, fontSize: "0.95rem" }}>{film.title}{film.year ? ` (${film.year})` : ""}</span>
-            {film.label && <span style={{ ...tag, ...LABEL_STYLE[film.label] }}>{film.label}</span>}
-            {film.split && <span style={{ ...tag, background: "var(--surface2)", color: "var(--amber)", border: "1px solid var(--amber)" }}>Split opinion</span>}
-          </div>
-          <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "0.15rem" }}>
-            {film.count} vote{film.count === 1 ? "" : "s"} · average {film.avg.toFixed(1)}
-            {film.we_own && " · On DVD"}
-            {film.lastShown && ` · Last shown ${monthYear(film.lastShown)}`}
-          </div>
-          <button onClick={onToggle}
-            style={{ marginTop: "0.35rem", background: "none", border: "none", padding: 0, color: "var(--teal)",
-              fontWeight: 600, fontSize: "0.82rem", cursor: "pointer", fontFamily: "inherit" }}>
-            {open ? "Hide who voted ▲" : "Show who voted ▼"}
-          </button>
-          {open && <VoterList film={film} typical={typical} period={period} />}
+    <button type="button" onClick={onOpen}
+      style={{ width: "100%", textAlign: "left", fontFamily: "inherit", color: "var(--text)", cursor: "pointer",
+        padding: "0.55rem 0.7rem", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12,
+        display: "flex", gap: "0.6rem", alignItems: "center" }}>
+      {rank != null && (
+        <div style={{ fontWeight: 800, fontSize: "1.05rem", color: "var(--teal)", minWidth: "1.6rem", textAlign: "right" }}>{rank}</div>
+      )}
+      <Poster url={film.poster_url} w={40} h={60} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontWeight: 700, fontSize: "0.95rem" }}>{film.title}{film.year ? ` (${film.year})` : ""}</span>
+          {film.label && <span style={{ ...tag, ...LABEL_STYLE[film.label] }}>{film.label}</span>}
+          {film.split && <span style={{ ...tag, background: "var(--surface2)", color: "var(--amber)", border: "1px solid var(--amber)" }}>Split opinion</span>}
+        </div>
+        <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", marginTop: "0.15rem" }}>
+          {film.count} vote{film.count === 1 ? "" : "s"} · average {film.avg.toFixed(1)}
+          {film.we_own && " · On DVD"}
+          {film.lastShown && ` · Last shown ${monthYear(film.lastShown)}`}
         </div>
       </div>
-    </div>
+      <span style={{ color: "var(--teal)", fontSize: "1.1rem", flexShrink: 0 }}>›</span>
+    </button>
   )
 }
 
@@ -108,7 +186,7 @@ export default function FairPickPanel() {
   const [night, setNight] = useState("sunday")
   const [dvdOnly, setDvdOnly] = useState(false)
   const [includeShown, setIncludeShown] = useState(false)
-  const [openId, setOpenId] = useState(null)
+  const [selected, setSelected] = useState(null)   // { film, rank }
   const [showNeeds, setShowNeeds] = useState(false)
   const [showHow, setShowHow] = useState(false)
 
@@ -120,13 +198,12 @@ export default function FairPickPanel() {
   }, [])
 
   // Names never carry over to another night or filter.
-  useEffect(() => { setOpenId(null) }, [night, dvdOnly, includeShown])
+  useEffect(() => { setSelected(null) }, [night, dvdOnly, includeShown])
 
   const keep = f => (!dvdOnly || f.we_own) && (includeShown || !f.lastShown)
   const n = data?.[night]
   const ranked = (n?.ranked || []).filter(keep)
   const needs = (n?.needsVotes || []).filter(keep)
-  const toggle = id => setOpenId(o => (o === id ? null : id))
 
   return (
     <div>
@@ -169,7 +246,7 @@ export default function FairPickPanel() {
             <div style={{ fontSize: "0.88rem", color: "var(--text-dim)" }}>No films with {config.minRankedVotes} or more votes match these filters.</div>
           )}
           {ranked.map((f, i) => (
-            <FilmRow key={f.id} film={f} rank={i + 1} typical={n.typical} period={periodText(config.attendanceDays)} open={openId === f.id} onToggle={() => toggle(f.id)} />
+            <FilmRow key={f.id} film={f} rank={i + 1} onOpen={() => setSelected({ film: f, rank: i + 1 })} />
           ))}
 
           {needs.length > 0 && (
@@ -182,13 +259,17 @@ export default function FairPickPanel() {
               {showNeeds && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginTop: "0.4rem" }}>
                   {needs.map(f => (
-                    <FilmRow key={f.id} film={f} rank={null} typical={n.typical} period={periodText(config.attendanceDays)} open={openId === f.id} onToggle={() => toggle(f.id)} />
+                    <FilmRow key={f.id} film={f} rank={null} onOpen={() => setSelected({ film: f, rank: null })} />
                   ))}
                 </div>
               )}
             </div>
           )}
         </div>
+      )}
+
+      {selected && n && (
+        <FilmSheet entry={selected} typical={n.typical} period={periodText(config.attendanceDays)} nightKey={night} onClose={() => setSelected(null)} />
       )}
     </div>
   )
