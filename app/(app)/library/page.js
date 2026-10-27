@@ -11,6 +11,10 @@ import { sydneyTodayStr } from '@/lib/date'
 import { useOwners } from '@/lib/useOwners'
 import { NIGHTS, NIGHT_CHOICES, nightFor, inNight, suggestionStatus, voteSpread, voteSpreadLabel, rateQueue } from '@/lib/suggestionList'
 
+// "On DVD" source tag, shown to everyone (Iain, 2026-10-27: a film on DVD
+// should always show the DVD as its source).
+const DVD_CHIP = { background:'var(--teal)', color:'#fff', borderRadius:'20px', fontWeight:700, whiteSpace:'nowrap' }
+
 const TAB_KEY = 'showtime_suggestions_tab'
 function parseGenres(g) {
   if (!g) return []
@@ -332,7 +336,7 @@ function ManageSuggestion({ movie, votes, statusInfo, onChanged, addToast }) {
   )
 }
 
-function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, canManage, votes, statusInfo, onChanged, session, onClose, onVoted, onDeleted, addToast, freeCostData }) {
+function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, canManage, votes, statusInfo, onChanged, session, onClose, onVoted, onDeleted, addToast, freeCostData, onDvd }) {
   const [voting, setVoting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -387,6 +391,7 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, canManage, vot
             {movie.year && <div style={{ color:'var(--text-dim)', fontSize:'0.85rem', marginTop:'0.2rem' }}>{movie.year}{movie.runtime&&` · ${movie.runtime}`}</div>}
           </div>
           <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', alignItems:'center' }}>
+            {onDvd && <span style={{ ...DVD_CHIP, padding:'0.2rem 0.65rem', fontSize:'0.75rem' }}>📀 On DVD</span>}
             <GenreChips genres={genres} />
             {isAdmin && freeCostData && (
               <span style={{ background:freeCostData.isFree?'#dcfce7':'#fef3c7', color:freeCostData.isFree?'#15803d':'#d97706', borderRadius:'20px', padding:'0.2rem 0.65rem', fontSize:'0.75rem', fontWeight:700 }}>
@@ -438,7 +443,7 @@ function DetailSheet({ movie, myVote, avgData, memberId, isAdmin, canManage, vot
   )
 }
 
-function SuggestSheet({ session, onClose, onAdded, addToast, maxHeight }) {
+function SuggestSheet({ session, onClose, onAdded, addToast, maxHeight, dvdTmdbIds = new Set(), dvdImdbIds = new Set() }) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [searching, setSearching] = useState(false)
@@ -503,11 +508,12 @@ function SuggestSheet({ session, onClose, onAdded, addToast, maxHeight }) {
     const data = await res.json()
     setSaving(false)
     if (!res.ok) { addToast(data.error || 'Failed to add', 'error'); return }
-    addToast(`${preview.title} added to suggestions!`)
+    addToast(data.on_dvd ? `${preview.title} added to suggestions, from our DVD Library` : `${preview.title} added to suggestions!`)
     onAdded(); onClose()
   }
 
   const leadActor = preview?.actors?.split(',')[0]?.trim()
+  const previewOnDvd = !!preview && ((!!preview.imdb_id && dvdImdbIds.has(preview.imdb_id)) || (!!preview.tmdb_id && dvdTmdbIds.has(String(preview.tmdb_id))))
 
   return (
     <div style={{ background: 'var(--surface)', borderRadius: '20px 20px 0 0', minHeight: 0, maxHeight: maxHeight ? `${maxHeight}px` : 'calc(90vh - 60px)', display: 'flex', flexDirection: 'column' }}>
@@ -568,7 +574,12 @@ function SuggestSheet({ session, onClose, onAdded, addToast, maxHeight }) {
                         : <div style={{ width: 42, height: 63, background: 'var(--border)', borderRadius: 6, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🎬</div>}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontWeight: 700, fontSize: '0.9rem', lineHeight: 1.2 }}>{r.title}</div>
-                        {r.year && <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginTop: '0.15rem' }}>{r.year}</div>}
+                        {(r.year || dvdTmdbIds.has(String(r.tmdb_id))) && (
+                          <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', marginTop: '0.15rem', display: 'flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                            {r.year}
+                            {dvdTmdbIds.has(String(r.tmdb_id)) && <span style={{ ...DVD_CHIP, padding: '0.05rem 0.4rem', fontSize: '0.65rem' }}>📀 On DVD</span>}
+                          </div>
+                        )}
                       </div>
                       <span style={{ color: 'var(--teal)', fontSize: '1rem', flexShrink: 0 }}>›</span>
                     </div>
@@ -598,6 +609,11 @@ function SuggestSheet({ session, onClose, onAdded, addToast, maxHeight }) {
                   </div>
                 )}
                 {preview.year && <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>{preview.year}{preview.runtime ? ` · ${preview.runtime}` : ''}</div>}
+                {previewOnDvd && (
+                  <div style={{ marginTop: '0.4rem' }}>
+                    <span style={{ ...DVD_CHIP, padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}>📀 In our DVD Library</span>
+                  </div>
+                )}
                 {preview.genre && (
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.4rem' }}>
                     {preview.genre.split(',').map(g => g.trim()).filter(Boolean).map(g => (
@@ -630,7 +646,7 @@ function SuggestSheet({ session, onClose, onAdded, addToast, maxHeight }) {
   )
 }
 
-function MovieCard({ movie, myVote, avgData, isAdmin, freeCostData, isNew, flagged, onClick }) {
+function MovieCard({ movie, myVote, avgData, isAdmin, freeCostData, isNew, flagged, onDvd, onClick }) {
   const genres = parseGenres(movie.genre)
   const leadActor = movie.actors?.split(',')[0]?.trim()
   return (
@@ -649,8 +665,9 @@ function MovieCard({ movie, myVote, avgData, isAdmin, freeCostData, isNew, flagg
             {leadActor}
           </div>
         )}
-        {genres.length>0 && (
+        {(genres.length>0 || onDvd) && (
           <div style={{ display:'flex', flexWrap:'wrap', gap:'0.2rem', marginTop:'0.25rem' }}>
+            {onDvd && <span style={{ ...DVD_CHIP, padding:'0.1rem 0.4rem', fontSize:'0.65rem' }}>📀 On DVD</span>}
             {genres.slice(0,2).map(g=><span key={g} style={{ background:'var(--surface2)', borderRadius:'20px', padding:'0.1rem 0.4rem', fontSize:'0.65rem', color:'var(--text-dim)' }}>{g}</span>)}
           </div>
         )}
@@ -811,9 +828,10 @@ export default function LibraryPage() {
   const mainList = sorted.filter(m => statusOf[m.id]?.status === 'main')
   const othersList = sorted.filter(m => statusOf[m.id]?.status === 'others')
   const retiredList = canManage ? sorted.filter(m => statusOf[m.id]?.status === 'retired') : []
+  const onDvd = (m) => !!m.we_own || (!!m.imdb_id && dvdImdbIds.has(m.imdb_id)) || (!!m.tmdb_id && dvdTmdbIds.has(String(m.tmdb_id)))
   const freeCostFor = (m) => member?.is_admin ? computeFreeCost(m, { streamingServices, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecords.filter(o => o.movie_id === m.id) }) : null
   const card = (m) => (
-    <MovieCard key={m.id} movie={m} myVote={myVotes[m.id]} avgData={avgVotes[m.id]} isAdmin={member?.is_admin} freeCostData={freeCostFor(m)}
+    <MovieCard key={m.id} movie={m} myVote={myVotes[m.id]} avgData={avgVotes[m.id]} isAdmin={member?.is_admin} freeCostData={freeCostFor(m)} onDvd={onDvd(m)}
       isNew={statusOf[m.id]?.isNew} flagged={canManage && fairRel !== null && statusOf[m.id]?.flagged} onClick={()=>setSelectedId(m.id)} />
   )
   const sectionHeader = (label, count, expanded, toggle) => (
@@ -961,7 +979,7 @@ export default function LibraryPage() {
             {screenedExpanded && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', marginTop: '0.65rem' }}>
                 {screenedMovies.map(m => (
-                  <MovieCard key={m.id} movie={m} myVote={myVotes[m.id]} avgData={avgVotes[m.id]} isAdmin={member?.is_admin} freeCostData={member?.is_admin ? computeFreeCost(m, { streamingServices, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecords.filter(o => o.movie_id === m.id) }) : null} onClick={()=>setSelectedId(m.id)} />
+                  <MovieCard key={m.id} movie={m} myVote={myVotes[m.id]} avgData={avgVotes[m.id]} isAdmin={member?.is_admin} freeCostData={member?.is_admin ? computeFreeCost(m, { streamingServices, dvdTmdbIds, dvdImdbIds, ownershipRecords: ownershipRecords.filter(o => o.movie_id === m.id) }) : null} onDvd={onDvd(m)} onClick={()=>setSelectedId(m.id)} />
                 ))}
               </div>
             )}
@@ -973,6 +991,7 @@ export default function LibraryPage() {
         <Overlay onClose={()=>setSelectedId(null)}>
           <DetailSheet
             movie={selectedMovie}
+            onDvd={onDvd(selectedMovie)}
             myVote={myVotes[selectedMovie.id]}
             avgData={avgVotes[selectedMovie.id]}
             memberId={member?.id}
@@ -1008,7 +1027,7 @@ export default function LibraryPage() {
       )}
       {showSuggest && (
         <SuggestOverlay onClose={()=>setShowSuggest(false)}>
-          <SuggestSheet session={session} onClose={()=>setShowSuggest(false)} onAdded={loadData} addToast={addToast} />
+          <SuggestSheet session={session} onClose={()=>setShowSuggest(false)} onAdded={loadData} addToast={addToast} dvdTmdbIds={dvdTmdbIds} dvdImdbIds={dvdImdbIds} />
         </SuggestOverlay>
       )}
     </div>
