@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from 'next/server'
+import { promoteToDvdPatch } from '@/lib/movieRecords'
 const TMDB_KEY = process.env.TMDB_API_KEY || '0e0ec3c6d62df378f31f7ddb78a83b49'
 const OMDB_KEY = process.env.OMDB_API_KEY || 'ed1ed939'
 
@@ -88,6 +89,30 @@ export async function POST(req) {
       // Raw scanned digits, only present when this add came from a barcode
       // scan that resolved cleanly — migration 116. NULL for manual-title adds.
       barcode: barcode ? String(barcode).replace(/\D/g, '') || null : null,
+    }
+
+    // Same film already in the DVD Library under another id (bulk-imported
+    // DVD rows have imdb_id but no tmdb_id)?
+    if (imdb_id) {
+      const { data: ownedByImdb } = await db.from('movies')
+        .select('id, title').eq('we_own', true).eq('imdb_id', imdb_id).limit(1)
+      if (ownedByImdb?.[0]) return NextResponse.json({ error: `"${ownedByImdb[0].title}" is already in the DVD Library` }, { status: 409 })
+    }
+
+    // Already a suggestion (or a resident's private-ownership record) for
+    // this film? Turn that record into the DVD instead of adding a second
+    // one -- keeps its votes and showings (Iain, 2026-10-27).
+    const idFilter = [
+      `tmdb_id.eq.${String(tmdb_id).replace(/[^0-9]/g, '')}`,
+      imdb_id ? `imdb_id.eq.${imdb_id.replace(/[^a-z0-9]/gi, '')}` : null,
+    ].filter(Boolean).join(',')
+    const { data: others } = await db.from('movies').select('*').eq('we_own', false).or(idFilter)
+      .order('is_viewing_suggestion', { ascending: false }).order('added_at').limit(1)
+    if (others?.[0]) {
+      const { data: movie, error } = await db.from('movies')
+        .update(promoteToDvdPatch(others[0], payload)).eq('id', others[0].id).select().single()
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json(movie)
     }
 
     const { data: movie, error } = await db.from('movies').insert(payload).select().single()

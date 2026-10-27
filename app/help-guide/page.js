@@ -1048,6 +1048,11 @@ export default function HelpGuidePage() {
                 <strong>Rate a Film</strong> shows the newest films first, then films that still need
                 votes.
               </Step>
+              <Step>
+                Films we have in our DVD Library show a <strong>📀 On DVD</strong> tag. When you suggest
+                a film we already own, the dialog shows <strong>📀 In our DVD Library</strong> and adding
+                it suggests our DVD, so there&apos;s only ever one entry per film.
+              </Step>
             </Subsection>
 
             <Subsection id="sub-movies-dvd" title="DVD library">
