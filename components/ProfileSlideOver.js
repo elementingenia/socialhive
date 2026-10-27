@@ -11,11 +11,13 @@ import InterestsPicker from "@/components/InterestsPicker"
 import StreetPicker from "@/components/StreetPicker"
 import { useStreets } from "@/lib/useStreets"
 import { houseNumberInput, normaliseHouseNumber } from "@/lib/address"
+import { DRAWN_AVATARS, isProfilePhotoUrl } from "@/lib/profilePhoto"
+import { shrinkPhotoForUpload } from "@/lib/shrinkPhotoClient"
 
 // Clearance below the sticky header so the avatar pill stays visible
 const TOP_OFFSET = 72 // px — covers both home (~68px) and sub-page (~43px) headers
 
-const ALL_AVATARS = Array.from({ length: 12 }, (_, i) => `/avatars/avatar_${String(i + 1).padStart(2, "0")}.svg`)
+const ALL_AVATARS = DRAWN_AVATARS
 
 const inputStyle = {
   width: "100%", padding: "0.55rem 0.85rem", borderRadius: "10px",
@@ -162,6 +164,12 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
   const [digestAvailable, setDigestAvailable] = useState(false)
   const [barOptIn, setBarOptIn] = useState(false)
   const [avatar,   setAvatar]   = useState(null)
+  // Profile photo (2026-10-27). Upload/remove save straight away through
+  // /api/profile/photo; the saved photo URL then rides along in avatar
+  // (the same column as the drawn avatars).
+  const [photoBusy,  setPhotoBusy]  = useState(false)
+  const [photoError, setPhotoError] = useState("")
+  const hasPhoto = isProfilePhotoUrl(avatar)
   // "Ask me about" (B3) and "I can help with" (B7). Saved via their own route
   // on Save; only sent when something actually changed, and never while Hide
   // my name is on (D2/S8). PUT /api/interests replaces BOTH lists at once, so
@@ -220,6 +228,41 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
     setToast({ msg, ok })
     setTimeout(() => setToast(null), 3500)
   }, [])
+
+  const uploadPhoto = async (file) => {
+    if (!file) return
+    setPhotoBusy(true)
+    setPhotoError("")
+    try {
+      const fd = new FormData()
+      fd.append("file", await shrinkPhotoForUpload(file))
+      const res = await authedFetch("/api/profile/photo", { method: "POST", body: fd })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || "Could not upload that photo")
+      setAvatar(d.avatar_url)
+      refreshUser?.()
+    } catch (err) {
+      setPhotoError(err.message || "Could not upload that photo")
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
+  const removePhoto = async () => {
+    setPhotoBusy(true)
+    setPhotoError("")
+    try {
+      const res = await authedFetch("/api/profile/photo", { method: "DELETE" })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || "Could not remove the photo")
+      setAvatar(d.avatar_url || null)
+      refreshUser?.()
+    } catch (err) {
+      setPhotoError(err.message || "Could not remove the photo")
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
 
   const handleSave = async () => {
     if (!name.trim()) { showToast("Your name is required", false); return }
@@ -305,9 +348,45 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
             <div style={{ textAlign: "center", padding: "2rem 0", color: "var(--text-dim)" }}>Loading…</div>
           ) : (
             <>
+              {/* Profile photo (2026-10-27). Not offered while Private is on --
+                  a Private profile can't have a photo (Iain). */}
+              <div style={{ marginBottom: "0.9rem", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                {avatar
+                  ? <img src={avatar} alt="" style={{ width: 56, height: 56, borderRadius: "50%", objectFit: "cover", border: "1.5px solid var(--border)", flexShrink: 0 }} />
+                  : <div style={{ width: 56, height: 56, borderRadius: "50%", background: "var(--surface2)", border: "1.5px solid var(--border)", flexShrink: 0 }} />}
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  {hideName ? (
+                    <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", lineHeight: 1.4 }}>
+                      {hasPhoto
+                        ? "Your profile is Private, so your photo will be removed when you save. Choose a drawn avatar below."
+                        : "Your profile is Private, so you can't add a photo. Choose a drawn avatar below."}
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                      <label style={{
+                        padding: "0.45rem 0.85rem", borderRadius: 10, background: "var(--teal)", color: "#fff",
+                        fontSize: "0.82rem", fontWeight: 700, cursor: photoBusy ? "wait" : "pointer", opacity: photoBusy ? 0.6 : 1,
+                      }}>
+                        {photoBusy ? "Saving…" : hasPhoto ? "Change photo" : "Add a photo"}
+                        <input type="file" accept="image/*" disabled={photoBusy} style={{ display: "none" }}
+                          onChange={e => { uploadPhoto(e.target.files?.[0]); e.target.value = "" }} />
+                      </label>
+                      {hasPhoto && (
+                        <button onClick={removePhoto} disabled={photoBusy} style={{
+                          padding: "0.45rem 0.85rem", borderRadius: 10, border: "1px solid var(--border)",
+                          background: "var(--surface)", color: "var(--text)", fontSize: "0.82rem", fontWeight: 600,
+                          cursor: "pointer", fontFamily: "inherit",
+                        }}>Remove photo</button>
+                      )}
+                    </div>
+                  )}
+                  {photoError && <div style={{ fontSize: "0.75rem", color: "var(--danger)", marginTop: "0.35rem" }}>{photoError}</div>}
+                </div>
+              </div>
+
               {/* Avatar grid */}
               <div style={{ marginBottom: "0.9rem" }}>
-                <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.5rem" }}>Choose your avatar</div>
+                <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.5rem" }}>{hideName ? "Choose your avatar" : "Or choose a drawn avatar"}</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "0.35rem" }}>
                   {ALL_AVATARS.map(src => (
                     <button key={src} onClick={() => setAvatar(src)} style={{ padding: 2, borderRadius: 8, border: avatar === src ? "2.5px solid var(--teal)" : "2.5px solid transparent", background: avatar === src ? "rgba(0,128,128,0.08)" : "transparent", cursor: "pointer", lineHeight: 0 }} aria-pressed={avatar === src}>
@@ -377,7 +456,7 @@ export default function ProfileSlideOver({ open, onClose, onSaved }) {
                 {digestAvailable && (
                   <Toggle value={weeklyDigest} onChange={setWeeklyDigest} label="Weekly digest" description="A Sunday round-up of what's on this week at Element Happenings" />
                 )}
-                <Toggle value={hideName} onChange={setHideName} label="Hide my name" description="Show me as 'Resident' everywhere -- including your Display Name above -- except to admins/EC" />
+                <Toggle value={hideName} onChange={setHideName} label="Hide my name" description="Show me as 'Resident' everywhere -- including your Display Name above -- except to admins/EC. A Private profile can't have a photo." />
                 {/* Bar access toggle parked (feature not in scope) — see lib/features.js */}
                 {BAR_ENABLED && (
                   <>

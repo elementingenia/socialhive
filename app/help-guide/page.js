@@ -691,8 +691,16 @@ export default function HelpGuidePage() {
               <Step img={IMG("05-profile.png")} alt="Profile screen">
                 Tap your name or photo in the top-right corner of any page to open the account menu,
                 then tap <strong>Update Profile</strong>. From here you can update your display name,
-                email address, and house number. If you want to add a profile photo, tap the avatar
-                area at the top of the profile screen to choose an image.
+                email address, and house number.
+              </Step>
+              <Step>
+                <strong>Your picture:</strong> at the top of the profile screen, tap{" "}
+                <strong>Add a photo</strong> to use a photo of yourself, or pick one of the drawn
+                avatars underneath. A photo saves straight away; tap <strong>Change photo</strong> to
+                replace it or <strong>Remove photo</strong> to go back to a drawn avatar. Your picture
+                shows next to your name in <strong>Info › Contacts</strong>. If your profile is set to
+                Private (<strong>Hide my name</strong>), you can&apos;t add a photo, and turning Private on
+                removes any photo you already have.
               </Step>
               <Step>
                 Your <strong>House number</strong> is numbers only (e.g. 92). Next to it, choose your{" "}
@@ -1569,6 +1577,11 @@ export default function HelpGuidePage() {
                 (street A to Z, then house number — shown once streets are set up) or by{" "}
                 <strong>Name</strong> (A to Z), whichever is easier to scan for what you're looking for.
                 Searching for a street name finds everyone on it.
+              </Step>
+              <Step>
+                Each resident has a small picture next to their name: their photo, the drawn avatar
+                they chose, or their initials if they haven&apos;t picked one. Tap a photo to see it
+                bigger; tap outside it to close.
               </Step>
               <Step>
                 Tap <strong>More</strong> on a card to see the phone number and email. Tap{" "}

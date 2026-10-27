@@ -9,6 +9,7 @@ import { interestsLine } from "@/lib/interests"
 import PhoneActions from "@/components/PhoneActions"
 import PinButton from "@/components/PinButton"
 import { formatAddress } from "@/lib/address"
+import ProfileAvatar from "@/components/ProfileAvatar"
 
 // ── Contact card ─────────────────────────────────────────────────────────────
 // Compact by design (Iain, 2026-07-12) -- this list is headed toward 200+
@@ -37,6 +38,8 @@ export default function ContactCard({ contact, badges = [], external = false, is
     .some(l => l.toLowerCase().includes(q))
   useEffect(() => { if (matchesChip) setExpanded(true) }, [matchesChip])
   const isAdminView = !!onEdit
+  // Lines under the name line up with the name, not the picture circle.
+  const indent = contact.showAvatar ? "calc(30px + 0.5rem)" : 0
 
   return (
     <div style={{
@@ -47,6 +50,10 @@ export default function ContactCard({ contact, badges = [], external = false, is
       marginBottom: "0.4rem",
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
+        <div style={{ minWidth: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
+        {/* Profile picture (2026-10-27): photo, drawn avatar or initials.
+            Residents only -- outside contacts get no circle. */}
+        {contact.showAvatar && <ProfileAvatar src={contact.avatar} name={contact.name} />}
         <div style={{ minWidth: 0, display: "flex", alignItems: "baseline", gap: "0.4rem", flexWrap: "wrap" }}>
           <span style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text)" }}>{contact.name}</span>
           {isResident && (contact.house_number || contact.street_name) && (
@@ -69,6 +76,7 @@ export default function ContactCard({ contact, badges = [], external = false, is
               borderRadius: 10, background: "rgba(138,143,107,0.18)", color: "var(--external-ink)",
             }}>External</span>
           )}
+        </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
           {onTogglePin && <PinButton pinned={!!pinned} onToggle={onTogglePin} label={contact.name} />}
@@ -94,17 +102,17 @@ export default function ContactCard({ contact, badges = [], external = false, is
         // the same line twice. --role-accent is a bronze, deliberately not
         // the page's own blue (COLOUR, used for phone/email/"More") and not
         // any hub colour -- see app/globals.css for the contrast check.
-        <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--role-accent)", marginTop: "0.15rem" }}>
+        <div style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--role-accent)", marginTop: "0.15rem", paddingLeft: indent }}>
           {contact.title}
         </div>
       )}
       {contact.realName && (
-        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.15rem" }}>
+        <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: "0.15rem", paddingLeft: indent }}>
           {contact.realName}
         </div>
       )}
       {expanded && (
-        <div style={{ marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.2rem" }}>
+        <div style={{ marginTop: "0.4rem", display: "flex", flexDirection: "column", gap: "0.2rem", paddingLeft: indent }}>
           {/* "Can help with" (skills, B7) and "Ask me about" (interests, B3):
               expanded view only (Iain, 2026-10-03). Approved chips only, never
               for a Private resident -- enforced server-side by

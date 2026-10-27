@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { stripPhotoForPrivate } from '@/lib/profilePhotoServer'
 import { NextResponse } from 'next/server'
 import { isValidDisplayName } from "@/lib/memberName"
 import { buildContactsDirectory } from "@/lib/directoryPrivacy"
@@ -46,7 +47,7 @@ export async function GET(req) {
 
   const [{ data: members, error: e1 }, { data: contacts, error: e2 }] = await Promise.all([
     supabaseAdmin.from('members')
-      .select('id, name, display_name, username, email, house_number, street_id, phone, hide_name, is_admin, is_test')
+      .select('id, name, display_name, username, email, house_number, street_id, phone, avatar_url, hide_name, is_admin, is_test')
       .eq('status', 'active'),
     supabaseAdmin.from('contacts')
       .select('id, name, title, phone, email, house_number, street_id, member_id, active, display_order, contact_category_members(category_id)')
@@ -210,6 +211,8 @@ export async function PATCH(req) {
     if (hide_name !== undefined) memberUpdates.hide_name = hide_name
     const { error } = await supabaseAdmin.from('members').update(memberUpdates).eq('id', member_id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    // A Private resident can't have a profile photo (Iain, 2026-10-27).
+    if (hide_name === true) await stripPhotoForPrivate(member_id)
   }
 
   return NextResponse.json({ ok: true, id: targetId })
