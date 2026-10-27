@@ -106,3 +106,15 @@ t("pdf is a PDF", () => assert.equal(Buffer.from(bytes.slice(0, 5)).toString(), 
 t("pdf has content", () => assert.ok(bytes.length > 1500))
 
 console.log(`newFeatures: ${n} passed`)
+
+// BUG-100: line breaks in a feature's text must survive into the PDF.
+{
+  const { PDFDocument, StandardFonts } = await import("pdf-lib")
+  const { wrapParagraphs } = await import("../../lib/featureAnnouncementPdf.js")
+  const doc = await PDFDocument.create()
+  const font = await doc.embedFont(StandardFonts.Helvetica)
+  const lines = wrapParagraphs(font, 11, "First paragraph.\n- Bullet one\r\n- Bullet two", 500)
+  assert.deepEqual(lines, ["First paragraph.", "- Bullet one", "- Bullet two"], "each typed line stays its own line")
+  assert.equal(wrapParagraphs(font, 11, "A\n\nB", 500).length, 3, "a blank line stays as a spacer line")
+  console.log("newFeatures: wrapParagraphs line breaks OK")
+}
