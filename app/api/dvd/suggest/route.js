@@ -27,7 +27,12 @@ export async function POST(req) {
 
   const { error } = await supabaseAdmin
     .from('movies')
-    .update({ is_viewing_suggestion: true, suggested_by: member.id })
+    .update({
+      is_viewing_suggestion: true, suggested_by: member.id,
+      // Restart the 60-day clock: an old DVD would otherwise count from
+      // added_at and land already auto-retired (lib/suggestionList.js).
+      suggestion_clock_from: new Date().toISOString(), suggestion_retired_at: null,
+    })
     .eq('id', movie_id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

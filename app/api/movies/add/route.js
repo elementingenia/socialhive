@@ -24,6 +24,19 @@ async function getOmdbExtras(imdbId) {
   }
 }
 
+// Fields set whenever a film joins the Suggestions list. The 60-day clock
+// (lib/suggestionList.js) runs from suggestion_clock_from, else added_at --
+// so a DVD or ownership-only row added months ago would otherwise land
+// already auto-retired and never show as NEW.
+function suggestionStart(memberId) {
+  return {
+    is_viewing_suggestion: true,
+    suggested_by: memberId,
+    suggestion_clock_from: new Date().toISOString(),
+    suggestion_retired_at: null,
+  }
+}
+
 export async function POST(req) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '')
   if (!token) return NextResponse.json({ error: 'Unauthorised' }, { status: 401 })
@@ -56,14 +69,42 @@ export async function POST(req) {
     return NextResponse.json({ error: `"${title}" has already been suggested` }, { status: 409 })
   }
 
-  // Block if this is a DVD we already own — user should suggest from the DVD Library instead
+  // A DVD we already own can be suggested from here too (Iain, 2026-10-27:
+  // the only reason to refuse a found film is that it's already on the
+  // Suggestions list). Flag the owned row as a suggestion, same as
+  // POST /api/dvd/suggest, rather than refusing or inserting a duplicate.
+  // Match on TMDB id, then IMDb id, then title + year: some owned DVDs have
+  // no tmdb_id (catalogued from spine photos), and missing them here would
+  // create a duplicate row instead of suggesting the DVD we already have.
+  const ownedSel = 'id, title, is_viewing_suggestion'
+  let ownedDvd = null
   if (tmdb_id) {
-    const { data: ownedDvd } = await supabaseAdmin
-      .from('movies').select('id, title').eq('we_own', true).eq('tmdb_id', tmdb_id.toString()).maybeSingle()
-    if (ownedDvd) return NextResponse.json({
-      error: `"${title}" is already in the DVD Library — suggest it for a screening from the DVD page instead.`,
-      dvd_exists: true,
-    }, { status: 409 })
+    const { data } = await supabaseAdmin.from('movies').select(ownedSel)
+      .eq('we_own', true).eq('tmdb_id', tmdb_id.toString()).limit(1)
+    ownedDvd = data?.[0] || null
+  }
+  if (!ownedDvd && imdb_id) {
+    const { data } = await supabaseAdmin.from('movies').select(ownedSel)
+      .eq('we_own', true).eq('imdb_id', imdb_id).limit(1)
+    ownedDvd = data?.[0] || null
+  }
+  if (!ownedDvd) {
+    let q = supabaseAdmin.from('movies').select(ownedSel).eq('we_own', true).ilike('title', title)
+    if (year) q = q.eq('year', year)
+    const { data } = await q.limit(1)
+    ownedDvd = data?.[0] || null
+  }
+  if (ownedDvd) {
+    if (ownedDvd.is_viewing_suggestion) {
+      return NextResponse.json({ error: `"${ownedDvd.title}" has already been suggested` }, { status: 409 })
+    }
+    const { data: movie, error } = await supabaseAdmin
+      .from('movies')
+      .update({ ...suggestionStart(member.id) })
+      .eq('id', ownedDvd.id)
+      .select().single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json(movie)
   }
 
   const { rating_rt, rating: maturityRating } = await getOmdbExtras(imdb_id)
@@ -87,8 +128,7 @@ export async function POST(req) {
     rating_imdb: rating_imdb || null,
     rating_rt,
     rating: maturityRating,
-    is_viewing_suggestion: true,
-    suggested_by: member.id,
+    ...suggestionStart(member.id),
     streaming_offers,
     streaming_checked_at,
   }
