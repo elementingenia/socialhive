@@ -15,6 +15,11 @@ import {
   validateBumpReason,
   buildSeatClaimedMessage,
   buildSeatAssignedMessage,
+  identityKeyOf,
+  planCancelTransportRelease,
+  isOfferDriverBooked,
+  buildDriverCancelledMessage,
+  buildPassengerCancelledMessage,
 } from '../../lib/vehicleOffers.js'
 
 let pass = 0, fail = 0
@@ -163,6 +168,61 @@ ok(buildSeatAssignedMessage({ driverName: 'Iain Pallot', eventTitle: 'Bowlers Un
   'a named driver is credited by name, possessive')
 ok(buildSeatAssignedMessage({ driverName: null, eventTitle: 'Bowlers Unite' }) === "You and your booking party have been given seats in a car for Bowlers Unite.",
   'a masked (hide_name) driver falls back to the original generic "a car" wording')
+
+// planCancelTransportRelease (BUG-102) -- the Stockton Flexi-Day case:
+// Iain (driver) cancels; Phil and Bob are riding in his car.
+{
+  const offers = [{ id: 'car-iain', member_id: 'iain', passengers: [
+    { id: 'p1', member_id: 'phil', party_owner_member_id: 'phil' },
+    { id: 'p2', member_id: 'bob', party_owner_member_id: 'bob' },
+  ] }]
+  const plan = planCancelTransportRelease({ offers, partyKeys: ['m:iain'], ownerKey: 'm:iain' })
+  ok(plan.offersToWithdraw.length === 1 && plan.offersToWithdraw[0] === 'car-iain', 'a cancelling driver has their car withdrawn')
+  ok(plan.strandedPassengers.map(s => s.member_id).sort().join() === 'bob,phil', 'everyone riding in the withdrawn car is told')
+  ok(plan.passengerIdsToDelete.length === 0, 'withdrawn car passengers go with the car (cascade), not deleted separately')
+  ok(plan.freedSeats.length === 0, 'no other driver to tell when the canceller only drove')
+}
+{
+  // Phil cancels; he and a named guest were in Iain's car. Bob's seat untouched.
+  const offers = [{ id: 'car-iain', member_id: 'iain', passengers: [
+    { id: 'p1', member_id: 'phil', party_owner_member_id: 'phil' },
+    { id: 'p3', guest_name: 'Mary', party_owner_member_id: 'phil' },
+    { id: 'p2', member_id: 'bob', party_owner_member_id: 'bob' },
+  ] }]
+  const plan = planCancelTransportRelease({ offers, partyKeys: ['m:phil'], ownerKey: 'm:phil' })
+  ok(plan.offersToWithdraw.length === 0, "a cancelling passenger doesn't withdraw the driver's car")
+  ok(plan.passengerIdsToDelete.sort().join() === 'p1,p3', "the passenger's whole party (incl. guest) leaves the car")
+  ok(plan.freedSeats.length === 1 && plan.freedSeats[0].member_id === 'iain' && plan.freedSeats[0].seats === 2, 'the driver is told 2 seats are free')
+}
+{
+  // Another party's guest with the same name is never caught by name.
+  const offers = [{ id: 'c', member_id: 'iain', passengers: [{ id: 'g', guest_name: 'Mary', party_owner_member_id: 'bob' }] }]
+  const plan = planCancelTransportRelease({ offers, partyKeys: ['m:phil'], ownerKey: 'm:phil' })
+  ok(plan.passengerIdsToDelete.length === 0, "a same-named guest in someone else's party is left alone")
+}
+{
+  // A named attendee in the cancelled party who was driving: their car goes too.
+  const offers = [{ id: 'c2', member_id: 'jan', passengers: [{ id: 'x', member_id: 'sue', party_owner_member_id: 'sue' }] }]
+  const plan = planCancelTransportRelease({ offers, partyKeys: ['m:phil', 'm:jan'], ownerKey: 'm:phil' })
+  ok(plan.offersToWithdraw[0] === 'c2' && plan.strandedPassengers[0].member_id === 'sue', "a driving party member's car is withdrawn and its riders told")
+}
+{
+  // Contact-owned (walk-up) booking cancelled by an EC.
+  const offers = [{ id: 'c3', member_id: 'iain', passengers: [{ id: 'q', contact_id: 'k1', party_owner_contact_id: 'k1' }] }]
+  const plan = planCancelTransportRelease({ offers, partyKeys: ['c:k1'], ownerKey: 'c:k1' })
+  ok(plan.passengerIdsToDelete[0] === 'q', "a contact's seat is freed when their booking is cancelled")
+}
+{
+  const plan = planCancelTransportRelease({ offers: [], partyKeys: ['m:a'], ownerKey: 'm:a' })
+  ok(plan.offersToWithdraw.length === 0 && plan.passengerIdsToDelete.length === 0, 'no cars on the event: nothing to do')
+}
+ok(identityKeyOf({ member_id: 'a' }) === 'm:a' && identityKeyOf({ contact_id: 'b' }) === 'c:b' && identityKeyOf({ guest_name: 'x' }) === null, 'identityKeyOf covers member/contact, never guests')
+ok(isOfferDriverBooked({ member_id: 'iain' }, new Set(['m:iain'])) === true, 'booked driver: car usable')
+ok(isOfferDriverBooked({ member_id: 'iain' }, new Set(['m:phil'])) === false, 'cancelled driver: car not usable')
+ok(buildDriverCancelledMessage({ driverName: 'Iain Pallot', eventTitle: 'Stockton Flexi-Day' }).startsWith('Iain Pallot is no longer going to Stockton Flexi-Day'), 'driver-cancelled message names the driver')
+ok(buildDriverCancelledMessage({ driverName: null, eventTitle: 'X' }).startsWith('Your driver is no longer going'), 'masked driver falls back to "Your driver"')
+ok(buildPassengerCancelledMessage({ passengerName: 'Phil Dorse', seats: 1, eventTitle: 'X' }) === 'Phil Dorse cancelled their booking for X, so a seat in your car is free again.', 'one seat freed wording')
+ok(buildPassengerCancelledMessage({ passengerName: null, seats: 2, eventTitle: 'X' }) === 'A resident cancelled their booking for X, so 2 seats in your car are free again.', 'two seats freed wording, masked name')
 
 console.log(`\nlib/vehicleOffers.js: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

@@ -12,6 +12,7 @@ import { amountOwing } from '@/lib/payments'
 import { busSeatsUsed, validateBusRequest, requestedBusSeats } from '@/lib/busSeats'
 import { eventNotifyRecipients } from '@/lib/questionRouting'
 import { applyTransport } from '@/lib/applyTransport'
+import { releaseTransportOnCancel } from '@/lib/releaseTransportOnCancel'
 
 
 async function getMember(token) {
@@ -585,6 +586,10 @@ export async function DELETE(req) {
     }
     await supabaseAdmin.from('bookings').update(patch).eq('id', b.id)
   }
+
+  // Withdraw the party's car / free its seats in other cars (BUG-102). Must
+  // run before booking_attendees is cleared -- it reads the party from there.
+  await releaseTransportOnCancel({ eventId: event_id, ownerMemberId: member.id, actingMemberId: member.id })
 
   await supabaseAdmin.from('booking_attendees').delete().eq('event_id', event_id).eq('owner_id', member.id)
 
