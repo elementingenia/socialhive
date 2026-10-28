@@ -210,16 +210,18 @@ export async function GET(req) {
     .order("created_at")
   if (oe) return NextResponse.json({ error: oe.message }, { status: 500 })
 
-  const { memberIds: attendeeMemberIds } = await fetchAttendeeIdentities(eventId)
-  const myOffer = (offers || []).find(o => o.member_id === member.id)
-  const myPassengerRow = (offers || []).flatMap(o => (o.passengers || []).map(p => ({ ...p, vehicle_offer_id: o.id })))
+  const { memberIds: attendeeMemberIds, contactIds: attendeeContactIds } = await fetchAttendeeIdentities(eventId)
+  // Hide any car whose driver is no longer booked (BUG-102).
+  const liveOffers = (offers || []).filter(o => o.member_id ? attendeeMemberIds.has(o.member_id) : attendeeContactIds.has(o.contact_id))
+  const myOffer = liveOffers.find(o => o.member_id === member.id)
+  const myPassengerRow = liveOffers.flatMap(o => (o.passengers || []).map(p => ({ ...p, vehicle_offer_id: o.id })))
     .find(p => p.member_id === member.id)
   const myBusRider = await isBusRider(eventId, { memberId: member.id })
 
   return NextResponse.json({
     allow_personal_vehicles: !!event.allow_personal_vehicles,
     has_bus: !!event.has_bus,
-    offers: (offers || []).map(o => {
+    offers: liveOffers.map(o => {
       const partyKey = p => (p.party_owner_member_id ? `m:${p.party_owner_member_id}` : p.party_owner_contact_id ? `c:${p.party_owner_contact_id}` : `p:${p.id}`)
       return {
         id: o.id,
@@ -418,6 +420,13 @@ async function partyRowsInOffer(passenger) {
 // between the two entry points (Iain's confirmed answer, live-fire review
 // of PR #145).
 async function addPartyToOffer({ event, offer, identity, nominatedByDriver, actingMemberId, actingMember }) {
+  // A car only runs while its driver is still going (BUG-102, 2026-10-28):
+  // never seat anyone in the car of a driver who has cancelled.
+  const roster = await fetchAttendeeIdentities(event.id)
+  const driverBooked = offer.member_id ? roster.memberIds.has(offer.member_id) : roster.contactIds.has(offer.contact_id)
+  if (!driverBooked) {
+    return NextResponse.json({ error: "This driver isn't booked on this event any more, so their car isn't available." }, { status: 409 })
+  }
   const party = await resolveBookingParty(event.id, identity)
   if (!party || party.members.length === 0) {
     return NextResponse.json({ error: "Couldn't find that person's booking for this event." }, { status: 400 })

@@ -882,6 +882,9 @@ export default function HelpGuidePage() {
                 <strong>🚌 Bus</strong> (if there is one), <strong>🧍 In a car</strong> (then pick whose
                 car) or <strong>🚗 Driving</strong> (then set your spare seats). It&apos;s saved with your
                 booking and covers everyone in it. You can leave it blank and sort it out later.
+                If you cancel your booking, your car arrangements go with it: if you were driving,
+                your car is withdrawn and everyone in it is told to find another way; if you were
+                riding, your seat is freed and the driver is told.
               </InfoBox>
             </Subsection>
 

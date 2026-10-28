@@ -10,6 +10,7 @@ import { effectiveSeatCap, planSeatModification } from "@/lib/modifyBooking"
 import { requireEventManage } from "@/lib/areaAuth"
 import { amountOwing, derivePaymentStatus, paymentReminderPhrase } from "@/lib/payments"
 import { applyTransport } from "@/lib/applyTransport"
+import { releaseTransportOnCancel } from "@/lib/releaseTransportOnCancel"
 
 // force-dynamic + the shared no-store supabaseAdmin (lib/supabaseAdmin.js) keep
 // this GET route reading LIVE data. Without it, Next's fetch cache once dropped a
@@ -598,7 +599,7 @@ export async function PATCH(req) {
   if (action === "cancel_booking" && booking_id) {
     // Fetch booking first so we know seats freed (for waitlist promotion) and who to notify
     const { data: bk } = await supa
-      .from("bookings").select("status, seats, member_id, payment_status, amount_paid").eq("id", booking_id).maybeSingle()
+      .from("bookings").select("status, seats, member_id, contact_id, payment_status, amount_paid").eq("id", booking_id).maybeSingle()
     // A 'submitted' claim is a resident's self-report, unconfirmed by design
     // (2026-08-12, Iain -- found on Spring Ball 2: cancelling a booking never
     // looks at payment_status = 'submitted' at all, only 'confirmed'/'partial',
@@ -628,6 +629,8 @@ export async function PATCH(req) {
       .eq("id", booking_id)
       .eq("event_id", event_id)
     if (ce) return NextResponse.json({ error: ce.message }, { status: 500 })
+    // Withdraw the party's car / free its seats in other cars (BUG-102).
+    await releaseTransportOnCancel({ eventId: event_id, ownerMemberId: bk?.member_id || null, ownerContactId: bk?.contact_id || null, actingMemberId: member.id })
     // Promote waitlisted members if a confirmed seat was freed
     if (bk?.status === "confirmed") {
       await promoteWaitlist(event_id)
