@@ -3,6 +3,7 @@ import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { authedFetch } from "@/lib/getAuthToken"
 import { MAX_CONTENT_LENGTH, MAX_PHOTOS_PER_POST } from "@/lib/happeningsNewsTier"
+import WorkingPanel, { WorkingSpinner, WORKING_TINT } from "@/components/WorkingPanel"
 
 // Composer modal -- creates a NEW post (eventId given, postId not yet
 // known) or manages an EXISTING post's photos (postId given directly, e.g.
@@ -30,6 +31,11 @@ export default function HappeningsNewsComposer({ eventId, postId: initialPostId,
   // happening).
   const [upload, setUpload] = useState(null)
   const uploading = !!upload
+  // Photo currently being removed (id), else null -- same in-place feedback
+  // as uploading (Iain, 2026-10-29: "same mechanism for when user is
+  // deleting - for consistency of experience").
+  const [removingId, setRemovingId] = useState(null)
+  const working = uploading || !!removingId
 
   useEffect(() => {
     if (!initialPostId) return
@@ -131,12 +137,20 @@ export default function HappeningsNewsComposer({ eventId, postId: initialPostId,
   }
 
   async function removePhoto(photoId) {
-    setError(""); setBusy(true)
-    const res = await authedFetch("/api/happenings-news/photos", {
-      method: "DELETE", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ photo_id: photoId }),
-    })
-    setBusy(false)
+    setError(""); setBusy(true); setRemovingId(photoId)
+    let res
+    try {
+      res = await authedFetch("/api/happenings-news/photos", {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photo_id: photoId }),
+      })
+    } catch (err) {
+      console.error("Happenings News photo remove failed (network):", err)
+      setBusy(false); setRemovingId(null)
+      setError("Couldn't reach the server -- check your connection and try again.")
+      return
+    }
+    setBusy(false); setRemovingId(null)
     if (!res.ok) { const json = await res.json().catch(() => ({})); setError(json.error || "Could not remove that photo"); return }
     const remaining = photos.filter(p => p.id !== photoId)
     setPhotos(remaining)
@@ -154,7 +168,7 @@ export default function HappeningsNewsComposer({ eventId, postId: initialPostId,
   // While photos are uploading, closing the sheet would hide the upload
   // mid-way, so the backdrop and the X do nothing until it finishes.
   function requestClose() {
-    if (uploading) return
+    if (working) return
     onClose()
   }
 
@@ -175,8 +189,8 @@ export default function HappeningsNewsComposer({ eventId, postId: initialPostId,
             <div style={{ fontWeight: 800, fontSize: "1.05rem", color: "var(--happenings-news)" }}>
               {step === "text" ? "Write a Happenings News post" : "Add photos"}
             </div>
-            <button onClick={requestClose} disabled={uploading} aria-label="Close" style={{ background: "var(--surface2)", border: "none", borderRadius: "50%",
-              width: 32, height: 32, cursor: uploading ? "not-allowed" : "pointer", fontSize: "1.1rem", opacity: uploading ? 0.4 : 1 }}>✕</button>
+            <button onClick={requestClose} disabled={working} aria-label="Close" style={{ background: "var(--surface2)", border: "none", borderRadius: "50%",
+              width: 32, height: 32, cursor: working ? "not-allowed" : "pointer", fontSize: "1.1rem", opacity: working ? 0.4 : 1 }}>✕</button>
           </div>
 
           {step === "text" ? (
@@ -199,48 +213,36 @@ export default function HappeningsNewsComposer({ eventId, postId: initialPostId,
                 Up to {MAX_PHOTOS_PER_POST} photos. Tap ★ to choose which one shows as the headline photo on Home and in the feed. Photos are optional — you can finish without any.
               </p>
               {uploading && (
-                <div role="status" aria-live="polite" style={{
-                  display: "flex", alignItems: "center", gap: 12, marginBottom: "0.9rem",
-                  padding: "0.85rem 1rem", borderRadius: 12,
-                  border: "2px solid var(--happenings-news)",
-                  background: "rgba(180, 83, 9, 0.12)",
-                }}>
-                  <span aria-hidden="true" style={{
-                    flexShrink: 0, width: 30, height: 30, borderRadius: "50%",
-                    border: "4px solid rgba(180, 83, 9, 0.25)",
-                    borderTopColor: "var(--happenings-news)", animation: "spin 0.8s linear infinite",
-                  }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 800, fontSize: "1rem", color: "var(--text)" }}>
-                      {upload.total > 1
-                        ? `Uploading photo ${Math.min(upload.done + 1, upload.total)} of ${upload.total}…`
-                        : "Uploading your photo…"}
-                    </div>
-                    <div style={{ fontSize: "0.85rem", color: "var(--text)", marginTop: 2 }}>
-                      Please wait and keep this screen open until it finishes.
-                    </div>
-                    {upload.total > 1 && (
-                      <div style={{ marginTop: 8, height: 8, borderRadius: 4, background: "var(--surface2)", overflow: "hidden" }}>
-                        <div style={{
-                          width: `${Math.round((upload.done / upload.total) * 100)}%`, height: "100%",
-                          background: "var(--happenings-news)", transition: "width 0.3s ease",
-                        }} />
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <WorkingPanel style={{ marginBottom: "0.9rem" }}
+                  title={upload.total > 1
+                    ? `Uploading photo ${Math.min(upload.done + 1, upload.total)} of ${upload.total}…`
+                    : "Uploading your photo…"}
+                  note="Please wait and keep this screen open until it finishes."
+                  done={upload.done} total={upload.total} />
+              )}
+              {removingId && (
+                <WorkingPanel style={{ marginBottom: "0.9rem" }}
+                  title="Removing photo…"
+                  note="Please wait and keep this screen open until it finishes." />
               )}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: "0.9rem" }}>
                 {photos.map(p => (
                   <div key={p.id} style={{ position: "relative", aspectRatio: "1 / 1", borderRadius: 8, overflow: "hidden" }}>
-                    <img src={p.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                    <button onClick={() => nominatePrimary(p.id)} disabled={uploading} title="Set as headline photo" style={{
+                    <img src={p.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block",
+                      opacity: removingId === p.id ? 0.35 : 1 }} />
+                    {removingId === p.id && (
+                      <div aria-hidden="true" style={{ position: "absolute", inset: 0, display: "flex",
+                        alignItems: "center", justifyContent: "center", border: "2px solid var(--happenings-news)", borderRadius: 8 }}>
+                        <WorkingSpinner size={26} thickness={3} />
+                      </div>
+                    )}
+                    <button onClick={() => nominatePrimary(p.id)} disabled={working} title="Set as headline photo" style={{
                       position: "absolute", top: 4, left: 4, width: 22, height: 22, borderRadius: "50%",
                       border: "none", cursor: "pointer", fontSize: "0.7rem",
                       background: primaryPhotoId === p.id ? "var(--happenings-news)" : "rgba(255,255,255,0.85)",
                       color: primaryPhotoId === p.id ? "#fff" : "var(--text-dim)",
                     }}>★</button>
-                    <button onClick={() => removePhoto(p.id)} disabled={uploading} title="Remove photo" style={{
+                    <button onClick={() => removePhoto(p.id)} disabled={working} title="Remove photo" style={{
                       position: "absolute", top: 4, right: 4, width: 22, height: 22, borderRadius: "50%",
                       border: "none", cursor: "pointer", fontSize: "0.7rem", background: "rgba(0,0,0,0.55)", color: "#fff",
                     }}>✕</button>
@@ -249,18 +251,13 @@ export default function HappeningsNewsComposer({ eventId, postId: initialPostId,
                 {uploading && Array.from({ length: Math.max(0, upload.total - upload.done) }).map((_, i) => (
                   <div key={`pending-${i}`} aria-hidden="true" style={{
                     aspectRatio: "1 / 1", borderRadius: 8,
-                    border: "2px solid var(--happenings-news)",
-                    background: "rgba(180, 83, 9, 0.10)",
+                    border: "2px solid var(--happenings-news)", background: WORKING_TINT,
                     display: "flex", alignItems: "center", justifyContent: "center",
                   }}>
-                    <span style={{
-                      width: 26, height: 26, borderRadius: "50%",
-                      border: "3px solid rgba(180, 83, 9, 0.25)",
-                      borderTopColor: "var(--happenings-news)", animation: "spin 0.8s linear infinite",
-                    }} />
+                    <WorkingSpinner size={26} thickness={3} />
                   </div>
                 ))}
-                {!uploading && photos.length < MAX_PHOTOS_PER_POST && (
+                {!working && photos.length < MAX_PHOTOS_PER_POST && (
                   <label style={{
                     aspectRatio: "1 / 1", borderRadius: 8, border: "2px dashed var(--border)",
                     display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
@@ -276,7 +273,7 @@ export default function HappeningsNewsComposer({ eventId, postId: initialPostId,
               <button onClick={finish} disabled={busy} style={{
                 width: "100%", padding: "0.75rem", borderRadius: 12, border: "none",
                 background: "var(--happenings-news)", color: "#fff", fontWeight: 700, cursor: busy ? "not-allowed" : "pointer", fontFamily: "inherit",
-              }}>{uploading ? "Uploading photos…" : busy ? "Please wait…" : "Done"}</button>
+              }}>{uploading ? "Uploading photos…" : removingId ? "Removing photo…" : busy ? "Please wait…" : "Done"}</button>
             </>
           )}
         </div>

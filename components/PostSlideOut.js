@@ -10,6 +10,7 @@ import HappeningsNewsComposer from "@/components/HappeningsNewsComposer"
 import { MAX_CONTENT_LENGTH } from "@/lib/happeningsNewsTier"
 import HeartButton from "@/components/HeartButton"
 import HeartNames from "@/components/HeartNames"
+import WorkingPanel from "@/components/WorkingPanel"
 
 // Full-post view -- "a modal like the booking form slides out with the full
 // post, including a grid of the images" (Iain, 2026-09-21). Same shell
@@ -41,6 +42,10 @@ export default function PostSlideOut({ postId, onClose, onChanged, onHeartChange
   const [draft, setDraft] = useState("")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  // Deleting the whole post -- same in-place "please wait" panel as photo
+  // upload/remove (Iain, 2026-10-29), and the panel can't be closed until
+  // the server answers.
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (!postId) { setOpen(false); return }
@@ -65,6 +70,7 @@ export default function PostSlideOut({ postId, onClose, onChanged, onHeartChange
   }
 
   function handleClose() {
+    if (deleting) return
     setOpen(false)
     setTimeout(onClose, 280)
   }
@@ -89,12 +95,21 @@ export default function PostSlideOut({ postId, onClose, onChanged, onHeartChange
 
   async function deletePost() {
     if (!confirm("Delete this Happenings News post? This can't be undone.")) return
-    setSaving(true)
-    const res = await authedFetch(`/api/happenings-news/${postId}`, { method: "DELETE" })
-    setSaving(false)
+    setError(""); setSaving(true); setDeleting(true)
+    let res
+    try {
+      res = await authedFetch(`/api/happenings-news/${postId}`, { method: "DELETE" })
+    } catch (err) {
+      console.error("Happenings News delete failed (network):", err)
+      setSaving(false); setDeleting(false)
+      setError("Couldn't reach the server -- check your connection and try again.")
+      return
+    }
+    setSaving(false); setDeleting(false)
     if (!res.ok) { const json = await res.json().catch(() => ({})); setError(json.error || "Could not delete"); return }
     onChanged?.()
-    handleClose()
+    setOpen(false)
+    setTimeout(onClose, 280)
   }
 
   return (
@@ -112,8 +127,8 @@ export default function PostSlideOut({ postId, onClose, onChanged, onHeartChange
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px",
           borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "var(--surface)", zIndex: 1 }}>
           <div style={{ fontWeight: 700, fontSize: 15, color: "var(--happenings-news)" }}>Happenings News</div>
-          <button onClick={handleClose} style={{ background: "var(--surface2)", border: "none", borderRadius: "50%",
-            width: 36, height: 36, fontSize: 20, cursor: "pointer", color: "var(--text)",
+          <button onClick={handleClose} disabled={deleting} aria-label="Close" style={{ background: "var(--surface2)", border: "none", borderRadius: "50%",
+            width: 36, height: 36, fontSize: 20, cursor: deleting ? "not-allowed" : "pointer", color: "var(--text)", opacity: deleting ? 0.4 : 1,
             display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         </div>
 
@@ -203,7 +218,12 @@ export default function PostSlideOut({ postId, onClose, onChanged, onHeartChange
 
               {error && <div style={{ color: "var(--terracotta)", fontSize: "0.82rem", marginBottom: 10 }}>{error}</div>}
 
-              {canManage && !editing && (
+              {deleting && (
+                <WorkingPanel style={{ marginBottom: 12 }} title="Deleting post…"
+                  note="Please wait and keep this screen open until it finishes." />
+              )}
+
+              {canManage && !editing && !deleting && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid var(--border)", paddingTop: 12 }}>
                   <div style={{ display: "flex", gap: 8 }}>
                     <button onClick={() => setEditing(true)} style={{ flex: 1, padding: "0.6rem", borderRadius: 10, border: "1px solid var(--happenings-news)", background: "transparent", color: "var(--happenings-news)", cursor: "pointer", fontWeight: 700 }}>Edit text</button>
