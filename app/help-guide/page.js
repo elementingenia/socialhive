@@ -884,7 +884,9 @@ export default function HelpGuidePage() {
                 booking and covers everyone in it. You can leave it blank and sort it out later.
                 If you cancel your booking, your car arrangements go with it: if you were driving,
                 your car is withdrawn and everyone in it is told to find another way; if you were
-                riding, your seat is freed and the driver is told.
+                riding, your seat is freed and the driver is told. The same happens for anyone you
+                take off your booking, and when an Event Coordinator cancels a booking. Anyone still
+                going another way keeps their car and their seat.
               </InfoBox>
             </Subsection>
 

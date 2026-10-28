@@ -567,7 +567,7 @@ export async function PATCH(req) {
     if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
 
     if (rawAttendees !== undefined) {
-      await syncAttendees(event_id, { ownerId: member_id || null, ownerContactId: contact_id || null }, party.attendees)
+      await syncAttendees(event_id, { ownerId: member_id || null, ownerContactId: contact_id || null }, party.attendees, { actingMemberId: member.id })
     }
 
     let transportError = null
@@ -629,8 +629,22 @@ export async function PATCH(req) {
       .eq("id", booking_id)
       .eq("event_id", event_id)
     if (ce) return NextResponse.json({ error: ce.message }, { status: 500 })
-    // Withdraw the party's car / free its seats in other cars (BUG-102).
-    await releaseTransportOnCancel({ eventId: event_id, ownerMemberId: bk?.member_id || null, ownerContactId: bk?.contact_id || null, actingMemberId: member.id })
+    // If this was the owner's last active booking on the event (a split
+    // booking can have a confirmed row and a waitlist row), they're no longer
+    // going: release their car arrangements and remove their named party,
+    // exactly as a resident's own cancel does (BUG-102 + follow-up). If they
+    // still have another active row, leave both alone.
+    if (bk?.member_id || bk?.contact_id) {
+      let rq = supa.from("bookings").select("id").eq("event_id", event_id).neq("status", "cancelled")
+      rq = bk.member_id ? rq.eq("member_id", bk.member_id) : rq.eq("contact_id", bk.contact_id)
+      const { data: remaining } = await rq
+      if (!remaining?.length) {
+        await releaseTransportOnCancel({ eventId: event_id, ownerMemberId: bk.member_id || null, ownerContactId: bk.contact_id || null, actingMemberId: member.id })
+        let dq = supa.from("booking_attendees").delete().eq("event_id", event_id)
+        dq = bk.member_id ? dq.eq("owner_id", bk.member_id) : dq.eq("owner_contact_id", bk.contact_id)
+        await dq
+      }
+    }
     // Promote waitlisted members if a confirmed seat was freed
     if (bk?.status === "confirmed") {
       await promoteWaitlist(event_id)
@@ -732,7 +746,7 @@ export async function PATCH(req) {
     // existing party, same pattern as self-service Modify) so this always
     // runs when the action succeeds -- mirrors PATCH /api/bookings, which
     // does the same unconditionally.
-    await syncAttendees(event_id, { ownerId: ownerId || null, ownerContactId: ownerContactId || null }, party.attendees)
+    await syncAttendees(event_id, { ownerId: ownerId || null, ownerContactId: ownerContactId || null }, party.attendees, { actingMemberId: member.id })
 
     // No account to notify for a contact-owned (no-login) booking.
     if (ownerId) {
