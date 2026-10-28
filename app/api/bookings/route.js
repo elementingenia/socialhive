@@ -243,7 +243,7 @@ export async function POST(req) {
       payment_status: initialPaymentStatus, bus_passenger: ownerWantsBus, ...bringFields,
     })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    await syncAttendees(event_id, { ownerId: member.id }, transport ? stripBus(party.attendees) : party.attendees)
+    await syncAttendees(event_id, { ownerId: member.id }, transport ? stripBus(party.attendees) : party.attendees, { actingMemberId: member.id })
     let transportError = null
     if (transport) {
       const applied = await applyTransport({
@@ -281,7 +281,7 @@ export async function POST(req) {
 
   const { error } = await supabaseAdmin.from('bookings').insert(rows)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  await syncAttendees(event_id, { ownerId: member.id }, party.attendees)
+  await syncAttendees(event_id, { ownerId: member.id }, party.attendees, { actingMemberId: member.id })
 
   return NextResponse.json({
     status:     'split_confirmed',
@@ -528,7 +528,7 @@ export async function PATCH(req) {
     if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 })
   }
 
-  await syncAttendees(event_id, { ownerId: member.id }, party.attendees)
+  await syncAttendees(event_id, { ownerId: member.id }, party.attendees, { actingMemberId: member.id })
 
   return NextResponse.json({
     status:    newWaitlisted > 0 ? 'split_change' : 'confirmed_change',

@@ -224,5 +224,40 @@ ok(buildDriverCancelledMessage({ driverName: null, eventTitle: 'X' }).startsWith
 ok(buildPassengerCancelledMessage({ passengerName: 'Phil Dorse', seats: 1, eventTitle: 'X' }) === 'Phil Dorse cancelled their booking for X, so a seat in your car is free again.', 'one seat freed wording')
 ok(buildPassengerCancelledMessage({ passengerName: null, seats: 2, eventTitle: 'X' }) === 'A resident cancelled their booking for X, so 2 seats in your car are free again.', 'two seats freed wording, masked name')
 
+// Follow-up (2026-10-28): seats reduced, and people still going another way.
+{
+  // Phil reduces his booking: Jan (named, driving) comes off. Sue rides with Jan.
+  const offers = [{ id: 'jan-car', member_id: 'jan', passengers: [{ id: 's', member_id: 'sue', party_owner_member_id: 'sue' }] }]
+  const plan = planCancelTransportRelease({ offers, partyKeys: ['m:jan'], ownerKey: 'm:phil', removedGuestNames: new Set(), stillGoingKeys: new Set(['m:phil']) })
+  ok(plan.offersToWithdraw[0] === 'jan-car' && plan.strandedPassengers[0].member_id === 'sue', "a named driver taken off a booking has their car withdrawn and riders told")
+}
+{
+  // Same, but Jan also has her own booking -- she's still going, keeps her car.
+  const offers = [{ id: 'jan-car', member_id: 'jan', passengers: [] }]
+  const plan = planCancelTransportRelease({ offers, partyKeys: ['m:jan'], ownerKey: 'm:phil', removedGuestNames: new Set(), stillGoingKeys: new Set(['m:jan']) })
+  ok(plan.offersToWithdraw.length === 0, "someone still going another way keeps their car")
+}
+{
+  // Phil reduces: guest Mary comes off, guest Tom stays; both were riding with Iain.
+  const offers = [{ id: 'c', member_id: 'iain', passengers: [
+    { id: 'm', guest_name: 'Mary', party_owner_member_id: 'phil' },
+    { id: 't', guest_name: 'Tom', party_owner_member_id: 'phil' },
+    { id: 'p', member_id: 'phil', party_owner_member_id: 'phil' },
+  ] }]
+  const plan = planCancelTransportRelease({ offers, partyKeys: [], ownerKey: 'm:phil', removedGuestNames: new Set(['mary']), stillGoingKeys: new Set(['m:phil']) })
+  ok(plan.passengerIdsToDelete.join() === 'm', 'only the removed guest loses their seat; the owner and other guest keep theirs')
+  ok(plan.freedSeats[0].seats === 1, 'the driver is told one seat is free')
+}
+{
+  // Owner cancels, but a named member of the party has their own booking too.
+  const offers = [{ id: 'c', member_id: 'iain', passengers: [
+    { id: 'p', member_id: 'phil', party_owner_member_id: 'phil' },
+    { id: 'j', member_id: 'jan', party_owner_member_id: 'phil' },
+  ] }]
+  const plan = planCancelTransportRelease({ offers, partyKeys: ['m:phil', 'm:jan'], ownerKey: 'm:phil', stillGoingKeys: new Set(['m:jan']) })
+  ok(plan.passengerIdsToDelete.join() === 'p', "a party member who's still going keeps their seat when the owner cancels")
+}
+ok(buildPassengerCancelledMessage({ passengerName: 'Phil Dorse', seats: 1, eventTitle: 'X', reduced: true }) === 'Phil Dorse changed their booking for X, so a seat in your car is free again.', 'reduced-booking wording')
+
 console.log(`\nlib/vehicleOffers.js: ${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)
