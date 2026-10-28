@@ -179,6 +179,7 @@ const RAW_SECTIONS = [
     id: "news", num: 13, title: "Happenings News",
     subs: [
       { title: "Reading recaps and leaving a heart", id: "sub-news-hearts" },
+      { title: "Posting a recap (coordinators)", id: "sub-news-post" },
     ],
   },
   {
@@ -2196,6 +2197,21 @@ export default function HelpGuidePage() {
                 Everyone can see how many hearts a recap has. Only the person who wrote it, admins,
                 and the event&apos;s Owner or coordinator can tap <strong>See who hearted</strong> to
                 see the names. Nobody gets a notification when you heart something.
+              </Step>
+            </Subsection>
+            <Subsection id="sub-news-post" title="Posting a recap (coordinators)">
+              <Step>
+                Once your event has ended, open it and tap <strong>📰 Write a Happenings News post about this event</strong>.
+                Write a few lines about how it went, then tap <strong>Continue — add photos →</strong>.
+              </Step>
+              <Step>
+                Tap the <strong>+</strong> square to choose photos (up to 10, several at once is fine). While they upload,
+                a coloured box at the top shows <strong>Uploading photo 2 of 5…</strong> with a progress bar, and each photo
+                still to come shows a spinning square. Large photos can take a little while — keep the screen open until the
+                box disappears. The screen can&apos;t be closed while photos are uploading.
+              </Step>
+              <Step>
+                Tap <strong>★</strong> on the photo you want as the headline picture, then tap <strong>Done</strong>.
               </Step>
             </Subsection>
           </Section>
