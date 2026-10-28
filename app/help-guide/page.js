@@ -2213,6 +2213,11 @@ export default function HelpGuidePage() {
               <Step>
                 Tap <strong>★</strong> on the photo you want as the headline picture, then tap <strong>Done</strong>.
               </Step>
+              <Step>
+                To change a recap later, open it and use <strong>Edit text</strong>, <strong>Manage photos</strong> or
+                <strong> Delete post</strong>. Removing a photo (the <strong>✕</strong> on it) or deleting the post shows the
+                same coloured &quot;please wait&quot; box until it&apos;s done.
+              </Step>
             </Subsection>
           </Section>
 
