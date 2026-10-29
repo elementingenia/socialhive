@@ -180,19 +180,42 @@ function TransportPicker({ event, colour, value, onChange, cars = [], ownerKey =
     color: active ? clubTextOn(colour) : "var(--text)",
   })
   const minDriverSeats = Math.max(0, partySize - 1)
+  // Bus full (Iain, 2026-10-29): the Bus button looks inactive when there
+  // aren't enough bus seats for this booking, and tapping it explains why
+  // instead of selecting it. Not applied when this booking is already on
+  // the bus (busLeft then already counts its own seats as free).
+  const busFull = busLeft != null && busLeft < partySize && mode !== "bus"
+  const [busFullTapped, setBusFullTapped] = useState(false)
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", marginBottom: 6 }}>Getting there</div>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        {options.map(o => (
-          <button key={o.v} type="button" onClick={() => onChange({
-              mode: o.v,
-              vehicle_offer_id: o.v === "car" ? (value?.vehicle_offer_id || null) : null,
-              seats_offered: o.v === "driver" ? Math.max(minDriverSeats, value?.seats_offered ?? minDriverSeats) : undefined,
-            })}
-            style={btn(mode === o.v)}>{o.label}</button>
-        ))}
+        {options.map(o => {
+          const inactive = o.v === "bus" && busFull
+          return (
+            <button key={o.v} type="button" aria-disabled={inactive || undefined}
+              onClick={() => {
+                if (inactive) { setBusFullTapped(true); return }
+                setBusFullTapped(false)
+                onChange({
+                  mode: o.v,
+                  vehicle_offer_id: o.v === "car" ? (value?.vehicle_offer_id || null) : null,
+                  seats_offered: o.v === "driver" ? Math.max(minDriverSeats, value?.seats_offered ?? minDriverSeats) : undefined,
+                })
+              }}
+              style={inactive
+                ? { ...btn(false), color: "var(--text-dim)", background: "var(--surface2)", borderStyle: "dashed", cursor: "not-allowed", opacity: 0.6 }
+                : btn(mode === o.v)}>{o.label}{inactive ? " (full)" : ""}</button>
+          )
+        })}
       </div>
+      {busFull && busFullTapped && (
+        <div role="alert" style={{ fontSize: 12, marginTop: 6, color: "var(--danger)" }}>
+          {busLeft === 0
+            ? "The bus is full, so it can't be chosen. Please choose another way to get there."
+            : `Only ${busLeft} bus seat${busLeft === 1 ? "" : "s"} left -- not enough for ${partySize} people. Please choose another way to get there.`}
+        </div>
+      )}
 
       {mode === "bus" && busLeft != null && (
         <div style={{ fontSize: 12, marginTop: 6, color: busLeft < partySize ? "var(--danger)" : "var(--text-dim)" }}>
