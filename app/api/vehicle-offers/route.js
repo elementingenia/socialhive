@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
+import { residentBusDriverId } from "@/lib/busDriver"
 import { NextResponse } from "next/server"
 import { notify } from "@/lib/notify"
 import { resolveMemberName } from "@/lib/memberName"
@@ -264,9 +265,13 @@ export async function POST(req) {
   const { event_id, action } = body
   if (!event_id || !action) return NextResponse.json({ error: "event_id and action required" }, { status: 400 })
 
-  const { data: event } = await supabaseAdmin.from("events").select("id, title, allow_personal_vehicles").eq("id", event_id).single()
+  const { data: event } = await supabaseAdmin.from("events").select("id, title, allow_personal_vehicles, has_bus, bus_driver_id").eq("id", event_id).single()
   if (!event) return NextResponse.json({ error: "Event not found" }, { status: 404 })
   if (!event.allow_personal_vehicles) return NextResponse.json({ error: "This event doesn't have personal vehicle offers enabled." }, { status: 400 })
+  // The resident bus driver drives the bus, not a car (Iain, 2026-10-29).
+  if ((action === "offer" || action === "claim_seat") && residentBusDriverId(event) === member.id) {
+    return NextResponse.json({ error: "You're the bus driver for this event, so you can't also go by car." }, { status: 409 })
+  }
 
   const { memberIds: attendeeMemberIds } = await fetchAttendeeIdentities(event_id)
 

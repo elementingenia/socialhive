@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { notifyClubMembers } from "@/lib/notifyAudience"
 import { notifyEventDetailsChanged } from "@/lib/notifyEventUpdated"
 import { promoteWaitlist } from "@/lib/promoteWaitlist"
+import { ensureBusDriverSeat } from "@/lib/busDriverSeat"
 import { needsSpaceValidation, fetchLocation } from "@/lib/eventClash"
 import { findAnyRoomConflict } from "@/lib/spaceBookings"
 import { notifyRequestOnlySpace } from "@/lib/notifyRequestOnlySpace"
@@ -132,6 +133,8 @@ export async function POST(req) {
   if (Array.isArray(body.coordinator_ids) && body.coordinator_ids.length) {
     await supa.from("event_coordinators").insert(body.coordinator_ids.map(id => ({ event_id: event.id, member_id: id })))
   }
+  // A resident bus driver always has a seat (Iain, 2026-10-29).
+  await ensureBusDriverSeat(event.id, { actingMemberId: member.id })
 
   // "Request Only" (Iain, 2026-08-04): Admin/EC/club owner is trusted to
   // have already talked to Ingenia, but gets a reminder to validate it.
@@ -156,7 +159,7 @@ export async function PATCH(req) {
   if (!event_id) return NextResponse.json({ error: "event_id required" }, { status: 400 })
 
   const { data: existing } = await supa.from("events")
-    .select("id, club_id, series_id, event_date, event_time, location, location_id, title, bring_required, bring_category_ids").eq("id", event_id).single()
+    .select("id, club_id, series_id, event_date, event_time, location, location_id, title, bring_required, bring_category_ids, has_bus, bus_driver_id").eq("id", event_id).single()
   if (!existing) return NextResponse.json({ error: "Event not found" }, { status: 404 })
 
   const { error, status, member } = await resolve(req, existing.club_id)
@@ -183,6 +186,7 @@ export async function PATCH(req) {
   // unconditionally on every edit rather than trying to detect exactly which
   // field changed.
   await promoteWaitlist(event_id)
+  await ensureBusDriverSeat(event_id, { previousDriverId: existing.has_bus ? existing.bus_driver_id : null, actingMemberId: member.id })
 
   // "Request Only" (Iain, 2026-08-04): only nudge when the room actually
   // changed onto a Request Only venue -- not on every unrelated edit.

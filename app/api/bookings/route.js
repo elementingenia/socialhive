@@ -13,6 +13,8 @@ import { busSeatsUsed, validateBusRequest, requestedBusSeats } from '@/lib/busSe
 import { eventNotifyRecipients } from '@/lib/questionRouting'
 import { applyTransport } from '@/lib/applyTransport'
 import { releaseTransportOnCancel } from '@/lib/releaseTransportOnCancel'
+import { residentBusDriverId, stripDriverFromBus } from '@/lib/busDriver'
+import { ensureBusDriverSeat } from '@/lib/busDriverSeat'
 
 
 async function getMember(token) {
@@ -60,8 +62,12 @@ export async function POST(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('id, max_seats, max_seats_per_booking, unassigned_seats_count, hub_type, book_id, booking_required, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, allow_personal_vehicles, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('id, max_seats, max_seats_per_booking, unassigned_seats_count, hub_type, book_id, booking_required, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, bus_driver_id, allow_personal_vehicles, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+  // Resident bus driver (Iain, 2026-10-29): drives the bus, so never a bus
+  // passenger, car seat or own way -- their transport is "Bus driver".
+  const busDriverId = residentBusDriverId(event)
+  const bookerIsBusDriver = !!busDriverId && busDriverId === member.id
 
   // "Open, all welcome" events (Groups & Clubs dry run, 2026-09-11) have no
   // booking/RSVP at all -- never reachable from the UI (BookingSection short-
@@ -110,6 +116,7 @@ export async function POST(req) {
   if (await checkPrivateNamed({ attendees: party.attendees, ownerId: member.id, eventId: event_id })) {
     return NextResponse.json({ error: PRIVATE_RESIDENT_ERROR }, { status: 400 })
   }
+  party.attendees = stripDriverFromBus(party.attendees, busDriverId)
 
   // "Attendees bring something" is now per-EVENT, not implied by the club's
   // capability flag (Iain, 2026-08-07): applicable only when this event has
@@ -183,7 +190,7 @@ export async function POST(req) {
   // Bus/car/driving need the whole booking to confirm outright, same rule as
   // the bus toggle below; it's checked BEFORE anything is written so a full
   // bus or car rejects the booking instead of half-saving it.
-  const transport = body.transport && body.transport.mode ? body.transport : null
+  const transport = !bookerIsBusDriver && body.transport && body.transport.mode ? body.transport : null
   const needsTransport = !!transport && transport.mode !== 'none'
   if (needsTransport) {
     if (available < requestedSeats) {
@@ -212,7 +219,7 @@ export async function POST(req) {
   // rarely actually hit this message.
   // When transport was chosen above it owns the bus too (whole booking), so
   // the per-person bus flags are ignored.
-  const ownerWantsBus = !transport && !!event.has_bus && !!body.bus_passenger
+  const ownerWantsBus = !transport && !bookerIsBusDriver && !!event.has_bus && !!body.bus_passenger
   const busRequested = transport ? 0 : requestedBusSeats({ ownerWantsBus, attendees: party.attendees })
   if (busRequested > 0) {
     if (!event.has_bus) {
@@ -255,6 +262,7 @@ export async function POST(req) {
       // took the last bus/car seat) lands here.
       if (!applied.ok) transportError = applied.error
     }
+    await ensureBusDriverSeat(event_id, { actingMemberId: member.id })
     return NextResponse.json({ status: 'confirmed', seats: requestedSeats, ...(transportError ? { transport_error: transportError } : {}) })
   }
 
@@ -282,6 +290,7 @@ export async function POST(req) {
   const { error } = await supabaseAdmin.from('bookings').insert(rows)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   await syncAttendees(event_id, { ownerId: member.id }, party.attendees, { actingMemberId: member.id })
+  await ensureBusDriverSeat(event_id, { actingMemberId: member.id })
 
   return NextResponse.json({
     status:     'split_confirmed',
@@ -413,7 +422,8 @@ export async function PATCH(req) {
   const oldConfirmed = myConfirmed.seats || 1
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('max_seats, max_seats_per_booking, unassigned_seats_count, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('max_seats, max_seats_per_booking, unassigned_seats_count, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, bus_driver_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+  const patchBusDriverId = residentBusDriverId(event)
   const { data: confirmedRows } = await supabaseAdmin
     .from('bookings').select('seats')
     .eq('event_id', event_id).eq('status', 'confirmed').neq('id', myConfirmed.id)
@@ -451,6 +461,7 @@ export async function PATCH(req) {
   if (await checkPrivateNamed({ attendees: party.attendees, ownerId: member.id, eventId: event_id, keepExisting: true })) {
     return NextResponse.json({ error: PRIVATE_RESIDENT_ERROR }, { status: 400 })
   }
+  party.attendees = stripDriverFromBus(party.attendees, patchBusDriverId)
 
   const bringApplicable = Array.isArray(event?.bring_category_ids) && event.bring_category_ids.length > 0
   let patchAllowedCategoryIds = event?.bring_category_ids
@@ -476,7 +487,7 @@ export async function PATCH(req) {
   // current bus usage so re-submitting an unchanged request isn't blocked by
   // itself, mirroring how othersConfirmed already excludes myConfirmed.id
   // for the ordinary seat cap above.
-  const ownerWantsBus = !!event?.has_bus && !!body.bus_passenger
+  const ownerWantsBus = !!event?.has_bus && !!body.bus_passenger && patchBusDriverId !== member.id
   const busRequested = requestedBusSeats({ ownerWantsBus, attendees: party.attendees })
   if (busRequested > 0) {
     if (!event?.has_bus) {
@@ -529,6 +540,8 @@ export async function PATCH(req) {
   }
 
   await syncAttendees(event_id, { ownerId: member.id }, party.attendees, { actingMemberId: member.id })
+  // Driver may have just come off this party -- make sure they still have a seat.
+  await ensureBusDriverSeat(event_id, { actingMemberId: member.id })
 
   return NextResponse.json({
     status:    newWaitlisted > 0 ? 'split_change' : 'confirmed_change',
@@ -554,6 +567,15 @@ export async function DELETE(req) {
 
   if (!myBookings?.length) {
     return NextResponse.json({ error: 'No active booking found' }, { status: 404 })
+  }
+
+  // The resident bus driver can't cancel their seat while they're still the
+  // driver (Iain, 2026-10-29) -- the coordinator changes the driver first.
+  const { data: delEvent } = await supabaseAdmin.from('events').select('has_bus, bus_driver_id').eq('id', event_id).maybeSingle()
+  if (residentBusDriverId(delEvent) === member.id) {
+    return NextResponse.json({
+      error: "You're the bus driver for this event, so your seat can't be cancelled. Please ask the Event Coordinator to change the bus driver first.",
+    }, { status: 409 })
   }
 
   // A 'submitted' claim is unresolved by definition -- the EC hasn't confirmed
@@ -595,6 +617,8 @@ export async function DELETE(req) {
 
   const hadConfirmed = myBookings.some(b => b.status === 'confirmed')
   if (hadConfirmed) await promoteWaitlist(event_id)
+  // If the bus driver was named on this booking, they still need a seat.
+  await ensureBusDriverSeat(event_id, { actingMemberId: member.id })
 
   // No notification here: this endpoint is SELF-cancel only, so the member who
   // would receive it is the one who just performed the action (Iain, 2026-07-21).

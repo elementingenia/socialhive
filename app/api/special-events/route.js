@@ -5,6 +5,7 @@ import { notifyEventAttendees } from '@/lib/notifyEventAttendees'
 import { notifyEventDetailsChanged } from '@/lib/notifyEventUpdated'
 import { notifyAllActiveMembers } from '@/lib/notifyAudience'
 import { promoteWaitlist } from '@/lib/promoteWaitlist'
+import { ensureBusDriverSeat } from '@/lib/busDriverSeat'
 import { checkCancelPaymentGuard } from '@/lib/eventCancelGuard'
 import { needsSpaceValidation, fetchLocation } from '@/lib/eventClash'
 import { findAnyRoomConflict } from '@/lib/spaceBookings'
@@ -138,6 +139,8 @@ export async function POST(req) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   await writeCoordinators(event.id, body.coordinator_ids, member.id)
+  // A resident bus driver always has a seat (Iain, 2026-10-29).
+  await ensureBusDriverSeat(event.id, { actingMemberId: member.id })
 
   if (space.request_only) {
     await notifyRequestOnlySpace({
@@ -188,7 +191,7 @@ export async function PATCH(req) {
   if (space.location) payload.location = space.location
 
   const { data: before } = await supabaseAdmin
-    .from('events').select('event_date, event_time, location, location_id').eq('id', body.id).single()
+    .from('events').select('event_date, event_time, location, location_id, has_bus, bus_driver_id').eq('id', body.id).single()
 
   const { error } = await supabaseAdmin
     .from('events')
@@ -204,6 +207,7 @@ export async function PATCH(req) {
   // so it's safe to call unconditionally on every edit rather than trying to
   // detect exactly which field changed.
   await promoteWaitlist(body.id)
+  await ensureBusDriverSeat(body.id, { previousDriverId: before?.has_bus ? before?.bus_driver_id : null, actingMemberId: member.id })
 
   await writeCoordinators(body.id, body.coordinator_ids, member.id)
 
