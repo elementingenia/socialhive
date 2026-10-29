@@ -1,7 +1,7 @@
 "use client"
 import EventCoordinators from "@/components/EventCoordinators"
 import BusDriverField from "@/components/BusDriverField"
-import { busDriverLabel } from "@/lib/busDriver"
+import { busDriverLabel, residentBusDriverId } from "@/lib/busDriver"
 import { useEffect, useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
@@ -10,6 +10,7 @@ import { HiveEventFinances } from "@/components/HiveFunds"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import { BusIcon } from "@/components/NavIcons"
+import BusDriverTag from "@/components/BusDriverTag"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import EventImagePicker from "@/components/EventImagePicker"
 import ExpandableText from "@/components/ExpandableText"
@@ -1685,20 +1686,22 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
                     const carOwnerKey = b.member_id ? `m:${b.member_id}` : b.contact_id ? `c:${b.contact_id}` : null
                     const carStatus = carOwnerKey ? carData.carByOwner[carOwnerKey] : null
                     const drivingSection = carStatus?.role === "driving" ? carData.carSections.find(s => s.driverKey === carOwnerKey) : null
+                    const isBusDriverRow = !!b.member_id && b.member_id === residentBusDriverId(event)
                     return (
                       <div key={i} style={{ padding: "0.2rem 0", borderBottom: "1px solid var(--border)" }}>
                         <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", gap: "0.5rem" }}>
                         <span style={{ fontWeight: isOwn ? 700 : 400, color: isOwn ? "var(--terracotta)" : "var(--text)", minWidth: 0, flex: "1 1 auto", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {label}
                           {isPrivate && isAdmin && !isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
-                          {b.bus_passenger && <BusIcon style={{ width: 12, height: 12, marginLeft: 4, verticalAlign: "-1px", opacity: 0.75 }} />}
-                          {carStatus?.role === "driving" && (
+                          {isBusDriverRow && <BusDriverTag />}
+                          {!isBusDriverRow && b.bus_passenger && <BusIcon style={{ width: 12, height: 12, marginLeft: 4, verticalAlign: "-1px", opacity: 0.75 }} />}
+                          {!isBusDriverRow && carStatus?.role === "driving" && (
                             <span title={`Driving -- offering ${carStatus.seatsOffered} seat${carStatus.seatsOffered === 1 ? "" : "s"}`} style={{ marginLeft: 4, fontSize: "0.72rem" }}>🚗 Driving</span>
                           )}
-                          {carStatus?.role === "riding" && (
+                          {!isBusDriverRow && carStatus?.role === "riding" && (
                             <span title={`In ${carStatus.driverName}'s car`} style={{ marginLeft: 4, fontSize: "0.72rem" }}>🧍 In {carStatus.driverName}'s car</span>
                           )}
-                          {b.own_way && !b.bus_passenger && !carStatus && (
+                          {!isBusDriverRow && b.own_way && !b.bus_passenger && !carStatus && (
                             <span title="Making their own way there" style={{ marginLeft: 4, fontSize: "0.72rem" }}>🚶 Own way</span>
                           )}
                         </span>
@@ -1940,7 +1943,7 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
                               const gName = gOwn ? "You" : p.guest_name ? p.guest_name
                                 : p.contact_id ? (p.contact?.name || "Resident")
                                 : resolveMemberName(p.member, { canManage: isAdmin || isOwn })
-                              return <span key={j} style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>+ {gName}{p.guest_name ? " (guest)" : ""}{gPriv && isAdmin && !gOwn && p.member?.name ? " (P)" : ""}{p.is_bus_passenger ? " 🚌" : ""}</span>
+                              return <span key={j} style={{ fontSize: "0.72rem", color: "var(--text-dim)" }}>+ {gName}{p.guest_name ? " (guest)" : ""}{gPriv && isAdmin && !gOwn && p.member?.name ? " (P)" : ""}{p.member_id && p.member_id === residentBusDriverId(event) ? <BusDriverTag /> : p.is_bus_passenger ? " 🚌" : ""}</span>
                             })}
                           </div>
                           )

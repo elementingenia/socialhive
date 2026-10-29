@@ -1212,6 +1212,15 @@ export default function HelpGuidePage() {
                 checkbox disables and shows <strong>Bus is full</strong> — you can still book the event
                 itself, you just won't have a bus seat. There's no waitlist for the bus.
               </InfoBox>
+              <Step>
+                <strong>If you're the bus driver.</strong> When a resident is set as the bus driver, the
+                app books them a seat at the event automatically (even if the event is already full),
+                so they don't need to book. They don't take a bus seat, and the attendee list shows{" "}
+                <strong>🚌 Bus driver</strong> against their name as how they're getting there. The
+                driver can't cancel their own seat — the coordinator changes the bus driver first. If the
+                driver is changed, the old driver keeps their seat and is asked to choose how they're
+                getting there.
+              </Step>
             </Subsection>
             <Subsection id="sub-social-funds" title="Hive Funds — where the money goes">
               <Step>
@@ -1440,6 +1449,15 @@ export default function HelpGuidePage() {
                 or <strong>Other</strong> to type a name — for example the Community Manager. The
                 driver's name shows next to the 🚌 on the event card. Social Hive and Special Events
                 work the same way.
+              </Step>
+              <Step>
+                <strong>If you're the bus driver.</strong> When a resident is set as the bus driver, the
+                app books them a seat at the event automatically (even if the event is already full),
+                so they don't need to book. They don't take a bus seat, and the attendee list shows{" "}
+                <strong>🚌 Bus driver</strong> against their name as how they're getting there. The
+                driver can't cancel their own seat — the coordinator changes the bus driver first. If the
+                driver is changed, the old driver keeps their seat and is asked to choose how they're
+                getting there.
               </Step>
             </Subsection>
 

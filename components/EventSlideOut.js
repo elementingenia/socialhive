@@ -1,10 +1,11 @@
 "use client"
 import { useState, useEffect, useRef, useMemo } from "react"
-import { busDriverLabel } from "@/lib/busDriver"
+import { busDriverLabel, residentBusDriverId } from "@/lib/busDriver"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
 import { HUB_COLOURS } from "@/lib/navUtils"
 import { BusIcon, CalendarIcon } from "@/components/NavIcons"
+import BusDriverTag from "@/components/BusDriverTag"
 import { supabase } from "@/lib/supabase"
 import { authedFetch } from "@/lib/getAuthToken"
 import { useUser } from "@/lib/UserContext"
@@ -1589,6 +1590,10 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
               const rowOnBus = !!firstConf?.bus_passenger || rowParty.some(p => p.bus)
               const rowOwnWay = !!firstConf?.own_way && !rowOnBus && !carStatus
               const rowHasTransport = rowOnBus || !!carStatus || rowOwnWay
+              // Resident bus driver (Iain, 2026-10-29): transport is "Bus
+              // driver", set automatically -- no bus/car/own-way tag, no editor.
+              const busDriverKey = residentBusDriverId(event) ? `m:${residentBusDriverId(event)}` : null
+              const isBusDriverRow = !!busDriverKey && carOwnerKey === busDriverKey
               return (
                 <div key={member?.id || contact?.id || name} style={{ background: isOwnBooking ? colour + "10" : "var(--surface2)", borderRadius: 10, padding: "10px 12px",
                   border: `${isOwnBooking ? 2 : 1}px solid ${borderCol}` }}>
@@ -1605,14 +1610,15 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                         )}
                         {name}
                         {isPrivate && !isOwnBooking && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-dim)", marginLeft: 5 }}>(P)</span>}
-                        {!!firstConf?.bus_passenger && <span title="Riding the bus" style={{ marginLeft: 5 }}><BusIcon size={11} /></span>}
-                        {carStatus?.role === "driving" && (
+                        {isBusDriverRow && <BusDriverTag style={{ marginLeft: 5, fontSize: 11 }} />}
+                        {!isBusDriverRow && !!firstConf?.bus_passenger && <span title="Riding the bus" style={{ marginLeft: 5 }}><BusIcon size={11} /></span>}
+                        {!isBusDriverRow && carStatus?.role === "driving" && (
                           <span title={`Driving -- offering ${carStatus.seatsOffered} seat${carStatus.seatsOffered === 1 ? "" : "s"}`} style={{ marginLeft: 5, fontSize: 11 }}>🚗 Driving</span>
                         )}
-                        {carStatus?.role === "riding" && (
+                        {!isBusDriverRow && carStatus?.role === "riding" && (
                           <span title={`In ${carStatus.driverName}'s car`} style={{ marginLeft: 5, fontSize: 11 }}>🧍 In {carStatus.driverName}'s car</span>
                         )}
-                        {showTransport && rowOwnWay && (
+                        {showTransport && !isBusDriverRow && rowOwnWay && (
                           <span title="Making their own way there" style={{ marginLeft: 5, fontSize: 11 }}>🚶 Own way</span>
                         )}
                       </div>
@@ -1647,12 +1653,12 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                         return party.length > 0 && (
                           <div style={{ fontSize: 12, color: "var(--text-dim)", marginTop: 3, lineHeight: 1.5 }}>
                             With: {party.map((p, i) => (
-                              <span key={i}>{i > 0 ? ", " : ""}{p.label}{p.guest ? " (guest)" : ""}{p.bus ? " 🚌" : ""}</span>
+                              <span key={i}>{i > 0 ? ", " : ""}{p.label}{p.guest ? " (guest)" : ""}{busDriverKey && p.identityKey === busDriverKey ? <BusDriverTag style={{ fontSize: 11 }} /> : p.bus ? " 🚌" : ""}</span>
                             ))}
                           </div>
                         )
                       })()}
-                      {showTransport && confirmedSeats > 0 && carOwnerKey && transportEditKey !== carOwnerKey && (
+                      {showTransport && !isBusDriverRow && confirmedSeats > 0 && carOwnerKey && transportEditKey !== carOwnerKey && (
                         <button type="button"
                           onClick={() => {
                             const party = partyByOwner[carOwnerKey] || []
@@ -2191,6 +2197,17 @@ function PartyPicker({ count, allowGuests, members, excludeIds, value, onChange,
 }
 
 // ── Booking Form ──────────────────────────────────────────────────────────────
+// Shown to the resident bus driver in their own booking panel (2026-10-29).
+function BusDriverNotice({ cancelNote = false }) {
+  return (
+    <div style={{ fontSize: 13, lineHeight: 1.45, color: "var(--text)", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 10, padding: "8px 12px", marginBottom: 10 }}>
+      <strong><BusIcon size={13} style={{ verticalAlign: "-2px", marginRight: 4 }} />You&apos;re the bus driver.</strong>{" "}
+      Your seat is booked for you, so you don&apos;t need a bus seat.
+      {cancelNote && " If you can no longer go, ask the Event Coordinator to change the bus driver."}
+    </div>
+  )
+}
+
 function BookingSection({ event, isEC = false, onRefresh, onClose }) {
   const [seats, setSeats] = useState(1)
   const [loading, setLoading] = useState(false)
@@ -2231,6 +2248,9 @@ function BookingSection({ event, isEC = false, onRefresh, onClose }) {
   // Bus-only events keep the existing per-person bus toggles.
   const carsEnabled = !!event.allow_personal_vehicles
   const [myTransport, setMyTransport] = useState({ mode: null })
+  // Resident bus driver (Iain, 2026-10-29): their seat is booked for them and
+  // their transport is "Bus driver" -- no bus/car choice, no self-cancel.
+  const iAmBusDriver = !!me?.id && residentBusDriverId(event) === me.id
   const [bookCars, setBookCars] = useState([])
   useEffect(() => {
     if (!carsEnabled) { setBookCars([]); return }
@@ -2651,13 +2671,14 @@ function BookingSection({ event, isEC = false, onRefresh, onClose }) {
                 <BringPicker cats={bringCats} categoryId={myBring.category_id} note={myBring.note}
                   onChange={setMyBring} colour="var(--amber)" required={bringRequired} label="What are you bringing?" />
               )}
-              {carsEnabled && (
+              {iAmBusDriver && <BusDriverNotice />}
+              {carsEnabled && !iAmBusDriver && (
                 <TransportPicker event={event} colour="var(--amber)" value={myTransport} onChange={setMyTransport}
                   cars={bookCars} ownerKey={me?.id ? `m:${me.id}` : null}
                   partySize={myPartySize} unnamedCount={myTransport.mode && myTransport.mode !== "none" ? myUnnamed : 0}
                   busLeft={busRemainingBase} ownWayNote="You'll make your own way there." />
               )}
-              {busEnabled && !carsEnabled && (
+              {busEnabled && !carsEnabled && !iAmBusDriver && (
                 <div style={{ marginBottom: 10 }}>
                   <Toggle value={myWantsBus} disabled={busFull && !myWantsBus}
                     onChange={setMyWantsBus}
@@ -2830,16 +2851,19 @@ function BookingSection({ event, isEC = false, onRefresh, onClose }) {
               increase) as well as cancel." The modifying panel below clamps
               the seat picker's max so growth still can't be requested from
               the UI either way. */}
+          {iAmBusDriver && <BusDriverNotice cancelNote />}
           {myConfirmed && !isBookclubEvent && (
             <button onClick={() => { setModifySeats((myConfirmed.seats || 1) + (myWaitlist?.seats || 0)); setModifying(true) }}
               style={{ width: "100%", padding: "12px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>
               Modify Seats
             </button>
           )}
+          {!iAmBusDriver && (
           <button onClick={() => setConfirm(true)}
             style={{ width: "100%", padding: "12px 0", background: "transparent", border: "1px solid var(--danger)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--danger)" }}>
             Cancel Booking
           </button>
+          )}
         </div>
       )}
 
@@ -2868,7 +2892,7 @@ function BookingSection({ event, isEC = false, onRefresh, onClose }) {
             <BringPicker cats={bringCats} categoryId={myBring.category_id} note={myBring.note}
               onChange={setMyBring} colour="var(--amber)" required={bringRequired} label="What are you bringing?" />
           )}
-          {busEnabled && (
+          {busEnabled && !iAmBusDriver && (
             <div style={{ marginBottom: 10 }}>
               <Toggle value={modWantsBus} disabled={modBusFull && !modWantsBus}
                 onChange={setModWantsBus}

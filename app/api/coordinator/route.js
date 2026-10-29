@@ -11,6 +11,8 @@ import { requireEventManage } from "@/lib/areaAuth"
 import { amountOwing, derivePaymentStatus, paymentReminderPhrase } from "@/lib/payments"
 import { applyTransport } from "@/lib/applyTransport"
 import { releaseTransportOnCancel } from "@/lib/releaseTransportOnCancel"
+import { residentBusDriverId, stripDriverFromBus } from "@/lib/busDriver"
+import { ensureBusDriverSeat } from "@/lib/busDriverSeat"
 
 // force-dynamic + the shared no-store supabaseAdmin (lib/supabaseAdmin.js) keep
 // this GET route reading LIVE data. Without it, Next's fetch cache once dropped a
@@ -487,6 +489,9 @@ export async function PATCH(req) {
       })
       if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
     }
+    const { data: busEv } = await supa.from("events").select("has_bus, bus_driver_id").eq("id", event_id).maybeSingle()
+    const walkupDriverId = residentBusDriverId(busEv)
+    party.attendees = stripDriverFromBus(party.attendees || [], walkupDriverId)
 
     // Same "still has a Book Club kit checked out" guard as self-book.
     // Contacts have no booking history tied to a login, so this only applies
@@ -531,7 +536,8 @@ export async function PATCH(req) {
     // transport silently dropped. See lib/transportAllocation.js.
     // "none" = an explicit Own way choice (2026-10-11): nothing to validate,
     // but it's applied after insert so the booking records own_way.
-    const transport = body.transport && body.transport.mode ? body.transport : null
+    // The resident bus driver's transport is always "Bus driver" (2026-10-29).
+    const transport = body.transport && body.transport.mode && !(member_id && member_id === walkupDriverId) ? body.transport : null
     if (transport && transport.mode !== "none") {
       if (bookingStatus !== "confirmed") {
         return NextResponse.json({ error: "Transport can only be set on a confirmed booking, not one on the waitlist." }, { status: 409 })
@@ -581,6 +587,7 @@ export async function PATCH(req) {
       // the last bus/car seat in the last second) lands here.
       if (!applied.ok) transportError = applied.error
     }
+    await ensureBusDriverSeat(event_id, { actingMemberId: member.id })
 
     // No account to notify/push for a contact-owned booking.
     if (member_id) {
@@ -608,6 +615,14 @@ export async function PATCH(req) {
     // nothing left to reconcile against). Force the EC to confirm or knock the
     // claim back to pending via the Paid toggle first, so the ledger never
     // silently drops money that may actually have changed hands.
+    if (bk?.member_id) {
+      const { data: cancelEv } = await supa.from("events").select("has_bus, bus_driver_id").eq("id", event_id).maybeSingle()
+      if (residentBusDriverId(cancelEv) === bk.member_id) {
+        return NextResponse.json({
+          error: "This resident is the bus driver, so their seat can't be cancelled. Change the bus driver on the event first.",
+        }, { status: 409 })
+      }
+    }
     if (bk?.payment_status === "submitted") {
       return NextResponse.json({
         error: "This booking has a payment marked as submitted that hasn't been confirmed yet. Confirm or clear it via the Paid toggle before cancelling."
@@ -649,6 +664,8 @@ export async function PATCH(req) {
     if (bk?.status === "confirmed") {
       await promoteWaitlist(event_id)
     }
+    // The bus driver may have been named on the cancelled booking.
+    await ensureBusDriverSeat(event_id, { actingMemberId: member.id })
     if (bk?.member_id) {
       const { data: ev } = await supa.from("events").select("title").eq("id", event_id).single()
       await notify(bk.member_id, event_id, "booking_cancelled", `Your booking for ${ev?.title || "this event"} was cancelled.`, undefined, member.id)
@@ -719,6 +736,10 @@ export async function PATCH(req) {
       required: !!ev.require_attendee_names,
     })
     if (!party.ok) return NextResponse.json({ error: party.error }, { status: 400 })
+    {
+      const { data: busEv } = await supa.from("events").select("has_bus, bus_driver_id").eq("id", event_id).maybeSingle()
+      party.attendees = stripDriverFromBus(party.attendees || [], residentBusDriverId(busEv))
+    }
 
     if (myWaitlist) {
       await supa.from("bookings").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", myWaitlist.id)
@@ -747,6 +768,7 @@ export async function PATCH(req) {
     // runs when the action succeeds -- mirrors PATCH /api/bookings, which
     // does the same unconditionally.
     await syncAttendees(event_id, { ownerId: ownerId || null, ownerContactId: ownerContactId || null }, party.attendees, { actingMemberId: member.id })
+    await ensureBusDriverSeat(event_id, { actingMemberId: member.id })
 
     // No account to notify for a contact-owned (no-login) booking.
     if (ownerId) {
@@ -766,11 +788,22 @@ export async function PATCH(req) {
     const { member_id: ownerId, contact_id: ownerContactId, mode, vehicle_offer_id, seats_offered } = body
     if (!ownerId && !ownerContactId) return NextResponse.json({ error: "member_id or contact_id required" }, { status: 400 })
     if (ownerId && ownerContactId) return NextResponse.json({ error: "Provide only one of member_id or contact_id" }, { status: 400 })
+    // The resident bus driver drives the bus (2026-10-29). Their own party
+    // can still go on the bus or make their own way, but not a car.
+    if (ownerId && (mode === "car" || mode === "driver")) {
+      const { data: busEv } = await supa.from("events").select("has_bus, bus_driver_id").eq("id", event_id).maybeSingle()
+      if (residentBusDriverId(busEv) === ownerId) {
+        return NextResponse.json({ error: "This resident is the bus driver, so they can't also go by car. Change the bus driver on the event first." }, { status: 409 })
+      }
+    }
     const result = await applyTransport({
       eventId: event_id, owner: { memberId: ownerId || null, contactId: ownerContactId || null },
       mode, vehicleOfferId: vehicle_offer_id || null, seatsOffered: seats_offered, actingMemberId: member.id,
     })
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status || 400 })
+    // "Bus" for the driver's party puts the party on the bus; the driver
+    // themselves stays the driver, not a passenger.
+    await ensureBusDriverSeat(event_id, { actingMemberId: member.id })
     return NextResponse.json({ ok: true })
   }
 

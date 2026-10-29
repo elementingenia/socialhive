@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import { BusIcon } from "@/components/NavIcons"
+import BusDriverTag from "@/components/BusDriverTag"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import { ContactBar } from "@/components/OwnersManager"
 import ExpandableText from "@/components/ExpandableText"
@@ -48,7 +49,7 @@ import MenuButton from "@/components/MenuButton"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 import { isHtmlContent } from "@/lib/richText"
 import BusDriverField from "@/components/BusDriverField"
-import { busDriverLabel } from "@/lib/busDriver"
+import { busDriverLabel, residentBusDriverId } from "@/lib/busDriver"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function localDate(str) {
@@ -281,8 +282,11 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
       const carOwnerKey = b.members?.id ? `m:${b.members.id}` : b.contacts?.id ? `c:${b.contacts.id}` : null
       const carStatus = carOwnerKey ? carByOwner[carOwnerKey] : null
       const drivingSection = carStatus?.role === "driving" ? carSections.find(s => s.driverKey === carOwnerKey) : null
+      // Resident bus driver (Iain, 2026-10-29): transport shows "Bus driver".
+      const isBusDriver = !!b.members?.id && b.members.id === residentBusDriverId(event)
       return {
         id: b.id,
+        isBusDriver,
         name: memberForName
           ? resolveMemberName(memberForName, {
               viewerId: member?.id, canManage: canManageBooks, selfLabel: "You",
@@ -292,11 +296,11 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
         isOwn,
         isPrivate,
         seats: b.seats || 1,
-        busPassenger: !!b.bus_passenger,
+        busPassenger: !isBusDriver && !!b.bus_passenger,
         // Own way (2026-10-11): explicit choice, shown only with no bus/car.
-        ownWay: !!b.own_way && !b.bus_passenger && !carStatus,
+        ownWay: !isBusDriver && !!b.own_way && !b.bus_passenger && !carStatus,
         carOwnerKey,
-        carStatus,
+        carStatus: isBusDriver ? null : carStatus,
         drivingPassengers: drivingSection?.passengers || [],
         hasBook: !!b.has_book,
         bring: b.bring?.label || null,
@@ -315,7 +319,8 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
                 ? resolveMemberName(p.member, { viewerId: member?.id, canManage: canManageBooks || isOwn, selfLabel: "You", fallback: "Resident" })
                 : "Resident",
             guest: !!p.guest_name,
-            busPassenger: !!p.is_bus_passenger,
+            isBusDriver: !!p.member_id && p.member_id === residentBusDriverId(event),
+            busPassenger: !!p.is_bus_passenger && !(p.member_id && p.member_id === residentBusDriverId(event)),
             identityKey: p.member_id ? `m:${p.member_id}` : p.contact_id ? `c:${p.contact_id}` : p.guest_name ? `g:${p.guest_name.trim().toLowerCase()}` : null,
             bring: p.bring?.label || null,
             bringNote: p.bring_note || null,
@@ -954,6 +959,7 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
                     <span style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontWeight: a.isOwn ? 700 : 400, color: a.isOwn ? colour : "var(--text)" }}>
                       {a.name}
                       {a.isPrivate && canManageBooks && !a.isOwn && <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", marginLeft: 4 }}>(P)</span>}
+                      {a.isBusDriver && <BusDriverTag />}
                       {a.busPassenger && <span title="Riding the bus" style={{ marginLeft: 4 }}><BusIcon style={{ width: 12, height: 12, verticalAlign: "-1px", opacity: 0.75 }} /></span>}
                       {a.carStatus?.role === "driving" && (
                         <span title={`Driving -- offering ${a.carStatus.seatsOffered} seat${a.carStatus.seatsOffered === 1 ? "" : "s"}`} style={{ marginLeft: 4, fontSize: "0.72rem" }}>🚗 Driving</span>
@@ -981,6 +987,7 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
                     {(a.party || []).map((p, j) => (
                       <span key={j} style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", fontSize: "0.75rem", color: "var(--text-dim)" }}>
                         {p.name}{p.guest ? " (guest)" : ""}
+                        {p.isBusDriver && <BusDriverTag />}
                         {p.busPassenger && <span title="Riding the bus" style={{ marginLeft: 4 }}><BusIcon style={{ width: 11, height: 11, verticalAlign: "-1px", opacity: 0.75 }} /></span>}
                         {p.bring && <span style={{ color: clubInk(colour), fontWeight: 600 }}> · {p.bring}{p.bringNote ? ` — ${p.bringNote}` : ""}</span>}
                       </span>
