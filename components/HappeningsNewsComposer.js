@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react"
 import { createPortal } from "react-dom"
 import { authedFetch } from "@/lib/getAuthToken"
+import { resizeForUpload, uploadFailMessage } from "@/lib/clientImageResize"
 import { MAX_CONTENT_LENGTH, MAX_PHOTOS_PER_POST } from "@/lib/happeningsNewsTier"
 import WorkingPanel, { WorkingSpinner, WORKING_TINT } from "@/components/WorkingPanel"
 
@@ -90,13 +91,18 @@ export default function HappeningsNewsComposer({ eventId, postId: initialPostId,
     setStep("photos")
   }
 
+  // Shrink in the browser first (BUG-103, 2026-10-30): a full-size camera
+  // photo is often over 4.5MB, and Vercel refuses any request that big before
+  // our route runs, with a plain-text 413 -- residents saw only "Could not
+  // upload that photo". Same fix Swap & Sell, Voting and Questions already use.
   async function uploadPhoto(file) {
+    const small = await resizeForUpload(file)
     const fd = new FormData()
     fd.append("post_id", postId)
-    fd.append("file", file)
+    fd.append("file", small)
     const res = await authedFetch("/api/happenings-news/photos", { method: "POST", body: fd })
     const json = await res.json().catch(() => ({}))
-    if (!res.ok) throw new Error(json.error || "Could not upload that photo")
+    if (!res.ok) throw new Error(json.error || uploadFailMessage(res.status))
     return json
   }
 
