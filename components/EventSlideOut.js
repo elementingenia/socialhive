@@ -14,7 +14,7 @@ import VehicleOffersPanel from "@/components/VehicleOffersPanel"
 import ExpandableText from "@/components/ExpandableText"
 import HappeningsNewsCard from "@/components/HappeningsNewsCard"
 import MenuModal from "@/components/MenuModal"
-import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge, balancePhrase, remainingBalance, wholeDollar, paymentSummary, reconciliationIsStale } from "@/lib/payments"
+import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge, balancePhrase, remainingBalance, wholeDollar, paymentSummary, reconciliationIsStale, payableSeats } from "@/lib/payments"
 import { byOwnThenName, ordinal } from "@/lib/sortNames"
 import { resolveMemberName } from "@/lib/memberName"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
@@ -577,7 +577,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   // their own matching handler (they don't render through this shared
   // component).
   function handleExportReconciliation() {
-    const eventForCalc = { payment_required: paymentRequired, cost: data?.cost }
+    const eventForCalc = { payment_required: paymentRequired, cost: data?.cost, has_bus: event.has_bus, bus_driver_id: event.bus_driver_id, bus_driver_free: event.bus_driver_free }
     const nameFor = (b) => b.members
       ? resolveMemberName(b.members, { canManage: true, fallback: b.members?.username || b.contacts?.name || "—" })
       : (b.contacts?.name || "—")
@@ -587,6 +587,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
     }
     const paidRows = [], unpaidRows = [], partialRows = []
     for (const b of confirmed) {
+      if (payableSeats(b, eventForCalc) === 0) continue // free bus-driver seat: nothing to reconcile
       if (computeIsRefunded(b)) continue
       if (computeIsPaid(b)) paidRows.push(rowFor(b))
       else if (computeIsPartial(b, eventForCalc)) partialRows.push(rowFor(b))
@@ -1229,7 +1230,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
           this shared panel gives every hub/club the same reconciliation
           behaviour rather than a third duplicate copy of it). */}
       {paymentRequired && eventCost && (() => {
-        const summary = paymentSummary(confirmed, { payment_required: paymentRequired, cost: data?.cost }, refundPending)
+        const summary = paymentSummary(confirmed, { payment_required: paymentRequired, cost: data?.cost, has_bus: event.has_bus, bus_driver_id: event.bus_driver_id, bus_driver_free: event.bus_driver_free }, refundPending)
         if (!summary) return null
         const isStale = data?.payments_reconciled_at && reconciliationIsStale({ payments_reconciled_at: data.payments_reconciled_at }, bookings)
         return (
@@ -1282,7 +1283,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
       {/* Attendee list */}
       {(() => {
         const totalSeats = confirmed.reduce((s, b) => s + (b.seats || 1), 0)
-        const unpaidSeats = sumUnpaidSeats(confirmed, { payment_required: paymentRequired })
+        const unpaidSeats = sumUnpaidSeats(confirmed, { payment_required: paymentRequired, has_bus: event.has_bus, bus_driver_id: event.bus_driver_id, bus_driver_free: event.bus_driver_free })
         return (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 8 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -1682,7 +1683,10 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                         <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 7px", borderRadius: 10,
                           background: "#f0fdfa", color: "#0f766e", border: "1px solid #99f6e4" }}>🧾 Submitted</span>
                       )}
-                      {paymentRequired && confirmedSeats > 0 && firstConf && !isRefunded && (() => {
+                      {paymentRequired && confirmedSeats > 0 && firstConf && !isRefunded && payableSeats(firstConf, event, confirmedSeats) === 0 && (
+                        <span title="Bus driver rides free" style={{ fontSize: 11, fontWeight: 700, padding: "4px 10px", borderRadius: 12, background: "var(--surface)", color: "var(--text-dim)", border: "1px solid var(--border)" }}>No charge</span>
+                      )}
+                      {paymentRequired && confirmedSeats > 0 && firstConf && !isRefunded && payableSeats(firstConf, event, confirmedSeats) > 0 && (() => {
                         // Editable again (2026-08-20) -- see the note above
                         // handlePaymentToggle: this is the ONLY attendee view
                         // Clubs/Movies have, so a read-only badge here left
@@ -1693,7 +1697,7 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
                           <button
                             disabled={pending}
                             onClick={() => {
-                              const owed = seatsCost(event, confirmedSeats)
+                              const owed = seatsCost(event, payableSeats(firstConf, event, confirmedSeats))
                               const bal = remainingBalance(firstConf, event, confirmedSeats)
                               setPayRecordingId(firstConf.id)
                               setPayRecordAmount(String(Math.round(bal != null ? bal : owed)))
@@ -2715,7 +2719,7 @@ function BookingSection({ event, isEC = false, onRefresh, onClose }) {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
             {myConfirmed && (() => {
               const seats = myConfirmed.seats || 1
-              const totalCost = seatsCost(event, seats)
+              const totalCost = seatsCost(event, payableSeats(myConfirmed, event, seats))
               const badge = bookingStatusBadge(myConfirmed, event)
               const statusWord = badge.label.toLowerCase() // "booked" or "confirmed" — canonical, see lib/payments.js
               // Partial (2026-08-11 follow-up, Iain -- Spring Ball): this is
@@ -2799,7 +2803,7 @@ function BookingSection({ event, isEC = false, onRefresh, onClose }) {
               // thing, as if their earlier $30 didn't happen).
               const seats = myConfirmed.seats || 1
               const balanceNum = remainingBalance(myConfirmed, event, seats)
-              const owedPhrase = seatsCost(event, seats)
+              const owedPhrase = seatsCost(event, payableSeats(myConfirmed, event, seats))
               const isPartialBooking = computeIsPartial(myConfirmed, event)
               return (
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: 12, background: "var(--surface2)", borderRadius: 12 }}>

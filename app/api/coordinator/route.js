@@ -8,7 +8,7 @@ import { fetchTakenResidentIds } from "@/lib/takenResidents"
 import { syncAttendees } from "@/lib/syncAttendees"
 import { effectiveSeatCap, planSeatModification } from "@/lib/modifyBooking"
 import { requireEventManage } from "@/lib/areaAuth"
-import { amountOwing, derivePaymentStatus, paymentReminderPhrase } from "@/lib/payments"
+import { amountOwing, derivePaymentStatus, paymentReminderPhrase, payableSeats } from "@/lib/payments"
 import { applyTransport } from "@/lib/applyTransport"
 import { releaseTransportOnCancel } from "@/lib/releaseTransportOnCancel"
 import { residentBusDriverId, stripDriverFromBus } from "@/lib/busDriver"
@@ -166,8 +166,8 @@ export async function PATCH(req) {
 
     let patch, effectiveStatus, refundDelta = 0, owed = 0
     if (payment_status === "confirmed") {
-      const { data: ev } = await supa.from("events").select("cost").eq("id", event_id).single()
-      owed = amountOwing(ev, prevBk.seats)
+      const { data: ev } = await supa.from("events").select("cost, has_bus, bus_driver_id, bus_driver_free").eq("id", event_id).single()
+      owed = amountOwing(ev, payableSeats(prevBk, ev))
       // Balance-based (2026-08-11 follow-up, Iain -- Spring Ball): `amount`
       // is the payment being recorded IN THIS transaction, not a new
       // absolute total -- it gets ADDED to whatever's already on file.
@@ -211,9 +211,9 @@ export async function PATCH(req) {
     if (pe) return NextResponse.json({ error: pe.message }, { status: 500 })
 
     if (effectiveStatus !== prevBk?.payment_status && prevBk?.member_id) {
-      const { data: ev } = await supa.from("events").select("title, cost").eq("id", event_id).single()
+      const { data: ev } = await supa.from("events").select("title, cost, has_bus, bus_driver_id, bus_driver_free").eq("id", event_id).single()
       const title = ev?.title || "this event"
-      const owedNow = owed || amountOwing(ev, prevBk.seats)
+      const owedNow = payment_status === "confirmed" ? owed : amountOwing(ev, payableSeats(prevBk, ev))
       let msg, type = "payment_confirmed"
       if (effectiveStatus === "partial") {
         type = "payment_partial"
@@ -252,7 +252,7 @@ export async function PATCH(req) {
   // one-shot lock on the event.
   if (action === "close_out_payments") {
     const { data: ev } = await supa
-      .from("events").select("title, cost, payment_required").eq("id", event_id).single()
+      .from("events").select("title, cost, payment_required, has_bus, bus_driver_id, bus_driver_free").eq("id", event_id).single()
     if (!ev?.payment_required) {
       return NextResponse.json({ error: "This event doesn't require payment" }, { status: 400 })
     }
@@ -261,7 +261,9 @@ export async function PATCH(req) {
       .select("id, member_id, seats, payment_status, amount_paid")
       .eq("event_id", event_id).eq("status", "confirmed")
 
-    const unpaid = (confirmedRows || []).filter(b => b.payment_status !== "confirmed" && b.payment_status !== "refunded")
+    // A free bus-driver seat with nothing else on the booking owes nothing.
+    const unpaid = (confirmedRows || []).filter(b => b.payment_status !== "confirmed" && b.payment_status !== "refunded"
+      && payableSeats(b, ev) > 0)
 
     const remindedAt = new Date().toISOString()
     for (const b of unpaid) {
@@ -298,7 +300,7 @@ export async function PATCH(req) {
   // event's reconciled stamp.
   if (action === "remind_payment" && booking_id) {
     const { data: ev } = await supa
-      .from("events").select("title, cost, payment_required").eq("id", event_id).single()
+      .from("events").select("title, cost, payment_required, has_bus, bus_driver_id, bus_driver_free").eq("id", event_id).single()
     if (!ev?.payment_required) {
       return NextResponse.json({ error: "This event doesn't require payment" }, { status: 400 })
     }
@@ -308,7 +310,7 @@ export async function PATCH(req) {
     if (!bk || bk.status !== "confirmed") {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 })
     }
-    if (bk.payment_status === "confirmed" || bk.payment_status === "refunded") {
+    if (bk.payment_status === "confirmed" || bk.payment_status === "refunded" || payableSeats(bk, ev) === 0) {
       return NextResponse.json({ error: "This booking isn't awaiting payment" }, { status: 400 })
     }
     // Balance-aware (2026-08-12 follow-up) -- see close_out_payments above
@@ -450,7 +452,7 @@ export async function PATCH(req) {
     }
 
     const { data: ev } = await supa
-      .from("events").select("id, max_seats, max_seats_per_booking, unassigned_seats_count, hub_type, book_id, payment_required, title, allow_nonresident_guests, require_attendee_names, cost")
+      .from("events").select("id, max_seats, max_seats_per_booking, unassigned_seats_count, hub_type, book_id, payment_required, title, allow_nonresident_guests, require_attendee_names, cost, has_bus, bus_driver_id, bus_driver_free")
       .eq("id", event_id).single()
     if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
 
@@ -564,7 +566,7 @@ export async function PATCH(req) {
     // 1-seat walk-up booking marked paid this way. Fix: an amount owed must
     // be written whenever payment_status is set to "confirmed" here, same
     // as set_payment (above) always does.
-    const amount_paid = payment_status === "confirmed" ? amountOwing(ev, seats) : 0
+    const amount_paid = payment_status === "confirmed" ? amountOwing(ev, payableSeats({ member_id: member_id || null }, ev, seats)) : 0
 
     const { error: insErr } = await supa.from("bookings").insert({
       event_id, member_id: member_id || null, contact_id: contact_id || null, seats, status: bookingStatus,

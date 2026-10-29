@@ -41,7 +41,7 @@ export async function GET(req) {
   // resource PostgREST filters, which proved unreliable from a deployed route.
   const { data: rows, error } = await supa
     .from("bookings")
-    .select("id, member_id, seats, status, payment_status, payment_reminded_at, event_id, events!inner(id, title, cost, payment_required, payment_due_by, archived)")
+    .select("id, member_id, seats, status, payment_status, payment_reminded_at, event_id, events!inner(id, title, cost, payment_required, payment_due_by, archived, has_bus, bus_driver_id, bus_driver_free)")
     .eq("status", "confirmed")
     .eq("events.payment_required", true)
 

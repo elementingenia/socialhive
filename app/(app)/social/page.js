@@ -16,7 +16,7 @@ import ManageLink from "@/components/ManageLink"
 import { HiveFundsTile } from "@/components/HiveFunds"
 import { useOwners } from "@/lib/useOwners"
 import { FormattedText } from "@/lib/textFormatter"
-import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted, balancePhrase } from "@/lib/payments"
+import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted, balancePhrase, payableSeats } from "@/lib/payments"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import { bookingsClosed } from "@/lib/booking"
 import { isHtmlContent } from "@/lib/richText"
@@ -215,7 +215,7 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
         <div style={{ marginTop: "0.6rem" }}>
           {isConfirmed ? (() => {
             const seats = myBooking?.seats || 1
-            const total = seatsCost(event, seats)
+            const total = seatsCost(event, payableSeats(myBooking, event, seats))
             const badge = bookingStatusBadge(myBooking, event)
             const statusWord = badge.label.toLowerCase() // "booked" or "confirmed" — never re-worded per screen
             // Partial (2026-08-11 follow-up) -- same balance-based fix as
@@ -386,7 +386,7 @@ export default function SocialHome() {
     const [eventsRes, myBookingsRes, hubRes] = await Promise.all([
       supabase
         .from("events")
-        .select("id, title, event_date, event_time, description, max_seats, cost, payment_required, has_bus, location_type, location, reservation_cutoff, image_url, image_focal_x, image_focal_y, bus_driver_name, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, booked_at)")
+        .select("id, title, event_date, event_time, description, max_seats, cost, payment_required, has_bus, bus_driver_id, bus_driver_free, location_type, location, reservation_cutoff, image_url, image_focal_x, image_focal_y, bus_driver_name, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, booked_at)")
         .eq("hub_type", "social").eq("archived", false)
         .gte("event_date", todayStr)
         .order("event_date", { ascending: true })
