@@ -1,6 +1,7 @@
 "use client"
 import { useState } from "react"
 import { authedFetch } from "@/lib/getAuthToken"
+import { resizeForUpload, uploadFailMessage } from "@/lib/clientImageResize"
 
 // Shared "Event Image" uploader + focal-point picker.
 // Lives in the event create/edit form (not the booking modal) — image upload
@@ -71,15 +72,16 @@ export default function EventImagePicker({
     setUploading(true)
     setError("")
     try {
+      const small = await resizeForUpload(file)
       const fd = new FormData()
       fd.append(idField, eventId)
-      fd.append("file", file)
+      fd.append("file", small)
       const res = await authedFetch(uploadUrl, {
         method: "POST",
         body: fd,
       })
       const d = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(d.error || "Could not upload that image")
+      if (!res.ok) throw new Error(d.error || uploadFailMessage(res.status))
       setLocalImageUrl(d.image_url)
       onUpdated?.()
     } catch (err) {

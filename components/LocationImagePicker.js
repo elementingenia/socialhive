@@ -2,6 +2,7 @@
 import { useState } from "react"
 import { supabase } from "@/lib/supabase"
 import { authedFetch } from "@/lib/getAuthToken"
+import { resizeForUpload } from "@/lib/clientImageResize"
 
 // Location Image uploader + focal-point picker -- Admin > Locations.
 // Social_Hive_Location_First_Booking_Scope_v2.md item 6 (Iain, 2026-08-17).
@@ -46,15 +47,21 @@ export default function LocationImagePicker({ locationId, imageUrl, focalX, foca
     saveFocal(x, y)
   }
 
+  // Shrinks in the browser first (BUG-103) and always clears the spinner --
+  // an oversized photo used to hit Vercel's plain-text 413, res.json() threw,
+  // and the picker stayed on "uploading" forever.
   async function uploadImage(file) {
     setUploading(true)
-    const fd = new FormData()
-    fd.append("location_id", locationId)
-    fd.append("file", file)
-    const res = await authedFetch("/api/locations/image", { method: "POST", body: fd })
-    const d = await res.json()
-    setUploading(false)
-    if (res.ok) { setLocalImageUrl(d.image_url); onUpdated?.() }
+    try {
+      const small = await resizeForUpload(file)
+      const fd = new FormData()
+      fd.append("location_id", locationId)
+      fd.append("file", small)
+      const res = await authedFetch("/api/locations/image", { method: "POST", body: fd })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) { setLocalImageUrl(d.image_url); onUpdated?.() }
+    } catch { /* picker shows no error line; spinner still clears */ }
+    finally { setUploading(false) }
   }
 
   async function removeImage() {
