@@ -1221,6 +1221,12 @@ export default function HelpGuidePage() {
                 driver is changed, the old driver keeps their seat and is asked to choose how they're
                 getting there.
               </Step>
+              <Step>
+                <strong>Driver doesn't pay.</strong> On a paid event, once a resident is picked as the
+                bus driver, coordinators can switch on <strong>Driver doesn't pay</strong>. The driver's
+                own seat is then free and shows <strong>No charge</strong> in the attendee list. Anyone
+                else the driver books for still pays.
+              </Step>
             </Subsection>
             <Subsection id="sub-social-funds" title="Hive Funds — where the money goes">
               <Step>
@@ -1458,6 +1464,12 @@ export default function HelpGuidePage() {
                 driver can't cancel their own seat — the coordinator changes the bus driver first. If the
                 driver is changed, the old driver keeps their seat and is asked to choose how they're
                 getting there.
+              </Step>
+              <Step>
+                <strong>Driver doesn't pay.</strong> On a paid event, once a resident is picked as the
+                bus driver, coordinators can switch on <strong>Driver doesn't pay</strong>. The driver's
+                own seat is then free and shows <strong>No charge</strong> in the attendee list. Anyone
+                else the driver books for still pays.
               </Step>
             </Subsection>
 

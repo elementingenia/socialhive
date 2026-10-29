@@ -44,7 +44,7 @@ function buildEventPayload(body, isInsert = false) {
   const {
     title, event_date, event_time, event_end_time, description, welcome_message,
     max_seats, max_seats_per_booking, cost, payment_required,
-    show_attendee_names, is_public, has_bus, bus_driver_id, bus_driver_name, bus_max_seats, allow_personal_vehicles,
+    show_attendee_names, is_public, has_bus, bus_driver_id, bus_driver_name, bus_driver_free, bus_max_seats, allow_personal_vehicles,
     location_type, location, location_id, has_dining, menu_type, menu_text, reservation_cutoff, payment_due_by, allow_nonresident_guests,
     require_attendee_names, allow_unassigned_seats, unassigned_seats_count,
   } = body
@@ -72,7 +72,7 @@ function buildEventPayload(body, isInsert = false) {
     show_attendee_names:   show_attendee_names !== false,
     is_public:             is_public !== false,
     has_bus:               !!has_bus,
-    ...normaliseBusDriver({ has_bus, bus_driver_id, bus_driver_name }),
+    ...normaliseBusDriver({ has_bus, bus_driver_id, bus_driver_name, bus_driver_free }),
     bus_max_seats:         (has_bus && bus_max_seats != null && bus_max_seats !== '') ? Number(bus_max_seats) : null,
     allow_personal_vehicles: !!allow_personal_vehicles,
     location_type:         location_type || 'onsite',

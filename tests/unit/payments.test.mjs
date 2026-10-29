@@ -5,6 +5,7 @@
 //   npm run test:unit
 
 import {
+  freeSeatsFor, payableSeats, isAwaitingPayment, sumUnpaidSeats,
   paymentReminderDue, isPartial, isPaid, amountOwing, derivePaymentStatus,
   bookingStatusBadge, paymentSummary, isRefundPending, isRefundIssued, refundsOutstandingTotal,
   remainingBalance, wholeDollar, balancePhrase, paymentReminderPhrase,
@@ -146,6 +147,33 @@ ok2(balancePhrase({ amount_paid: 0 }, balEvent, 1) === '$40 of $40', 'nothing pa
 ok2(paymentReminderPhrase({ amount_paid: 0 }, balEvent, 1) === '$40 payment', 'nothing paid yet: plain amount, no balance language')
 ok2(paymentReminderPhrase({ amount_paid: 30 }, balEvent, 1) === '$10 balance to complete the $40 payment', '$30 of $40 already in: balance-aware phrase')
 ok2(paymentReminderPhrase({ amount_paid: 40 }, balEvent, 1) === '$40 payment', 'fully paid: falls back to plain amount (should not be reminded anyway)')
+
+// -- Driver doesn't pay (migration 145, Iain 2026-10-29) -----------------
+const drvEvent = { payment_required: true, cost: 40, has_bus: true, bus_driver_id: 'd', bus_driver_free: true }
+const drvSolo  = { member_id: 'd', seats: 1, status: 'confirmed', payment_status: 'pending', amount_paid: 0 }
+const drvParty = { member_id: 'd', seats: 3, status: 'confirmed', payment_status: 'pending', amount_paid: 0 }
+const other    = { member_id: 'x', seats: 2, status: 'confirmed', payment_status: 'pending', amount_paid: 0 }
+ok2(freeSeatsFor(drvSolo, drvEvent) === 1, 'driver gets one free seat')
+ok2(freeSeatsFor(other, drvEvent) === 0, 'non-driver gets no free seat')
+ok2(freeSeatsFor(drvSolo, { ...drvEvent, bus_driver_free: false }) === 0, 'toggle off: driver pays')
+ok2(freeSeatsFor(drvSolo, { ...drvEvent, has_bus: false }) === 0, 'bus off: no free seat')
+ok2(payableSeats(drvParty, drvEvent) === 2, 'driver party of 3: 2 seats pay')
+ok2(payableSeats(drvSolo, drvEvent) === 0, 'driver alone: nothing to pay')
+ok2(remainingBalance(drvParty, drvEvent, 3) === 80, 'driver party balance excludes driver seat')
+ok2(remainingBalance(drvSolo, drvEvent, 1) === 0, 'solo driver owes nothing')
+ok2(isAwaitingPayment(drvSolo, drvEvent) === false, 'solo free driver is not awaiting payment')
+ok2(isAwaitingPayment(drvParty, drvEvent) === true, 'driver with paying party still awaits payment')
+ok2(bookingStatusBadge(drvSolo, drvEvent).label === 'Confirmed', 'solo free driver badge reads Confirmed')
+ok2(sumUnpaidSeats([drvSolo, other], drvEvent) === 2, 'unpaid seats skip the free driver seat')
+{
+  const sum = paymentSummary([drvParty, other], drvEvent, [])
+  ok2(sum.expectedTotal === 160 && sum.outstandingTotal === 160, 'summary: 2 driver-party seats + 2 others = $160')
+  const solo = paymentSummary([drvSolo], drvEvent, [])
+  ok2(solo.expectedTotal === 0 && solo.unpaidCount === 0, 'summary: solo free driver expects nothing')
+}
+ok2(paymentReminderDue({ ...drvEvent, payment_due_by: '2026-01-01' }, drvSolo, '2026-02-01') === false, 'no reminder for a solo free driver')
+ok2(amountOwing(drvEvent, 0) === 0, 'amountOwing: 0 seats owes 0')
+ok2(amountOwing(drvEvent, undefined) === 40, 'amountOwing: missing seats defaults to 1')
 
 console.log(`lib/payments.js (partial payments + refund ledger): ${pass2} passed, ${fail2} failed`)
 

@@ -14,7 +14,7 @@ import BusDriverTag from "@/components/BusDriverTag"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import EventImagePicker from "@/components/EventImagePicker"
 import ExpandableText from "@/components/ExpandableText"
-import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, isRefundPending, isRefundIssued, paymentSummary, reconciliationIsStale, balancePhrase, remainingBalance, wholeDollar, amountOwing, isRemindedToday } from "@/lib/payments"
+import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, isRefundPending, isRefundIssued, paymentSummary, reconciliationIsStale, balancePhrase, remainingBalance, wholeDollar, amountOwing, isRemindedToday, payableSeats } from "@/lib/payments"
 import { cutoffToInputValue, cutoffFromInputValue, bookingsClosed } from "@/lib/booking"
 import { useLocations } from "@/lib/useLocations"
 import TimeField from "@/components/TimeField"
@@ -126,7 +126,7 @@ function BookingStrip({ myBooking, myWaitlist, waitlistPosition, event, isFull, 
     // different answers to the same question. Route through the shared
     // helper like every other status display now does.
     const badge = bookingStatusBadge(myBooking, event)
-    const total = seatsCost(event, seats)
+    const total = seatsCost(event, payableSeats(myBooking, event, seats))
     const statusWord = badge.label.toLowerCase() // "booked" or "confirmed" — canonical, see lib/payments.js
     // Partial (2026-08-11 follow-up, Iain -- Spring Ball): this strip used
     // to re-show the FULL amount owed on a partial booking ("1 seat
@@ -552,6 +552,7 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
     has_bus:               event?.has_bus             || false,
     allow_personal_vehicles: event?.allow_personal_vehicles || false,
     bus_max_seats:         event?.bus_max_seats       ?? "",
+    bus_driver_free:       !!event?.bus_driver_free,
     location_type:         event?.location_type       || "onsite",
     location:              event?.location            || "",
     location_id:           event?.location_id         || null,
@@ -681,6 +682,8 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
       bus_driver_id:         form.has_bus && busDriverMode === "resident" ? busDriver?.id || null : null,
       bus_driver_name:       form.has_bus && busDriverMode === "other" ? (busDriverName.trim() || null) : null,
       bus_max_seats:         form.has_bus && form.bus_max_seats !== "" ? Number(form.bus_max_seats) : null,
+      // "Driver doesn't pay" (migration 145): resident driver on a paid event only.
+      bus_driver_free:       !!(form.has_bus && busDriverMode === "resident" && busDriver?.id && form.payment_required && form.bus_driver_free),
       allow_personal_vehicles: !!form.allow_personal_vehicles,
       has_dining:            form.has_dining,
       menu_type:             form.has_dining ? form.menu_type : null,
@@ -1082,6 +1085,12 @@ function SocialEventForm({ event, session, members = [], onClose, onSaved }) {
                   </BusDriverField>
                 </div>
               )}
+              {form.has_bus && busDriverMode === "resident" && busDriver?.id && form.payment_required && (
+                <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
+                  <Toggle value={!!form.bus_driver_free} onChange={v => set("bus_driver_free", v)} label="Driver doesn't pay" />
+                  <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: 4 }}>The driver&apos;s own seat is free. Anyone else they book for still pays.</div>
+                </div>
+              )}
               {form.has_bus && (
                 <div style={{ ...FIELD, marginTop: "-0.5rem" }}>
                   <label style={LABEL}>Bus max seats <span style={{ color: "var(--text-dim)", fontSize: "0.78rem", fontWeight: 400 }}>(optional — blank = uncapped)</span></label>
@@ -1382,6 +1391,7 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
     })
     const paidRows = [], unpaidRows = [], partialRows = []
     for (const b of confirmedBookings) {
+      if (payableSeats(b, event) === 0) continue // free bus-driver seat: nothing to reconcile
       if (computeIsPaid(b)) paidRows.push(rowFor(b))
       else if (computeIsPartial(b, event)) partialRows.push(rowFor(b))
       else unpaidRows.push(rowFor(b))
@@ -1669,7 +1679,7 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
                     // see both: the amount already on file AND that there's a
                     // fresh submission waiting on their review.
                     const submitted = !paid && computeIsSubmitted(b)
-                    const owed = seatsCost(event, b.seats || 1)
+                    const owed = seatsCost(event, payableSeats(b, event))
                     // Balance-based (2026-08-11 follow-up, Iain -- Spring
                     // Ball) -- the record form's amount input is what the
                     // EC is recording IN THIS transaction, added to
@@ -1736,7 +1746,7 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
                               unconditionally in the collapsed row, so removing it is
                               a pure declutter, not a loss of information. */}
                           <span style={{ color: "var(--text-dim)" }}>{b.seats || 1} seat{(b.seats||1) > 1 ? "s" : ""}</span>
-                          {canManagePayments && isPaidEvent && !paid && (() => {
+                          {canManagePayments && isPaidEvent && !paid && payableSeats(b, event) > 0 && (() => {
                             const reminding = remindingId === b.id
                             // Grey out / disable once a reminder has already gone out
                             // today (2026-09-15, Iain -- migration 106's
@@ -1764,7 +1774,8 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
                               </button>
                             )
                           })()}
-                          {canManagePayments && isPaidEvent && (() => {
+                          {canManagePayments && isPaidEvent && payableSeats(b, event) === 0 && <span title="Bus driver rides free" style={{ fontSize: "0.62rem", fontWeight: 700, color: "var(--text-dim)" }}>No charge</span>}
+                          {canManagePayments && isPaidEvent && payableSeats(b, event) > 0 && (() => {
                             const pending = togglingId === b.id
                             const isSettled = paid || partial
                             // Hotfix 2026-08-11 (real bug, live-caught: Iain marked
@@ -2100,7 +2111,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, bus_driver_name, bus_max_seats, allow_personal_vehicles, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, display_name, username), bookings(id, status, seats, payment_status, amount_paid, payment_reminded_at, refund_due, refund_paid_at, member_id, contact_id, bus_passenger, own_way, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
+      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, bus_driver_name, bus_driver_free, bus_max_seats, allow_personal_vehicles, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, display_name, username), bookings(id, status, seats, payment_status, amount_paid, payment_reminded_at, refund_due, refund_paid_at, member_id, contact_id, bus_passenger, own_way, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
       .eq("hub_type", "social")
       .eq("archived", false)
       .order("event_date", { ascending: true })

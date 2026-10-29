@@ -8,7 +8,7 @@ import { fetchTakenResidentIds } from '@/lib/takenResidents'
 import { syncAttendees } from '@/lib/syncAttendees'
 import { effectiveSeatCap, planSeatModification } from '@/lib/modifyBooking'
 import { isEventCoordinator } from '@/lib/areaAuth'
-import { amountOwing } from '@/lib/payments'
+import { amountOwing, payableSeats } from '@/lib/payments'
 import { busSeatsUsed, validateBusRequest, requestedBusSeats } from '@/lib/busSeats'
 import { eventNotifyRecipients } from '@/lib/questionRouting'
 import { applyTransport } from '@/lib/applyTransport'
@@ -341,8 +341,8 @@ export async function PATCH(req) {
     }
 
     const { data: event } = await supabaseAdmin
-      .from('events').select('title, cost').eq('id', event_id).single()
-    const owed = amountOwing(event, booking.seats)
+      .from('events').select('title, cost, has_bus, bus_driver_id, bus_driver_free').eq('id', event_id).single()
+    const owed = amountOwing(event, payableSeats({ ...booking, member_id: member.id }, event))
     // amount_paid is the EC-CONFIRMED ledger, not a claim (2026-08-12
     // follow-up, Iain -- Spring Ball 1): self-report used to write the
     // resident's claimed new total straight into amount_paid, so by the

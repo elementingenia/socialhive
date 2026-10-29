@@ -58,7 +58,7 @@ async function loadState(fund, openingOverride = null) {
   if (!opening) return { lines, opening: null, items: [] }
 
   const { data: evRows, error: eErr } = await supa.from("events")
-    .select("id, title, event_date, event_time, cost, payment_required, archived")
+    .select("id, title, event_date, event_time, cost, payment_required, archived, has_bus, bus_driver_id, bus_driver_free")
     .eq("hub_type", fund.hubType).is("club_id", null)
     .gte("event_date", opening.entry_date)
     .order("event_date", { ascending: true })
@@ -69,7 +69,7 @@ async function loadState(fund, openingOverride = null) {
   let bookings = [], finance = []
   if (ids.length) {
     const [bRes, fRes] = await Promise.all([
-      supa.from("bookings").select("event_id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at").in("event_id", ids),
+      supa.from("bookings").select("event_id, member_id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at").in("event_id", ids),
       supa.from("hive_event_finance").select("*").in("event_id", ids),
     ])
     if (bRes.error) return { error: bRes.error.message }

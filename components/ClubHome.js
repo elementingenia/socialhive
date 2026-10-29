@@ -40,7 +40,7 @@ import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/att
 // hub-agnostic helpers Social's events page and EventSlideOut.js's
 // CoordinatorPanel already use, see lib/payments.js for the shared
 // status/reconciliation math.
-import { paymentSummary, reconciliationIsStale, isPaid as isPaymentPaid, isSubmitted as isPaymentSubmitted, isPartial as isPaymentPartial, seatsCost, remainingBalance, wholeDollar, balancePhrase, isRemindedToday } from "@/lib/payments"
+import { paymentSummary, reconciliationIsStale, isPaid as isPaymentPaid, isSubmitted as isPaymentSubmitted, isPartial as isPaymentPartial, seatsCost, remainingBalance, wholeDollar, balancePhrase, isRemindedToday, payableSeats } from "@/lib/payments"
 import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
 import EventNotices from "@/components/EventNotices"
@@ -409,6 +409,7 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
     const confirmed = (paymentData?.bookings || []).filter(b => b.status === "confirmed")
     const paidRows = [], unpaidRows = [], partialRows = []
     for (const b of confirmed) {
+      if (payableSeats(b, event) === 0) continue // free bus-driver seat: nothing to reconcile
       if (isPaymentPaid(b)) paidRows.push(rowFor(b))
       else if (isPaymentPartial(b, event)) partialRows.push(rowFor(b))
       else unpaidRows.push(rowFor(b))
@@ -1019,7 +1020,7 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
                         </div>
                       </div>
                       )}
-                      {isPaidEvent && payBooking && !paid && (() => {
+                      {isPaidEvent && payBooking && !paid && payableSeats(payBooking, event) > 0 && (() => {
                         const reminding = remindingPaymentId === a.id
                         const remindedToday = isRemindedToday(payBooking)
                         const disabled = reminding || remindedToday
@@ -1037,7 +1038,8 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
                           </button>
                         )
                       })()}
-                      {isPaidEvent && payBooking && (() => {
+                      {isPaidEvent && payBooking && payableSeats(payBooking, event) === 0 && <span title="Bus driver rides free" style={{ fontSize: "0.62rem", fontWeight: 700, color: "var(--text-dim)" }}>No charge</span>}
+                      {isPaidEvent && payBooking && payableSeats(payBooking, event) > 0 && (() => {
                         const pending = payTogglingId === a.id
                         return (
                           <button
@@ -1077,7 +1079,7 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
                     derives Partial/Confirmed from the amount -- this never
                     sends a status directly. */}
                 {canManageBooks && isRecording && (() => {
-                  const owed = payBooking ? seatsCost(event, payBooking.seats || a.seats || 1) : null
+                  const owed = payBooking ? seatsCost(event, payableSeats(payBooking, event, payBooking.seats || a.seats || 1)) : null
                   const enteredAmt = recordAmount === "" ? null : (parseFloat(recordAmount) || 0)
                   const willComplete = enteredAmt !== null && Math.round(enteredAmt) === Math.round(balanceNum)
                   const commentNeeded = !willComplete
@@ -1728,6 +1730,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     has_bus:      event?.has_bus || false,
     allow_personal_vehicles: event?.allow_personal_vehicles || false,
     bus_max_seats: event?.bus_max_seats ?? "",
+    bus_driver_free: !!event?.bus_driver_free,
     max_seats_per_booking: event?.max_seats_per_booking ?? 2,
     // "Open, all welcome" events (Iain, 2026-09-11 -- Groups & Clubs dry run):
     // no booking/RSVP at all, so no capacity, payment, or attendee-naming
@@ -2121,6 +2124,8 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       bus_driver_id:   form.location_type === "offsite" && form.has_bus && busDriverMode === "resident" ? (busDriver || null) : null,
       bus_driver_name: form.location_type === "offsite" && form.has_bus && busDriverMode === "other" ? (busDriverName.trim() || null) : null,
       bus_max_seats:   form.location_type === "offsite" && form.has_bus && form.bus_max_seats !== "" ? Number(form.bus_max_seats) : null,
+      // "Driver doesn't pay" (migration 145): resident driver on a paid event only.
+      bus_driver_free: !!(form.location_type === "offsite" && form.has_bus && busDriverMode === "resident" && busDriver && form.payment_required && form.bus_driver_free),
       allow_personal_vehicles: form.location_type === "offsite" ? !!form.allow_personal_vehicles : false,
       max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
       booking_required: !!form.booking_required,
@@ -2371,6 +2376,12 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
                 <CoordPicker members={members} value={busDriver} onChange={setBusDriver} valid colour={colour}
                   placeholder="Search for bus driver…" />
               </BusDriverField>
+            </div>
+          )}
+          {form.has_bus && busDriverMode === "resident" && busDriver && form.payment_required && (
+            <div style={{ marginBottom: 12 }}>
+              <Toggle value={!!form.bus_driver_free} colour={colour} onChange={v => set("bus_driver_free", v)} label="Driver doesn't pay" />
+              <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: 4 }}>The driver&apos;s own seat is free. Anyone else they book for still pays.</div>
             </div>
           )}
           {form.has_bus && (
@@ -3073,7 +3084,7 @@ export default function ClubHome({ club }) {
   async function openEventById(id) {
     const { data } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver_name, booking_required, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, display_name, username), image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver_name, bus_driver_free, booking_required, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, display_name, username), image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("id", id).single()
     if (!data) return
     setSlideOutEvent(toSlideOutShape(data, myBookings[id]))
@@ -3136,7 +3147,7 @@ export default function ClubHome({ club }) {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver_name, booking_required, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, display_name, username), image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver_name, bus_driver_free, booking_required, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, display_name, username), image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("club_id", club.id)
       .eq("archived", false)
       .order("event_date", { ascending: true })
