@@ -47,7 +47,7 @@ function buildEventPayload(body, isInsert = false) {
     max_seats, max_seats_per_booking, cost, payment_required,
     show_attendee_names, is_public, has_bus, bus_driver_id, bus_driver_name, bus_driver_free, bus_max_seats, allow_personal_vehicles,
     location_type, location, location_id, has_dining, menu_type, menu_text, reservation_cutoff, payment_due_by, allow_nonresident_guests,
-    require_attendee_names, allow_unassigned_seats, unassigned_seats_count,
+    require_attendee_names, allow_unassigned_seats, unassigned_seats_count, booking_optional,
   } = body
 
   const diningOn = !!has_dining
@@ -76,6 +76,10 @@ function buildEventPayload(body, isInsert = false) {
     ...normaliseBusDriver({ has_bus, bus_driver_id, bus_driver_name, bus_driver_free }),
     bus_max_seats:         (has_bus && bus_max_seats != null && bus_max_seats !== '') ? Number(bus_max_seats) : null,
     allow_personal_vehicles: !!allow_personal_vehicles,
+    // Optional booking (Iain, 2026-10-31): no seat limit, I'm coming is a
+    // normal booking. seats_unlimited always follows it.
+    booking_optional:      booking_optional === true,
+    seats_unlimited:       booking_optional === true,
     location_type:         normaliseLocationType(location_type),
     location_id:           location_id || null,
     location:              location || null,

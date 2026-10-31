@@ -11,8 +11,8 @@ import {
   validateRepeat, ruleFor, planDates, describeRepeat, TBA_TITLE, SHOWING_NAME_MAX,
 } from "@/lib/showtimeSeries"
 import {
-  WIZARD_HUB_TYPE, DEFAULT_MAX_PER_BOOKING, cinemaCapacity, canUseWizard,
-  validateResidentShowing, allResidentsAudience, shortDate,
+  WIZARD_HUB_TYPE, DEFAULT_MAX_PER_BOOKING, DEFAULT_CINEMA_CAPACITY, cinemaCapacity, canUseWizard,
+  validateResidentShowing, allResidentsAudience, shortDate, showingPlace,
 } from "@/lib/residentShowing"
 
 // Show Time: any resident can add a showing through the wizard (Iain,
@@ -26,6 +26,13 @@ export const dynamic = "force-dynamic"
 
 const MOVIES_HUB = "movies"   // hub_settings spelling -- events use "movie"
 const CINEMA_NAME = "Cinema"
+
+// The location columns for a showing: the Cinema, or a village spot.
+function placeColumns(place, cinema) {
+  return place.village
+    ? { location_type: "village", location: place.location, location_id: null }
+    : { location_type: "onsite", location: cinema.name, location_id: cinema.id }
+}
 
 async function loadContext(req) {
   const { error, status, member } = await resolveMember(req)
@@ -67,16 +74,18 @@ export async function POST(req) {
   if (!canUseWizard(ctx)) {
     return NextResponse.json({ error: "Adding a showing isn't open yet" }, { status: 403 })
   }
-  if (!cinema) {
+  const body = await req.json().catch(() => ({}))
+  // Cinema or In the village (Iain, 2026-10-31).
+  const place = showingPlace(body, { cinemaCapacity: cinemaCapacity(cinema) })
+  if (place.error) return NextResponse.json({ error: place.error }, { status: 400 })
+  if (!place.village && !cinema) {
     return NextResponse.json({ error: "The Show Time venue isn't set up. Ask an admin to check Admin > Show Time." }, { status: 500 })
   }
-
-  const body = await req.json().catch(() => ({}))
-  const capacity = cinemaCapacity(cinema)
-  const invalid = validateResidentShowing(body, { capacity, isPrivate: !!member.hide_name })
+  const capacity = place.capacity
+  const invalid = validateResidentShowing(body, { capacity, isPrivate: !!member.hide_name, village: place.village })
     || validateRepeat(body.repeat)
   if (invalid) return NextResponse.json({ error: invalid }, { status: 400 })
-  if (body.repeat) return createRepeating({ body, member, isManager, cinema, capacity })
+  if (body.repeat) return createRepeating({ body, member, isManager, cinema, capacity, place })
 
   const { movie_id, showing_title, event_date, event_time, event_end_time, notify: notifyChoice } = body
   const seatsKept = Number(body.seats_kept)
@@ -95,28 +104,32 @@ export async function POST(req) {
   }
 
   // Clash: another event or space booking already holds the Cinema then.
-  const conflict = await findAnyRoomConflict(supabaseAdmin, {
-    location_id: cinema.id, event_date, event_time, event_end_time,
-    locationName: cinema.name, viewerId: member.id, canManage: !!member.is_admin,
-  })
-  if (conflict) return NextResponse.json({ error: conflict.message }, { status: 409 })
+  // A village spot isn't a room, so there's nothing to clash with.
+  if (!place.village) {
+    const conflict = await findAnyRoomConflict(supabaseAdmin, {
+      location_id: cinema.id, event_date, event_time, event_end_time,
+      locationName: cinema.name, viewerId: member.id, canManage: !!member.is_admin,
+    })
+    if (conflict) return NextResponse.json({ error: conflict.message }, { status: 409 })
+  }
 
   const { data: event, error } = await supabaseAdmin
     .from("events")
     .insert({
       hub_type: "movie", title, movie_id: movieId,
       event_date, event_time, event_end_time,
-      max_seats: capacity,
+      max_seats: place.seats_unlimited ? DEFAULT_CINEMA_CAPACITY : capacity,
       max_seats_per_booking: DEFAULT_MAX_PER_BOOKING,
+      booking_optional: place.booking_optional, seats_unlimited: place.seats_unlimited,
       reservation_cutoff: null,
       allow_nonresident_guests: true,       // "Anyone"
       require_attendee_names: false,
       notes: null,
       created_by: member.id,
       movie_snapshot: movieSnapshot,
-      location_type: "onsite", location: cinema.name, location_id: cinema.id,
+      ...placeColumns(place, cinema),
       is_public: false,                     // inside the app only
-      ingenia_confirmed: true,
+      ingenia_confirmed: !place.village,
     })
     .select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -150,7 +163,7 @@ export async function POST(req) {
   const ownerIds = [...new Set((ownerRows || []).map(o => o.member_id).filter(id => id && id !== member.id))]
   const creatorName = member.display_name || member.name || "A resident"
   await Promise.all(ownerIds.map(id => notify(id, event.id, "showtime_resident_event",
-    `${creatorName} added a Show Time showing: ${title} — ${when}. Ingenia Cinema booking confirmed.`)))
+    `${creatorName} added a Show Time showing: ${title} — ${when}. ${place.village ? `In the village: ${place.location}.` : "Ingenia Cinema booking confirmed."}`)))
 
   const message = `New showing: ${title} — ${when}`
   let notified = 0
@@ -174,7 +187,7 @@ export async function POST(req) {
 // what's on the first date, that date gets it straight away. Alerts go out
 // only for a date whose content is set -- never for the run itself (agreed);
 // Owners still hear that a run was added, as for any resident showing.
-async function createRepeating({ body, member, isManager, cinema, capacity }) {
+async function createRepeating({ body, member, isManager, cinema, capacity, place }) {
   const { movie_id, showing_title, event_date, event_time, event_end_time, notify: notifyChoice, repeat } = body
   const seatsKept = Number(body.seats_kept)
   const showingName = (repeat.showing_name || "").trim().slice(0, SHOWING_NAME_MAX) || null
@@ -184,8 +197,9 @@ async function createRepeating({ body, member, isManager, cinema, capacity }) {
   }
 
   // Every date must have the Cinema free. Say which ones don't.
+  // (Not for a village spot -- no room to clash with.)
   const clashes = []
-  for (const d of dates) {
+  for (const d of (place.village ? [] : dates)) {
     const c = await findAnyRoomConflict(supabaseAdmin, {
       location_id: cinema.id, event_date: d, event_time, event_end_time,
       locationName: cinema.name, viewerId: member.id, canManage: !!member.is_admin,
@@ -216,12 +230,13 @@ async function createRepeating({ body, member, isManager, cinema, capacity }) {
     rule_type: rule.rule_type, rule_config: rule.rule_config, month_end_policy: "clamp",
     horizon_months: 12, start_date: event_date, event_time, event_end_time,
     title: null, showing_name: showingName,
-    location_type: "onsite", location: cinema.name, location_id: cinema.id,
-    max_seats: capacity, max_seats_per_booking: DEFAULT_MAX_PER_BOOKING,
+    ...placeColumns(place, cinema),
+    max_seats: place.seats_unlimited ? DEFAULT_CINEMA_CAPACITY : capacity, max_seats_per_booking: DEFAULT_MAX_PER_BOOKING,
+    booking_optional: place.booking_optional, seats_unlimited: place.seats_unlimited,
     allow_nonresident_guests: true, require_attendee_names: false, booking_required: true,
     is_public: false, coordinator_ids: [member.id],
     dates_ahead: dates.length, keep_rolling: repeat.keep_rolling === true,
-    coordinator_seats: seatsKept > 0 ? seatsKept : 0, ingenia_confirmed: true,
+    coordinator_seats: seatsKept > 0 ? seatsKept : 0, ingenia_confirmed: !place.village,
   }).select("*").single()
   if (se) return NextResponse.json({ error: se.message }, { status: 500 })
 
@@ -248,7 +263,7 @@ async function createRepeating({ body, member, isManager, cinema, capacity }) {
   const ownerIds = [...new Set((ownerRows || []).map(o => o.member_id).filter(id => id && id !== member.id))]
   const creatorName = member.display_name || member.name || "A resident"
   await Promise.all(ownerIds.map(id => notify(id, first.id, "showtime_resident_event",
-    `${creatorName} added a repeating Show Time showing: ${label} — ${howOften.toLowerCase()}, ${gen.created} dates from ${shortDate(event_date)}${series.keep_rolling ? ", rolling" : ""}. Ingenia Cinema booking confirmed for the run.`)))
+    `${creatorName} added a repeating Show Time showing: ${label} — ${howOften.toLowerCase()}, ${gen.created} dates from ${shortDate(event_date)}${series.keep_rolling ? ", rolling" : ""}. ${place.village ? `In the village: ${place.location}.` : "Ingenia Cinema booking confirmed for the run."}`)))
 
   // Residents only hear about the first date, and only if it has content.
   let notified = 0

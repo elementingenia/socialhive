@@ -11,7 +11,8 @@ import { supabase } from '@/lib/supabase'
 import { authedFetch } from '@/lib/getAuthToken'
 import TimeField from '@/components/TimeField'
 import { sydneyTodayStr } from '@/lib/date'
-import { SHOWING_TITLE_MAX } from '@/lib/residentShowing'
+import { SHOWING_TITLE_MAX, VILLAGE_SEATS_MAX } from '@/lib/residentShowing'
+import { VILLAGE_LOCATION_MAX, VILLAGE_PLACEHOLDER } from '@/lib/eventLocation'
 import { describeRepeat, planDates, MAX_DATES_AHEAD, DEFAULT_DATES_AHEAD, SHOWING_NAME_MAX } from '@/lib/showtimeSeries'
 
 const TEAL = 'var(--teal)'
@@ -157,8 +158,8 @@ function MoviePicker({ picked, onPick }) {
 
 // ── The wizard ──────────────────────────────────────────────────────────────
 export default function ShowTimeWizard({ info, onClose, onCreated }) {
-  const capacity = info?.capacity || 20
-  const venue    = info?.venueName || 'Cinema'
+  const cinemaCap = info?.capacity || 20
+  const cinemaName = info?.venueName || 'Cinema'
   const [repeats, setRepeats]     = useState(null)     // true | false | null
   const [showingName, setShowingName] = useState('')
   const [kind, setKind]           = useState(null)     // 'weekly' | 'fortnightly' | 'monthly'
@@ -169,9 +170,20 @@ export default function ShowTimeWizard({ info, onClose, onCreated }) {
   // "Who do you want to tell?" when the first date is left to decide later --
   // nobody is told until there's something to tell them about.
   const [mode, setMode]           = useState(null)     // 'movie' | 'other' | 'later'
+  // Where (Iain, 2026-10-31): the Cinema, or somewhere in the village. A
+  // village showing skips the Ingenia question (no room is booked) and asks
+  // how it takes bookings instead: a seat limit, No limit, or Optional.
+  const [where, setWhere]         = useState(null)     // 'cinema' | 'village' | null
+  const [place, setPlace]         = useState('')
+  const [bookMode, setBookMode]   = useState(null)     // 'limit' | 'nolimit' | 'optional' | null
+  const [seatLimit, setSeatLimit] = useState(20)
+  const village  = where === 'village'
+  const unlimited = village && (bookMode === 'nolimit' || bookMode === 'optional')
+  const capacity = village ? (unlimited ? 20 : (Number(seatLimit) || 0)) : cinemaCap
+  const venue    = village ? (place.trim() || 'the spot') : cinemaName
   const steps = [
-    ...(info?.isPrivate ? ['privacy'] : []), 'repeat', 'ingenia', 'what', 'when',
-    ...(repeats ? ['schedule'] : []), 'seats',
+    ...(info?.isPrivate ? ['privacy'] : []), 'repeat', 'where', ...(village ? [] : ['ingenia']), 'what', 'when',
+    ...(repeats ? ['schedule'] : []), ...(village ? ['booking'] : []), 'seats',
     ...(repeats && mode === 'later' ? [] : ['notify']),
   ]
   const [stepIdx, setStepIdx]     = useState(0)
@@ -196,6 +208,8 @@ export default function ShowTimeWizard({ info, onClose, onCreated }) {
   const canNext = {
     privacy: privacyAck,
     repeat: repeats === false || (repeats === true && showingName.trim().length <= SHOWING_NAME_MAX),
+    where: where === 'cinema' || (village && !!place.trim()),
+    booking: !!bookMode && (bookMode !== 'limit' || (Number.isInteger(Number(seatLimit)) && Number(seatLimit) >= 1 && Number(seatLimit) <= VILLAGE_SEATS_MAX)),
     ingenia: ingenia === true,
     what: mode === 'movie' ? !!movie : mode === 'other' ? !!freeText.trim() : (mode === 'later' && !!repeats),
     schedule: !!kind && rolling !== null && datesAhead >= 2 && datesAhead <= MAX_DATES_AHEAD,
@@ -213,7 +227,11 @@ export default function ShowTimeWizard({ info, onClose, onCreated }) {
       const res = await authedFetch('/api/screenings/resident', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          privacy_ack: privacyAck, ingenia_confirmed: ingenia === true,
+          privacy_ack: privacyAck, ingenia_confirmed: !village && ingenia === true,
+          location_type: village ? 'village' : 'onsite', location: village ? place.trim() : null,
+          booking_optional: village && bookMode === 'optional',
+          seats_unlimited: unlimited,
+          max_seats: village && bookMode === 'limit' ? Number(seatLimit) : undefined,
           movie_id: mode === 'movie' ? movie?.id : null,
           showing_title: mode === 'other' ? freeText.trim() : null,
           content_later: mode === 'later',
@@ -286,6 +304,38 @@ export default function ShowTimeWizard({ info, onClose, onCreated }) {
             </>
           )}
 
+          {step === 'where' && (
+            <>
+              <p style={QUESTION}>Where is it?</p>
+              <Choice selected={where === 'cinema'} onClick={() => setWhere('cinema')}>In the {cinemaName}</Choice>
+              <Choice selected={where === 'village'} onClick={() => setWhere('village')} sub="Your street, outside your home, the lawn by the lake">Somewhere else in the village</Choice>
+              {village && (
+                <div style={{ marginTop: '0.5rem' }}>
+                  <label style={LABEL} htmlFor="stw-place">Where in the village</label>
+                  <input id="stw-place" value={place} onChange={e => setPlace(e.target.value)} maxLength={VILLAGE_LOCATION_MAX}
+                    placeholder={VILLAGE_PLACEHOLDER} style={INPUT} />
+                </div>
+              )}
+            </>
+          )}
+
+          {step === 'booking' && (
+            <>
+              <p style={QUESTION}>Do people need to book?</p>
+              <Choice selected={bookMode === 'limit'} onClick={() => setBookMode('limit')} sub="Set how many seats there are">Yes, with a seat limit</Choice>
+              {bookMode === 'limit' && (
+                <div style={{ margin: '0 0 0.75rem' }}>
+                  <label style={LABEL} htmlFor="stw-limit">How many seats</label>
+                  <input id="stw-limit" type="number" inputMode="numeric" min={1} max={VILLAGE_SEATS_MAX} value={seatLimit}
+                    onChange={e => setSeatLimit(e.target.value === '' ? '' : Number(e.target.value))}
+                    onWheel={e => e.currentTarget.blur()} style={INPUT} />
+                </div>
+              )}
+              <Choice selected={bookMode === 'nolimit'} onClick={() => setBookMode('nolimit')} sub="Anyone can book, nobody is turned away">Yes, no limit</Choice>
+              <Choice selected={bookMode === 'optional'} onClick={() => setBookMode('optional')} sub="No need to book. People can tap I'm coming so you know numbers">No — let us know if you&apos;re coming</Choice>
+            </>
+          )}
+
           {step === 'ingenia' && (
             <>
               <p style={QUESTION}>Have you booked the {venue} in the Ingenia app{repeats ? ' for all these dates' : ''}?</p>
@@ -343,9 +393,11 @@ export default function ShowTimeWizard({ info, onClose, onCreated }) {
               <div>
                 <label style={LABEL}>Expected end time</label>
                 <TimeField value={endTime} onChange={setEndTime} colour={endTime ? 'var(--green)' : 'var(--border)'} minTime={time || null} />
-                <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginTop: '0.35rem' }}>
-                  This holds the {venue} so nobody else books it at the same time.
-                </div>
+                {!village && (
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-dim)', marginTop: '0.35rem' }}>
+                    This holds the {venue} so nobody else books it at the same time.
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -367,7 +419,7 @@ export default function ShowTimeWizard({ info, onClose, onCreated }) {
               <p style={{ ...QUESTION, fontSize: '1rem' }}>Keep it rolling?</p>
               <Choice selected={rolling === true} onClick={() => setRolling(true)} sub={`As each date passes, a new one is added so there are always ${datesAhead} ahead`}>Yes, keep it going</Choice>
               <Choice selected={rolling === false} onClick={() => setRolling(false)} sub={`Just these ${datesAhead} dates, then it stops`}>No, just these dates</Choice>
-              {rolling === true && (
+              {rolling === true && !village && (
                 <Note tone="warn">New dates keep being added until you end it. Keep your {venue} booking in the Ingenia app up to date for them.</Note>
               )}
               {kind && date && (
@@ -381,7 +433,9 @@ export default function ShowTimeWizard({ info, onClose, onCreated }) {
 
           {step === 'seats' && (
             <>
-              <p style={QUESTION}>How many seats are you keeping for yourself{repeats ? ' on each date' : ''}?</p>
+              <p style={QUESTION}>{bookMode === 'optional' && village
+                ? `How many of you are coming${repeats ? ' to each date' : ''}?`
+                : `How many seats are you keeping for yourself${repeats ? ' on each date' : ''}?`}</p>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.25rem', margin: '0.5rem 0 1rem' }}>
                 <button type="button" aria-label="One fewer seat" onClick={() => setKept(k => Math.max(0, k - 1))} disabled={kept <= 0}
                   style={{ width: 52, height: 52, borderRadius: '50%', border: `2px solid ${TEAL}`, background: 'var(--surface)', color: TEAL, fontSize: '1.6rem', fontWeight: 700, cursor: 'pointer', opacity: kept <= 0 ? 0.4 : 1 }}>−</button>
@@ -390,7 +444,9 @@ export default function ShowTimeWizard({ info, onClose, onCreated }) {
                   style={{ width: 52, height: 52, borderRadius: '50%', border: `2px solid ${TEAL}`, background: 'var(--surface)', color: TEAL, fontSize: '1.6rem', fontWeight: 700, cursor: 'pointer', opacity: kept >= capacity ? 0.4 : 1 }}>+</button>
               </div>
               <Note>
-                <strong>{capacity - kept}</strong> of {capacity} seats will be open for others to book, up to 4 seats per booking.
+                {unlimited
+                  ? <>There&apos;s no seat limit{bookMode === 'optional' ? ' and no need to book' : ''}. Others can {bookMode === 'optional' ? 'say they\'re coming' : 'book'}, up to 4 per booking. </>
+                  : <><strong>{capacity - kept}</strong> of {capacity} seats will be open for others to book, up to 4 seats per booking. </>}
                 {kept > 0 ? <>Your {kept === 1 ? 'seat is' : 'seats are'} booked in your name. </> : null}You&apos;re set as the coordinator, so you can edit or cancel the showing later.
               </Note>
             </>

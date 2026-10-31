@@ -106,6 +106,9 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen, c
               )}
             </div>
           )}
+          {event.location_type === 'village' && event.location && (
+            <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text)' }}>📍 {event.location}</div>
+          )}
           <EventCoordinators eventId={event.id} eventTitle={movie?.title || event.title}
             names={coordinator ? [coordinator.name || coordinator.username] : []} colour="var(--teal)" />
           {movie?.plot && (
@@ -117,7 +120,7 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen, c
           <div style={{ marginTop: '0.1rem', display: 'flex', gap: '0.35rem', flexWrap: 'wrap', alignItems: 'center' }}>
             {isBooked && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '0.1rem' }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--teal)' }}>✓ {myBooking.confirmed_seats} seat{myBooking.confirmed_seats !== 1 ? 's' : ''}</div>
+                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--teal)' }}>{event.booking_optional ? `✓ You're coming (${myBooking.confirmed_seats})` : `✓ ${myBooking.confirmed_seats} seat${myBooking.confirmed_seats !== 1 ? 's' : ''}`}</div>
                 {myBooking.waitlist_seats > 0 && (
                   <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--amber-dark)' }}>⏳ +{myBooking.waitlist_seats} {waitlistLabel(myBooking.waitlist_position).replace(/^On/, 'on')}</div>
                 )}
@@ -130,7 +133,7 @@ function NextScreeningCard({ event, myBooking, coordinator, seatsLeft, onOpen, c
             )}
             {!isBooked && !isWaitlist && (
               <div style={{ display: 'inline-flex', alignItems: 'center', background: closed ? '#fee2e2' : isFull ? 'rgba(217,119,6,0.1)' : 'rgba(0,128,128,0.1)', color: closed ? '#991b1b' : isFull ? 'var(--amber)' : 'var(--teal)', borderRadius: '20px', padding: '0.25rem 0.75rem', fontSize: '0.78rem', fontWeight: 700 }}>
-                {closed ? 'Bookings Closed' : isFull ? 'Full · Join waitlist →' : 'Tap to book →'}
+                {closed ? 'Bookings Closed' : isFull ? 'Full · Join waitlist →' : event.booking_optional ? "No need to book · Tap if you're coming →" : 'Tap to book →'}
               </div>
             )}
             {seatsLeft !== null && seatsLeft > 0 && (
@@ -482,7 +485,7 @@ export default function MoviesHomePage() {
       supabase.from('bookings').select('seats').eq('event_id', nextEv.id).eq('status', 'confirmed')
         .then(({ data: capRows }) => {
           const taken = (capRows || []).reduce((s, b) => s + (b.seats || 1), 0)
-          setNextEventSeatsLeft(nextEv.max_seats != null ? Math.max(0, nextEv.max_seats - taken) : null)
+          setNextEventSeatsLeft(nextEv.max_seats != null && !nextEv.seats_unlimited && !nextEv.booking_optional ? Math.max(0, nextEv.max_seats - taken) : null)
         })
     } else {
       setNextEventCoordinator(null)

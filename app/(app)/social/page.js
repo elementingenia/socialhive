@@ -16,10 +16,12 @@ import ManageLink from "@/components/ManageLink"
 import { HiveFundsTile } from "@/components/HiveFunds"
 import { useOwners } from "@/lib/useOwners"
 import { FormattedText } from "@/lib/textFormatter"
-import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted, balancePhrase, payableSeats } from "@/lib/payments"
+import { seatsCost, bookingStatusBadge, isSubmitted as computeIsSubmitted, balancePhrase, payableSeats, seatsPhrase, badgeText } from "@/lib/payments"
 import { sydneyTodayStr, isEventPast } from "@/lib/date"
 import { bookingsClosed } from "@/lib/booking"
 import { isHtmlContent } from "@/lib/richText"
+import ComingCount from "@/components/ComingCount"
+import { isSeatsUnlimited, isBookingOptional } from "@/lib/bookingMode"
 
 const COLOUR = "var(--terracotta)"
 
@@ -209,7 +211,9 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
           }} dangerouslySetInnerHTML={{ __html: bbToHtml(event.description, "var(--terracotta)") }} />
         )}
 
-        <CapacityBar booked={bookedCount} max={event.max_seats} waitlist={waitlistCount} />
+        {isSeatsUnlimited(event)
+          ? <ComingCount event={event} booked={bookedCount} />
+          : <CapacityBar booked={bookedCount} max={event.max_seats} waitlist={waitlistCount} />}
 
         {/* Booking status or CTA */}
         <div style={{ marginTop: "0.6rem" }}>
@@ -224,12 +228,12 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
             const balance = isPartialBooking ? balancePhrase(myBooking, event, seats) : null
             const submitted = badge.label !== "Confirmed" && !isPartialBooking && computeIsSubmitted(myBooking)
             const label = badge.label === "Confirmed"
-              ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Paid " + total : ""}`
+              ? `✓ ${seatsPhrase(seats, statusWord, event)}${total ? " · Paid " + total : ""}`
               : isPartialBooking
-                ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid ${balance}`
+                ? `${seatsPhrase(seats, statusWord, event)} · Unpaid ${balance}`
                 : submitted
-                  ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${total ? " " + total : ""}`
-                  : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Unpaid " + total : ""}`
+                  ? `${seatsPhrase(seats, statusWord, event)} · Payment submitted${total ? " " + total : ""}`
+                  : `${seatsPhrase(seats, statusWord, event)}${total ? " · Unpaid " + total : ""}`
             const pillBg = submitted ? "#f0fdfa" : badge.bg
             const pillColor = submitted ? "#0f766e" : badge.color
             return (
@@ -253,7 +257,7 @@ function NextEventTile({ event, coordinators, myBooking, bookedCount, waitlistCo
               background: closed ? "#fee2e2" : COLOUR + "18", color: closed ? "#991b1b" : COLOUR,
               borderRadius: "20px", padding: "0.25rem 0.75rem",
               fontSize: "0.78rem", fontWeight: 700,
-            }}>{closed ? "Bookings Closed" : "Tap to book →"}</div>
+            }}>{closed ? "Bookings Closed" : isBookingOptional(event) ? "No need to book · tap if you're coming →" : "Tap to book →"}</div>
           )}
         </div>
       </div>
@@ -330,10 +334,10 @@ function MyBookingsCard({ bookings, onViewAll }) {
                     const total     = seatsCost(ev, n)
                     const submitted = badge.label !== "Confirmed" && computeIsSubmitted({ payment_status })
                     const label = badge.label === "Confirmed"
-                      ? `✓ ${n} seat${n !== 1 ? "s" : ""} · ${badge.label}${total ? ` ${total}` : ""}`
+                      ? `✓ ${n} seat${n !== 1 ? "s" : ""} · ${badgeText(badge, ev)}${total ? ` ${total}` : ""}`
                       : submitted
-                        ? `${n} seat${n !== 1 ? "s" : ""} · ${badge.label} · Payment submitted${total ? ` ${total}` : ""}`
-                        : `${n} seat${n !== 1 ? "s" : ""} · ${badge.label}${total ? ` ${total}` : ""}`
+                        ? `${n} seat${n !== 1 ? "s" : ""} · ${badgeText(badge, ev)} · Payment submitted${total ? ` ${total}` : ""}`
+                        : `${n} seat${n !== 1 ? "s" : ""} · ${badgeText(badge, ev)}${total ? ` ${total}` : ""}`
                     const pillBg    = submitted ? "#f0fdfa" : badge.bg
                     const pillColor = submitted ? "#0f766e" : badge.color
                     return (
@@ -386,7 +390,7 @@ export default function SocialHome() {
     const [eventsRes, myBookingsRes, hubRes] = await Promise.all([
       supabase
         .from("events")
-        .select("id, title, event_date, event_time, description, max_seats, cost, payment_required, has_bus, bus_driver_id, bus_driver_free, location_type, location, reservation_cutoff, image_url, image_focal_x, image_focal_y, bus_driver_name, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, booked_at)")
+        .select("id, title, event_date, event_time, description, max_seats, booking_optional, seats_unlimited, booking_required, cost, payment_required, has_bus, bus_driver_id, bus_driver_free, location_type, location, reservation_cutoff, image_url, image_focal_x, image_focal_y, bus_driver_name, bus_driver:members!bus_driver_id(name, username), bookings(id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, member_id, booked_at)")
         .eq("hub_type", "social").eq("archived", false)
         .gte("event_date", todayStr)
         .order("event_date", { ascending: true })
@@ -394,7 +398,7 @@ export default function SocialHome() {
         .limit(5),
       supabase
         .from("bookings")
-        .select("id, event_id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, events(id, title, event_date, event_time, hub_type, archived, payment_required, location_type, location)")
+        .select("id, event_id, status, seats, payment_status, amount_paid, refund_due, refund_paid_at, events(id, title, event_date, event_time, hub_type, archived, booking_optional, booking_required, payment_required, location_type, location)")
         .eq("member_id", member.id)
         .neq("status", "cancelled"),
       supabase.from("hub_settings").select("welcome_text, enabled").eq("hub_type", "social").single(),

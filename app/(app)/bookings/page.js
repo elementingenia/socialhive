@@ -5,7 +5,8 @@ import { useUser } from "@/lib/UserContext"
 import EventSlideOut from "@/components/EventSlideOut"
 import { fetchWaitlistInfo } from "@/lib/useWaitlistInfo"
 import { waitlistLabel } from "@/lib/waitlist"
-import { bookingStatusBadge } from "@/lib/payments"
+import { bookingStatusBadge, badgeText } from "@/lib/payments"
+import { isBookingOptional } from "@/lib/bookingMode"
 import { authedFetch } from "@/lib/getAuthToken"
 import { MoviesIcon, SocialIcon, SpecialEventsIcon } from "@/components/NavIcons"
 import ClubScopeDropdown from "@/components/ClubScopeDropdown"
@@ -115,7 +116,9 @@ function BookingCard({ group, waitlistPosition, onClick }) {
       <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", flexShrink: 0, alignItems: "flex-end" }}>
         {confirmed > 0 && (() => {
           const badge = bookingStatusBadge(group.confirmedBooking, event)
-          const label = confirmed === 1
+          const label = isBookingOptional(event)
+            ? `${badgeText(badge, event)}${confirmed > 1 ? ` (${confirmed})` : ""}`
+            : confirmed === 1
             ? badge.label
             : `${badge.label === "Confirmed" ? "✓ " : ""}${confirmed} ${badge.label.toLowerCase()}`
           return (
@@ -198,7 +201,7 @@ export default function BookingsPage() {
     if (!member?.id) return
     const { data } = await supabase
       .from("bookings")
-      .select("id, status, seats, payment_status, booked_at, event_id, events(id, title, event_date, event_time, hub_type, archived, club_id, clubs!club_id(name, colour, single_signup))")
+      .select("id, status, seats, payment_status, booked_at, event_id, events(id, title, event_date, event_time, hub_type, archived, booking_optional, booking_required, club_id, clubs!club_id(name, colour, single_signup))")
       .eq("member_id", member.id)
       .neq("status", "cancelled")
 

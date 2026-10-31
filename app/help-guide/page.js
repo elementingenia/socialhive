@@ -952,6 +952,14 @@ export default function HelpGuidePage() {
                 below). Then:
               </Step>
               <Step>
+                <strong>Where is it?</strong> Choose <strong>In the Cinema</strong>, or{" "}
+                <strong>Somewhere else in the village</strong> and type where, e.g. Outside 42
+                Banksia St. A village showing doesn&apos;t need an Ingenia booking, so the question
+                below is skipped. Instead you&apos;re asked <strong>Do people need to book?</strong>:{" "}
+                <strong>Yes, with a seat limit</strong> (type how many), <strong>Yes, no limit</strong>,
+                or <strong>No — let us know if you&apos;re coming</strong>.
+              </Step>
+              <Step>
                 <strong>1. Have you booked the Cinema in the Ingenia app?</strong> If you choose{" "}
                 <strong>No</strong> you can&apos;t carry on. The Cinema can&apos;t be used without an
                 Ingenia booking.
@@ -1272,6 +1280,15 @@ export default function HelpGuidePage() {
                 car-sharing.
               </Step>
               <Step>
+                <strong>Does it need booking?</strong> Under <strong>Booking</strong>, choose{" "}
+                <strong>Requires booking</strong> (a seat limit, with a waitlist when full) or{" "}
+                <strong>Optional — let us know</strong>. Optional means nobody has to book and
+                there&apos;s no seat limit, but residents can tap <strong>I&apos;m coming</strong> so
+                you know numbers. They then show as <strong>You&apos;re coming</strong> in the
+                attendee list, and paid events still ask them to pay. Anyone who just turns up can be
+                added with a walk-up booking.
+              </Step>
+              <Step>
                 Where a booking is waitlist-only, it's listed in queue order with the resident's
                 position — <strong>(1st)</strong>, <strong>(2nd)</strong>, and so on — shown to the
                 left of their name.
@@ -1511,6 +1528,15 @@ export default function HelpGuidePage() {
                 the lake — just type a short description. <strong>Off-site</strong> is for events
                 outside the village and is the only choice that offers the Community Bus and
                 car-sharing.
+              </Step>
+              <Step>
+                <strong>Does it need booking?</strong> Under <strong>Booking</strong>, choose{" "}
+                <strong>Requires booking</strong> (a seat limit, with a waitlist when full) or{" "}
+                <strong>Optional — let us know</strong>. Optional means nobody has to book and
+                there&apos;s no seat limit, but residents can tap <strong>I&apos;m coming</strong> so
+                you know numbers. They then show as <strong>You&apos;re coming</strong> in the
+                attendee list, and paid events still ask them to pay. Anyone who just turns up can be
+                added with a walk-up booking.
               </Step>
               <Step>
                 When creating or editing an event, a <strong>Booking</strong> choice at the top decides
@@ -2205,6 +2231,15 @@ export default function HelpGuidePage() {
                 the lake — just type a short description. <strong>Off-site</strong> is for events
                 outside the village and is the only choice that offers the Community Bus and
                 car-sharing.
+              </Step>
+              <Step>
+                <strong>Does it need booking?</strong> Under <strong>Booking</strong>, choose{" "}
+                <strong>Requires booking</strong> (a seat limit, with a waitlist when full) or{" "}
+                <strong>Optional — let us know</strong>. Optional means nobody has to book and
+                there&apos;s no seat limit, but residents can tap <strong>I&apos;m coming</strong> so
+                you know numbers. They then show as <strong>You&apos;re coming</strong> in the
+                attendee list, and paid events still ask them to pay. Anyone who just turns up can be
+                added with a walk-up booking.
               </Step>
               <Step>
                 A Special Event can be set up to allow <strong>unassigned seats</strong> — a plain

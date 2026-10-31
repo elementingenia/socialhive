@@ -14,7 +14,7 @@ import VehicleOffersPanel from "@/components/VehicleOffersPanel"
 import ExpandableText from "@/components/ExpandableText"
 import HappeningsNewsCard from "@/components/HappeningsNewsCard"
 import MenuModal from "@/components/MenuModal"
-import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge, balancePhrase, remainingBalance, wholeDollar, paymentSummary, reconciliationIsStale, payableSeats } from "@/lib/payments"
+import { isPaid as computeIsPaid, isRefunded as computeIsRefunded, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, sumUnpaidSeats, seatsCost, bookingStatusBadge, balancePhrase, remainingBalance, wholeDollar, paymentSummary, reconciliationIsStale, payableSeats, seatsPhrase, badgeText } from "@/lib/payments"
 import { byOwnThenName, ordinal } from "@/lib/sortNames"
 import { resolveMemberName } from "@/lib/memberName"
 import { bookingsClosed, cutoffLabel } from "@/lib/booking"
@@ -30,6 +30,7 @@ import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/att
 import { hubPathForEvent } from "@/lib/eventShare"
 import { loginHref } from "@/lib/safeNext"
 import { formatAddress } from "@/lib/address"
+import { isBookingOptional, isSeatsUnlimited, UNLIMITED_SEATS, OPTIONAL_WELCOME, comingLabel, bookedLabel } from "@/lib/bookingMode"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -2462,16 +2463,24 @@ function BookingSection({ event, isEC = false, onRefresh, onClose }) {
   const booked = (event.bookings_count
     ?? (event.bookings?.filter(b => b.status === 'confirmed').reduce((s, b) => s + (b.seats || 1), 0) || 0))
     + (event.unassigned_seats_count || 0)
-  const max = event.max_seats || 0
+  // Optional / no-limit events (Iain, 2026-10-31): no seat limit, never a
+  // waitlist. max is 0 so the seats bar hides; availableSeats never runs out.
+  const optional  = isBookingOptional(event)
+  const unlimited = isSeatsUnlimited(event)
+  const max = unlimited ? 0 : (event.max_seats || 0)
   const isMovieEvent    = event.hub_type === "movie"
-  const availableSeats = Math.max(0, max - booked)
+  const availableSeats = unlimited ? UNLIMITED_SEATS : Math.max(0, max - booked)
   // This event's own EC may book past the per-booking cap for their own
   // party, up to the seats actually free (Iain, 2026-10-03). Mirrors the
   // server (POST/PATCH /api/bookings). "booked" above already includes
   // unassigned seats, so othersConfirmed is the confirmed seats only.
   const confirmedOnly = Math.max(0, booked - (event.unassigned_seats_count || 0))
-  const maxPerBooking = effectiveSeatCap(event, { unlimitedCap: isEC, othersConfirmed: confirmedOnly })
   const perBookingCap = maxSeatsPerBooking(event)
+  // With no seat limit the coordinator's "up to the seats still free" would be
+  // endless; keep their picker sensible (walk-up booking covers bigger groups).
+  const maxPerBooking = unlimited
+    ? (isEC ? Math.max(perBookingCap, 20) : perBookingCap)
+    : effectiveSeatCap(event, { unlimitedCap: isEC, othersConfirmed: confirmedOnly })
   const closed = bookingsClosed(event)
 
   const [modifySeats, setModifySeats] = useState(
@@ -2544,7 +2553,7 @@ function BookingSection({ event, isEC = false, onRefresh, onClose }) {
       // close — this is only the member booking action.
       setSplitOffer(null)
       if (data.status === "confirmed" && !data.transport_error) {
-        showToast(`Booked — ${data.seats} seat${data.seats !== 1 ? "s" : ""} confirmed!`)
+        showToast(optional ? `Thanks — you're coming (${data.seats})` : `Booked — ${data.seats} seat${data.seats !== 1 ? "s" : ""} confirmed!`)
       } else if (data.status === "split_confirmed") {
         if (data.confirmed === 0) {
           showToast(`${data.waitlisted} seat${data.waitlisted !== 1 ? "s" : ""} added to waitlist`, "warn")
@@ -2652,6 +2661,17 @@ function BookingSection({ event, isEC = false, onRefresh, onClose }) {
       )}
 
       {!isBookclubEvent && max > 0 && <CapacityBar booked={booked} max={max} waitlist={waitlistInfo ? waitlistInfo.waitlist_seats : (event.waitlist_count || 0)} />}
+      {!isBookclubEvent && unlimited && (
+        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-dim)", marginBottom: 10 }}>
+          👥 {optional ? comingLabel(booked) : bookedLabel(booked)}
+        </div>
+      )}
+      {optional && !myConfirmed && !myWaitlist && (
+        <div style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12,
+          padding: "12px 14px", fontSize: 14, lineHeight: 1.5, marginBottom: 10, textAlign: "center" }}>
+          {OPTIONAL_WELCOME}
+        </div>
+      )}
 
       {!myConfirmed && !myWaitlist && (
         <div>
@@ -2724,7 +2744,7 @@ function BookingSection({ event, isEC = false, onRefresh, onClose }) {
               <button onClick={() => handleBook()} disabled={loading || (seats > 1 && !partyValid) || !bringValid || !transportValid}
                 style={{ width: "100%", padding: "14px 0", background: "var(--amber)", color: "#fff", border: "none",
                   borderRadius: 12, fontSize: 16, fontWeight: 700, cursor: (loading || (seats > 1 && !partyValid) || !bringValid || !transportValid) ? "not-allowed" : "pointer", opacity: (loading || (seats > 1 && !partyValid) || !bringValid || !transportValid) ? 0.7 : 1 }}>
-                {loading ? "Booking…" : isBookclubEvent ? "Sign Up" : availableSeats === 0 ? "Join Waitlist" : "Book Now"}
+                {loading ? (optional ? "Saving…" : "Booking…") : optional ? "I'm coming" : isBookclubEvent ? "Sign Up" : availableSeats === 0 ? "Join Waitlist" : "Book Now"}
               </button>
               {event.payment_required && (
                 <div style={{ fontSize: 12, color: "var(--text-dim)", textAlign: "center", marginTop: 8 }}>
@@ -2752,14 +2772,17 @@ function BookingSection({ event, isEC = false, onRefresh, onClose }) {
               const isPartialBooking = event.payment_required && badge.label === "Partial"
               const balance = isPartialBooking ? balancePhrase(myConfirmed, event, seats) : null
               const submitted = event.payment_required && !isPartialBooking && badge.label !== "Confirmed" && computeIsSubmitted(myConfirmed)
-              const label = event.payment_required
+              const seatsWord = optional ? `You're coming (${seats})` : `${seatsPhrase(seats, statusWord, event)}`
+              const label = optional && !event.payment_required
+                ? `✓ You're coming (${seats})`
+                : event.payment_required
                 ? (badge.label === "Confirmed"
-                    ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Paid${totalCost ? " " + totalCost : ""}`
+                    ? `✓ ${seatsWord} · Paid${totalCost ? " " + totalCost : ""}`
                     : isPartialBooking
-                      ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid ${balance}`
+                      ? `${seatsWord} · Unpaid ${balance}`
                       : submitted
-                        ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${totalCost ? " " + totalCost : ""}`
-                        : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid${totalCost ? " " + totalCost : ""}`)
+                        ? `${seatsWord} · Payment submitted${totalCost ? " " + totalCost : ""}`
+                        : `${seatsWord} · Unpaid${totalCost ? " " + totalCost : ""}`)
                 : `✓ ${seats} seat${seats !== 1 ? "s" : ""} confirmed`
               const colour = event.payment_required
                 ? (badge.label === "Confirmed" ? "var(--green)" : isPartialBooking ? "#0369a1" : submitted ? "#0f766e" : "#d97706")
@@ -2882,13 +2905,13 @@ function BookingSection({ event, isEC = false, onRefresh, onClose }) {
           {myConfirmed && !isBookclubEvent && (
             <button onClick={() => { setModifySeats((myConfirmed.seats || 1) + (myWaitlist?.seats || 0)); setModifying(true) }}
               style={{ width: "100%", padding: "12px 0", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}>
-              Modify Seats
+              {optional ? "Change how many" : "Modify Seats"}
             </button>
           )}
           {!iAmBusDriver && (
           <button onClick={() => setConfirm(true)}
             style={{ width: "100%", padding: "12px 0", background: "transparent", border: "1px solid var(--danger)", borderRadius: 12, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "var(--danger)" }}>
-            Cancel Booking
+            {optional ? "I'm not coming now" : "Cancel Booking"}
           </button>
           )}
         </div>
