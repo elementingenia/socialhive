@@ -24,6 +24,7 @@ import { nextOccurrence } from "@/lib/recurrence"
 import EventImagePicker from "@/components/EventImagePicker"
 import MembersToggle from "@/components/MembersToggle"
 import { useLocations } from "@/lib/useLocations"
+import { LOCATION_TYPES, LOCATION_TYPE_LABELS, VILLAGE_LOCATION_MAX, VILLAGE_PLACEHOLDER } from "@/lib/eventLocation"
 import { cutoffToDateValue, cutoffFromDateValue } from "@/lib/booking"
 import TimeField from "@/components/TimeField"
 import { needsSpaceValidation } from "@/lib/eventClash"
@@ -2326,14 +2327,14 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
           {invalidFields.includes("location") && <span style={{ color: "#dc2626", fontWeight: 800, marginLeft: 6, textTransform: "none", letterSpacing: 0 }}>⚠ Required</span>}
         </label>
         <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          {["onsite", "offsite"].map(t => (
+          {LOCATION_TYPES.map(t => (
             <button key={t} type="button" onClick={() => { set("location_type", t); set("location", ""); set("location_id", null) }}
               style={{ flex: 1, padding: "0.55rem", borderRadius: 10, fontFamily: "inherit", fontSize: "0.88rem",
                 fontWeight: 700, cursor: "pointer", border: "2px solid",
                 borderColor: form.location_type === t ? colour : "var(--border)",
                 background: form.location_type === t ? colour + "18" : "var(--surface)",
                 color: form.location_type === t ? colour : "var(--text-dim)" }}>
-              {t === "onsite" ? "On-site" : "Off-site"}
+              {LOCATION_TYPE_LABELS[t]}
             </button>
           ))}
         </div>
@@ -2353,6 +2354,10 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             )}
             {onsiteLocations.map(l => <option key={l.id} value={l.id}>{l.name}{l.request_only ? " (Request Only)" : ""}</option>)}
           </select>
+        ) : form.location_type === "village" ? (
+          <input value={form.location} onChange={e => set("location", e.target.value)}
+            maxLength={VILLAGE_LOCATION_MAX} placeholder={VILLAGE_PLACEHOLDER}
+            style={{ ...inputStyle, ...(invalidFields.includes("location") ? INVALID_FIELD_STYLE : {}) }} />
         ) : (
           <textarea value={form.location} onChange={e => set("location", e.target.value)} rows={3}
             placeholder="Enter venue name and address…"

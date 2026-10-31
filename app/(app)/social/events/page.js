@@ -17,6 +17,7 @@ import ExpandableText from "@/components/ExpandableText"
 import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, isRefundPending, isRefundIssued, paymentSummary, reconciliationIsStale, balancePhrase, remainingBalance, wholeDollar, amountOwing, isRemindedToday, payableSeats } from "@/lib/payments"
 import { cutoffToInputValue, cutoffFromInputValue, bookingsClosed } from "@/lib/booking"
 import { useLocations } from "@/lib/useLocations"
+import { LOCATION_TYPES, LOCATION_TYPE_LABELS, VILLAGE_LOCATION_MAX, VILLAGE_PLACEHOLDER } from "@/lib/eventLocation"
 import TimeField from "@/components/TimeField"
 import { needsSpaceValidation } from "@/lib/eventClash"
 import { useSameDateWarning } from "@/components/SameDateWarning"
@@ -486,7 +487,8 @@ function FixedListPicker({ value, onChange, options, placeholder = "Select…", 
 }
 
 // ── Location field ────────────────────────────────────────────────────────────
-// Onsite works in location IDs; offsite stays free text, which is deliberate —
+// Onsite works in location IDs; In the village (2026-10-31) and offsite stay
+// free text, which is deliberate —
 // it is informational only, for the event and its attendees (Iain, 2026-07-31).
 function LocationField({ locationType, location, locationId, onTypeChange, onLocationChange, onLocationIdChange, invalid }) {
   const onsiteLocations = useLocations()
@@ -497,7 +499,7 @@ function LocationField({ locationType, location, locationId, onTypeChange, onLoc
       </label>
       {/* Onsite / Offsite toggle buttons */}
       <div style={{ display: "flex", gap: "0.5rem", marginBottom: "0.6rem" }}>
-        {["onsite", "offsite"].map(t => (
+        {LOCATION_TYPES.map(t => (
           <button key={t} type="button" onClick={() => { onTypeChange(t); onLocationChange(""); onLocationIdChange(null) }}
             style={{
               flex: 1, padding: "0.55rem", borderRadius: "10px", fontFamily: "inherit",
@@ -506,7 +508,7 @@ function LocationField({ locationType, location, locationId, onTypeChange, onLoc
               background: locationType === t ? "var(--terracotta)18" : "var(--surface)",
               color: locationType === t ? "var(--terracotta)" : "var(--text-dim)",
             }}>
-            {t === "onsite" ? "On-site" : "Off-site"}
+            {LOCATION_TYPE_LABELS[t]}
           </button>
         ))}
       </div>
@@ -518,6 +520,14 @@ function LocationField({ locationType, location, locationId, onTypeChange, onLoc
           options={onsiteLocations.length ? onsiteLocations : ONSITE_LOCATIONS_FALLBACK}
           placeholder="Select venue…"
           invalid={invalid}
+        />
+      ) : locationType === "village" ? (
+        <input
+          value={location}
+          onChange={e => onLocationChange(e.target.value)}
+          maxLength={VILLAGE_LOCATION_MAX}
+          placeholder={VILLAGE_PLACEHOLDER}
+          style={{ ...INPUT, ...(invalid ? { border: "2px solid #dc2626", background: "rgba(220, 38, 38, 0.10)" } : {}) }}
         />
       ) : (
         <textarea
