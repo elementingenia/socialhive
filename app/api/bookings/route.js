@@ -15,6 +15,7 @@ import { applyTransport } from '@/lib/applyTransport'
 import { releaseTransportOnCancel } from '@/lib/releaseTransportOnCancel'
 import { residentBusDriverId, stripDriverFromBus } from '@/lib/busDriver'
 import { ensureBusDriverSeat } from '@/lib/busDriverSeat'
+import { seatCapacity } from '@/lib/bookingMode'
 
 
 async function getMember(token) {
@@ -62,7 +63,7 @@ export async function POST(req) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('id, max_seats, max_seats_per_booking, unassigned_seats_count, hub_type, book_id, booking_required, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, bus_driver_id, allow_personal_vehicles, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('id, max_seats, max_seats_per_booking, unassigned_seats_count, booking_optional, seats_unlimited, hub_type, book_id, booking_required, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, bus_driver_id, allow_personal_vehicles, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
   // Resident bus driver (Iain, 2026-10-29): drives the bus, so never a bus
   // passenger, car seat or own way -- their transport is "Bus driver".
@@ -173,7 +174,7 @@ export async function POST(req) {
     }
   }
 
-  const available = Math.max(0, event.max_seats - (event.unassigned_seats_count || 0) - confirmedSeats)
+  const available = Math.max(0, seatCapacity(event) - (event.unassigned_seats_count || 0) - confirmedSeats)
 
   const myBookings  = (allBookings || []).filter(b => b.member_id === member.id)
   const myConfirmed = myBookings.find(b => b.status === 'confirmed')
@@ -422,7 +423,7 @@ export async function PATCH(req) {
   const oldConfirmed = myConfirmed.seats || 1
 
   const { data: event } = await supabaseAdmin
-    .from('events').select('max_seats, max_seats_per_booking, unassigned_seats_count, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, bus_driver_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
+    .from('events').select('max_seats, max_seats_per_booking, unassigned_seats_count, booking_optional, seats_unlimited, booking_required, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names, bring_category_ids, bring_required, club_id, has_bus, bus_max_seats, bus_driver_id, clubs!club_id(bring_enabled)').eq('id', event_id).single()
   const patchBusDriverId = residentBusDriverId(event)
   const { data: confirmedRows } = await supabaseAdmin
     .from('bookings').select('seats')

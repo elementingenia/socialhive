@@ -16,6 +16,36 @@ import { resolveCoordinatorIds } from '@/lib/residentShowing'
 import { resolveMemberName } from '@/lib/memberName'
 import { TBA_TITLE, SHOWING_NAME_MAX, isContentBeingSet, contentSetRecipients, contentSetMessage } from '@/lib/showtimeSeries'
 import { shortDate } from '@/lib/residentShowing'
+import { cleanVillageLocation } from '@/lib/eventLocation'
+import { seatCapacity } from '@/lib/bookingMode'
+
+// Where a showing is (Iain, 2026-10-31): a room (default the Cinema) or a
+// village spot. A village spot books no room, so no clash check; it can have
+// No limit or Optional booking. A room showing always requires booking with
+// a seat limit. Returns { cols, room } or { error, status }.
+async function resolveShowingPlace(body, { bodyLocationId, event_date, event_time, event_end_time, excludeEventId, member }) {
+  if (body.location_type === 'village') {
+    const location = cleanVillageLocation(body.location)
+    if (!location) return { error: 'Say where in the village it is', status: 400 }
+    const optional = body.booking_optional === true
+    return {
+      room: null,
+      cols: { location_type: 'village', location, location_id: null,
+        booking_optional: optional, seats_unlimited: optional || body.seats_unlimited === true },
+    }
+  }
+  const room = bodyLocationId
+    ? await fetchLocation(supabaseAdmin, bodyLocationId)
+    : await hubLocation(supabaseAdmin, MOVIES_HUB, CINEMA_NAME)
+  if (!room) return { error: `That venue no longer exists. Pick another on the screening, or set the Show Time venue in Admin > Show Time.`, status: 500 }
+  const conflict = await findAnyRoomConflict(supabaseAdmin, { location_id: room.id, event_date, event_time, event_end_time,
+    ...(excludeEventId ? { exclude_event_id: excludeEventId } : {}), locationName: room.name, viewerId: member.id, canManage: !!member.is_admin })
+  if (conflict) return { error: conflict.message, status: 409 }
+  return {
+    room,
+    cols: { location_type: 'onsite', location: room.name, location_id: room.id, booking_optional: false, seats_unlimited: false },
+  }
+}
 
 // Movie screenings always run in the one dedicated common space -- there's no
 // location picker in the screening form, so every screening is auto-bound to
@@ -201,7 +231,7 @@ export async function GET(req) {
       confirmed_seats,
       waitlist_count,
       waitlist_seats,
-      seats_remaining: Math.max(0, ev.max_seats - confirmed_seats),
+      seats_remaining: Math.max(0, seatCapacity(ev) - confirmed_seats),
       my_booking,
       community_score: ev.movie_id ? (communityAvg[ev.movie_id] || null) : null,
       attendees,
@@ -226,7 +256,8 @@ export async function POST(req) {
   const { error: authErr, status: authStatus, member } = await requireAdminOrAreaOwner(req, 'hub', 'movie')
   if (authErr) return NextResponse.json({ error: authErr }, { status: authStatus })
 
-  const { movie_id, showing_title, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = await req.json()
+  const body = await req.json()
+  const { movie_id, showing_title, location_id: bodyLocationId, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, notes, coordinator_id, reservation_cutoff, allow_nonresident_guests, require_attendee_names } = body
   if (!event_date || !event_time) {
     return NextResponse.json({ error: 'Date and time are required' }, { status: 400 })
   }
@@ -253,13 +284,9 @@ export async function POST(req) {
   // unique; before that two same-named rows made this silently resolve to null.
   // The form sends the venue chosen for THIS screening. Fall back to the hub's
   // nominated venue when it doesn't (an older client, or the API called direct).
-  const cinema = bodyLocationId
-    ? await fetchLocation(supabaseAdmin, bodyLocationId)
-    : await hubLocation(supabaseAdmin, MOVIES_HUB, CINEMA_NAME)
-  if (!cinema) return NextResponse.json({ error: `That venue no longer exists. Pick another on the screening, or set the Show Time venue in Admin > Show Time.` }, { status: 500 })
-  const location_id = cinema.id
-  const conflict = await findAnyRoomConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time, locationName: cinema.name, viewerId: member.id, canManage: !!member.is_admin })
-  if (conflict) return NextResponse.json({ error: conflict.message }, { status: 409 })
+  const placeRes = await resolveShowingPlace(body, { bodyLocationId, event_date, event_time, event_end_time, member })
+  if (placeRes.error) return NextResponse.json({ error: placeRes.error }, { status: placeRes.status })
+  const cinema = placeRes.room
 
   const { data: event, error } = await supabaseAdmin
     .from('events')
@@ -272,7 +299,7 @@ export async function POST(req) {
       require_attendee_names: !!require_attendee_names,
       notes: notes || null, created_by: member.id,
       movie_snapshot: movieSnapshot,
-      location_type: 'onsite', location: cinema.name, location_id,
+      ...placeRes.cols,
     })
     .select().single()
 
@@ -280,7 +307,7 @@ export async function POST(req) {
 
   // "Request Only" (Iain, 2026-08-04): Admin is trusted to have already
   // talked to Ingenia, but gets a reminder to actually go validate it.
-  if (cinema.request_only) {
+  if (cinema?.request_only) {
     await notifyRequestOnlySpace({
       actingMemberId: member.id, eventId: event.id, eventTitle: title,
       eventDate: event_date, locationName: cinema.name,
@@ -336,13 +363,10 @@ export async function PATCH(req) {
 
   // The form sends the venue chosen for THIS screening. Fall back to the hub's
   // nominated venue when it doesn't (an older client, or the API called direct).
-  const cinema = bodyLocationId
-    ? await fetchLocation(supabaseAdmin, bodyLocationId)
-    : await hubLocation(supabaseAdmin, MOVIES_HUB, CINEMA_NAME)
-  if (!cinema) return NextResponse.json({ error: `That venue no longer exists. Pick another on the screening, or set the Show Time venue in Admin > Show Time.` }, { status: 500 })
-  const location_id = cinema.id
-  const conflict = await findAnyRoomConflict(supabaseAdmin, { location_id, event_date, event_time, event_end_time, exclude_event_id: event_id, locationName: cinema.name, viewerId: member.id, canManage: !!member.is_admin })
-  if (conflict) return NextResponse.json({ error: conflict.message }, { status: 409 })
+  const placeRes = await resolveShowingPlace(body, { bodyLocationId, event_date, event_time, event_end_time, excludeEventId: event_id, member })
+  if (placeRes.error) return NextResponse.json({ error: placeRes.error }, { status: placeRes.status })
+  const cinema = placeRes.room
+  const location_id = placeRes.cols.location_id
 
   const { data: before } = await supabaseAdmin
     .from('events').select('event_date, event_time, location_id, content_tba, series_id, showing_name').eq('id', event_id).single()
@@ -354,7 +378,7 @@ export async function PATCH(req) {
   const stillTba = !!before?.content_tba && !contentSet
   if (stillTba) title = TBA_TITLE
 
-  const update = { movie_id: movie_id || null, title, event_date, event_time, event_end_time, max_seats: max_seats || 20, max_seats_per_booking: max_seats_per_booking || 4, notes: notes || null, movie_snapshot: movieSnapshot, reservation_cutoff: reservation_cutoff || null, allow_nonresident_guests: !!allow_nonresident_guests, require_attendee_names: !!require_attendee_names, location_type: 'onsite', location: cinema.name, location_id, content_tba: stillTba }
+  const update = { movie_id: movie_id || null, title, event_date, event_time, event_end_time, max_seats: max_seats || 20, max_seats_per_booking: max_seats_per_booking || 4, notes: notes || null, movie_snapshot: movieSnapshot, reservation_cutoff: reservation_cutoff || null, allow_nonresident_guests: !!allow_nonresident_guests, require_attendee_names: !!require_attendee_names, ...placeRes.cols, content_tba: stillTba }
   if ('showing_name' in body) update.showing_name = (body.showing_name || '').trim().slice(0, SHOWING_NAME_MAX) || null
 
   const { error } = await supabaseAdmin
@@ -374,7 +398,7 @@ export async function PATCH(req) {
 
   // "Request Only" (Iain, 2026-08-04): only nudge when the room actually
   // changed onto a Request Only venue -- not on every unrelated edit.
-  if (cinema.request_only && before?.location_id !== location_id) {
+  if (cinema?.request_only && before?.location_id !== location_id) {
     await notifyRequestOnlySpace({
       actingMemberId: member.id, eventId: event_id, eventTitle: title,
       eventDate: event_date, locationName: cinema.name,

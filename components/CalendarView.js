@@ -6,6 +6,7 @@ import { MoviesIcon, SocialIcon, SpaceIcon, SpecialEventsIcon } from "@/componen
 import ClubScopeDropdown from "@/components/ClubScopeDropdown"
 import { SPACE_BOOKINGS_ENABLED } from "@/lib/features"
 import { loadFilterPrefs, saveFilterPrefs, sortByOnState } from "@/lib/calendarFilterPrefs"
+import { isSeatsUnlimited } from "@/lib/bookingMode"
 
 const FILTER_STORAGE_KEY = "calendarFilters"
 
@@ -87,7 +88,8 @@ function getMondayOf(d) {
 export function EventChip({ event, onTap, compact = false }) {
   const colour = eventColour(event)
   const booked = event.bookings_count || 0
-  const max = event.max_seats || 0
+  // No seat limit (optional / no-limit events, 2026-10-31): show the count only.
+  const max = isSeatsUnlimited(event) ? 0 : (event.max_seats || 0)
   const hasMyBooking = event.my_bookings?.some(b => b.status === "confirmed")
   const hasWaitlist  = event.my_bookings?.some(b => b.status === "waitlist")
 
@@ -131,6 +133,9 @@ export function EventChip({ event, onTap, compact = false }) {
             borderRadius: 4,
             fontWeight: 500,
           }}>{eventLabel(event)}</span>
+          {max === 0 && isSeatsUnlimited(event) && booked > 0 && (
+            <span style={{ fontSize: 12, color: "var(--text-dim)" }}>{booked} coming</span>
+          )}
           {max > 0 && (
             <span style={{ fontSize: 12, color: booked >= max ? "var(--danger)" : "var(--text-dim)" }}>
               {booked}/{max}

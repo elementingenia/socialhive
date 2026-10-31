@@ -28,6 +28,9 @@ import EventNotices from '@/components/EventNotices'
 import InviteNeighbourButton from '@/components/InviteNeighbourButton'
 import { buildShareUrl, resolveEventWindow } from '@/lib/eventShare'
 import ShowTimeWizard from '@/components/ShowTimeWizard'
+import { VILLAGE_LOCATION_MAX, VILLAGE_PLACEHOLDER } from '@/lib/eventLocation'
+import ComingCount from '@/components/ComingCount'
+import { isSeatsUnlimited, isBookingOptional } from '@/lib/bookingMode'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -199,6 +202,14 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   // Iain, 2026-08-07: bring Show Time in line. Default stays 4 so existing
   // screenings' actual live behaviour doesn't change on this deploy.
   const [maxSeatsPerBooking, setMaxSeatsPerBooking] = useState(event?.max_seats_per_booking || 4)
+  // Cinema or In the village (Iain, 2026-10-31). A village showing books no
+  // room and chooses how it takes bookings: a seat limit, No limit, or
+  // Optional (no need to book). Optional is village-only.
+  const [where, setWhere]       = useState(event?.location_type === 'village' ? 'village' : 'cinema')
+  const [place, setPlace]       = useState(event?.location_type === 'village' ? (event?.location || '') : '')
+  const [bookMode, setBookMode] = useState(event?.booking_optional ? 'optional' : event?.seats_unlimited ? 'nolimit' : 'limit')
+  const village = where === 'village'
+  const unlimitedSeats = village && bookMode !== 'limit'
   // Venue for THIS screening. Defaults to the Cinema and renders LOCKED —
   // changing it is a deliberate act, not something to do by brushing past a
   // dropdown (Iain, 2026-07-31).
@@ -313,7 +324,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
   }
 
 
-  const FIELD_ORDER = ['showing', 'date', 'time', 'endTime']
+  const FIELD_ORDER = ['showing', 'date', 'time', 'place', 'endTime']
   const FIELD_MESSAGES = {
     date: 'Date is required',
     time: 'Time is required',
@@ -330,6 +341,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     if (!date) invalid.date = FIELD_MESSAGES.date
     if (!time) invalid.time = FIELD_MESSAGES.time
     if (!endTime) invalid.endTime = FIELD_MESSAGES.endTime
+    if (village && !place.trim()) invalid.place = 'Say where in the village it is'
     return invalid
   }
   const invalidMap = computeInvalidFields()
@@ -359,7 +371,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event_date: date, event_time: time, event_end_time: endTime,
-          location_type: 'onsite', location_id: venueId, exclude_event_id: eventId || null,
+          location_type: village ? 'village' : 'onsite', location_id: village ? null : venueId, exclude_event_id: eventId || null,
         }),
       }).then(r => r.json()).catch(() => ({}))
       if (pre.spaceConflict) {
@@ -376,7 +388,9 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     const body = { movie_id: showMode === 'movie' ? (pickedMovie?.id || null) : null,
                    showing_title: showMode === 'other' ? freeText.trim() : null,
                    ...(event?.series_id ? { showing_name: showingName.trim() || null } : {}),
-                   location_id: venueId || null, event_date: date, event_time: time, event_end_time: endTime, max_seats: Number(maxSeats), max_seats_per_booking: Number(maxSeatsPerBooking), notes: notes || null, coordinator_ids: coordinators, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: Number(maxSeatsPerBooking) > 1 ? allowGuests : false, require_attendee_names: Number(maxSeatsPerBooking) > 1 ? requireNaming : false }
+                   location_type: village ? 'village' : 'onsite', location: village ? place.trim() : null,
+                   booking_optional: village && bookMode === 'optional', seats_unlimited: unlimitedSeats,
+                   location_id: village ? null : (venueId || null), event_date: date, event_time: time, event_end_time: endTime, max_seats: Number(maxSeats), max_seats_per_booking: Number(maxSeatsPerBooking), notes: notes || null, coordinator_ids: coordinators, reservation_cutoff: cutoffFromInputValue(cutoff), allow_nonresident_guests: Number(maxSeatsPerBooking) > 1 ? allowGuests : false, require_attendee_names: Number(maxSeatsPerBooking) > 1 ? requireNaming : false }
     if (eventId) body.event_id = eventId
     // try/finally so the button can NEVER be left stuck on "Saving…". It just
     // was: the route 500'd with an HTML body, res.json() threw, and
@@ -410,7 +424,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
     // "Request Only" (Iain, 2026-08-04): a toast auto-dismissed and was
     // still too easy to miss -- forces an explicit OK click instead, on
     // top of the bell notification.
-    if (venue?.request_only) {
+    if (!village && venue?.request_only) {
       await askRequestOnly(venue.name)
     }
 
@@ -581,9 +595,22 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
           {/* VENUE — locked by default. Preset to the hub's nominated venue;
               "Edit" unlocks it for this screening only. Changing it here does
               NOT change the hub default (Admin > Show Time > Venue does that). */}
-          <div style={{ marginBottom: '1rem' }}>
+          <div ref={el => (fieldRefs.current.place = el)} style={{ marginBottom: '1rem' }}>
             <label style={LABEL}>Venue</label>
-            {!venueEditing ? (
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              {[['cinema', 'A room'], ['village', 'In the village']].map(([v, t]) => (
+                <button key={v} type="button" onClick={() => setWhere(v)} style={{
+                  flex: 1, padding: '0.55rem', borderRadius: 10, fontFamily: 'inherit', fontSize: '0.88rem', fontWeight: 700,
+                  cursor: 'pointer', border: '2px solid', borderColor: where === v ? 'var(--teal)' : 'var(--border)',
+                  background: where === v ? 'var(--teal)12' : 'var(--surface)', color: where === v ? 'var(--teal)' : 'var(--text-dim)',
+                }}>{t}</button>
+              ))}
+            </div>
+            {village ? (
+              <input value={place} onChange={e => setPlace(e.target.value)} maxLength={VILLAGE_LOCATION_MAX}
+                placeholder={VILLAGE_PLACEHOLDER}
+                style={{ ...INPUT, ...(invalidFields.includes('place') ? { border: '2px solid #dc2626', background: 'rgba(220, 38, 38, 0.10)' } : {}) }} />
+            ) : !venueEditing ? (
               <div style={{
                 ...INPUT, display: 'flex', alignItems: 'center', gap: '0.5rem',
                 background: 'var(--surface2)', color: venueName ? 'var(--text)' : 'var(--danger)',
@@ -628,7 +655,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
               </>
             )}
             {/* Only warn when there IS something to warn about. */}
-            {venueClosed && (
+            {!village && venueClosed && (
               <div style={{ fontSize: '0.72rem', color: '#b45309', marginTop: '0.3rem' }}>
                 {venueName} is currently closed for bookings.
               </div>
@@ -640,9 +667,11 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
               {invalidFields.includes('endTime') && <span style={{ color: '#dc2626', fontWeight: 800, marginLeft: 6, textTransform: 'none', letterSpacing: 0 }}>⚠ Required</span>}
             </label>
             <TimeField value={endTime} onChange={setEndTime} colour={endTime ? 'var(--green)' : 'var(--danger)'} invalid={invalidFields.includes('endTime')} minTime={time || null} />
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.3rem' }}>
-              Every screening books {venueName || 'the venue'} as a common space, so an end time keeps it from double-booking.
-            </div>
+            {!village && (
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: '0.3rem' }}>
+                Every screening books {venueName || 'the venue'} as a common space, so an end time keeps it from double-booking.
+              </div>
+            )}
           </div>
 
           <div style={{ marginBottom: '1.5rem' }}>
@@ -650,11 +679,25 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
             <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="e.g. Bring a chair! BYO drinks." rows={2} style={{ ...INPUT, resize: 'vertical' }} />
           </div>
 
-          <div style={{ marginBottom: '1rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-            <div>
-              <label style={LABEL}>Total Seats</label>
-              <input type="number" value={maxSeats} onChange={e => setMaxSeats(e.target.value)} min={1} max={200} style={INPUT} />
+          {village && (
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={LABEL}>Booking</label>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                {[['limit', 'Seat limit'], ['nolimit', 'No limit'], ['optional', 'Optional — let us know']].map(([v, t]) => (
+                  <button key={v} type="button" onClick={() => setBookMode(v)} style={{
+                    flex: '1 1 30%', padding: '0.55rem 0.4rem', borderRadius: 10, fontFamily: 'inherit', fontSize: '0.85rem', fontWeight: 700,
+                    cursor: 'pointer', border: '2px solid', borderColor: bookMode === v ? 'var(--teal)' : 'var(--border)',
+                    background: bookMode === v ? 'var(--teal)12' : 'var(--surface)', color: bookMode === v ? 'var(--teal)' : 'var(--text-dim)',
+                  }}>{t}</button>
+                ))}
+              </div>
             </div>
+          )}
+          <div style={{ marginBottom: '1rem', display: 'grid', gridTemplateColumns: unlimitedSeats ? '1fr' : '1fr 1fr', gap: '0.75rem' }}>
+            {!unlimitedSeats && <div>
+              <label style={LABEL}>Total Seats</label>
+              <input type="number" value={maxSeats} onChange={e => setMaxSeats(e.target.value)} min={1} max={village ? 500 : 200} style={INPUT} />
+            </div>}
             <div>
               <label style={LABEL}>Max per Booking</label>
               <input type="number" value={maxSeatsPerBooking} onChange={e => setMaxSeatsPerBooking(e.target.value)} min={1} max={10} style={INPUT} />
@@ -721,7 +764,7 @@ function ScreeningSheet({ session, event, members, onClose, onSaved, addToast })
 
 // ── Booking Status Strip ───────────────────────────────────────────────────────
 // Always-visible bottom strip — shows booking state and tells user what tapping does
-function BookingStrip({ myBooking, isFull, closed, blocked }) {
+function BookingStrip({ myBooking, isFull, closed, blocked, optional = false }) {
   const hasConfirmed   = myBooking?.has_confirmed || false
   const hasWaitlist    = myBooking?.has_waitlist  || false
   const confirmedSeats = myBooking?.confirmed_seats || 0
@@ -740,7 +783,7 @@ function BookingStrip({ myBooking, isFull, closed, blocked }) {
   if (hasConfirmed) {
     return (
       <div style={{ ...base, background: '#f0fdf4', borderTop: '1px solid #bbf7d0' }}>
-        <span style={{ color: '#15803d' }}>✓ {confirmedSeats} seat{confirmedSeats !== 1 ? 's' : ''} confirmed</span>
+        <span style={{ color: '#15803d' }}>{optional ? `✓ You're coming (${confirmedSeats})` : `✓ ${confirmedSeats} seat${confirmedSeats !== 1 ? 's' : ''} confirmed`}</span>
         <span style={{ color: '#15803d', fontSize: '0.75rem' }}>Tap to modify or cancel →</span>
       </div>
     )
@@ -776,8 +819,8 @@ function BookingStrip({ myBooking, isFull, closed, blocked }) {
   }
   return (
     <div style={{ ...base, background: 'rgba(0,128,128,0.06)', borderTop: '1px solid rgba(0,128,128,0.15)' }}>
-      <span style={{ color: 'var(--teal)' }}>Reserve your seat</span>
-      <span style={{ color: 'var(--teal)', fontSize: '0.75rem' }}>Tap to book →</span>
+      <span style={{ color: 'var(--teal)' }}>{optional ? 'No need to book' : 'Reserve your seat'}</span>
+      <span style={{ color: 'var(--teal)', fontSize: '0.75rem' }}>{optional ? "Tap to say you're coming →" : 'Tap to book →'}</span>
     </div>
   )
 }
@@ -840,7 +883,7 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
   const router = useRouter()
   const [showAttendees, setShowAttendees] = useState(false)
   const movie              = ev.movies
-  const isFull             = ev.seats_remaining === 0
+  const isFull             = !isSeatsUnlimited(ev) && ev.seats_remaining === 0
   // Same bookings-closed consistency fix as Movies Home's NextScreeningCard
   // (Iain, 2026-08-21) -- see lib/booking.js's bookingsClosed(). An existing
   // booker (confirmed or waitlisted) can still open the card to modify/
@@ -966,6 +1009,10 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
               the next tile down. Falls back to its own compact row when the
               screening has no coordinator (EventCoordinators renders
               nothing at all in that case, so there'd be no line to sit on). */}
+          {/* In the village (Iain, 2026-10-31) -- Cinema showings don't show a place. */}
+          {ev.location_type === 'village' && ev.location && (
+            <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text)' }}>📍 {ev.location}</div>
+          )}
           {(() => {
             const coordinatorNames = (ev.coordinators?.length ? ev.coordinators : (ev.coordinator ? [ev.coordinator] : [])).map(c => c.name || c.username)
             const evWindow = resolveEventWindow(ev)
@@ -1028,7 +1075,9 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
             </div>
           )}
           <div style={{ marginTop: '0.2rem' }}>
-            <CapacityBar confirmedSeats={ev.confirmed_seats} maxSeats={ev.max_seats} waitlistSeats={ev.waitlist_seats} />
+            {isSeatsUnlimited(ev)
+              ? <ComingCount event={ev} booked={ev.confirmed_seats} style={{ margin: 0 }} />
+              : <CapacityBar confirmedSeats={ev.confirmed_seats} maxSeats={ev.max_seats} waitlistSeats={ev.waitlist_seats} />}
           </div>
           {ev.notes && <div style={{ color: 'var(--text-dim)', fontSize: '0.78rem', fontStyle: 'italic' }}>{ev.notes}</div>}
         </div>
@@ -1038,7 +1087,7 @@ function ScreeningCard({ ev, isAdmin, isEC = false, freeCostData, onOpen, onEdit
       <EventNotices eventId={ev.id} colour="var(--teal)" style={{ padding: '0 0.75rem' }} />
 
       {/* Booking status strip — always visible */}
-      <BookingStrip myBooking={ev.my_booking} isFull={isFull} closed={closed} blocked={blocked} />
+      <BookingStrip myBooking={ev.my_booking} isFull={isFull} closed={closed} blocked={blocked} optional={isBookingOptional(ev)} />
 
       {/* Attendees accordion */}
       <div style={{ borderTop: '1px solid var(--border)', background: 'var(--surface2)' }}>

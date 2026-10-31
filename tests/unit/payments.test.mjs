@@ -8,7 +8,7 @@ import {
   freeSeatsFor, payableSeats, isAwaitingPayment, sumUnpaidSeats,
   paymentReminderDue, isPartial, isPaid, amountOwing, derivePaymentStatus,
   bookingStatusBadge, paymentSummary, isRefundPending, isRefundIssued, refundsOutstandingTotal,
-  remainingBalance, wholeDollar, balancePhrase, paymentReminderPhrase,
+  remainingBalance, wholeDollar, balancePhrase, paymentReminderPhrase, seatsPhrase, badgeText,
 } from '../../lib/payments.js'
 
 let pass = 0, fail = 0
@@ -43,6 +43,22 @@ ok(paymentReminderDue(paidEvent, { ...confirmedUnpaid, payment_status: 'partial'
 console.log(`\nlib/payments.js paymentReminderDue: ${pass} passed, ${fail} failed`)
 
 // ── derivePaymentStatus (2026-08-11) ─────────────────────────────────────────
+
+// Optional events (2026-10-31): words only, badge label unchanged.
+{
+  const opt = { booking_optional: true, payment_required: false }
+  ok(seatsPhrase(2, 'confirmed', opt) === "You're coming (2)", 'optional seats phrase')
+  ok(seatsPhrase(2, 'booked', {}) === '2 seats booked', 'normal seats phrase')
+  ok(seatsPhrase(1, 'confirmed', {}) === '1 seat confirmed', 'singular phrase')
+  const freeBadge = bookingStatusBadge({ status: 'confirmed' }, opt)
+  ok(freeBadge.label === 'Confirmed', 'badge label stays canonical')
+  ok(badgeText(freeBadge, opt) === "You're coming", 'free optional reads You\'re coming')
+  const paidOpt = { booking_optional: true, payment_required: true, cost: 10 }
+  ok(badgeText({ label: 'Booked' }, paidOpt) === "You're coming", 'paid optional unpaid reads You\'re coming')
+  ok(badgeText({ label: 'Confirmed' }, paidOpt) === 'Confirmed', 'paid optional paid reads Confirmed')
+  ok(badgeText({ label: 'Booked' }, {}) === 'Booked', 'normal event unchanged')
+}
+
 let pass2 = 0, fail2 = 0
 const ok2 = (cond, msg) => { cond ? pass2++ : (fail2++, console.log('  ✗', msg)) }
 

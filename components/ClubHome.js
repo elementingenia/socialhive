@@ -24,6 +24,8 @@ import { nextOccurrence } from "@/lib/recurrence"
 import EventImagePicker from "@/components/EventImagePicker"
 import MembersToggle from "@/components/MembersToggle"
 import { useLocations } from "@/lib/useLocations"
+import ComingCount from "@/components/ComingCount"
+import { isSeatsUnlimited, isBookingOptional } from "@/lib/bookingMode"
 import { LOCATION_TYPES, LOCATION_TYPE_LABELS, VILLAGE_LOCATION_MAX, VILLAGE_PLACEHOLDER } from "@/lib/eventLocation"
 import { cutoffToDateValue, cutoffFromDateValue } from "@/lib/booking"
 import TimeField from "@/components/TimeField"
@@ -113,7 +115,7 @@ function Toast({ msg, type }) {
 }
 
 // ── Booking Strip ────────────────────────────────────────────────────────────
-function BookingStrip({ isJoined, isWaitlisted = false, seats = 1, waitlistSeats = 0, waitlistPosition = null, hasBook, bookReturnDate, closed, blocked, open, colour = "var(--purple)" }) {
+function BookingStrip({ isJoined, isWaitlisted = false, seats = 1, waitlistSeats = 0, waitlistPosition = null, hasBook, bookReturnDate, closed, blocked, open, optional = false, colour = "var(--purple)" }) {
   const base = { display: "flex", alignItems: "center", justifyContent: "space-between",
     padding: "0.55rem 1rem", fontSize: "0.82rem", fontWeight: 600, gap: "0.5rem" }
   // "Open, all welcome" events (Iain, 2026-09-11 -- Groups & Clubs dry run):
@@ -154,7 +156,7 @@ function BookingStrip({ isJoined, isWaitlisted = false, seats = 1, waitlistSeats
       <div style={{ background: "#f0fdf4", borderTop: "1px solid #bbf7d0" }}>
         <div style={base}>
           <span style={{ color: "#15803d" }}>
-            ✓ Booked {seats} place{seats !== 1 ? "s" : ""}
+            {optional ? `✓ You're coming (${seats})` : `✓ Booked ${seats} place${seats !== 1 ? "s" : ""}`}
             {waitlistSeats > 0 && <span style={{ color: "#d97706" }}>{` · +${waitlistSeats} ${waitlistLabel(waitlistPosition).replace(/^On/, "on")}`}</span>}
           </span>
           <span style={{ color: "#15803d", fontSize: "0.75rem" }}>Tap to manage →</span>
@@ -169,7 +171,7 @@ function BookingStrip({ isJoined, isWaitlisted = false, seats = 1, waitlistSeats
   }
   return (
     <div style={{ ...base, background: colour + "0f", borderTop: `1px solid ${colour}26` }}>
-      <span style={{ color: clubInk(colour), fontSize: "0.75rem" }}>Tap to sign up →</span>
+      <span style={{ color: clubInk(colour), fontSize: "0.75rem" }}>{optional ? "No need to book — tap to say you're coming →" : "Tap to sign up →"}</span>
     </div>
   )
 }
@@ -837,9 +839,10 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
 
         {/* Seats booked / left -- not on "open, all welcome" events
             (no capacity), same rule as the Show attendees row below. */}
-        {event.booking_required !== false && (
-          <CapacityBar booked={seatCount?.confirmed || 0} max={event.max_seats}
-            waitlist={waitlistInfo?.waitlist_seats ?? (seatCount?.waitlist || 0)} />
+        {event.booking_required !== false && (isSeatsUnlimited(event)
+          ? <ComingCount event={event} booked={seatCount?.confirmed || 0} />
+          : <CapacityBar booked={seatCount?.confirmed || 0} max={event.max_seats}
+              waitlist={waitlistInfo?.waitlist_seats ?? (seatCount?.waitlist || 0)} />
         )}
 
         {/* Show attendees row -- meaningless on an "open, all welcome"
@@ -1239,7 +1242,7 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
       </div>
 
       {/* Booking status strip */}
-      <BookingStrip isJoined={isJoined} isWaitlisted={isWaitlisted} waitlistSeats={myWaitlistSeats} waitlistPosition={waitlistInfo?.position || null} seats={booking?.seats || 1} hasBook={!!booking?.has_book} bookReturnDate={event?.book_return_date} closed={closed} blocked={blocked} open={event.booking_required === false} colour={colour} />
+      <BookingStrip optional={isBookingOptional(event)} isJoined={isJoined} isWaitlisted={isWaitlisted} waitlistSeats={myWaitlistSeats} waitlistPosition={waitlistInfo?.position || null} seats={booking?.seats || 1} hasBook={!!booking?.has_book} bookReturnDate={event?.book_return_date} closed={closed} blocked={blocked} open={event.booking_required === false} colour={colour} />
 
     </div>
   )
@@ -1738,6 +1741,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
     // policy applies. Defaults true (Requires booking) for both new and
     // existing events, matching the DB column's own default.
     booking_required: event?.booking_required !== false,
+    booking_optional: event?.booking_required !== false && !!event?.booking_optional,
     allow_nonresident_guests: event ? !!event.allow_nonresident_guests : true, // new events default to "Anyone" (2026-07-25)
     require_attendee_names: !!event?.require_attendee_names,
     payment_required: event?.payment_required || false,
@@ -2033,6 +2037,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
             max_seats: Number(form.max_seats) || 20,
             max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
             booking_required: !!form.booking_required,
+            booking_optional: !!form.booking_required && !!form.booking_optional,
             allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
             require_attendee_names: Number(form.max_seats_per_booking) > 1 ? !!form.require_attendee_names : false,
             payment_required: !!form.payment_required,
@@ -2130,6 +2135,7 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       allow_personal_vehicles: form.location_type === "offsite" ? !!form.allow_personal_vehicles : false,
       max_seats_per_booking: Number(form.max_seats_per_booking) || 1,
       booking_required: !!form.booking_required,
+      booking_optional: !!form.booking_required && !!form.booking_optional,
       allow_nonresident_guests: Number(form.max_seats_per_booking) > 1 ? !!form.allow_nonresident_guests : false,
       require_attendee_names: Number(form.max_seats_per_booking) > 1 ? !!form.require_attendee_names : false,
       payment_required: !!form.payment_required,
@@ -2518,15 +2524,26 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
       <div style={{ marginBottom: 12 }}>
         <label style={labelStyle}>Booking</label>
         <div style={{ display: "flex", gap: 8 }}>
-          {[{ v: true, t: "Requires booking" }, { v: false, t: "Open — All Welcome" }].map(opt => (
-            <button key={String(opt.v)} type="button" onClick={() => set("booking_required", opt.v)}
+          {/* Optional (Iain, 2026-10-31): no need to book, but residents can
+              say they're coming. No seat limit. */}
+          {[{ v: "required", t: "Requires booking" }, { v: "optional", t: "Optional — let us know" }, { v: "open", t: "Open — All Welcome" }].map(opt => {
+            const cur = !form.booking_required ? "open" : form.booking_optional ? "optional" : "required"
+            const on = cur === opt.v
+            return (
+            <button key={opt.v} type="button" onClick={() => { set("booking_required", opt.v !== "open"); set("booking_optional", opt.v === "optional") }}
               style={{ flex: 1, padding: "0.6rem 0.5rem", borderRadius: 10, fontSize: "0.88rem", fontFamily: "inherit", cursor: "pointer",
-                border: `1.5px solid ${!!form.booking_required === opt.v ? colour : "var(--border)"}`,
-                background: !!form.booking_required === opt.v ? colour : "var(--surface)",
-                color: !!form.booking_required === opt.v ? "#fff" : "var(--text)",
-                fontWeight: !!form.booking_required === opt.v ? 700 : 500 }}>{opt.t}</button>
-          ))}
+                border: `1.5px solid ${on ? colour : "var(--border)"}`,
+                background: on ? colour : "var(--surface)",
+                color: on ? "#fff" : "var(--text)",
+                fontWeight: on ? 700 : 500 }}>{opt.t}</button>
+            )
+          })}
         </div>
+        {form.booking_required && form.booking_optional && (
+          <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 6 }}>
+            No seat limit. Residents can tap I&apos;m coming so you know numbers.
+          </div>
+        )}
         {!form.booking_required && (
           <div style={{ fontSize: "0.72rem", color: "var(--text-dim)", marginTop: 6 }}>
             Anyone can attend — no seat count, payment, or sign-up required.
@@ -2541,13 +2558,13 @@ function AdminEventForm({ event, members, onSave, onClose, club, clubPattern = n
           bring-a-dish. Grouped together per Iain, 2026-08-07 -- these were
           previously split across "Capacity & Cost" and "Extras", which is
           why Bring Something read as randomly placed. */}
-      <div style={{ marginBottom: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <div>
+      <div style={{ marginBottom: 12, display: "grid", gridTemplateColumns: form.booking_optional ? "1fr" : "1fr 1fr", gap: 10 }}>
+        {!form.booking_optional && <div>
           <label style={labelStyle}>Total Seats</label>
           <input type="number" min={1} max={500} value={form.max_seats}
             onChange={e => set("max_seats", e.target.value)} onWheel={e => e.currentTarget.blur()}
             style={inputStyle} />
-        </div>
+        </div>}
         <div>
           <label style={labelStyle}>Max per Booking</label>
           <input type="number" min={1} max={10} value={form.max_seats_per_booking}
@@ -3089,7 +3106,7 @@ export default function ClubHome({ club }) {
   async function openEventById(id) {
     const { data } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver_name, bus_driver_free, booking_required, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, display_name, username), image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, event_end_time, max_seats, booking_optional, seats_unlimited, booking_required, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver_name, bus_driver_free, booking_required, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, display_name, username), image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("id", id).single()
     if (!data) return
     setSlideOutEvent(toSlideOutShape(data, myBookings[id]))
@@ -3152,7 +3169,7 @@ export default function ClubHome({ club }) {
     // All non-archived BC events
     const { data: evs } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, max_seats, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver_name, bus_driver_free, booking_required, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, display_name, username), image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
+      .select("id, title, event_date, event_time, event_end_time, max_seats, booking_optional, seats_unlimited, booking_required, max_seats_per_booking, allow_nonresident_guests, require_attendee_names, cost, payment_due_by, payment_required, location_type, location, location_id, has_bus, bus_max_seats, bus_driver_id, bus_driver_name, bus_driver_free, booking_required, allow_personal_vehicles, bus_driver:members!bus_driver_id(name, display_name, username), image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, theme_name, bring_category_ids, bring_required, description, welcome_message, book_id, kit_return_date, book_return_date, reservation_cutoff, book_snapshot, series_id, is_series_exception, books(id, title, author, cover_url, rating, rating_link, summary, published_year), event_coordinators(id, member_id, replaced_at, members!event_coordinators_member_id_fkey(name, username))")
       .eq("club_id", club.id)
       .eq("archived", false)
       .order("event_date", { ascending: true })

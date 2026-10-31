@@ -13,6 +13,7 @@ import { applyTransport } from "@/lib/applyTransport"
 import { releaseTransportOnCancel } from "@/lib/releaseTransportOnCancel"
 import { residentBusDriverId, stripDriverFromBus } from "@/lib/busDriver"
 import { ensureBusDriverSeat } from "@/lib/busDriverSeat"
+import { seatCapacity } from "@/lib/bookingMode"
 
 // force-dynamic + the shared no-store supabaseAdmin (lib/supabaseAdmin.js) keep
 // this GET route reading LIVE data. Without it, Next's fetch cache once dropped a
@@ -452,7 +453,7 @@ export async function PATCH(req) {
     }
 
     const { data: ev } = await supa
-      .from("events").select("id, max_seats, max_seats_per_booking, unassigned_seats_count, hub_type, book_id, payment_required, title, allow_nonresident_guests, require_attendee_names, cost, has_bus, bus_driver_id, bus_driver_free")
+      .from("events").select("id, max_seats, max_seats_per_booking, unassigned_seats_count, booking_optional, seats_unlimited, booking_required, hub_type, book_id, payment_required, title, allow_nonresident_guests, require_attendee_names, cost, has_bus, bus_driver_id, bus_driver_free")
       .eq("id", event_id).single()
     if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
 
@@ -525,7 +526,7 @@ export async function PATCH(req) {
       .from("bookings").select("seats, status").eq("event_id", event_id).neq("status", "cancelled")
     const confirmedSeats = (allBookings || [])
       .filter(b => b.status === "confirmed").reduce((s, b) => s + (b.seats || 1), 0)
-    const available = Math.max(0, (ev.max_seats || 0) - (ev.unassigned_seats_count || 0) - confirmedSeats)
+    const available = Math.max(0, seatCapacity(ev) - (ev.unassigned_seats_count || 0) - confirmedSeats)
 
     let bookingStatus
     if (force_status === "waitlist") bookingStatus = "waitlist"
@@ -696,7 +697,7 @@ export async function PATCH(req) {
     }
 
     const { data: ev } = await supa
-      .from("events").select("id, title, max_seats, max_seats_per_booking, unassigned_seats_count, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names")
+      .from("events").select("id, title, max_seats, max_seats_per_booking, unassigned_seats_count, booking_optional, seats_unlimited, booking_required, payment_required, reservation_cutoff, allow_nonresident_guests, require_attendee_names")
       .eq("id", event_id).single()
     if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
 
@@ -848,7 +849,7 @@ export async function PATCH(req) {
     if (names.length === 0) return NextResponse.json({ error: "Enter at least one name" }, { status: 400 })
 
     const { data: ev } = await supa.from("events")
-      .select("max_seats, allow_unassigned_seats, unassigned_seat_names").eq("id", event_id).single()
+      .select("max_seats, booking_optional, seats_unlimited, booking_required, allow_unassigned_seats, unassigned_seat_names").eq("id", event_id).single()
     if (!ev) return NextResponse.json({ error: "Event not found" }, { status: 404 })
     if (!ev.allow_unassigned_seats) {
       return NextResponse.json({ error: "This event doesn't allow unassigned seats" }, { status: 400 })
@@ -861,7 +862,7 @@ export async function PATCH(req) {
 
     const existingNames = Array.isArray(ev.unassigned_seat_names) ? ev.unassigned_seat_names : []
     const newNames = [...existingNames, ...names]
-    const available = Math.max(0, (ev.max_seats || 0) - confirmedSeats - existingNames.length)
+    const available = Math.max(0, seatCapacity(ev) - confirmedSeats - existingNames.length)
     if (names.length > available) {
       return NextResponse.json({
         error: available === 0

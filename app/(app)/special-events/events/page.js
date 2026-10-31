@@ -13,7 +13,7 @@ import BusDriverTag from "@/components/BusDriverTag"
 import RichEditor, { bbToHtml } from "@/components/RichEditor"
 import EventImagePicker from "@/components/EventImagePicker"
 import ExpandableText from "@/components/ExpandableText"
-import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, isRefundPending, isRefundIssued, paymentSummary, reconciliationIsStale, balancePhrase, remainingBalance, wholeDollar, amountOwing, isRemindedToday, payableSeats } from "@/lib/payments"
+import { sumUnpaidSeats, bookingStatusBadge, seatsCost, isPaid as computeIsPaid, isSubmitted as computeIsSubmitted, isPartial as computeIsPartial, isRefundPending, isRefundIssued, paymentSummary, reconciliationIsStale, balancePhrase, remainingBalance, wholeDollar, amountOwing, isRemindedToday, payableSeats, seatsPhrase, badgeText } from "@/lib/payments"
 import { cutoffToInputValue, cutoffFromInputValue, bookingsClosed } from "@/lib/booking"
 import { useLocations } from "@/lib/useLocations"
 import { LOCATION_TYPES, LOCATION_TYPE_LABELS, VILLAGE_LOCATION_MAX, VILLAGE_PLACEHOLDER } from "@/lib/eventLocation"
@@ -35,6 +35,8 @@ import InviteNeighbourButton from "@/components/InviteNeighbourButton"
 import MenuButton from "@/components/MenuButton"
 import { buildShareUrl, resolveEventWindow } from "@/lib/eventShare"
 import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
+import ComingCount from "@/components/ComingCount"
+import { isSeatsUnlimited, isBookingOptional } from "@/lib/bookingMode"
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const INPUT = {
@@ -136,12 +138,12 @@ function BookingStrip({ myBooking, myWaitlist, waitlistPosition, event, isFull, 
     const balance = isPartialBooking ? balancePhrase(myBooking, event, seats) : null
     const submitted = badge.label !== "Confirmed" && !isPartialBooking && computeIsSubmitted(myBooking)
     const label = badge.label === "Confirmed"
-      ? `✓ ${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Paid " + total : ""}`
+      ? `✓ ${seatsPhrase(seats, statusWord, event)}${total ? " · Paid " + total : ""}`
       : isPartialBooking
-        ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Unpaid ${balance}`
+        ? `${seatsPhrase(seats, statusWord, event)} · Unpaid ${balance}`
         : submitted
-          ? `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord} · Payment submitted${total ? " " + total : ""}`
-          : `${seats} seat${seats !== 1 ? "s" : ""} ${statusWord}${total ? " · Unpaid " + total : ""}`
+          ? `${seatsPhrase(seats, statusWord, event)} · Payment submitted${total ? " " + total : ""}`
+          : `${seatsPhrase(seats, statusWord, event)}${total ? " · Unpaid " + total : ""}`
     const bg = badge.label === "Confirmed" ? "#f0fdf4" : submitted ? "#f0fdfa" : "#fffbeb"
     const border = badge.label === "Confirmed" ? "#bbf7d0" : submitted ? "#99f6e4" : "#fde68a"
     const textColour = badge.label === "Confirmed" ? badge.color : submitted ? "#0f766e" : badge.color
@@ -186,8 +188,8 @@ function BookingStrip({ myBooking, myWaitlist, waitlistPosition, event, isFull, 
   }
   return (
     <div style={{ ...base, background: "rgba(176,84,64,0.06)", borderTop: "1px solid rgba(176,84,64,0.15)" }}>
-      <span style={{ color: "var(--special)" }}>Book your spot</span>
-      <span style={{ color: "var(--special)", fontSize: "0.75rem" }}>Tap to book →</span>
+      <span style={{ color: "var(--special)" }}>{isBookingOptional(event) ? "Everyone's welcome" : "Book your spot"}</span>
+      <span style={{ color: "var(--special)", fontSize: "0.75rem" }}>{isBookingOptional(event) ? "No need to book · tap if you're coming →" : "Tap to book →"}</span>
     </div>
   )
 }
@@ -552,6 +554,7 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
     description:           event?.description         || "",
     welcome_message:       event?.welcome_message     || "",
     max_seats:             event?.max_seats           ?? 20,
+    booking_optional:      !!event?.booking_optional,
     max_seats_per_booking: event?.max_seats_per_booking ?? 2,
     payment_required:      event?.payment_required    || false,
     cost:                  event?.cost                || "",
@@ -687,6 +690,7 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
       ...form,
       cost:                  form.payment_required ? Number(form.cost) : 0,
       max_seats:             Number(form.max_seats),
+      booking_optional:      !!form.booking_optional,
       max_seats_per_booking: Number(form.max_seats_per_booking),
       coordinator_ids:       coordinators.map(m => m.id),
       bus_driver_id:         form.has_bus && busDriverMode === "resident" ? busDriver?.id || null : null,
@@ -937,14 +941,37 @@ function SpecialEventForm({ event, session, members = [], onClose, onSaved }) {
           </div>
 
 
+          {/* Booking (Iain, 2026-10-31): Optional = no need to book, residents
+              can say they're coming. No seat limit, never a waitlist. */}
+          <div style={FIELD}>
+            <label style={LABEL}>Booking</label>
+            <div style={{ display: "flex", gap: "0.5rem" }}>
+              {[{ v: false, t: "Requires booking" }, { v: true, t: "Optional — let us know" }].map(opt => {
+                const on = !!form.booking_optional === opt.v
+                return (
+                  <button key={String(opt.v)} type="button" onClick={() => set("booking_optional", opt.v)}
+                    style={{ flex: 1, padding: "0.55rem", borderRadius: "10px", fontFamily: "inherit", fontSize: "0.88rem",
+                      fontWeight: 700, cursor: "pointer", border: "2px solid",
+                      borderColor: on ? "var(--special)" : "var(--border)", background: on ? "var(--special)18" : "var(--surface)",
+                      color: on ? "var(--special)" : "var(--text-dim)" }}>{opt.t}</button>
+                )
+              })}
+            </div>
+            {form.booking_optional && (
+              <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "0.4rem" }}>
+                No seat limit. Residents can tap I&apos;m coming so you know numbers.
+              </div>
+            )}
+          </div>
+
           {/* Capacity */}
-          <div style={{ ...FIELD, display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
-            <div>
+          <div style={{ ...FIELD, display: "grid", gridTemplateColumns: form.booking_optional ? "1fr" : "1fr 1fr", gap: "0.75rem" }}>
+            {!form.booking_optional && <div>
               <label style={LABEL}>Total Seats</label>
               <input type="number" min={1} max={500} value={form.max_seats}
                 onChange={e => set("max_seats", e.target.value)}
                 onWheel={e => e.currentTarget.blur()} style={INPUT} />
-            </div>
+            </div>}
             <div>
               <label style={LABEL}>Max per Booking</label>
               <input type="number" min={1} max={10} value={form.max_seats_per_booking}
@@ -1513,7 +1540,7 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
                   background: badge.bg, color: badge.color,
                   borderRadius: "20px", padding: "0.2rem 0.55rem",
                   fontSize: "0.7rem", fontWeight: 700, whiteSpace: "nowrap",
-                }}>{badge.label === "Confirmed" ? `✓ ${badge.label}` : badge.label}</span>
+                }}>{badge.label === "Confirmed" ? `✓ ${badgeText(badge, event)}` : badgeText(badge, event)}</span>
               )
             })()}
             {isWaitlist && (
@@ -1619,10 +1646,12 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
 
         <EventNotices eventId={event.id} colour="var(--special)" />
 
-        <CapacityBar booked={booked} max={event.max_seats} waitlist={waiting} />
+        {isSeatsUnlimited(event)
+          ? <ComingCount event={event} booked={booked} />
+          : <CapacityBar booked={booked} max={event.max_seats} waitlist={waiting} />}
       </div>
       {/* Booking status strip — always visible */}
-      <BookingStrip myBooking={myBooking} myWaitlist={myWaitlist} waitlistPosition={waitlistInfo?.position || null} event={event} isFull={booked >= event.max_seats && event.max_seats > 0} closed={closed} blocked={blocked} />
+      <BookingStrip myBooking={myBooking} myWaitlist={myWaitlist} waitlistPosition={waitlistInfo?.position || null} event={event} isFull={!isSeatsUnlimited(event) && booked >= event.max_seats && event.max_seats > 0} closed={closed} blocked={blocked} />
 
       {/* Attendees accordion */}
       {event.max_seats > 0 && (
@@ -1631,7 +1660,7 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
             style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 1rem", background: "none", border: "none", cursor: "pointer", fontSize: "0.75rem", color: "var(--text-dim)", fontFamily: "inherit" }}>
             <span>
               <strong style={{ color: "var(--text)" }}>{booked} seat{booked !== 1 ? "s" : ""}</strong>
-              <span style={{ marginLeft: "0.4rem" }}>of {event.max_seats}</span>
+              {!isSeatsUnlimited(event) && <span style={{ marginLeft: "0.4rem" }}>of {event.max_seats}</span>}
               {isAdmin && unpaidSeats > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.4rem" }}>({unpaidSeats} unpaid)</span>}
               {canManagePayments && waiting > 0 && <span style={{ color: "var(--amber-dark)", marginLeft: "0.4rem" }}>· {waiting} waiting</span>}
               {event.has_bus && <span style={{ color: "var(--text-dim)", marginLeft: "0.4rem" }}>· 🚌 {busSeats}{event.bus_max_seats != null ? `/${event.bus_max_seats}` : ""}</span>}
@@ -2174,7 +2203,7 @@ export default function SocialEvents() {
 
     const { data: eventsData } = await supabase
       .from("events")
-      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, max_seats_per_booking, allow_unassigned_seats, unassigned_seats_count, unassigned_seat_names, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, bus_driver_name, bus_driver_free, bus_max_seats, allow_personal_vehicles, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, display_name, username), bookings(id, status, seats, payment_status, amount_paid, payment_reminded_at, refund_due, refund_paid_at, member_id, contact_id, bus_passenger, own_way, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
+      .select("id, title, event_date, event_time, event_end_time, description, welcome_message, max_seats, booking_optional, seats_unlimited, booking_required, max_seats_per_booking, allow_unassigned_seats, unassigned_seats_count, unassigned_seat_names, allow_nonresident_guests, require_attendee_names, cost, payment_required, payment_due_by, reservation_cutoff, show_attendee_names, is_public, has_bus, bus_driver_id, bus_driver_name, bus_driver_free, bus_max_seats, allow_personal_vehicles, location_type, location, location_id, image_url, image_focal_x, image_focal_y, has_dining, menu_type, menu_text, menu_url, menu_file_name, payments_reconciled_at, payments_reconciled_by, reconciled_by_member:members!payments_reconciled_by(name, username), bus_driver:members!bus_driver_id(name, display_name, username), bookings(id, status, seats, payment_status, amount_paid, payment_reminded_at, refund_due, refund_paid_at, member_id, contact_id, bus_passenger, own_way, booked_at, updated_at, member:members!member_id(id, name, display_name, username, hide_name), contact:contacts!contact_id(id, name)), booking_attendees(owner_id, owner_contact_id, member_id, contact_id, guest_name, is_bus_passenger, member:members!member_id(name, display_name, hide_name), contact:contacts!contact_id(name))")
       .eq("hub_type", "special")
       .eq("archived", false)
       .order("event_date", { ascending: true })

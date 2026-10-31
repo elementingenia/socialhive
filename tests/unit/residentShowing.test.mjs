@@ -3,7 +3,7 @@
 
 import {
   cinemaCapacity, canUseWizard, validateResidentShowing, allResidentsAudience,
-  resolveCoordinatorIds, DEFAULT_CINEMA_CAPACITY, NOTIFY_CHOICES,
+  resolveCoordinatorIds, DEFAULT_CINEMA_CAPACITY, NOTIFY_CHOICES, showingPlace, VILLAGE_SEATS_MAX,
 } from '../../lib/residentShowing.js'
 
 let pass = 0, fail = 0
@@ -72,6 +72,25 @@ eq(resolveCoordinatorIds({ coordinator_ids: ['a', 'b', 'a'] }, { isManager: fals
 eq(resolveCoordinatorIds({ coordinator_id: 'a' }, { isManager: true }).ids.join(','), 'a', 'old single-coordinator body still works')
 eq(resolveCoordinatorIds({ coordinator_ids: [] }, { isManager: true }).ids.length, 0, 'admins/Owners may clear the coordinator')
 ok(!!resolveCoordinatorIds({ coordinator_ids: [] }, { isManager: false }).error, 'a coordinator cannot leave it with none')
+
+// ── In the village (Iain, 2026-10-31) ────────────────────────────────────────
+eq(showingPlace({}, { cinemaCapacity: 30 }).capacity, 30, 'cinema keeps cinema capacity')
+eq(showingPlace({}).village, false, 'default is cinema')
+ok(!!showingPlace({ location_type: 'village', location: '  ' }).error, 'village needs a place')
+ok(!!showingPlace({ location_type: 'village', location: 'Lake lawn', max_seats: 0 }).error, 'village limit must be >= 1')
+ok(!!showingPlace({ location_type: 'village', location: 'Lake lawn', max_seats: VILLAGE_SEATS_MAX + 1 }).error, 'village limit capped')
+const lim = showingPlace({ location_type: 'village', location: ' Lake  lawn ', max_seats: 12 })
+eq(lim.capacity, 12, 'village seat limit')
+eq(lim.location, 'Lake lawn', 'village place cleaned')
+eq(lim.seats_unlimited, false, 'limit is limited')
+const nl = showingPlace({ location_type: 'village', location: 'Lake lawn', seats_unlimited: true })
+eq(nl.seats_unlimited, true, 'no limit')
+eq(nl.booking_optional, false, 'no limit still requires booking')
+const opt = showingPlace({ location_type: 'village', location: 'Lake lawn', booking_optional: true })
+eq(opt.booking_optional && opt.seats_unlimited, true, 'optional implies no limit')
+eq(v({ ingenia_confirmed: false }, { village: true }), null, 'village skips the Ingenia question')
+ok(!!v({ ingenia_confirmed: false }), 'cinema still needs Ingenia')
+ok(/only 5 seats/.test(v({ seats_kept: 6 }, { village: true, capacity: 5 }) || ''), 'village seat message')
 
 console.log(`residentShowing: ${pass} passed, ${fail} failed`)
 if (fail) process.exit(1)

@@ -8,6 +8,7 @@ import { checkCancelPaymentGuard } from "@/lib/eventCancelGuard"
 import { validateBringRequirement } from "@/lib/attendees"
 import { sydneyTodayStr } from "@/lib/date"
 import { normaliseLocationType, villageLocation } from "@/lib/eventLocation"
+import { normaliseBookingMode } from "@/lib/bookingMode"
 
 // Recurring event series — create / end. Occurrences are materialised as real
 // events by generateSeriesEvents (scope §3). A series fires exactly ONE
@@ -59,7 +60,7 @@ function applySeriesLocation(obj) {
 }
 
 const PROPAGATE = ["title","description","welcome_message","event_time","location_type","location","location_id","event_end_time",
-  "max_seats","max_seats_per_booking","allow_nonresident_guests","require_attendee_names","booking_required","payment_required","cost",
+  "max_seats","max_seats_per_booking","allow_nonresident_guests","require_attendee_names","booking_required","booking_optional","seats_unlimited","payment_required","cost",
   "bring_category_ids","bring_required","theme_name","is_public","show_attendee_names"]
 
 // "Open, all welcome" events (Iain, 2026-09-11 — Groups & Clubs dry run):
@@ -159,6 +160,8 @@ export async function POST(req) {
     location_id: body.location_id || null, event_end_time: body.event_end_time || null,
     max_seats: body.max_seats ?? 20, max_seats_per_booking: body.max_seats_per_booking ?? 1,
     booking_required: body.booking_required !== false,
+    booking_optional: body.booking_optional === true,
+    seats_unlimited: body.seats_unlimited === true,
     allow_nonresident_guests: !!body.allow_nonresident_guests,
     require_attendee_names: !!body.require_attendee_names,
     payment_required: !!body.payment_required, cost: body.payment_required ? (body.cost ?? 0) : 0,
@@ -167,6 +170,7 @@ export async function POST(req) {
     coordinator_ids: Array.isArray(body.coordinator_ids) ? body.coordinator_ids : [],
   })
   if (!row.start_date) return NextResponse.json({ error: "start_date required" }, { status: 400 })
+  normaliseBookingMode(row)
   const locErr = applySeriesLocation(row)
   if (locErr) return NextResponse.json({ error: locErr }, { status: 400 })
   const bringCheck = validateBringRequirement(row)
@@ -258,6 +262,7 @@ export async function PATCH(req) {
     const patch = {}
     for (const k of PROPAGATE) if (k in body) patch[k] = body[k]
     enforceOpenEventRules(patch)
+    normaliseBookingMode(patch)
     const patchLocErr = applySeriesLocation(patch)
     if (patchLocErr) return NextResponse.json({ error: patchLocErr }, { status: 400 })
     if ("bring_required" in patch || "bring_category_ids" in patch) {

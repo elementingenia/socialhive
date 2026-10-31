@@ -10,6 +10,7 @@ import { findAnyRoomConflict } from "@/lib/spaceBookings"
 import { notifyRequestOnlySpace } from "@/lib/notifyRequestOnlySpace"
 import { validateBringRequirement } from "@/lib/attendees"
 import { normaliseBusDriver } from "@/lib/busDriver"
+import { normaliseBookingMode } from "@/lib/bookingMode"
 
 // Club event create/edit — moved server-side (2026-07-23) as part of the Event
 // Clash / Space Booking scope (Social_Hive_Event_Clash_Space_Booking_Scope.md,
@@ -77,7 +78,7 @@ async function validateSpace(payload, excludeEventId, viewerId, canManage) {
 
 const FIELDS = ["club_id", "event_date", "event_time", "event_end_time", "title", "is_public", "show_attendee_names",
   "description", "welcome_message", "book_id", "kit_return_date", "book_return_date", "reservation_cutoff", "max_seats",
-  "location_type", "location", "location_id", "has_bus", "bus_driver_id", "bus_driver_name", "bus_driver_free", "bus_max_seats", "allow_personal_vehicles", "max_seats_per_booking", "allow_nonresident_guests", "require_attendee_names", "booking_required", "payment_required", "cost",
+  "location_type", "location", "location_id", "has_bus", "bus_driver_id", "bus_driver_name", "bus_driver_free", "bus_max_seats", "allow_personal_vehicles", "max_seats_per_booking", "allow_nonresident_guests", "require_attendee_names", "booking_required", "booking_optional", "payment_required", "cost",
   "payment_due_by", "bring_category_ids", "bring_required", "theme_name", "book_snapshot",
   "has_dining", "menu_type", "menu_text"]
 
@@ -104,6 +105,7 @@ function buildPayload(body, isInsert) {
   const payload = {}
   for (const k of FIELDS) if (k in body) payload[k] = body[k]
   if (isInsert) { payload.hub_type = "club"; payload.archived = false }
+  normaliseBookingMode(payload)
   // Location kind (Iain, 2026-10-31): only Off-site keeps the bus and cars.
   if ("location_type" in payload) {
     payload.location_type = normaliseLocationType(payload.location_type)
@@ -218,7 +220,7 @@ export async function PATCH(req) {
     if (series_scope === "future") {
       const PROP = ["title", "description", "welcome_message", "event_time", "event_end_time", "location_type",
         "location", "location_id", "max_seats", "max_seats_per_booking", "allow_nonresident_guests", "require_attendee_names",
-        "booking_required", "payment_required", "cost", "bring_category_ids", "bring_required", "theme_name", "is_public", "show_attendee_names"]
+        "booking_required", "booking_optional", "seats_unlimited", "payment_required", "cost", "bring_category_ids", "bring_required", "theme_name", "is_public", "show_attendee_names"]
       const fields = {}
       for (const k of PROP) if (k in payload) fields[k] = payload[k]
       await fetch(new URL("/api/series", req.url), {

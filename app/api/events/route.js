@@ -43,7 +43,7 @@ export async function GET(req) {
   let query = supabaseAdmin
     .from('events')
     .select(`
-      id, hub_type, title, event_date, event_time, max_seats, max_seats_per_booking,
+      id, hub_type, title, event_date, event_time, max_seats, max_seats_per_booking, booking_optional, seats_unlimited,
       is_public, cost, description, payment_required, show_attendee_names, archived,
       unassigned_seats_count,
       reservation_cutoff, payment_due_by, allow_nonresident_guests, require_attendee_names, club_id,
