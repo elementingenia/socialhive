@@ -1263,6 +1263,15 @@ export default function HelpGuidePage() {
                 individual bookings, or update event details directly from this view.
               </Step>
               <Step>
+                <strong>Where is it?</strong> When you add or edit an event, pick one of three
+                Location buttons. <strong>On-site</strong> books one of the village's rooms or
+                common spaces. <strong>In the village</strong> is for anywhere else around the
+                village that doesn't need booking — your street, outside your home, the lawn by
+                the lake — just type a short description. <strong>Off-site</strong> is for events
+                outside the village and is the only choice that offers the Community Bus and
+                car-sharing.
+              </Step>
+              <Step>
                 Where a booking is waitlist-only, it's listed in queue order with the resident's
                 position — <strong>(1st)</strong>, <strong>(2nd)</strong>, and so on — shown to the
                 left of their name.
@@ -1493,6 +1502,15 @@ export default function HelpGuidePage() {
                 restricted to their own club. To change an event, tap <strong>Edit</strong> on the
                 right of the event's title — the edit form opens right there,
                 in place of that event's card.
+              </Step>
+              <Step>
+                <strong>Where is it?</strong> When you add or edit an event, pick one of three
+                Location buttons. <strong>On-site</strong> books one of the village's rooms or
+                common spaces. <strong>In the village</strong> is for anywhere else around the
+                village that doesn't need booking — your street, outside your home, the lawn by
+                the lake — just type a short description. <strong>Off-site</strong> is for events
+                outside the village and is the only choice that offers the Community Bus and
+                car-sharing.
               </Step>
               <Step>
                 When creating or editing an event, a <strong>Booking</strong> choice at the top decides
@@ -2178,6 +2196,15 @@ export default function HelpGuidePage() {
                 event card's Attendees list — the same panel Social Hive uses. There's no
                 separate Owner role for this hub: only admins and that event's own coordinators can
                 manage it.
+              </Step>
+              <Step>
+                <strong>Where is it?</strong> When you add or edit an event, pick one of three
+                Location buttons. <strong>On-site</strong> books one of the village's rooms or
+                common spaces. <strong>In the village</strong> is for anywhere else around the
+                village that doesn't need booking — your street, outside your home, the lawn by
+                the lake — just type a short description. <strong>Off-site</strong> is for events
+                outside the village and is the only choice that offers the Community Bus and
+                car-sharing.
               </Step>
               <Step>
                 A Special Event can be set up to allow <strong>unassigned seats</strong> — a plain

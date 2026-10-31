@@ -7,6 +7,7 @@ import { RULE_TYPES } from "@/lib/recurrence"
 import { checkCancelPaymentGuard } from "@/lib/eventCancelGuard"
 import { validateBringRequirement } from "@/lib/attendees"
 import { sydneyTodayStr } from "@/lib/date"
+import { normaliseLocationType, villageLocation } from "@/lib/eventLocation"
 
 // Recurring event series — create / end. Occurrences are materialised as real
 // events by generateSeriesEvents (scope §3). A series fires exactly ONE
@@ -43,6 +44,20 @@ async function resolve(req, clubId) {
 // event row) and never the series template or any OTHER already-existing
 // future occurrence, so the venue/end-time re-entry problem kept coming
 // back on every subsequent edit and every cron-generated occurrence.
+// Location kind (Iain, 2026-10-31): "In the village" is free text with no
+// room. Normalises the type and, for village, cleans the text and clears
+// location_id. Returns an error string, or null when fine.
+function applySeriesLocation(obj) {
+  if (!("location_type" in obj)) return null
+  obj.location_type = normaliseLocationType(obj.location_type)
+  const village = villageLocation(obj)
+  if (!village) return null
+  if (village.error) return village.error
+  obj.location = village.location
+  obj.location_id = null
+  return null
+}
+
 const PROPAGATE = ["title","description","welcome_message","event_time","location_type","location","location_id","event_end_time",
   "max_seats","max_seats_per_booking","allow_nonresident_guests","require_attendee_names","booking_required","payment_required","cost",
   "bring_category_ids","bring_required","theme_name","is_public","show_attendee_names"]
@@ -152,6 +167,8 @@ export async function POST(req) {
     coordinator_ids: Array.isArray(body.coordinator_ids) ? body.coordinator_ids : [],
   })
   if (!row.start_date) return NextResponse.json({ error: "start_date required" }, { status: 400 })
+  const locErr = applySeriesLocation(row)
+  if (locErr) return NextResponse.json({ error: locErr }, { status: 400 })
   const bringCheck = validateBringRequirement(row)
   if (!bringCheck.ok) return NextResponse.json({ error: bringCheck.error }, { status: 400 })
 
@@ -241,6 +258,8 @@ export async function PATCH(req) {
     const patch = {}
     for (const k of PROPAGATE) if (k in body) patch[k] = body[k]
     enforceOpenEventRules(patch)
+    const patchLocErr = applySeriesLocation(patch)
+    if (patchLocErr) return NextResponse.json({ error: patchLocErr }, { status: 400 })
     if ("bring_required" in patch || "bring_category_ids" in patch) {
       const { data: seriesRow } = await supa.from("event_series").select("bring_required, bring_category_ids").eq("id", series_id).single()
       const bringCheck = validateBringRequirement({

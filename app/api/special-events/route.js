@@ -7,6 +7,7 @@ import { notifyAllActiveMembers } from '@/lib/notifyAudience'
 import { promoteWaitlist } from '@/lib/promoteWaitlist'
 import { ensureBusDriverSeat } from '@/lib/busDriverSeat'
 import { checkCancelPaymentGuard } from '@/lib/eventCancelGuard'
+import { normaliseLocationType, villageLocation, stripTransport } from '@/lib/eventLocation'
 import { needsSpaceValidation, fetchLocation } from '@/lib/eventClash'
 import { findAnyRoomConflict } from '@/lib/spaceBookings'
 import { notifyRequestOnlySpace } from '@/lib/notifyRequestOnlySpace'
@@ -75,7 +76,7 @@ function buildEventPayload(body, isInsert = false) {
     ...normaliseBusDriver({ has_bus, bus_driver_id, bus_driver_name, bus_driver_free }),
     bus_max_seats:         (has_bus && bus_max_seats != null && bus_max_seats !== '') ? Number(bus_max_seats) : null,
     allow_personal_vehicles: !!allow_personal_vehicles,
-    location_type:         location_type || 'onsite',
+    location_type:         normaliseLocationType(location_type),
     location_id:           location_id || null,
     location:              location || null,
     has_dining:            diningOn,
@@ -92,6 +93,9 @@ function buildEventPayload(body, isInsert = false) {
 }
 
 async function validateSpace(payload, excludeEventId, viewerId, canManage) {
+  // In the village (Iain, 2026-10-31): free text, no room, no space rules.
+  const village = villageLocation(payload)
+  if (village) return village.error ? { error: village.error, status: 400 } : village
   if (payload.location_type !== 'onsite') return { location_id: null }
 
   const loc = await fetchLocation(supabaseAdmin, payload.location_id)
@@ -125,6 +129,7 @@ export async function POST(req) {
     return NextResponse.json({ error: 'At least one Event Coordinator is required' }, { status: 400 })
 
   const payload = buildEventPayload(body, true)
+  stripTransport(payload)
   const space = await validateSpace(payload, undefined, member.id, !!member.is_admin)
   if (space.error) return NextResponse.json({ error: space.error }, { status: space.status })
   payload.location_id = space.location_id || null
@@ -185,6 +190,7 @@ export async function PATCH(req) {
     return NextResponse.json({ error: 'At least one Event Coordinator is required' }, { status: 400 })
 
   const payload = buildEventPayload(body)
+  stripTransport(payload)
   const space = await validateSpace(payload, body.id, member.id, !!member.is_admin)
   if (space.error) return NextResponse.json({ error: space.error }, { status: space.status })
   payload.location_id = space.location_id || null

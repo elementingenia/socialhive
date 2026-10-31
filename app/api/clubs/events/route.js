@@ -4,6 +4,7 @@ import { notifyClubMembers } from "@/lib/notifyAudience"
 import { notifyEventDetailsChanged } from "@/lib/notifyEventUpdated"
 import { promoteWaitlist } from "@/lib/promoteWaitlist"
 import { ensureBusDriverSeat } from "@/lib/busDriverSeat"
+import { normaliseLocationType, villageLocation, stripTransport } from "@/lib/eventLocation"
 import { needsSpaceValidation, fetchLocation } from "@/lib/eventClash"
 import { findAnyRoomConflict } from "@/lib/spaceBookings"
 import { notifyRequestOnlySpace } from "@/lib/notifyRequestOnlySpace"
@@ -53,6 +54,9 @@ async function resolve(req, clubId) {
 
 // ID is the truth, name derived from it — see the note in app/api/social/route.js.
 async function validateSpace(payload, excludeEventId, viewerId, canManage) {
+  // In the village (Iain, 2026-10-31): free text, no room, no space rules.
+  const village = villageLocation(payload)
+  if (village) return village.error ? { error: village.error, status: 400 } : village
   if (payload.location_type !== "onsite") return { location_id: null }
 
   const loc = await fetchLocation(supa, payload.location_id)
@@ -100,6 +104,11 @@ function buildPayload(body, isInsert) {
   const payload = {}
   for (const k of FIELDS) if (k in body) payload[k] = body[k]
   if (isInsert) { payload.hub_type = "club"; payload.archived = false }
+  // Location kind (Iain, 2026-10-31): only Off-site keeps the bus and cars.
+  if ("location_type" in payload) {
+    payload.location_type = normaliseLocationType(payload.location_type)
+    stripTransport(payload)
+  }
   // Bus driver: resident OR a named "Other", never both (migration 125).
   if ("has_bus" in payload) Object.assign(payload, normaliseBusDriver(payload))
   // Menu/Additional Info (2026-10-07) -- same normalisation as Social's
