@@ -16,6 +16,10 @@ import { pinFromPersonKey } from "@/lib/myStuff"
 import StreetPicker from "@/components/StreetPicker"
 import { useStreets } from "@/lib/useStreets"
 import { formatAddress, houseNumberInput, normaliseHouseNumber } from "@/lib/address"
+import TradeWizard from "@/components/TradeWizard"
+import TradeRecommendBlock from "@/components/TradeRecommendBlock"
+import TradeTypesManager from "@/components/TradeTypesManager"
+import { isTradesCategory, sortTrades, TRADES_DISCLAIMER, PRIVATE_NOTICE } from "@/lib/trades"
 
 const secondaryButtonStyle = {
   padding: "0.5rem 0.9rem", borderRadius: 10, border: "1px solid var(--border)",
@@ -444,6 +448,18 @@ export default function ContactsPage() {
   // already stripped server-side (backlog B3).
   const [interests, setInterests]   = useState({})
   const [skills, setSkills]         = useState({})
+  // Recommend a Trade (migration 148): switch, types and per-trade
+  // recommendations from /api/trades. null until loaded.
+  const [trades, setTrades]         = useState(null)
+  const [tradeWizard, setTradeWizard] = useState(null) // null | { editing }
+  const [tradePrivateNotice, setTradePrivateNotice] = useState(false)
+
+  const loadTrades = useCallback(() => {
+    authedFetch("/api/trades")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setTrades(d))
+      .catch(() => {})
+  }, [])
 
   const load = useCallback(async () => {
     // Members + contacts come from the server, already masked for this
@@ -465,17 +481,33 @@ export default function ContactsPage() {
       .then(r => r.ok ? r.json() : null)
       .then(d => { setInterests(d?.directory || {}); setSkills(d?.skills || {}) })
       .catch(() => {})
-  }, [])
+    loadTrades()
+  }, [loadTrades])
 
   useEffect(() => { load() }, [load])
 
   const residentsId = categories.find(c => c.name.toLowerCase() === "residents")?.id
 
-  useEffect(() => {
-    if (activeFilter === null && residentsId) setFilter(residentsId)
-  }, [residentsId, activeFilter])
+  const tradesCatId = categories.find(c => isTradesCategory(c.name))?.id || null
 
-  const displayContacts = useMemo(() => contacts.filter(c => !c.member_id && (c.active || isAdmin)), [contacts, isAdmin])
+  // ?cat=trades (the admin "new trade" notification) opens on Trades.
+  useEffect(() => {
+    if (activeFilter !== null || !residentsId) return
+    let want = null
+    try { want = new URLSearchParams(window.location.search).get("cat") } catch { /* ignore */ }
+    setFilter(want === "trades" && tradesCatId ? tradesCatId : residentsId)
+  }, [residentsId, activeFilter, tradesCatId])
+
+  // A trade's card line reads "Plumber · PP Plumbing" (trade type + business).
+  const displayContacts = useMemo(() => contacts
+    .filter(c => !c.member_id && (c.active || isAdmin))
+    .map(c => {
+      const t = trades?.trades?.[c.id]
+      if (!t) return c
+      const biz = t.business_name && t.business_name !== c.name ? t.business_name : null
+      const line = [t.trade_type || c.title, biz].filter(Boolean).join(" · ")
+      return { ...c, title: line || c.title }
+    }), [contacts, isAdmin, trades])
 
   // Who in each category could actually receive a question -- i.e. has an app
   // login and an active member record. Mirrors lib/categoryQuestions.js's
@@ -576,7 +608,16 @@ export default function ContactsPage() {
   // number within the street -- the order a neighbour walks it. Anyone
   // without a street falls to the end, in house-number order.
   const hasStreets = useMemo(() => entries.some(e => e.isResident && e.street_name), [entries])
+  const tradesView = !!tradesCatId && activeFilter === tradesCatId
   const sortedFiltered = useMemo(() => {
+    // Trades: grouped by trade type, most recommended first, ties A-Z (Q6).
+    if (tradesView) {
+      const meta = id => trades?.trades?.[id] || {}
+      return sortTrades(
+        filtered.map(e => ({ ...e, trade_type: e.contact ? meta(e.contact.id).trade_type : null })),
+        e => (e.contact ? meta(e.contact.id).count || 0 : 0),
+      )
+    }
     if (sortMode === "name") return filtered
     const byHouse = (a, b) => {
       const an = parseInt(a.isResident ? a.house_number : "", 10)
@@ -599,7 +640,7 @@ export default function ContactsPage() {
       })
     }
     return [...filtered].sort(byHouse)
-  }, [filtered, sortMode, hasStreets])
+  }, [filtered, sortMode, hasStreets, tradesView, trades])
 
   const initializing = loading || activeFilter === null
 
@@ -662,6 +703,32 @@ export default function ContactsPage() {
           above, per this project's reuse-the-canonical-asset rule, just
           sized down to read as a secondary control rather than a second
           row of primary filters. */}
+      {/* Recommend a Trade: disclaimer (Q8) and the add button, Trades only. */}
+      {tradesView && (
+        <div style={{ marginBottom: "0.75rem" }}>
+          <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", lineHeight: 1.4, marginBottom: trades?.canUse ? "0.6rem" : 0 }}>
+            {TRADES_DISCLAIMER}
+          </div>
+          {trades?.canUse && (
+            <button type="button"
+              onClick={() => trades.isPrivate ? setTradePrivateNotice(true) : setTradeWizard({ editing: null })}
+              style={{
+                width: "100%", padding: "0.6rem", borderRadius: 10, border: "none", background: COLOUR, color: "#fff",
+                fontWeight: 700, fontSize: "0.9rem", cursor: "pointer", fontFamily: "inherit",
+              }}>
+              + Recommend a trade
+            </button>
+          )}
+          {tradePrivateNotice && (
+            <div role="alert" style={{ marginTop: "0.5rem", borderRadius: 8, padding: "0.6rem 0.75rem", background: "#fef2f2", color: "#991b1b", border: "1px solid #fca5a5", fontSize: "0.85rem", lineHeight: 1.4 }}>
+              {PRIVATE_NOTICE}
+              <button type="button" onClick={() => setTradePrivateNotice(false)} style={{ display: "block", marginTop: "0.4rem", fontSize: "0.78rem", fontWeight: 700, padding: "0.3rem 0.7rem", borderRadius: 16, border: "1px solid #fca5a5", background: "#fff", color: "#991b1b", cursor: "pointer", fontFamily: "inherit" }}>OK</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!tradesView && (
       <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", marginBottom: "0.6rem" }}>
         <span style={{ fontSize: "0.75rem", color: "var(--text-dim)", fontWeight: 600 }}>Sort:</span>
         {[{ key: "house", label: "House #" }, ...(hasStreets ? [{ key: "street", label: "Street" }] : []), { key: "name", label: "Name" }].map(opt => (
@@ -673,6 +740,7 @@ export default function ContactsPage() {
           }}>{opt.label}</button>
         ))}
       </div>
+      )}
 
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", marginBottom: "1rem" }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
@@ -696,6 +764,11 @@ export default function ContactsPage() {
           <button onClick={() => setSheet("invite")} style={inviteButtonStyle}>🔑 Invite Code</button>
         </div>
       )}
+      {isAdmin && tradesView && trades && (
+        <div style={{ display: "flex", marginTop: "-0.5rem", marginBottom: "1rem" }}>
+          <button onClick={() => setSheet("tradeTypes")} style={toolbarButtonStyle}>🛠️ Trade types</button>
+        </div>
+      )}
 
       {sortedFiltered.length === 0 ? (
         <div style={{ textAlign: "center", padding: "2.5rem 1rem", color: "var(--text-dim)", fontSize: "0.9rem" }}>
@@ -703,12 +776,36 @@ export default function ContactsPage() {
           No contacts in this category
         </div>
       ) : (
-        sortedFiltered.map(e => (
-          <ContactCard key={e.key} contact={e} badges={e.badges} external={e.external} isResident={e.isResident} query={search}
-            pinned={(() => { const p = pinFromPersonKey(e.key); return !!p && isPinned(p.item_type, p.item_id) })()}
-            onTogglePin={e.member?.id && e.member.id === me?.id ? undefined : () => { const p = pinFromPersonKey(e.key); if (p) togglePin(p.item_type, p.item_id) }}
-            onEdit={isAdmin ? () => setSheet(e.isMember ? { type: "resident", member: e.member } : { type: "contact", contact: e.contact }) : null} />
-        ))
+        sortedFiltered.map((e, i) => {
+          const trade = tradesView && e.contact ? trades?.trades?.[e.contact.id] : null
+          // Trades view: a small heading each time the trade type changes.
+          const heading = tradesView && (i === 0 || (sortedFiltered[i - 1].trade_type || "") !== (e.trade_type || ""))
+            ? (e.trade_type || "Other trades") : null
+          const raw = e.contact ? contacts.find(c => c.id === e.contact.id) : null
+          return (
+            <div key={e.key}>
+              {heading && (
+                <div style={{ fontSize: "0.78rem", fontWeight: 800, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.04em", margin: i === 0 ? "0 0 0.35rem" : "0.9rem 0 0.35rem" }}>
+                  {heading}
+                </div>
+              )}
+              <ContactCard contact={e} badges={e.badges} external={e.external} isResident={e.isResident} query={search}
+                pinned={(() => { const p = pinFromPersonKey(e.key); return !!p && isPinned(p.item_type, p.item_id) })()}
+                onTogglePin={e.member?.id && e.member.id === me?.id ? undefined : () => { const p = pinFromPersonKey(e.key); if (p) togglePin(p.item_type, p.item_id) }}
+                onEdit={isAdmin ? () => setSheet(e.isMember ? { type: "resident", member: e.member } : { type: "contact", contact: raw || e.contact }) : null}>
+                {trade?.recommendations && (
+                  <TradeRecommendBlock contactId={e.contact.id} trade={trade} isPrivate={!!trades?.isPrivate}
+                    onChanged={loadTrades}
+                    onEdit={() => setTradeWizard({ editing: {
+                      id: e.contact.id, trade_type: trade.trade_type, name: raw?.name || e.name,
+                      business_name: trade.business_name, phone: raw?.phone || "", email: raw?.email || "",
+                      note: trade.mine?.note || "", hasMine: !!trade.mine,
+                    } })} />
+                )}
+              </ContactCard>
+            </div>
+          )
+        })
       )}
 
       <Sheet open={sheet === "add"} onClose={() => setSheet(null)} title="Add Contact">
@@ -725,6 +822,15 @@ export default function ContactsPage() {
       <Sheet open={sheet === "categories"} onClose={() => setSheet(null)} title="Manage Categories">
         <CategoryManager categories={categories} setCategories={setCategories} onSaved={load} loginMembersByCategory={loginMembersByCategory} />
       </Sheet>
+
+      <Sheet open={sheet === "tradeTypes"} onClose={() => setSheet(null)} title="Trade types">
+        <TradeTypesManager types={trades?.types || []} unlisted={trades?.unlisted || []} onChanged={() => { loadTrades(); load() }} />
+      </Sheet>
+
+      {tradeWizard && (
+        <TradeWizard types={trades?.types || []} editing={tradeWizard.editing}
+          onClose={() => setTradeWizard(null)} onSaved={() => { load() }} />
+      )}
 
       <Sheet open={sheet === "invite"} onClose={() => setSheet(null)} title="Invite Code">
         <InviteCodeControl code={inviteCode} onSaved={code => setInviteCode(code)} />

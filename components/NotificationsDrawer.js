@@ -41,6 +41,7 @@ function typeIcon(type) {
     case "event_added":          return "🗓️"
     case "showtime_resident_event": return "🎬"
     case "showtime_tba_nudge": return "🎬"
+    case "trade_added":        return "🛠️"
     case "payment_refunded":     return "💸"
     case "question_received":    return "❓"
     case "question_answered":    return "💬"
@@ -94,6 +95,7 @@ function typeColour(type) {
     case "event_added":          return "var(--teal)"
     case "showtime_resident_event": return "var(--teal)"
     case "showtime_tba_nudge": return "var(--teal)"
+    case "trade_added":        return "var(--amber-dark)"
     case "payment_refunded":     return "var(--teal)"
     case "question_received":    return "var(--amber-dark)"
     case "question_answered":    return "var(--teal)"
@@ -156,6 +158,8 @@ function targetForNotif(n) {
   // (event_invite needs no case -- it carries the event_id and falls through
   // to eventDeepLink below, landing on the event itself.)
   if (n.type === "weekly_digest") return "/digest"
+  // Recommend a Trade (migration 148): admin alert opens Contacts on Trades.
+  if (n.type === "trade_added") return "/info/contacts?cat=trades"
   // New Features (migration 123): opens the PDF for the day it was sent --
   // one PDF per day, so the notification's own Sydney date identifies it.
   if (n.type === "new_features") return featureDocLink(isoToSydneyDateStr(n.created_at))

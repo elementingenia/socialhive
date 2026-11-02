@@ -110,6 +110,7 @@ const RAW_SECTIONS = [
     id: "info", num: 6, title: "Info — Contacts, Interests & Skills, Documents",
     subs: [
       { title: "Finding a contact",     id: "sub-info-contacts" },
+      { title: "Recommending a tradesperson", id: "sub-info-trades" },
       { title: "Finding someone by skill or interest", id: "sub-info-interests" },
       { title: "Community documents",   id: "sub-info-documents" },
       { title: "My Stuff — your pinned people and documents", id: "sub-info-mystuff" },
@@ -1675,6 +1676,37 @@ export default function HelpGuidePage() {
                 &quot;handyman&quot; — to find everyone who listed it; their cards open to show why they
                 matched. Or use the <strong>Interests &amp; Skills</strong> tab (below).
               </Step>
+            </Subsection>
+
+            <Subsection id="sub-info-trades" title="Recommending a tradesperson">
+              <Step>
+                Tap the <strong>Trades</strong> chip on Info › Contacts. Trades are grouped by type
+                (Electrician, Plumber and so on), with the most recommended at the top of each group.
+                Under a trade you&apos;ll see <strong>👍 Recommended by</strong> and the neighbours who
+                recommend them. Tap <strong>Comments</strong> to read what they said.
+              </Step>
+              <Step>
+                Used someone good? Tap <strong>👍 I recommend them too</strong>, add a short comment if you
+                like (for example &quot;Fixed our hot water, fair price&quot;), then tap{" "}
+                <strong>Recommend</strong>. Changed your mind? Tap <strong>Remove my recommendation</strong>.
+              </Step>
+              <Step>
+                To add someone who isn&apos;t listed, tap <strong>+ Recommend a trade</strong> and answer
+                one question at a time: what kind of trade, their name or business name, their phone
+                number (and email if you have it), then your comment. If they&apos;re already on the list
+                you&apos;ll be offered <strong>Recommend them instead</strong>. Tap{" "}
+                <strong>Add to Trades</strong> and they appear straight away, with you as the person who
+                recommended them.
+              </Step>
+              <Step>
+                If you added a trade, you can fix their details later with <strong>Edit details</strong>.
+                Your recommendation on a trade you added stays — ask an admin if it needs removing.
+              </Step>
+              <InfoBox>
+                💡 Recommendations come from residents. The committee and Ingenia don&apos;t vouch for any
+                trade — check licences and insurance yourself. If your profile is set to{" "}
+                <strong>Private</strong> you can see recommendations but can&apos;t add your own.
+              </InfoBox>
             </Subsection>
 
             <Subsection id="sub-info-interests" title="Finding someone by skill or interest">

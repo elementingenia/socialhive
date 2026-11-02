@@ -61,6 +61,30 @@ export default function OccasionalActivitiesPage() {
   const [digestError, setDigestError] = useState(null)
   const [stSaving, setStSaving] = useState(false)
   const [stError, setStError] = useState(null)
+  // Recommend a Trade (migration 148): Off / Admins / Everyone.
+  const [tradesMode, setTradesMode] = useState(null)
+  const [tradesSaving, setTradesSaving] = useState(false)
+  const [tradesError, setTradesError] = useState(null)
+  useEffect(() => {
+    authedFetch("/api/trades").then(r => r.ok ? r.json() : null)
+      .then(d => setTradesMode(d?.mode || "off")).catch(() => setTradesMode("off"))
+  }, [])
+  async function saveTradesMode(mode) {
+    setTradesSaving(true); setTradesError(null)
+    try {
+      const res = await authedFetch("/api/trades", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "mode", mode }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || "Couldn't change the setting")
+      setTradesMode(mode)
+    } catch (err) {
+      setTradesError(err.message)
+    } finally {
+      setTradesSaving(false)
+    }
+  }
 
   useEffect(() => {
     if (!loading && !member?.is_admin) router.replace("/home")
@@ -239,6 +263,51 @@ export default function OccasionalActivitiesPage() {
           </button>
         </div>
         {stError && <div style={{ color: "var(--danger)", fontSize: "0.82rem", marginTop: "0.5rem" }}>{stError}</div>}
+      </div>
+
+      <div style={{
+        background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "14px",
+        padding: "1rem", marginBottom: "0.75rem",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.9rem" }}>
+          <div style={{ fontSize: 28, lineHeight: 1, width: 32, textAlign: "center" }} aria-hidden>🛠️</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, color: "var(--teal)" }}>Recommend a Trade</div>
+            <div style={{ color: "var(--text-dim)", fontSize: "0.82rem" }}>
+              Residents add tradespeople to Info › Contacts › Trades and say who they recommend.
+            </div>
+          </div>
+        </div>
+        <div style={{ marginTop: "0.8rem" }}>
+          <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--text)", marginBottom: "0.35rem" }}>Who can use it</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {[["off", "Off"], ["admins", "Admins"], ["everyone", "Everyone"]].map(([key, label]) => {
+              const active = tradesMode === key
+              return (
+                <button key={key} type="button" onClick={() => saveTradesMode(key)}
+                  disabled={tradesMode === null || tradesSaving} aria-pressed={active}
+                  style={{
+                    flex: 1, padding: "0.55rem 0.5rem", borderRadius: 10, fontFamily: "inherit",
+                    fontSize: "0.88rem", fontWeight: 700, cursor: "pointer",
+                    border: `1px solid ${active ? "var(--teal)" : "var(--border)"}`,
+                    background: active ? "var(--teal)" : "var(--surface)",
+                    color: active ? "#fff" : "var(--text-dim)",
+                    opacity: tradesMode === null || tradesSaving ? 0.6 : 1,
+                  }}>
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "0.35rem" }}>
+            {tradesMode === "everyone"
+              ? "Every resident (except Private ones) can recommend trades."
+              : tradesMode === "admins"
+                ? "Only admins can see and use it — use this to trial it."
+                : "Off: the Trades list works as before, with no recommendations."}
+          </div>
+        </div>
+        {tradesError && <div style={{ color: "var(--danger)", fontSize: "0.82rem", marginTop: "0.5rem" }}>{tradesError}</div>}
       </div>
 
       {AREAS.map(area => {

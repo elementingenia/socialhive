@@ -116,6 +116,7 @@ const RAW_SECTIONS = [
       { title: "Exporting the list — Export button", id: "sub-acc-export" },
       { title: "Admin badge — seeing who is Admin at a glance", id: "sub-acc-adminbadge" },
       { title: "Info › Documents — editing a document", id: "sub-acc-docedit" },
+      { title: "Recommend a Trade — switch, trade types, removing a trade", id: "sub-acc-trades" },
     ],
   },
   {
@@ -1142,6 +1143,36 @@ export default function AdminGuidePage() {
                 this without adding a manually-maintained group anywhere.
               </Step>
             </Subsection>
+            <Subsection id="sub-acc-trades" title="Recommend a Trade — switch, trade types, removing a trade (added 2026-11-03)">
+              <Step>
+                <strong>The switch</strong> is in Admin → <strong>Occasional Activities</strong> →{" "}
+                <strong>Recommend a Trade</strong>: <strong>Off</strong> (Trades list works as before, no
+                recommendations shown), <strong>Admins</strong> (only admins see and use it — for a trial),
+                or <strong>Everyone</strong>. It starts Off.
+              </Step>
+              <Step>
+                Residents add a trade from Info → Contacts → Trades → <strong>+ Recommend a trade</strong>.
+                It goes live straight away, in the Trades category, and every admin gets a{" "}
+                <strong>New trade recommended</strong> notification so a bad entry is spotted quickly.
+                Private residents can&apos;t add or recommend — the app tells them why, and the server
+                refuses it too. A recommendation from someone who later turns Private stops showing.
+              </Step>
+              <Step>
+                <strong>Trade types:</strong> with the Trades chip selected, tap{" "}
+                <strong>🛠️ Trade types</strong>. Add a type, <strong>Rename</strong> it (every trade of
+                that type moves with it) or <strong>Hide</strong> it from the list residents pick from.
+                Anything residents typed under &quot;Something else&quot; shows under{" "}
+                <strong>Typed in by residents</strong>, with <strong>Add to list</strong>.
+              </Step>
+              <Step>
+                <strong>Changing a trade:</strong> use <strong>Edit details</strong> under the trade (the
+                resident who added it can too). The card&apos;s own <strong>Edit</strong> button still
+                works for hiding or deleting, but change the trade type through Edit details so the
+                grouping stays right. The person who added a trade can&apos;t withdraw their
+                recommendation; to remove a trade, delete it from the card&apos;s <strong>Edit</strong>.
+              </Step>
+            </Subsection>
+
             <Subsection id="sub-acc-docedit" title="Info › Documents — editing a document (added 2026-09-29)">
               <Step>
                 On Info → Documents, every document card shows an <strong>Edit</strong> button (admin
