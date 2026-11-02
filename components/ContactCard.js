@@ -19,7 +19,7 @@ import ProfileAvatar from "@/components/ProfileAvatar"
 // on the compact line -- admins additionally get "Edit" alongside it, since
 // viewing details and editing them are different actions (2026-07-12,
 // clarified same day: Edit alone isn't a substitute for a quick "More").
-export default function ContactCard({ contact, badges = [], external = false, isResident = true, onEdit, query = "", pinned, onTogglePin }) {
+export default function ContactCard({ contact, badges = [], external = false, isResident = true, onEdit, query = "", pinned, onTogglePin, children }) {
   // Title/Role is always visible under the name now (Iain, 2026-09-16) --
   // it's identity information (who this person is), not contact detail
   // like phone/email, so it no longer waits behind "More". "More" now only
@@ -135,6 +135,9 @@ export default function ContactCard({ contact, badges = [], external = false, is
           )}
         </div>
       )}
+      {/* Extra block under the card (Recommend a Trade: "Recommended by").
+          Nothing rendered when absent. */}
+      {children && <div style={{ paddingLeft: indent }}>{children}</div>}
     </div>
   )
 }
