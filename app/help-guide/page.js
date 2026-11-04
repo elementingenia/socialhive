@@ -1125,8 +1125,8 @@ export default function HelpGuidePage() {
                 tapped <strong>+ Join</strong> on Show Time gets an alert, and the notice appears on the
                 Show Time home page for all residents to read. Tap <strong>Edit</strong> under a
                 notice to correct it (members are not alerted again for an edit), or{" "}
-                <strong>Remove</strong> to take it down. (Social and Special Events don't have members, so they don't
-                have notices.)
+                <strong>Remove</strong> to take it down. (Social Hive has the same button — see Social
+                Hive hub home.)
               </Step>
               <Step>
                 The Owner can also fill in missing DVD details. Tap <strong>⚙ Manage</strong> on the Show
@@ -1174,6 +1174,14 @@ export default function HelpGuidePage() {
                 name, seat availability, and a cost chip if the event has a per-person price. A bus
                 icon and driver name appear if transport is available. <strong>Tap the card</strong> to
                 open the full booking panel.
+              </Step>
+              <Step>
+                Notices from the Social Hive Owner or admins appear near the top of this page under a{" "}
+                <strong>📣 Notice</strong> heading. The Owner and admins see a{" "}
+                <strong>📣 Post notice</strong> button: write the message and tap{" "}
+                <strong>Post notice</strong> — every resident gets an alert. Tap{" "}
+                <strong>Edit</strong> under a notice to correct it (nobody is alerted again), or{" "}
+                <strong>Remove</strong> to take it down.
               </Step>
             </Subsection>
 

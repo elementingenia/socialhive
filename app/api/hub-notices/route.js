@@ -2,13 +2,14 @@ import { supabaseAdmin as supa } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { notify } from "@/lib/notify"
 import { requireAdminOrAreaOwner } from "@/lib/areaAuth"
-import { hubHasNotices, hubNoticeHome, noticeMessage, noticeRecipients } from "@/lib/hubNotices"
+import { hubHasNotices, hubNoticeHome, hubNoticeAudience, noticeMessage, noticeRecipients } from "@/lib/hubNotices"
 
 export const dynamic = "force-dynamic"
 
 // Hub notices (Iain, 2026-09-23) -- the hub equivalent of
-// app/api/clubs/notices/route.js. Posting fans a notification out to every
-// member who has JOINED the hub (hub_followers), so it must run server-side:
+// app/api/clubs/notices/route.js. Posting fans a notification out to the
+// hub's audience (lib/hubNotices.js): Show Time = everyone who JOINED it
+// (hub_followers); Social = every active resident. Runs server-side:
 // notifications INSERT is service-role only (migration 034). Posting rights:
 // admin or that hub's Owner (space_owners, context 'hub').
 
@@ -18,7 +19,7 @@ export async function POST(req) {
     return NextResponse.json({ error: "hub_type and content required" }, { status: 400 })
   }
   if (!hubHasNotices(hub_type)) {
-    return NextResponse.json({ error: "This hub has no members, so it has no notices" }, { status: 400 })
+    return NextResponse.json({ error: "This hub does not have notices" }, { status: 400 })
   }
 
   const { error, status, member } = await requireAdminOrAreaOwner(req, "hub", hub_type)
@@ -29,8 +30,15 @@ export async function POST(req) {
     .select("id").single()
   if (insError) return NextResponse.json({ error: insError.message }, { status: 500 })
 
-  const { data: followers } = await supa.from("hub_followers").select("member_id").eq("hub_type", hub_type)
-  const ids = noticeRecipients((followers || []).map(f => f.member_id), member.id)
+  let audienceIds = []
+  if (hubNoticeAudience(hub_type) === "everyone") {
+    const { data: active } = await supa.from("members").select("id").eq("status", "active").eq("is_test", false)
+    audienceIds = (active || []).map(m => m.id)
+  } else {
+    const { data: followers } = await supa.from("hub_followers").select("member_id").eq("hub_type", hub_type)
+    audienceIds = (followers || []).map(f => f.member_id)
+  }
+  const ids = noticeRecipients(audienceIds, member.id)
   const msg = noticeMessage(hub_type, content)
   const url = hubNoticeHome(hub_type)
   await Promise.all(ids.map(id => notify(id, null, "hub_notice_posted", msg, url, member.id)))

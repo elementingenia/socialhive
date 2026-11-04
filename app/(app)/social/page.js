@@ -13,6 +13,7 @@ import { bbToHtml } from "@/components/RichEditor"
 import { BusIcon } from "@/components/NavIcons"
 import { ContactBar } from "@/components/OwnersManager"
 import ManageLink from "@/components/ManageLink"
+import HubNotices from "@/components/HubNotices"
 import { HiveFundsTile } from "@/components/HiveFunds"
 import { useOwners } from "@/lib/useOwners"
 import { FormattedText } from "@/lib/textFormatter"
@@ -482,6 +483,8 @@ export default function SocialHome() {
       <ContactBar contextType="hub" contextKey="social" contextLabel="Social Hive" colour="var(--terracotta)" style={{ margin: "-2px 0 12px" }} />
 
       {canManage && <ManageLink href="/social/manage" label="Manage Social" colour="var(--terracotta)" />}
+
+      <HubNotices hubType="social" colour="var(--terracotta)" canPost={canManage} />
 
       <NextEventTile
         event={nextEvent}
