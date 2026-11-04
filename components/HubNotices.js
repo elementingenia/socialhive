@@ -3,14 +3,14 @@ import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import { authedFetch } from "@/lib/getAuthToken"
 import RichEditor from "@/components/RichEditor"
-import { hubHasNotices } from "@/lib/hubNotices"
+import { hubHasNotices, hubNoticeAudience } from "@/lib/hubNotices"
 import { isHtmlContent } from "@/lib/richText"
 
 // Hub notices (Iain, 2026-09-23) -- the hub equivalent of Groups & Clubs'
 // notices (components/ClubHome.js ClubSocial), same look and behaviour:
-// admin or this hub's Owner gets a "📣 Post notice" pill; posting notifies
-// everyone who has Joined the hub (hub_followers). Everyone can read notices.
-// Only hubs with members get this (lib/hubNotices.js) -- never Social/Special.
+// admin or this hub's Owner gets a "📣 Post notice" pill; posting notifies the
+// hub's audience (Show Time: who Joined; Social: every resident). Everyone can
+// read notices. Which hubs have notices: lib/hubNotices.js HUBS_WITH_NOTICES.
 //
 // Vertical space: renders nothing at all for a resident when there are no
 // notices, and nothing for anyone on a hub without members.
@@ -25,6 +25,7 @@ export default function HubNotices({ hubType, colour = "var(--teal)", canPost = 
   const [saving, setSaving]       = useState(false)
   const [toast, setToast]         = useState(null)
   const enabled = hubHasNotices(hubType)
+  const toEveryone = hubNoticeAudience(hubType) === "everyone"
 
   const load = useCallback(() => {
     if (!enabled) return
@@ -48,7 +49,8 @@ export default function HubNotices({ hubType, colour = "var(--teal)", canPost = 
       const data = await res.json().catch(() => ({}))
       if (!res.ok) { flash(data.error || "Could not post"); return }
       setDraft(""); setComposing(false); load()
-      flash(data.notified ? `Posted — ${data.notified} member${data.notified !== 1 ? "s" : ""} notified` : "Posted")
+      const who = toEveryone ? "resident" : "member"
+      flash(data.notified ? `Posted — ${data.notified} ${who}${data.notified !== 1 ? "s" : ""} notified` : "Posted")
     } finally {
       setPosting(false)
     }
@@ -109,7 +111,10 @@ export default function HubNotices({ hubType, colour = "var(--teal)", canPost = 
       {canPost && composing && (
         <div style={{ marginBottom: 8, border: `1px solid ${colour}`, borderRadius: 12, padding: "0.75rem" }}>
           <RichEditor key={`hub-notice-${hubType}`} initialValue="" hubColour={colour}
-            bg="card" onChange={setDraft} placeholder="Write a notice for this hub's members…" />
+            bg="card" onChange={setDraft} placeholder={toEveryone ? "Write a notice for everyone in the village…" : "Write a notice for this hub's members…"} />
+          <div style={{ fontSize: "0.78rem", color: "var(--text-dim)", marginTop: 6 }}>
+            {toEveryone ? "Every resident will get an alert." : "Everyone who has joined will get an alert."}
+          </div>
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <button onClick={() => { setComposing(false); setDraft("") }} style={{ flex: 1, padding: "0.6rem", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text)", fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>Cancel</button>
             <button onClick={postNotice} disabled={posting || !draft.trim()} style={{ flex: 2, padding: "0.6rem", borderRadius: 10, border: "none", background: colour, color: "#fff", fontWeight: 700, fontFamily: "inherit", cursor: (posting || !draft.trim()) ? "not-allowed" : "pointer", opacity: (posting || !draft.trim()) ? 0.6 : 1 }}>{posting ? "Posting…" : "Post notice"}</button>
