@@ -2125,6 +2125,10 @@ export default function HelpGuidePage() {
                 can see how many people voted at all, depends on choices made when that particular
                 vote was set up; some votes keep one or both of those private.
               </Step>
+              <Step>
+                If some residents voted on paper or by proxy, each option shows how many votes came
+                from the app and how many from paper or proxy, with the total alongside.
+              </Step>
             </Subsection>
 
             <Subsection id="sub-voting-ec" title="Running a vote (Owner/admin/coordinator)" ecOnly>
@@ -2162,6 +2166,17 @@ export default function HelpGuidePage() {
                 Once closed, review the vote before publishing — for a per-household vote, the app
                 flags any household that recorded more than one vote so you can check it before
                 results go out. Tap <strong>Publish results</strong> once you're satisfied.
+              </Step>
+              <Step>
+                <strong>Paper and proxy votes.</strong> If anyone voted on paper or gave someone their
+                proxy, add those votes after the vote closes and before you publish. Tap{" "}
+                <strong>Add paper &amp; proxy votes</strong>, then: (1) add each resident whose vote it
+                is (not the person holding the proxy) — anyone who already voted in the app is
+                greyed out and can't be added; (2) type how many votes each option got from those
+                forms; (3) add a note if useful, e.g. where the forms are kept. The app checks the
+                totals add up before you can save. Tap <strong>Change paper &amp; proxy votes</strong>{" "}
+                to fix a mistake. Once results are published they can't be changed. The paper forms
+                stay the official record.
               </Step>
               <InfoBox>
                 💡 The Voting tile itself can be switched on or off from{" "}

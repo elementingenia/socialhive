@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { resolveMember, isAreaOwner, requireVotingEventManage } from '@/lib/areaAuth'
-import { computeVotingStatus, canSeeResults, tallyBallots, isEligibleToVote, normalizeCoordinatorIds, validateClosesAt, cleanChoiceImageUrl, choiceImageStoragePath } from '@/lib/voting'
+import { computeVotingStatus, canSeeResults, combineResults, isEligibleToVote, normalizeCoordinatorIds, validateClosesAt, cleanChoiceImageUrl, choiceImageStoragePath } from '@/lib/voting'
 import { votingCoordinatorsByEvent, setVotingCoordinators } from '@/lib/votingCoordinators'
 
 export const dynamic = 'force-dynamic'
@@ -61,15 +61,20 @@ export async function GET(req, { params }) {
   const showOutcome = ['closed', 'published'].includes(votingStatus) && canSeeResults(event, { field: 'results_visibility_outcome', isCoordinator })
 
   if (showTurnout) {
-    const { count } = await supabaseAdmin
-      .from('voting_participation').select('id', { count: 'exact', head: true }).eq('voting_event_id', event.id)
-    turnout = { votesCast: count || 0 }
+    // Paper & proxy voters (149) are participation rows too, so the total
+    // already includes them; the split lets the screen show both sources.
+    const { data: partRows } = await supabaseAdmin
+      .from('voting_participation').select('method').eq('voting_event_id', event.id)
+    const rows = partRows || []
+    const offline = rows.filter(r => r.method === 'offline').length
+    turnout = { votesCast: rows.length, app: rows.length - offline, offline }
   }
   if (showOutcome) {
-    const { data: ballots } = await supabaseAdmin
-      .from('voting_ballots').select('choice_id').eq('voting_event_id', event.id)
-    const tally = tallyBallots(ballots || [])
-    results = choices.map(c => ({ choice_id: c.id, label: c.label, image_url: c.image_url || null, votes: tally.get(c.id) || 0 }))
+    const [{ data: ballots }, { data: offlineCounts }] = await Promise.all([
+      supabaseAdmin.from('voting_ballots').select('choice_id').eq('voting_event_id', event.id),
+      supabaseAdmin.from('voting_offline_counts').select('choice_id, votes').eq('voting_event_id', event.id),
+    ])
+    results = combineResults(choices, ballots, offlineCounts)
   }
 
   const canManage = !!member.is_admin || await isAreaOwner(member.id, 'hub', 'voting')

@@ -6,6 +6,7 @@ import {
   householdAlreadyVoted, isEligibleToVote, validateSelfVote,
   validateBallotSelection, tallyBallots, householdAnomalyReport, canSeeResults,
   normalizeCoordinatorIds, validateClosesAt, cleanChoiceImageUrl, choiceImageStoragePath,
+  validateOfflineVotes, offlineTotalsCheck, combineResults,
 } from '../../lib/voting.js'
 
 let pass = 0, fail = 0
@@ -150,6 +151,61 @@ ok(cleanChoiceImageUrl(null, SB) === null && cleanChoiceImageUrl(good, '') === n
 ok(choiceImageStoragePath(good) === 'voting/choices/1b2c3d4e-0000-4000-8000-123456789abc.webp', 'storage path from url')
 ok(choiceImageStoragePath(`${SB}/storage/v1/object/public/event-images/voting/abc/cover.webp`) === null, 'storage path: never a cover image')
 ok(choiceImageStoragePath(null) === null, 'storage path: null => null')
+
+
+// ── Paper & proxy votes (149) ──
+{
+  const single = { eligibility_mode: 'per_resident', vote_mode: 'single' }
+  const multi = { eligibility_mode: 'per_resident', vote_mode: 'multi', max_selections: 2 }
+  const household = { eligibility_mode: 'per_household', vote_mode: 'single' }
+  const choiceIds = ['c1', 'c2', 'c3']
+  const members = [
+    { id: 'a', name: 'Ann', house_number: '1' },
+    { id: 'b', name: 'Bob', house_number: '2' },
+    { id: 'c', name: 'Cat', house_number: '2' },
+    { id: 'd', name: 'Dee', house_number: null },
+  ]
+  const appParticipants = [{ member_id: 'x', house_number: '9' }]
+  const base = { choiceIds, members, appParticipants }
+
+  const okSingle = validateOfflineVotes(single, { ...base, memberIds: ['a', 'b'], counts: { c1: 1, c2: 1 } })
+  ok(okSingle.ok && okSingle.counts.c3 === 0 && okSingle.counts.c1 === 1, 'single: totals equal to residents => ok, missing option = 0')
+  ok(!validateOfflineVotes(single, { ...base, memberIds: ['a', 'b'], counts: { c1: 1 } }).ok, 'single: totals short of residents => rejected')
+  ok(!validateOfflineVotes(single, { ...base, memberIds: ['a'], counts: { c1: 2 } }).ok, 'single: totals over residents => rejected')
+  ok(!validateOfflineVotes(single, { ...base, memberIds: ['a', 'a'], counts: { c1: 2 } }).ok, 'same resident twice => rejected')
+  ok(!validateOfflineVotes(single, { ...base, memberIds: ['zz'], counts: { c1: 1 } }).ok, 'unknown resident => rejected')
+  ok(!validateOfflineVotes(single, { ...base, memberIds: ['a'], counts: { c9: 1 } }).ok, 'unknown option => rejected')
+  ok(!validateOfflineVotes(single, { ...base, memberIds: ['a'], counts: { c1: 1.5 } }).ok, 'fractional total => rejected')
+  ok(!validateOfflineVotes(single, { ...base, memberIds: ['a'], counts: { c1: -1, c2: 2 } }).ok, 'negative total => rejected')
+  ok(validateOfflineVotes(single, { ...base, memberIds: [], counts: {} }).ok, 'clearing everything (no residents, no totals) => ok')
+  ok(!validateOfflineVotes(single, { ...base, memberIds: [], counts: { c1: 1 } }).ok, 'totals with no residents => rejected')
+
+  const already = validateOfflineVotes(single, { ...base, members: [...members, { id: 'x', name: 'Xan', house_number: '9' }], memberIds: ['x'], counts: { c1: 1 } })
+  ok(!already.ok && /already voted in the app/.test(already.reason), 'resident who voted in the app can\'t be counted on paper too')
+
+  ok(validateOfflineVotes(multi, { ...base, memberIds: ['a', 'b'], counts: { c1: 2, c2: 2 } }).ok, 'multi: 2 residents x 2 picks = 4 => ok')
+  ok(validateOfflineVotes(multi, { ...base, memberIds: ['a', 'b'], counts: { c1: 1, c2: 1 } }).ok, 'multi: one pick each => ok')
+  ok(!validateOfflineVotes(multi, { ...base, memberIds: ['a', 'b'], counts: { c1: 2, c2: 2, c3: 1 } }).ok, 'multi: more than residents x max => rejected')
+  ok(!validateOfflineVotes(multi, { ...base, memberIds: ['a', 'b'], counts: { c1: 3 } }).ok, 'multi: one option with more votes than residents => rejected')
+  ok(!validateOfflineVotes(multi, { ...base, memberIds: ['a', 'b'], counts: { c1: 1 } }).ok, 'multi: fewer picks than residents => rejected')
+
+  ok(!validateOfflineVotes(household, { ...base, memberIds: ['b', 'c'], counts: { c1: 2 } }).ok, 'household: two residents from the same house => rejected')
+  ok(!validateOfflineVotes(household, { ...base, memberIds: ['d'], counts: { c1: 1 } }).ok, 'household: resident with no house number => rejected')
+  ok(!validateOfflineVotes(household, { ...base, appParticipants: [{ member_id: 'q', house_number: 'Unit 1' }], memberIds: ['a'], counts: { c1: 1 } }).ok,
+    'household: house already voted in the app (normalised) => rejected')
+  ok(validateOfflineVotes(household, { ...base, memberIds: ['a', 'b'], counts: { c1: 2 } }).ok, 'household: different houses => ok')
+
+  ok(offlineTotalsCheck(single, 3, 3, [3, 0], 2).ok, 'offlineTotalsCheck agrees with the full check')
+
+  const combined = combineResults(
+    [{ id: 'c1', label: 'Yes' }, { id: 'c2', label: 'No' }],
+    [{ choice_id: 'c1' }, { choice_id: 'c1' }, { choice_id: 'c2' }],
+    [{ choice_id: 'c2', votes: 4 }],
+  )
+  ok(combined[0].votes === 2 && combined[0].app === 2 && combined[0].offline === 0, 'combineResults: app-only option')
+  ok(combined[1].votes === 5 && combined[1].app === 1 && combined[1].offline === 4, 'combineResults: app + offline added together')
+  ok(combineResults([{ id: 'c1', label: 'Yes' }], [], null)[0].votes === 0, 'combineResults: no ballots, no offline => 0')
+}
 
 console.log(`\nvoting.test.mjs: ${pass} passed, ${fail} failed`)
 if (fail > 0) process.exit(1)
