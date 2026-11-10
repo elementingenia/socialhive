@@ -110,9 +110,15 @@ export function OwnersContact({ contextType, contextKey, style }) {
 // One-row contact bar for hub/club landings (Iain 2026-07-20): the whole
 // icon + label + owner-name(s) block IS the "ask a question" trigger, with
 // an optional control (e.g. the hub Join button) on the right — saves a row
-// vs. stacking contact + ask + join separately. If a space has no owner yet,
-// the same row falls back to a plain "Ask a question" label (routes to
-// admins) — still the same icon, still the whole row clickable.
+// vs. stacking contact + ask + join separately.
+//
+// No owner = no ask (Iain, 2026-11-10): if a hub/club has no Owner there is
+// nobody to ask, so the ask block is not rendered at all -- only the `right`
+// control (e.g. Join / Opt out) remains. This replaced an older fallback to a
+// plain "Ask a question" label routed to admins (Social Hive had no committee
+// and residents were still offered an ask). The ? button stays the way to
+// reach admins. Nothing renders for the ask block while owners are loading,
+// so it never flashes in and out.
 //
 // Icon + tap-target rebuilt 2026-09-09 (Iain, mockup review): the same
 // QuestionIcon used on the top-nav Questions button, sitting beside the
@@ -120,9 +126,19 @@ export function OwnersContact({ contextType, contextKey, style }) {
 // tap, not just the underlined names; names are left-aligned and each one
 // wraps as a whole (never split mid-word).
 export function ContactBar({ contextType, contextKey, contextLabel, colour = "var(--amber-dark)", right = null, style }) {
-  const { owners } = useOwners(contextType, contextKey)
+  const { owners, loading } = useOwners(contextType, contextKey)
   const names = owners.map(o => o.name).filter(Boolean)
   const ink = clubInk(colour) // readable on the light card/page background (no-op for dark colours)
+  if (loading || names.length === 0) {
+    // Nobody to ask: no ask row. Keep the right-hand control (Join / Opt
+    // out) on its own, right-aligned; render nothing at all if there isn't one.
+    if (!right) return null
+    return (
+      <div style={{ display: "flex", justifyContent: "flex-end", ...style }}>
+        {right}
+      </div>
+    )
+  }
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.6rem", flexWrap: "wrap", ...style }}>
       <AskQuestion contextType={contextType} contextKey={contextKey} contextLabel={contextLabel} colour={colour}
@@ -145,8 +161,7 @@ export function ContactBar({ contextType, contextKey, contextLabel, colour = "va
             }}>
               <QuestionIcon size={12} />
             </span>
-            {names.length > 0 ? (
-              <span style={{ display: "flex", flexDirection: "column", gap: "0.05rem", minWidth: 0 }}>
+            <span style={{ display: "flex", flexDirection: "column", gap: "0.05rem", minWidth: 0 }}>
                 <span style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--text-dim)" }}>
                   Contact{names.length > 1 ? "s" : ""}
                 </span>
@@ -158,9 +173,6 @@ export function ContactBar({ contextType, contextKey, contextLabel, colour = "va
                   ))}
                 </span>
               </span>
-            ) : (
-              <span style={{ fontSize: "0.85rem", fontWeight: 700, color: ink, marginTop: 1 }}>Ask a question</span>
-            )}
           </button>
         )} />
       {right}
