@@ -1424,8 +1424,8 @@ export default function HelpGuidePage() {
                 Every club page opens with a welcome message from its organiser, then a{" "}
                 <strong>Contact</strong> row. If the club has an assigned Owner or coordinator, their
                 name appears here — tap it to <strong>Ask a Question</strong> that goes straight to
-                them privately. If no one is assigned yet, you'll see a plain{" "}
-                <strong>💬 Ask a question</strong> link instead, which reaches the admin team.
+                them privately. If no one is assigned yet, there is no Contact row and no Ask option
+                for the club — use the grey <strong>?</strong> button to ask the admins instead.
               </Step>
               <Step>
                 Below that, upcoming meetings or activities are listed as cards — the next date first,
@@ -1786,8 +1786,9 @@ export default function HelpGuidePage() {
               <Step>
                 You'll find an <strong>Ask a question</strong> link on most hub, club and event pages —
                 it goes privately to whoever is the right contact for that area (the Owner or
-                coordinator, or an admin if no one's assigned). Type your question and send it; the
-                other side gets notified and can reply.
+                coordinator). If an area or event has no Owner or coordinator, there is no Ask option
+                there, because there is nobody to answer. Type your question and send it; the other
+                side gets notified and can reply.
               </Step>
               <Step>
                 To ask anyone at all, tap the small grey <strong>?</strong> button in the bottom-right
