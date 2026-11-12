@@ -1077,10 +1077,11 @@ export default function AdminGuidePage() {
                 created a login for stays on this list until they actually sign in.
               </Step>
               <Step>
-                The line at the top also says how many <strong>houses</strong> have nobody signed in yet.
-                Tap <strong>Houses with no sign-in</strong> to list just the residents of those houses. A
-                house counts as signed in once any one resident there has signed in. Only houses with a
-                resident on file are counted, and residents with no house number are left out.
+                The line at the top also counts <strong>houses</strong>, out of every home in the village:
+                how many have residents, how many are empty (no resident on file), and how many houses
+                with residents have nobody signed in yet. Tap <strong>Houses with no sign-in</strong> to
+                list just the residents of those houses. A house counts as signed in once any one resident
+                there has signed in. Residents with no house number are left out.
               </Step>
               <Step>
                 Use the <strong>Find by name or house number</strong> box to go straight to someone. A house

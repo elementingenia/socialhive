@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import {
-  isWeakStartingPin, generateStartingPin, sortForWalking, filterForScope, housesNotSignedIn, firstName,
+  isWeakStartingPin, generateStartingPin, sortForWalking, filterForScope, housesNotSignedIn, houseStats, firstName,
   cardLoginUrl, siteLabel, chunk, prefillUsername, matchesResidentSearch,
 } from "../../lib/welcomeCards.js"
 import { hasSignedIn, signedInIdsFromAuthUsers } from "../../lib/signedIn.js"
@@ -77,6 +77,11 @@ t("housesNotSignedIn: a house counts once anyone there has signed in", () => {
   // No sign-in data: every house reads as not signed in, never "all done".
   assert.equal(housesNotSignedIn(list, null).none.size, 3)
   assert.deepEqual(housesNotSignedIn([], signedIn), { total: 0, none: new Set() })
+  // Out of every home: 12, 39, 60 occupied; 50 (inactive only), 51 (test only), 70 empty.
+  assert.deepEqual(houseStats(list, signedIn, ["12", "39", 50, "51", "60", "70", " 70 ", null]),
+    { total: 6, occupied: 3, noSignIn: 2, empty: 3 })
+  // Home list unreadable: no invented total or empty count.
+  assert.deepEqual(houseStats(list, signedIn, null), { total: null, occupied: 3, noSignIn: 2, empty: null })
 })
 
 t("names, urls, chunks", () => {
