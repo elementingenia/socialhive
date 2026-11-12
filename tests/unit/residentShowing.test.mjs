@@ -66,6 +66,9 @@ const members = [
 ]
 eq(allResidentsAudience(members, ['e', 'f']).join(','), 'a', 'only signed-in, active, real residents, minus creator and Owners')
 eq(allResidentsAudience(null).length, 0, 'no members => nobody')
+members.push({ id: 'g', status: 'active', auth_id: 'u' })   // has a login, never signed in
+eq(allResidentsAudience(members, ['e', 'f'], new Set(['x', 'w', 'v'])).join(','), 'a', 'a login alone is not signed in')
+eq(allResidentsAudience(members, ['e', 'f'], null).join(','), 'a,g', 'no sign-in data => falls back to has-a-login')
 
 // ── coordinators on edit ──────────────────────────────────────────────────
 eq(resolveCoordinatorIds({ coordinator_ids: ['a', 'b', 'a'] }, { isManager: false }).ids.join(','), 'a,b', 'dedupes the list')

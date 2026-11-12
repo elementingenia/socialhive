@@ -6,6 +6,7 @@ import { resolveMemberName } from "@/lib/memberName"
 import { withStreetNames } from "@/lib/streetsServer"
 import { eventDeepLink } from "@/lib/eventNav"
 import { canInviteToEvent, planInvites, inviteMessage, isInviteExcluded, isNotSignedIn, INVITE_CAP_PER_SENDER } from "@/lib/eventInvites"
+import { fetchSignedInAuthIds } from "@/lib/signedIn"
 
 export const dynamic = "force-dynamic"
 
@@ -56,8 +57,9 @@ export async function GET(req) {
   if (!canInviteToEvent(ctx.event)) return NextResponse.json({ open: false, candidates: [], remaining: 0 })
 
   const blocked = new Set([...ctx.ineligibleIds, ...ctx.bookedIds, ...ctx.alreadyInvitedIds, member.id])
+  const signedInIds = await fetchSignedInAuthIds(supa)
   const candidates = (await withStreetNames(supa, ctx.members.filter(m => !blocked.has(m.id))))
-    .map(m => ({ id: m.id, name: resolveMemberName(m, { canManage: !!member.is_admin }), house_number: m.house_number || null, street_name: m.street_name || null, not_signed_in: isNotSignedIn(m) }))
+    .map(m => ({ id: m.id, name: resolveMemberName(m, { canManage: !!member.is_admin }), house_number: m.house_number || null, street_name: m.street_name || null, not_signed_in: isNotSignedIn(m, signedInIds) }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
   return NextResponse.json({

@@ -6,6 +6,7 @@ import {
   HELP_SETTING_KEY, generateStartingPin, sortForWalking, filterForScope, cardLoginUrl, siteLabel,
 } from "@/lib/welcomeCards"
 import { buildWelcomeCardsPdf } from "@/lib/welcomeCardsPdf"
+import { fetchSignedInAuthIds, hasSignedIn } from "@/lib/signedIn"
 
 // Admin › Sign-in Help (Iain, 2026-10-09). Lists residents who have never
 // signed in (or everyone, for reprints) and prints welcome cards. Printing a
@@ -42,19 +43,25 @@ export async function GET(req) {
     .eq("status", "active").eq("is_test", false)
   if (error) return NextResponse.json({ error: "Could not load residents." }, { status: 500 })
 
+  // "Signed in" comes from Supabase Auth's last_sign_in_at, not auth_id --
+  // see lib/signedIn.js. If Auth can't be read, say so: a wrong count here
+  // sends the committee to the wrong doors.
+  const signedInIds = await fetchSignedInAuthIds(supa)
+  if (!signedInIds) return NextResponse.json({ error: "Could not check who has signed in. Try again." }, { status: 500 })
+
   const all = data || []
   // Printer names via a plain lookup, not an embed: members -> members is a
   // self-reference and an embed hint there is easy to get wrong (Standard #9).
   const nameById = new Map(all.map(m => [m.id, m.name]))
-  const residents = sortForWalking(filterForScope(all, scope)).map(m => ({
+  const residents = sortForWalking(filterForScope(all, scope, signedInIds)).map(m => ({
     id: m.id, name: m.name, username: m.username, house_number: m.house_number,
-    signedIn: !!m.auth_id,
+    signedIn: hasSignedIn(m, signedInIds),
     printedAt: m.welcome_card_printed_at || null,
     printedBy: nameById.get(m.welcome_card_printed_by) || null,
   }))
   return NextResponse.json({
     residents,
-    neverCount: all.filter(m => !m.auth_id).length,
+    neverCount: all.filter(m => !hasSignedIn(m, signedInIds)).length,
     helpLine: await readHelpLine(),
   })
 }
