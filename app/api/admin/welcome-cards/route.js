@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import { randomInt } from "crypto"
 import { newPinColumns } from "@/lib/pinAuth"
 import {
-  HELP_SETTING_KEY, generateStartingPin, sortForWalking, filterForScope, housesNotSignedIn, cardLoginUrl, siteLabel,
+  HELP_SETTING_KEY, generateStartingPin, sortForWalking, filterForScope, houseStats, cardLoginUrl, siteLabel,
 } from "@/lib/welcomeCards"
 import { buildWelcomeCardsPdf } from "@/lib/welcomeCardsPdf"
 import { fetchSignedInAuthIds, hasSignedIn } from "@/lib/signedIn"
@@ -60,12 +60,16 @@ export async function GET(req) {
     printedAt: m.welcome_card_printed_at || null,
     printedBy: nameById.get(m.welcome_card_printed_by) || null,
   }))
-  const houses = housesNotSignedIn(all, signedInIds)
+  // Every home in the village (122), so the house numbers are out of all
+  // homes, not just the ones with a resident loaded. If the list can't be
+  // read the screen says so in its wording instead of showing a wrong total.
+  const { data: homes, error: homesErr } = await supa.from("properties").select("ref")
+  if (homesErr) console.error("welcome-cards: could not read properties", homesErr.message)
+  const houses = houseStats(all, signedInIds, homesErr || !homes?.length ? null : homes.map(h => h.ref))
   return NextResponse.json({
     residents,
     neverCount: all.filter(m => !hasSignedIn(m, signedInIds)).length,
-    houseCount: houses.total,
-    housesNeverCount: houses.none.size,
+    houses,
     helpLine: await readHelpLine(),
   })
 }

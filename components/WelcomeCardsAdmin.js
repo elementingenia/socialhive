@@ -77,7 +77,7 @@ export default function WelcomeCardsAdmin() {
   const [residents, setResidents] = useState(null)
   const [loading, setLoading] = useState(true)
   const [neverCount, setNeverCount] = useState(0)
-  const [houses, setHouses] = useState({ total: 0, none: 0 })
+  const [houses, setHouses] = useState(null)
   const [selected, setSelected] = useState(() => new Set())
   const [helpLine, setHelpLine] = useState("")
   const [helpDraft, setHelpDraft] = useState("")
@@ -98,7 +98,7 @@ export default function WelcomeCardsAdmin() {
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || "Could not load residents.")
       setResidents(d.residents); setNeverCount(d.neverCount || 0)
-      setHouses({ total: d.houseCount || 0, none: d.housesNeverCount || 0 })
+      setHouses(d.houses || null)
       setHelpLine(d.helpLine || ""); setHelpDraft(d.helpLine || "")
     } catch (e) { setError(e.message) }
     setLoading(false)
@@ -171,7 +171,10 @@ export default function WelcomeCardsAdmin() {
         <h2 style={{ margin: "0 0 0.25rem", fontSize: "1.15rem" }}>Sign-in Help</h2>
         <div style={{ fontSize: "0.88rem", color: "var(--text-dim)" }}>
           {neverCount} {neverCount === 1 ? "resident has" : "residents have"} never signed in.{" "}
-          {houses.total > 0 && <><strong>{houses.none} of {houses.total} houses</strong> have nobody signed in yet. </>}
+          {houses && (houses.total != null
+            ? <>Of {houses.total} houses, {houses.occupied} have residents and {houses.empty} {houses.empty === 1 ? "is" : "are"} empty.{" "}
+                <strong>{houses.noSignIn} {houses.noSignIn === 1 ? "house with residents has" : "houses with residents have"} nobody signed in yet.</strong>{" "}</>
+            : <><strong>{houses.noSignIn} of {houses.occupied} houses with residents</strong> have nobody signed in yet. </>)}
           Print a welcome card for each
           with their username, a starting password and a code to scan. They choose their own password when they first sign in.
         </div>
@@ -189,7 +192,7 @@ export default function WelcomeCardsAdmin() {
 
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
         <Pill active={scope === "never"} onClick={() => setScope("never")}>Never signed in ({neverCount})</Pill>
-        <Pill active={scope === "houses"} onClick={() => setScope("houses")}>Houses with no sign-in ({houses.none})</Pill>
+        <Pill active={scope === "houses"} onClick={() => setScope("houses")}>Houses with no sign-in ({houses?.noSignIn ?? 0})</Pill>
         <Pill active={scope === "all"} onClick={() => setScope("all")}>Everyone</Pill>
         {list.length > 0 && (
           <span style={{ marginLeft: "auto" }}>
