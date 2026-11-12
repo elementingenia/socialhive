@@ -3,6 +3,7 @@ import {
   isWeakStartingPin, generateStartingPin, sortForWalking, filterForScope, firstName,
   cardLoginUrl, siteLabel, chunk, prefillUsername, matchesResidentSearch,
 } from "../../lib/welcomeCards.js"
+import { hasSignedIn, signedInIdsFromAuthUsers } from "../../lib/signedIn.js"
 import { buildWelcomeCardsPdf, qrRuns } from "../../lib/welcomeCardsPdf.js"
 import { PDFDocument } from "pdf-lib"
 import QRCode from "qrcode"
@@ -31,13 +32,30 @@ t("sortForWalking numeric house then name", () => {
   assert.deepEqual(out, ["Amy", "bob", "Zed", "None"])
 })
 
+t("hasSignedIn / signedInIdsFromAuthUsers", () => {
+  const ids = signedInIdsFromAuthUsers([
+    { id: "x", last_sign_in_at: "2026-11-12T01:00:00Z" }, { id: "y", last_sign_in_at: null }, { id: "z" }, null,
+  ])
+  assert.deepEqual([...ids], ["x"])
+  assert.equal(hasSignedIn({ auth_id: "x" }, ids), true)
+  assert.equal(hasSignedIn({ auth_id: "y" }, ids), false, "a login with no sign-in is not signed in")
+  assert.equal(hasSignedIn({ auth_id: null }, ids), false)
+  assert.equal(hasSignedIn({ auth_id: "x" }, null), false)
+})
+
 t("filterForScope", () => {
   const list = [
     { id: 1, status: "active", auth_id: null }, { id: 2, status: "active", auth_id: "x" },
     { id: 3, status: "inactive", auth_id: null }, { id: 4, status: "active", auth_id: null, is_test: true },
   ]
-  assert.deepEqual(filterForScope(list, "never").map(m => m.id), [1])
-  assert.deepEqual(filterForScope(list, "all").map(m => m.id), [1, 2])
+  // 2 has a login AND a sign-in on record; 5 has a login only (admin's
+  // Create Login makes the Auth user up front) so is still "never signed in".
+  list.push({ id: 5, status: "active", auth_id: "y" })
+  const signedIn = new Set(["x"])
+  assert.deepEqual(filterForScope(list, "never", signedIn).map(m => m.id), [1, 5])
+  assert.deepEqual(filterForScope(list, "all", signedIn).map(m => m.id), [1, 2, 5])
+  // No sign-in data at all must never read as "everyone has signed in".
+  assert.deepEqual(filterForScope(list, "never", null).map(m => m.id), [1, 2, 5])
 })
 
 t("names, urls, chunks", () => {

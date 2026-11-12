@@ -14,6 +14,7 @@ import {
   WIZARD_HUB_TYPE, DEFAULT_MAX_PER_BOOKING, DEFAULT_CINEMA_CAPACITY, cinemaCapacity, canUseWizard,
   validateResidentShowing, allResidentsAudience, shortDate, showingPlace,
 } from "@/lib/residentShowing"
+import { fetchSignedInAuthIds } from "@/lib/signedIn"
 
 // Show Time: any resident can add a showing through the wizard (Iain,
 // 2026-10-07). Scope: claude/Element_Happenings_ShowTime_Resident_Events_Scope_Answered.md
@@ -169,7 +170,7 @@ export async function POST(req) {
   let notified = 0
   if (notifyChoice === "all") {
     const { data: everyone } = await supabaseAdmin.from("members").select("id, status, auth_id, is_test")
-    const ids = allResidentsAudience(everyone, [member.id, ...ownerIds])
+    const ids = allResidentsAudience(everyone, [member.id, ...ownerIds], await fetchSignedInAuthIds(supabaseAdmin))
     await Promise.all(ids.map(id => notify(id, event.id, "event_added", message)))
     notified = ids.length
   } else if (notifyChoice === "members") {
@@ -271,7 +272,7 @@ async function createRepeating({ body, member, isManager, cinema, capacity, plac
     const message = `New showing: ${showingName ? `${showingName} — ` : ""}${firstContent.title} — ${shortDate(event_date)}`
     if (notifyChoice === "all") {
       const { data: everyone } = await supabaseAdmin.from("members").select("id, status, auth_id, is_test")
-      const ids = allResidentsAudience(everyone, [member.id, ...ownerIds])
+      const ids = allResidentsAudience(everyone, [member.id, ...ownerIds], await fetchSignedInAuthIds(supabaseAdmin))
       await Promise.all(ids.map(id => notify(id, first.id, "event_added", message)))
       notified = ids.length
     } else if (notifyChoice === "members") {

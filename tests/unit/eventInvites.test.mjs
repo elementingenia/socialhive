@@ -45,5 +45,11 @@ t("Private excluded for non-admin", () => assert.equal(isInviteExcluded(M({ hide
 t("Private offered to admin", () => assert.equal(isInviteExcluded(M({ hide_name: true }), true), false))
 t("null member excluded", () => assert.equal(isInviteExcluded(null), true))
 t("not signed in flag", () => { assert.equal(isNotSignedIn(M({ auth_id: null })), true); assert.equal(isNotSignedIn(M()), false) })
+t("a login alone is not signed in", () => {
+  const signedIn = new Set(["yes"])
+  assert.equal(isNotSignedIn(M({ auth_id: "yes" }), signedIn), false)
+  assert.equal(isNotSignedIn(M({ auth_id: "login-only" }), signedIn), true)
+  assert.equal(isNotSignedIn(M({ auth_id: null }), signedIn), true)
+})
 
 console.log(`eventInvites: ${n} passed`)

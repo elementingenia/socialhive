@@ -1073,7 +1073,8 @@ export default function AdminGuidePage() {
                 <strong>Admin › Residents › Sign-in Help</strong> lists residents who have never signed in, in
                 house-number order so you can walk round. Each row shows their username, when a card was
                 last printed and by whom, and <strong>Signed in</strong> once they have made it in
-                (<strong>Not yet</strong> if a card went out and they haven't).
+                (<strong>Not yet</strong> if a card went out and they haven't). A resident you have only just
+                created a login for stays on this list until they actually sign in.
               </Step>
               <Step>
                 Use the <strong>Find by name or house number</strong> box to go straight to someone. A house
