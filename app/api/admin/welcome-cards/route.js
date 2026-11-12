@@ -3,7 +3,7 @@ import { NextResponse } from "next/server"
 import { randomInt } from "crypto"
 import { newPinColumns } from "@/lib/pinAuth"
 import {
-  HELP_SETTING_KEY, generateStartingPin, sortForWalking, filterForScope, cardLoginUrl, siteLabel,
+  HELP_SETTING_KEY, generateStartingPin, sortForWalking, filterForScope, housesNotSignedIn, cardLoginUrl, siteLabel,
 } from "@/lib/welcomeCards"
 import { buildWelcomeCardsPdf } from "@/lib/welcomeCardsPdf"
 import { fetchSignedInAuthIds, hasSignedIn } from "@/lib/signedIn"
@@ -36,7 +36,8 @@ async function readHelpLine() {
 export async function GET(req) {
   const admin = await requireAdmin(req)
   if (!admin) return NextResponse.json({ error: "Admin only" }, { status: 403 })
-  const scope = new URL(req.url).searchParams.get("scope") === "all" ? "all" : "never"
+  const asked = new URL(req.url).searchParams.get("scope")
+  const scope = asked === "all" || asked === "houses" ? asked : "never"
 
   const { data, error } = await supa.from("members")
     .select("id, name, username, house_number, status, is_test, auth_id, welcome_card_printed_at, welcome_card_printed_by")
@@ -59,9 +60,12 @@ export async function GET(req) {
     printedAt: m.welcome_card_printed_at || null,
     printedBy: nameById.get(m.welcome_card_printed_by) || null,
   }))
+  const houses = housesNotSignedIn(all, signedInIds)
   return NextResponse.json({
     residents,
     neverCount: all.filter(m => !hasSignedIn(m, signedInIds)).length,
+    houseCount: houses.total,
+    housesNeverCount: houses.none.size,
     helpLine: await readHelpLine(),
   })
 }

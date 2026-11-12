@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import {
-  isWeakStartingPin, generateStartingPin, sortForWalking, filterForScope, firstName,
+  isWeakStartingPin, generateStartingPin, sortForWalking, filterForScope, housesNotSignedIn, firstName,
   cardLoginUrl, siteLabel, chunk, prefillUsername, matchesResidentSearch,
 } from "../../lib/welcomeCards.js"
 import { hasSignedIn, signedInIdsFromAuthUsers } from "../../lib/signedIn.js"
@@ -56,6 +56,27 @@ t("filterForScope", () => {
   assert.deepEqual(filterForScope(list, "all", signedIn).map(m => m.id), [1, 2, 5])
   // No sign-in data at all must never read as "everyone has signed in".
   assert.deepEqual(filterForScope(list, "never", null).map(m => m.id), [1, 2, 5])
+})
+
+t("housesNotSignedIn: a house counts once anyone there has signed in", () => {
+  const list = [
+    { id: 1, status: "active", house_number: "12", auth_id: "x" },   // signed in
+    { id: 2, status: "active", house_number: "12", auth_id: null },  // same house: house is covered
+    { id: 3, status: "active", house_number: "39", auth_id: "y" },   // login only, no sign-in
+    { id: 4, status: "active", house_number: " 39 ", auth_id: null },
+    { id: 5, status: "active", house_number: null, auth_id: null },  // no house: in no house
+    { id: 6, status: "inactive", house_number: "50", auth_id: null },
+    { id: 7, status: "active", house_number: "51", auth_id: null, is_test: true },
+    { id: 8, status: "active", house_number: "60", auth_id: null },
+  ]
+  const signedIn = new Set(["x"])
+  const h = housesNotSignedIn(list, signedIn)
+  assert.equal(h.total, 3)
+  assert.deepEqual([...h.none].sort(), ["39", "60"])
+  assert.deepEqual(filterForScope(list, "houses", signedIn).map(m => m.id), [3, 4, 8])
+  // No sign-in data: every house reads as not signed in, never "all done".
+  assert.equal(housesNotSignedIn(list, null).none.size, 3)
+  assert.deepEqual(housesNotSignedIn([], signedIn), { total: 0, none: new Set() })
 })
 
 t("names, urls, chunks", () => {

@@ -1077,6 +1077,12 @@ export default function AdminGuidePage() {
                 created a login for stays on this list until they actually sign in.
               </Step>
               <Step>
+                The line at the top also says how many <strong>houses</strong> have nobody signed in yet.
+                Tap <strong>Houses with no sign-in</strong> to list just the residents of those houses. A
+                house counts as signed in once any one resident there has signed in. Only houses with a
+                resident on file are counted, and residents with no house number are left out.
+              </Step>
+              <Step>
                 Use the <strong>Find by name or house number</strong> box to go straight to someone. A house
                 number finds that house only (7 doesn't bring up 17 or 77); anything else matches the name
                 or username. Ticks stay put while you search, so you can find and tick several people in turn.
