@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import {
   isWeakStartingPin, generateStartingPin, sortForWalking, filterForScope, housesNotSignedIn, houseStats, firstName,
+  noLoginResidents, asHouseOccupant,
   cardLoginUrl, siteLabel, chunk, prefillUsername, matchesResidentSearch,
 } from "../../lib/welcomeCards.js"
 import { hasSignedIn, signedInIdsFromAuthUsers } from "../../lib/signedIn.js"
@@ -56,6 +57,26 @@ t("filterForScope", () => {
   assert.deepEqual(filterForScope(list, "all", signedIn).map(m => m.id), [1, 2, 5])
   // No sign-in data at all must never read as "everyone has signed in".
   assert.deepEqual(filterForScope(list, "never", null).map(m => m.id), [1, 2, 5])
+})
+
+t("noLoginResidents: Residents-category contacts with no login (BUG-106)", () => {
+  const RES = "res", TRADES = "tr"
+  const contacts = [
+    { id: 1, name: "Zed", house_number: "49", member_id: null, active: true, contact_category_members: [{ category_id: RES }] },
+    { id: 2, name: "Linked", house_number: "5", member_id: "m1", active: true, contact_category_members: [{ category_id: RES }] },
+    { id: 3, name: "Plumber", house_number: null, member_id: null, active: true, contact_category_members: [{ category_id: TRADES }] },
+    { id: 4, name: "Hidden", house_number: "6", member_id: null, active: false, contact_category_members: [{ category_id: RES }] },
+    { id: 5, name: "Amy", house_number: "7", member_id: null, active: true, contact_category_members: [{ category_id: TRADES }, { category_id: RES }] },
+    { id: 6, name: "NoHouse", house_number: null, member_id: null, active: true, contact_category_members: [{ category_id: RES }] },
+  ]
+  const out = noLoginResidents(contacts, RES)
+  assert.deepEqual(out.map(r => r.name), ["Amy", "Zed", "NoHouse"])
+  assert.deepEqual(out[0], { id: "c-5", contactId: 5, name: "Amy", username: null, house_number: "7", noLogin: true })
+  assert.deepEqual(noLoginResidents(contacts, null), [], "no Residents category => nobody, never everyone")
+  assert.deepEqual(noLoginResidents(null, RES), [])
+  // A house whose only resident has no login is occupied with nobody signed in, not empty.
+  const occupants = [{ status: "active", auth_id: "x", house_number: "5" }, ...out.map(asHouseOccupant)]
+  assert.deepEqual(houseStats(occupants, new Set(["x"]), ["5", "7", "49", "50"]), { total: 4, occupied: 3, noSignIn: 2, empty: 1 })
 })
 
 t("housesNotSignedIn: a house counts once anyone there has signed in", () => {

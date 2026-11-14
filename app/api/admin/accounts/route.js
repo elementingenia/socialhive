@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
 import { newAuthEmail } from "@/lib/authEmail"
-import { validateNewAccount, validateUsername, validatePin } from "@/lib/accounts"
+import { validateNewAccount, validateUsername, validatePin, memberFieldsFromContact } from "@/lib/accounts"
 import { sydneyTodayStr } from "@/lib/date"
 import { newPinColumns } from "@/lib/pinAuth"
 
@@ -88,6 +88,17 @@ export async function POST(req) {
       .from("members").select("id").ilike("username", username).maybeSingle()
     if (existing) return NextResponse.json({ error: "That username is already taken." }, { status: 409 })
 
+    // Created from a Contacts entry: the login takes over that entry's house
+    // number, street, phone and email (BUG-106). Only from an entry that has
+    // no login yet -- the same condition the link below uses.
+    let fromContact = {}
+    if (contactId) {
+      const { data: contact, error: contactErr } = await supabaseAdmin
+        .from("contacts").select("id, house_number, street_id, phone, email, member_id").eq("id", contactId).maybeSingle()
+      if (contactErr) return NextResponse.json({ error: "Could not read the contact. Please try again." }, { status: 500 })
+      if (contact && !contact.member_id) fromContact = memberFieldsFromContact(contact)
+    }
+
     // Random and permanent -- see migration 066. Never derived from username.
     const fakeEmail = newAuthEmail()
     const authPassword = toAuthPassword(pin)
@@ -120,6 +131,7 @@ export async function POST(req) {
     const { data: member, error: insertErr } = await supabaseAdmin.from("members").insert({
       // display_name (2026-08-14) defaults to Real Name at creation here too --
       // see the identical note in app/api/auth/register/route.js.
+      ...fromContact,
       name, display_name: name, username, ...newPinColumns(pin), auth_id: authUserId, auth_email: fakeEmail,
       // Admin-created: the PIN is handed over, so force a change on first
       // login (migration 067). Self-registration leaves this false.

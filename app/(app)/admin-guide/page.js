@@ -1084,6 +1084,13 @@ export default function AdminGuidePage() {
                 there has signed in. Residents with no house number are left out.
               </Step>
               <Step>
+                <strong>No login yet</strong> lists residents who are in Contacts but have never been given a
+                login, so they can&apos;t sign in at all. Tap <strong>Create login</strong>, choose a username
+                and starting PIN, and they move to <strong>Never signed in</strong>, ready to be ticked for a
+                card. Their house number, street, phone and email come across from Contacts. These residents
+                count as living in their house, so the house is not shown as empty.
+              </Step>
+              <Step>
                 Use the <strong>Find by name or house number</strong> box to go straight to someone. A house
                 number finds that house only (7 doesn't bring up 17 or 77); anything else matches the name
                 or username. Ticks stay put while you search, so you can find and tick several people in turn.

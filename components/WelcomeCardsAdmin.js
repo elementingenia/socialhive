@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { authedFetch } from "@/lib/getAuthToken"
 import { matchesResidentSearch } from "@/lib/welcomeCards"
+import { CreateLoginForm } from "@/components/ResidentEditPanel"
 
 // Admin › Sign-in Help (Iain, 2026-10-09). Residents who have never signed
 // in, sorted by house number for walking round, with a printable welcome
@@ -13,6 +14,10 @@ import { matchesResidentSearch } from "@/lib/welcomeCards"
 // 2026-10-19 (Iain): search by name or house number; the Print action sits in
 // a bar fixed above the bottom nav so it's reachable without scrolling; the
 // cards come back as one PDF (lib/welcomeCardsPdf.js), not a web page.
+//
+// 2026-11-15 (Iain, BUG-106): residents added in Contacts with no login yet
+// were invisible here. "No login yet" lists them with a Create login button;
+// they can't be ticked (no username to print) until the login exists.
 
 const inputStyle = {
   width: "100%", padding: "0.6rem 0.85rem", borderRadius: 10, border: "1px solid var(--border)",
@@ -77,6 +82,8 @@ export default function WelcomeCardsAdmin() {
   const [residents, setResidents] = useState(null)
   const [loading, setLoading] = useState(true)
   const [neverCount, setNeverCount] = useState(0)
+  const [noLoginCount, setNoLoginCount] = useState(0)
+  const [creating, setCreating] = useState(null)
   const [houses, setHouses] = useState(null)
   const [selected, setSelected] = useState(() => new Set())
   const [helpLine, setHelpLine] = useState("")
@@ -97,14 +104,14 @@ export default function WelcomeCardsAdmin() {
       const r = await authedFetch(`/api/admin/welcome-cards?scope=${scope}`)
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || "Could not load residents.")
-      setResidents(d.residents); setNeverCount(d.neverCount || 0)
+      setResidents(d.residents); setNeverCount(d.neverCount || 0); setNoLoginCount(d.noLoginCount || 0)
       setHouses(d.houses || null)
       setHelpLine(d.helpLine || ""); setHelpDraft(d.helpLine || "")
     } catch (e) { setError(e.message) }
     setLoading(false)
   }, [scope])
 
-  useEffect(() => { setSelected(new Set()); setConfirming(false); setResult(null); load() }, [load])
+  useEffect(() => { setSelected(new Set()); setConfirming(false); setResult(null); setCreating(null); load() }, [load])
 
   function toggle(id) {
     setConfirming(false); setResult(null); setPrintError(null)
@@ -152,14 +159,16 @@ export default function WelcomeCardsAdmin() {
   // Selection survives searching: tick #12, search for #40, tick them too.
   const chosen = all.filter(m => selected.has(m.id))
   const chosenSignedIn = chosen.filter(m => m.signedIn).length
-  const allOn = list.length > 0 && list.every(m => selected.has(m.id))
+  // Only residents with a login can be ticked for a card.
+  const tickable = list.filter(m => !m.noLogin)
+  const allOn = tickable.length > 0 && tickable.every(m => selected.has(m.id))
   const trayOpen = chosen.length > 0 || confirming || !!result || !!printError
 
   function toggleVisible() {
     setConfirming(false); setResult(null); setPrintError(null)
     setSelected(s => {
       const n = new Set(s)
-      list.forEach(m => allOn ? n.delete(m.id) : n.add(m.id))
+      tickable.forEach(m => allOn ? n.delete(m.id) : n.add(m.id))
       return n
     })
   }
@@ -171,6 +180,7 @@ export default function WelcomeCardsAdmin() {
         <h2 style={{ margin: "0 0 0.25rem", fontSize: "1.15rem" }}>Sign-in Help</h2>
         <div style={{ fontSize: "0.88rem", color: "var(--text-dim)" }}>
           {neverCount} {neverCount === 1 ? "resident has" : "residents have"} never signed in.{" "}
+          {noLoginCount > 0 && <><strong>{noLoginCount} more {noLoginCount === 1 ? "has" : "have"} no login yet.</strong>{" "}</>}
           {houses && (houses.total != null
             ? <>Of {houses.total} houses, {houses.occupied} have residents and {houses.empty} {houses.empty === 1 ? "is" : "are"} empty.{" "}
                 <strong>{houses.noSignIn} {houses.noSignIn === 1 ? "house with residents has" : "houses with residents have"} nobody signed in yet.</strong>{" "}</>
@@ -193,11 +203,12 @@ export default function WelcomeCardsAdmin() {
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
         <Pill active={scope === "never"} onClick={() => setScope("never")}>Never signed in ({neverCount})</Pill>
         <Pill active={scope === "houses"} onClick={() => setScope("houses")}>Houses with no sign-in ({houses?.noSignIn ?? 0})</Pill>
+        <Pill active={scope === "nologin"} onClick={() => setScope("nologin")}>No login yet ({noLoginCount})</Pill>
         <Pill active={scope === "all"} onClick={() => setScope("all")}>Everyone</Pill>
-        {list.length > 0 && (
+        {tickable.length > 0 && (
           <span style={{ marginLeft: "auto" }}>
             <Btn onClick={toggleVisible}>
-              {allOn ? (search.trim() ? "Untick these" : "Clear") : (search.trim() ? `Select these ${list.length}` : "Select all")}
+              {allOn ? (search.trim() ? "Untick these" : "Clear") : (search.trim() ? `Select these ${tickable.length}` : "Select all")}
             </Btn>
           </span>
         )}
@@ -223,13 +234,42 @@ export default function WelcomeCardsAdmin() {
       ) : list.length === 0 ? (
         <div style={{ fontSize: "0.9rem", color: "var(--text-dim)" }}>
           {all.length > 0 && search.trim()
-            ? `No ${scope === "never" ? "never-signed-in " : ""}resident ${scope === "houses" ? "in these houses " : ""}matches “${search.trim()}”.${scope === "all" ? "" : " Try Everyone."}`
+            ? `No ${scope === "never" ? "never-signed-in " : ""}resident ${scope === "houses" ? "in these houses " : scope === "nologin" ? "without a login " : ""}matches “${search.trim()}”.${scope === "all" ? "" : " Try Everyone."}`
             : scope === "never" ? "Everyone has signed in at least once."
+            : scope === "nologin" ? "Every resident in Contacts has a login."
             : scope === "houses" ? "Every house has at least one resident signed in." : "No residents found."}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-          {list.map(m => (
+          {scope === "nologin" && (
+            <div style={{ fontSize: "0.82rem", color: "var(--text-dim)" }}>
+              These residents are in Contacts but have no login, so they can&apos;t sign in or be given a card yet.
+              Create a login and they move to Never signed in, ready for a card.
+            </div>
+          )}
+          {list.map(m => m.noLogin ? (
+            <div key={m.id} style={{
+              background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "0.55rem 0.75rem",
+              display: "flex", flexDirection: "column", gap: "0.6rem",
+            }}>
+              <div style={{ display: "flex", gap: "0.65rem", alignItems: "center" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: "0.92rem" }}>
+                    {m.house_number ? `#${m.house_number} · ` : ""}{m.name}
+                  </div>
+                  <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--amber)" }}>No login yet</div>
+                </div>
+                <Btn onClick={() => setCreating(c => c === m.id ? null : m.id)}>{creating === m.id ? "Cancel" : "Create login"}</Btn>
+              </div>
+              {creating === m.id && (
+                <CreateLoginForm defaultName={m.name} contactId={m.contactId} onCreated={() => {
+                  setCreating(null); setError(null)
+                  setMsg(`Login created for ${m.name}. They are now under Never signed in, ready for a card.`)
+                  load()
+                }} />
+              )}
+            </div>
+          ) : (
             <div key={m.id} onClick={() => toggle(m.id)} style={{
               display: "flex", gap: "0.65rem", alignItems: "center", cursor: "pointer",
               background: "var(--surface)", border: `1px solid ${selected.has(m.id) ? "var(--teal)" : "var(--border)"}`,

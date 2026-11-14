@@ -3,10 +3,12 @@ import { NextResponse } from "next/server"
 import { randomInt } from "crypto"
 import { newPinColumns } from "@/lib/pinAuth"
 import {
-  HELP_SETTING_KEY, generateStartingPin, sortForWalking, filterForScope, houseStats, cardLoginUrl, siteLabel,
+  HELP_SETTING_KEY, generateStartingPin, sortForWalking, filterForScope, houseStats, housesNotSignedIn, houseKey,
+  noLoginResidents, asHouseOccupant, cardLoginUrl, siteLabel,
 } from "@/lib/welcomeCards"
 import { buildWelcomeCardsPdf } from "@/lib/welcomeCardsPdf"
 import { fetchSignedInAuthIds, hasSignedIn } from "@/lib/signedIn"
+import { isBuiltInCategory } from "@/lib/contactCategories"
 
 // Admin › Sign-in Help (Iain, 2026-10-09). Lists residents who have never
 // signed in (or everyone, for reprints) and prints welcome cards. Printing a
@@ -37,7 +39,7 @@ export async function GET(req) {
   const admin = await requireAdmin(req)
   if (!admin) return NextResponse.json({ error: "Admin only" }, { status: 403 })
   const asked = new URL(req.url).searchParams.get("scope")
-  const scope = asked === "all" || asked === "houses" ? asked : "never"
+  const scope = asked === "all" || asked === "houses" || asked === "nologin" ? asked : "never"
 
   const { data, error } = await supa.from("members")
     .select("id, name, username, house_number, status, is_test, auth_id, welcome_card_printed_at, welcome_card_printed_by")
@@ -51,24 +53,54 @@ export async function GET(req) {
   if (!signedInIds) return NextResponse.json({ error: "Could not check who has signed in. Try again." }, { status: 500 })
 
   const all = data || []
+
+  // Residents with no login yet (BUG-106): Residents-category contacts not
+  // linked to a member. If they can't be read, say so rather than show 0.
+  const [{ data: cats, error: catErr }, { data: contactRows, error: conErr }] = await Promise.all([
+    supa.from("contact_categories").select("id, name"),
+    supa.from("contacts").select("id, name, house_number, member_id, active, contact_category_members(category_id)").is("member_id", null),
+  ])
+  if (catErr || conErr) {
+    console.error("welcome-cards: could not read contacts", (catErr || conErr).message)
+    return NextResponse.json({ error: "Could not load residents without a login. Try again." }, { status: 500 })
+  }
+  const noLogin = noLoginResidents(contactRows, (cats || []).find(c => isBuiltInCategory(c.name))?.id || null)
+  // Everyone who lives here, for the house numbers: logins + no-login residents.
+  const occupants = [...all, ...noLogin.map(asHouseOccupant)]
+
   // Printer names via a plain lookup, not an embed: members -> members is a
   // self-reference and an embed hint there is easy to get wrong (Standard #9).
   const nameById = new Map(all.map(m => [m.id, m.name]))
-  const residents = sortForWalking(filterForScope(all, scope, signedInIds)).map(m => ({
+  const row = m => ({
     id: m.id, name: m.name, username: m.username, house_number: m.house_number,
     signedIn: hasSignedIn(m, signedInIds),
     printedAt: m.welcome_card_printed_at || null,
     printedBy: nameById.get(m.welcome_card_printed_by) || null,
-  }))
+  })
+  let residents
+  if (scope === "nologin") {
+    residents = noLogin
+  } else if (scope === "houses") {
+    // Houses where nobody has signed in, counting no-login residents as
+    // living there; their rows are listed too so no such house is hidden.
+    const { none } = housesNotSignedIn(occupants, signedInIds)
+    residents = sortForWalking([
+      ...all.filter(m => none.has(houseKey(m))).map(row),
+      ...noLogin.filter(r => none.has(houseKey(r))),
+    ])
+  } else {
+    residents = sortForWalking(filterForScope(all, scope, signedInIds)).map(row)
+  }
   // Every home in the village (122), so the house numbers are out of all
   // homes, not just the ones with a resident loaded. If the list can't be
   // read the screen says so in its wording instead of showing a wrong total.
   const { data: homes, error: homesErr } = await supa.from("properties").select("ref")
   if (homesErr) console.error("welcome-cards: could not read properties", homesErr.message)
-  const houses = houseStats(all, signedInIds, homesErr || !homes?.length ? null : homes.map(h => h.ref))
+  const houses = houseStats(occupants, signedInIds, homesErr || !homes?.length ? null : homes.map(h => h.ref))
   return NextResponse.json({
     residents,
     neverCount: all.filter(m => !hasSignedIn(m, signedInIds)).length,
+    noLoginCount: noLogin.length,
     houses,
     helpLine: await readHelpLine(),
   })
@@ -89,7 +121,8 @@ export async function POST(req) {
 
   if (body.action !== "print") return NextResponse.json({ error: "Unknown action" }, { status: 400 })
 
-  const ids = [...new Set((body.member_ids || []).filter(Boolean))]
+  // Residents with no login (ids "c-...") have no username to print.
+  const ids = [...new Set((body.member_ids || []).filter(id => id && !String(id).startsWith("c-")))]
   if (!ids.length) return NextResponse.json({ error: "Choose at least one resident." }, { status: 400 })
   if (ids.length > MAX_PER_PRINT) return NextResponse.json({ error: `Print at most ${MAX_PER_PRINT} cards at a time.` }, { status: 400 })
 
