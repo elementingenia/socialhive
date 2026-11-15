@@ -112,7 +112,7 @@ const RAW_SECTIONS = [
       { title: "Deactivate vs. Delete — not interchangeable", id: "sub-acc-remove" },
       { title: "Creating a login for a resident", id: "sub-acc-create" },
       { title: "Reset PIN — what it forces on next login", id: "sub-acc-pin" },
-      { title: "Residents › Sign-in Help — welcome cards", id: "sub-acc-welcome" },
+      { title: "Residents › Sign-in Help — welcome cards and packs", id: "sub-acc-welcome" },
       { title: "Exporting the list — Export button", id: "sub-acc-export" },
       { title: "Admin badge — seeing who is Admin at a glance", id: "sub-acc-adminbadge" },
       { title: "Info › Documents — editing a document", id: "sub-acc-docedit" },
@@ -1122,7 +1122,41 @@ export default function AdminGuidePage() {
               </Step>
               <Step>
                 A card is a password. Hand it to the resident or put it in their letterbox — never leave it
-                in a common area. Admins only.
+                in a common area. Cards are admins only.
+              </Step>
+              <Step>
+                <strong>Welcome pack (added 2026-11-16).</strong> Tick residents and tap{" "}
+                <strong>Welcome pack</strong> instead of Print. A pack is a letter with the resident&apos;s
+                card inside it and the steps for putting the app on their Home Screen. Residents of the
+                same house share <strong>one letter with a card each</strong>; a resident with no house
+                number gets their own. Making a pack resets the password, exactly like printing a card.
+                At most 12 residents at a time.
+              </Step>
+              <Step>
+                When the packs are ready each house has its own row. <strong>Share PDF</strong> opens your
+                phone&apos;s share sheet with the letter attached (Messages, Mail, WhatsApp).{" "}
+                <strong>Download PDF</strong> saves the finished letter to print or attach.{" "}
+                <strong>Preview</strong> shows it on the page. Under that, each resident has{" "}
+                <strong>Text</strong> (if a mobile is on file) and <strong>Email</strong> (if an email is on
+                file): these open a message already written with their sign-in link, username and one-time
+                password. A message opened this way can&apos;t carry the PDF, only Share and Download do.
+                Share is offered on phones and tablets; on a computer use Download.
+              </Step>
+              <Step>
+                The passwords are shown only on that screen. Send or download before you tap{" "}
+                <strong>Done</strong> or leave the page; after that the only way to get a pack is to make it
+                again, which sets a new password.
+              </Step>
+              <Step>
+                <strong>Welcome pack opening paragraph</strong> at the top is the paragraph printed under
+                “Welcome” on every pack. Leave it empty to use the standard wording shown in grey.
+              </Step>
+              <Step>
+                <strong>Committee.</strong> Owners of the Committee hub also have <strong>Sign-in Help</strong>{" "}
+                on the Committee page. There they see only residents who have <strong>never signed in</strong>{" "}
+                (not admins, not Private residents) and can make welcome packs for them. They can&apos;t print
+                cards, create logins, change the help line or opening paragraph, or make a pack for anyone
+                who already signs in.
               </Step>
             </Subsection>
             <Subsection id="sub-acc-export" title="Exporting the list — Export button (added 2026-08-30)">

@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect, useMemo, useRef } from "react"
+import { HOME_SCREEN_LEAD, IPHONE_STEPS, ANDROID_STEPS, GOOD_TO_KNOW } from "@/lib/welcomePack"
 import { BAR_ENABLED } from "@/lib/features"
 
 const BASE = "https://tzzxwvbqszzrruxjrpcs.supabase.co/storage/v1/object/public/help-screenshots"
@@ -51,6 +52,7 @@ const RAW_SECTIONS = [
     id: "access", num: 1, title: "Signing In, Registering & Changing Your Password",
     subs: [
       { title: "Sign In",                    id: "sub-signin" },
+      { title: "Putting the app on your Home Screen", id: "sub-home-screen" },
       { title: "Register — first time users", id: "sub-register" },
       { title: "Change Password",             id: "sub-password" },
     ],
@@ -661,9 +663,38 @@ export default function HelpGuidePage() {
                 may remember your username.
               </Step>
               <Step>
-                <strong>Got a welcome card?</strong> Scan the square code with your phone camera, or type the
-                website on the card. Your username is filled in for you: enter the password from the card
+                <strong>Got a welcome card or welcome pack?</strong> Scan the square code with your phone camera, tap
+                the card if you are reading the pack on your phone, or type the website on the card. Your username is filled in for you: enter the password from the card
                 and tap <strong>Sign In</strong>. You will then be asked to choose your own new password.
+              </Step>
+            </Subsection>
+
+            {/* Linked from the welcome pack's Text / Email message
+                (lib/welcomePack.js homeScreenGuideUrl) -- keep this id. The
+                steps are the same ones printed in the pack. */}
+            <Subsection id="sub-home-screen" title="Putting the app on your Home Screen">
+              <Step>{HOME_SCREEN_LEAD}</Step>
+              <Step>
+                <strong>iPhone and iPad (Safari)</strong>
+                <ol style={{ margin: "0.4rem 0 0", paddingLeft: "1.2rem" }}>
+                  {IPHONE_STEPS.map((st, i) => <li key={i} style={{ marginBottom: "0.3rem" }}>{st.text}</li>)}
+                </ol>
+              </Step>
+              <Step>
+                <strong>Android phones and tablets (Chrome)</strong>
+                <ol style={{ margin: "0.4rem 0 0", paddingLeft: "1.2rem" }}>
+                  {ANDROID_STEPS.map((st, i) => <li key={i} style={{ marginBottom: "0.3rem" }}>{st.text}</li>)}
+                </ol>
+              </Step>
+              <Step>
+                <strong>Then sign in from the new icon.</strong> On an iPhone the Home Screen app keeps its own
+                sign-in, separate from Safari, so add the icon first and sign in there.
+              </Step>
+              <Step>
+                <strong>Good to know</strong>
+                <ul style={{ margin: "0.4rem 0 0", paddingLeft: "1.2rem" }}>
+                  {GOOD_TO_KNOW.map((t, i) => <li key={i} style={{ marginBottom: "0.3rem" }}>{t}</li>)}
+                </ul>
               </Step>
             </Subsection>
 
