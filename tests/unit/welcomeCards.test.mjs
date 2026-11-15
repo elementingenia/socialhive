@@ -6,7 +6,12 @@ import {
 } from "../../lib/welcomeCards.js"
 import { hasSignedIn, signedInIdsFromAuthUsers } from "../../lib/signedIn.js"
 import { buildWelcomeCardsPdf, qrRuns } from "../../lib/welcomeCardsPdf.js"
-import { PDFDocument } from "pdf-lib"
+import { PDFDocument, PDFName } from "pdf-lib"
+import { buildWelcomePackPdf } from "../../lib/welcomePackPdf.js"
+import {
+  DEFAULT_PACK_INTRO, PACK_INTRO_MAX, cleanPackIntro, packIntroText, joinNames, groupByHouse, packTitle,
+  packGreeting, packFileName, homeScreenGuideUrl, packMessage, smsHrefWithBody, mailtoHref, committeeMayPack,
+} from "../../lib/welcomePack.js"
 import QRCode from "qrcode"
 
 let n = 0
@@ -128,7 +133,98 @@ t("search: digits match the house number exactly, words match name or username",
   assert.equal(matchesResidentSearch(null, "x"), false)
 })
 
+// ── Welcome pack (2026-11-16) ──
+t("pack intro: admin's text, else the standard wording; capped", () => {
+  assert.equal(packIntroText(""), DEFAULT_PACK_INTRO)
+  assert.equal(packIntroText("   "), DEFAULT_PACK_INTRO)
+  assert.equal(packIntroText("  Hello there.  "), "Hello there.")
+  assert.equal(cleanPackIntro("a\r\n\r\n\r\n\r\nb"), "a\n\nb")
+  assert.equal(cleanPackIntro("x".repeat(PACK_INTRO_MAX + 50)).length, PACK_INTRO_MAX)
+})
+
+t("joinNames", () => {
+  assert.equal(joinNames([]), "")
+  assert.equal(joinNames(["Susie"]), "Susie")
+  assert.equal(joinNames(["Susie", "John"]), "Susie and John")
+  assert.equal(joinNames(["Ann", "", "Bob", "Cy"]), "Ann, Bob and Cy")
+})
+
+t("one pack per house; no house number = own pack; walking order", () => {
+  const g = groupByHouse([
+    { id: 1, name: "Zed", house_number: "49" }, { id: 2, name: "Amy", house_number: "49" },
+    { id: 3, name: "Bob", house_number: "7" }, { id: 4, name: "Nohouse One", house_number: null },
+    { id: 5, name: "Nohouse Two", house_number: "" },
+  ])
+  assert.deepEqual(g.map(x => x.house), ["7", "49", "", ""])
+  assert.deepEqual(g[1].residents.map(r => r.name), ["Amy", "Zed"])
+  assert.equal(new Set(g.map(x => x.key)).size, 4)
+  assert.equal(packTitle(g[1]), "House 49")
+  assert.equal(packGreeting(g[1]), "Welcome, Amy and Zed")
+  assert.equal(packTitle(g[2]), "Nohouse One")
+  assert.equal(packFileName(g[1]), "Welcome pack - House 49.pdf")
+  assert.equal(packFileName({ residents: [{ name: "Jo/../x <b>" }] }), "Welcome pack - Jox b.pdf")
+  assert.deepEqual(groupByHouse(null), [])
+})
+
+t("pack message carries the link, username and one-time password", () => {
+  const m = packMessage({ name: "Susie Tydd", username: "SusieT", pin: "6483",
+    loginUrl: "https://x.au/login?u=SusieT", guideUrl: homeScreenGuideUrl("https://x.au/"), helpLine: " Ask Iain " })
+  assert.ok(m.startsWith("Hi Susie, welcome to Element Happenings."))
+  for (const part of ["Sign in here: https://x.au/login?u=SusieT", "Username: SusieT", "One-time password: 6483",
+    "https://x.au/help-guide#sub-home-screen", "Need help? Ask Iain"]) assert.ok(m.includes(part), part)
+  const bare = packMessage({ name: "", username: "u", pin: "1", loginUrl: "l" })
+  assert.ok(bare.startsWith("Hi, welcome") && !bare.includes("Need help?") && !bare.includes("Home Screen"))
+})
+
+t("text only to a mobile, email only to a real address", () => {
+  assert.equal(smsHrefWithBody("0434 357 060", "Hi & bye"), "sms:0434357060?&body=Hi%20%26%20bye")
+  assert.equal(smsHrefWithBody("02 4912 3456", "x"), null)
+  assert.equal(smsHrefWithBody("", "x"), null)
+  assert.equal(mailtoHref(" a@b.co ", "Sub ject", "line1\nline2"), "mailto:a@b.co?subject=Sub%20ject&body=line1%0Aline2")
+  assert.equal(mailtoHref("not-an-email", "s", "b"), null)
+  assert.equal(mailtoHref(null, "s", "b"), null)
+})
+
+t("committee may only pack residents who have never signed in, not admins or Private", () => {
+  const m = { status: "active", is_test: false, is_admin: false, hide_name: false }
+  assert.equal(committeeMayPack(m, false), true)
+  assert.equal(committeeMayPack(m, true), false)
+  assert.equal(committeeMayPack({ ...m, is_admin: true }, false), false)
+  assert.equal(committeeMayPack({ ...m, hide_name: true }, false), false)
+  assert.equal(committeeMayPack({ ...m, is_test: true }, false), false)
+  assert.equal(committeeMayPack({ ...m, status: "inactive" }, false), false)
+  assert.equal(committeeMayPack(null, false), false)
+})
+
 const tests = [
+  (async () => {
+    // Pack PDF: every house starts on its own page, each card is a link to
+    // that resident's sign-in page, awkward text never breaks the build.
+    const mk = (name, house, u) => ({ id: u, name, house_number: house, username: u, pin: "4826", loginUrl: `https://x.au/login?u=${u}` })
+    const groups = groupByHouse([mk("Hēmi “Jim” O’Brien 😀", "49", "HemiO"), mk("Jo Smith", "49", "JoS"), mk("Al Lone", "12", "AlL")])
+    const bytes = await buildWelcomePackPdf(groups, { site: "x.au", helpLine: "Ask Iain. ".repeat(20), intro: "Para one.\n\nPara two 😀." })
+    const doc = await PDFDocument.load(bytes)
+    assert.equal(doc.getTitle(), "Welcome packs")
+    const pages = doc.getPages()
+    assert.ok(pages.length >= 4 && pages.length <= 6, `pages ${pages.length}`)
+    const uris = []
+    for (const pg of pages) {
+      const annots = pg.node.Annots()
+      if (!annots) continue
+      for (let i = 0; i < annots.size(); i++) {
+        const a = annots.lookup(i)
+        uris.push(a.lookup(PDFName.of("A")).lookup(PDFName.of("URI")).decodeText())
+      }
+    }
+    assert.deepEqual(uris.sort(), ["https://x.au/login?u=AlL", "https://x.au/login?u=HemiO", "https://x.au/login?u=JoS"])
+    const one = await PDFDocument.load(await buildWelcomePackPdf(groups.slice(0, 1), { site: "x.au" }))
+    assert.equal(one.getTitle(), "Welcome pack - House 12")
+    assert.equal(one.getPageCount(), 2)
+    // A broken logo must not stop the letter being made.
+    const noLogo = await PDFDocument.load(await buildWelcomePackPdf(groups.slice(0, 1), { site: "x.au", logoPng: new Uint8Array([1, 2, 3]) }))
+    assert.equal(noLogo.getPageCount(), 2)
+    n++
+  })(),
   (async () => {
     // QR runs decode back to the same module grid the qrcode package made.
     const url = "https://elementhappenings.com.au/login?u=MaryS"

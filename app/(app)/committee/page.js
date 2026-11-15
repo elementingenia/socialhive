@@ -1,5 +1,6 @@
 "use client"
 import { useState, useEffect, useCallback } from "react"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase"
 import { useUser } from "@/lib/UserContext"
 import { useOwners } from "@/lib/useOwners"
@@ -359,7 +360,16 @@ export default function CommitteePage() {
       )}
 
       {canManage && (
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: composerOpen ? 10 : 14 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap", marginBottom: composerOpen ? 10 : 14 }}>
+          {/* Welcome packs for new residents (Iain, 2026-11-16): committee
+              can make them here; admins also have this in Admin > Residents. */}
+          <Link href="/committee/sign-in-help" style={{
+            display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.9rem",
+            borderRadius: 20, fontWeight: 700, fontSize: "0.82rem", whiteSpace: "nowrap", textDecoration: "none",
+            border: `1.5px solid ${COLOUR}`, background: "var(--surface)", color: COLOUR,
+          }}>
+            Sign-in Help
+          </Link>
           <button onClick={() => setComposerOpen(o => !o)} style={{
             display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.9rem",
             borderRadius: 20, fontFamily: "inherit", fontWeight: 700, fontSize: "0.82rem",
