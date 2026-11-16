@@ -8,6 +8,7 @@ import { formatPhoneInput } from "@/lib/phone"
 import { sydneyTodayStr } from "@/lib/date"
 import { displayRecipientName } from "@/lib/categoryQuestions"
 import AskQuestion from "@/components/AskQuestion"
+import AddResidentForm from "@/components/AddResidentForm"
 import { authedFetch } from "@/lib/getAuthToken"
 import ContactCard from "@/components/ContactCard"
 import { buildContactEntries } from "@/lib/contactEntries"
@@ -170,10 +171,17 @@ function ContactForm({ contact, categories, setCategories, members, onSaved, onC
             This matches an existing resident's name — residents already appear automatically, no need to add them here.
           </div>
         )}
+        {!isEdit && (
+          <div style={{ fontSize: "0.75rem", color: "var(--text-dim)", marginTop: "0.3rem" }}>
+            For a new resident, use 👤 Add Resident instead: it adds them with a login and makes their welcome pack.
+          </div>
+        )}
       </div>
       <div>
         <label style={labelStyle}>Category <span style={{ color: "var(--danger)" }}>*</span></label>
-        <CategoryPicker categories={categories} selectedIds={form.category_ids}
+        {/* New residents come in through Add Resident, with a login
+            (Iain, 2026-11-16), so + Add no longer offers Residents. */}
+        <CategoryPicker categories={isEdit ? categories : categories.filter(c => !isBuiltInCategory(c.name))} selectedIds={form.category_ids}
           onChange={ids => set("category_ids", ids)}
           onCategoryCreated={cat => setCategories(prev => [...prev, cat])}
           required />
@@ -812,11 +820,8 @@ export default function ContactsPage() {
         <ContactForm categories={categories} setCategories={setCategories} members={members} onSaved={load} onClose={() => setSheet(null)} />
       </Sheet>
 
-      <Sheet open={sheet === "addResident"} onClose={() => setSheet(null)} title="Add Resident Login">
-        <div style={{ fontSize: "0.83rem", color: "var(--text-dim)", marginBottom: "0.75rem" }}>
-          Creates an app account for a resident who hasn\'t registered themselves. They\'ll appear in the Residents list and can be added to bookings.
-        </div>
-        <CreateLoginForm onCreated={() => { load(); setSheet(null) }} />
+      <Sheet open={sheet === "addResident"} onClose={() => setSheet(null)} title="Add Resident">
+        {sheet === "addResident" && <AddResidentForm onAdded={load} onClose={() => setSheet(null)} />}
       </Sheet>
 
       <Sheet open={sheet === "categories"} onClose={() => setSheet(null)} title="Manage Categories">

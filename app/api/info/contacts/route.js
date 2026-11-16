@@ -5,6 +5,7 @@ import { isValidDisplayName } from "@/lib/memberName"
 import { buildContactsDirectory } from "@/lib/directoryPrivacy"
 import { normaliseHouseNumber, resolveStreetId } from "@/lib/address"
 import { loadStreets, withStreetNames } from "@/lib/streetsServer"
+import { isBuiltInCategory } from "@/lib/contactCategories"
 
 // House number (whole number only) + street (must be on Admin > Streets),
 // migration 122. Mutates `fields` in place; returns an error string or null.
@@ -71,6 +72,11 @@ export async function POST(req) {
   const { name, title, phone, email, house_number, street_id, category_ids } = await req.json()
   if (!name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 })
   if (!category_ids?.length) return NextResponse.json({ error: 'At least one category required' }, { status: 400 })
+  // New residents are added with a login through Add Resident
+  // (app/api/residents/add, Iain 2026-11-16), never as a Contacts-only entry.
+  const { data: chosenCats } = await supabaseAdmin.from('contact_categories').select('name').in('id', category_ids)
+  if ((chosenCats || []).some(c => isBuiltInCategory(c.name)))
+    return NextResponse.json({ error: 'To add a resident, use Add Resident: it gives them a login too.' }, { status: 400 })
   const address = { house_number, street_id }
   const addrErr = await cleanAddress(address)
   if (addrErr) return NextResponse.json({ error: addrErr }, { status: 400 })

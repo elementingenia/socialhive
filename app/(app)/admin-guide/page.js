@@ -110,7 +110,7 @@ const RAW_SECTIONS = [
     subs: [
       { title: "Every field you can edit, and what it affects", id: "sub-acc-edit" },
       { title: "Deactivate vs. Delete — not interchangeable", id: "sub-acc-remove" },
-      { title: "Creating a login for a resident", id: "sub-acc-create" },
+      { title: "Adding a resident — Add Resident", id: "sub-acc-create" },
       { title: "Reset PIN — what it forces on next login", id: "sub-acc-pin" },
       { title: "Residents › Sign-in Help — welcome cards and packs", id: "sub-acc-welcome" },
       { title: "Exporting the list — Export button", id: "sub-acc-export" },
@@ -1036,17 +1036,37 @@ export default function AdminGuidePage() {
                 resident who's moved out or stopped participating, Deactivate is the one to use.
               </Step>
             </Subsection>
-            <Subsection id="sub-acc-create" title="Creating a login for a resident">
+            <Subsection id="sub-acc-create" title="Adding a resident — Add Resident (one step, updated 2026-11-16)">
               <Step>
-                Also on the Contacts screen — set a <strong>Name</strong>, a <strong>Username</strong>{" "}
-                (what they'll type to sign in; minimum 3 characters, must be unique) and a{" "}
-                <strong>Starting PIN</strong> (minimum 4 characters). On success you're shown that exact
-                username and PIN to hand to the resident directly — there's no email/SMS sent automatically.
+                Tap <strong>👤 Add Resident</strong> on Info › Contacts or on Sign-in Help. One form takes the
+                resident&apos;s Contacts details and their login together: <strong>Full name</strong> (required),{" "}
+                <strong>Display name</strong>, <strong>House #</strong> and <strong>Street</strong>,{" "}
+                <strong>Phone</strong>, <strong>Email</strong>, extra <strong>Category</strong> tags (Residents is
+                always included), <strong>Title / Role</strong>, and a <strong>Username</strong> (suggested from
+                the name, editable; 3 or more letters, numbers or underscores, must be unique).
               </Step>
               <Step>
-                If you create the login from an existing Contacts-only entry (one with no login yet), the
-                new login is automatically linked to that entry — its phone/title/category tags carry over,
-                and it stops appearing as a separate, contact-only row.
+                There is no PIN to type. Tap <strong>Add resident and make welcome pack</strong>: the login is
+                made and their welcome pack opens straight away (Share PDF, Download PDF, Text, Email). The pack
+                gives them a one-time password that must be changed at first sign-in. If the pack can&apos;t be
+                made, the resident is still added: make the pack from Sign-in Help (they are under{" "}
+                <strong>Never signed in</strong>).
+              </Step>
+              <Step>
+                As you type the name and house number, anyone already on file with that name or at that house
+                is shown. If the person is already in Contacts with no login, tap <strong>Use this entry</strong>{" "}
+                to give that entry the login instead of making a second one. If they already have a login, send
+                them a new welcome pack from Sign-in Help instead.
+              </Step>
+              <Step>
+                <strong>+ Add</strong> on Contacts is now for people who aren&apos;t residents (trades, staff,
+                services); it no longer offers the Residents category. A new resident always gets a login.
+                Admin and Private are set afterwards from Edit Resident.
+              </Step>
+              <Step>
+                An older Contacts-only resident entry can still be given a login from its own Edit Contact
+                screen (<strong>Give this person a login</strong>), or from Sign-in Help ›{" "}
+                <strong>No login yet</strong>.
               </Step>
             </Subsection>
             <Subsection id="sub-acc-pin" title="Reset PIN — what it forces on next login">
@@ -1155,8 +1175,10 @@ export default function AdminGuidePage() {
                 <strong>Committee.</strong> Owners of the Committee hub also have <strong>Sign-in Help</strong>{" "}
                 on the Committee page. There they see only residents who have <strong>never signed in</strong>{" "}
                 (not admins, not Private residents) and can make welcome packs for them. They can&apos;t print
-                cards, create logins, change the help line or opening paragraph, or make a pack for anyone
-                who already signs in.
+                cards, change the help line or opening paragraph, or make a pack for anyone who already signs
+                in. They can add a new resident with <strong>👤 Add Resident</strong> (on the Committee page and
+                on their Sign-in Help) with the same fields as an admin, and send that resident&apos;s welcome
+                pack straight away. They can&apos;t make anyone an Admin or Private.
               </Step>
             </Subsection>
             <Subsection id="sub-acc-export" title="Exporting the list — Export button (added 2026-08-30)">
