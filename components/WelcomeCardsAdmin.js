@@ -3,12 +3,11 @@ import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { authedFetch } from "@/lib/getAuthToken"
 import { matchesResidentSearch } from "@/lib/welcomeCards"
-import {
-  DEFAULT_PACK_INTRO, PACK_INTRO_MAX, MAX_PER_PACK_RUN, PACK_MESSAGE_SUBJECT,
-  packMessage, smsHrefWithBody, mailtoHref,
-} from "@/lib/welcomePack"
+import { DEFAULT_PACK_INTRO, PACK_INTRO_MAX, MAX_PER_PACK_RUN } from "@/lib/welcomePack"
 import { CreateLoginForm } from "@/components/ResidentEditPanel"
-import PdfPages from "@/components/PdfPages"
+import { PackPanel, pdfBlob } from "@/components/WelcomePackPanel"
+import AddResidentForm from "@/components/AddResidentForm"
+import { Sheet } from "@/components/Sheet"
 
 // Admin › Sign-in Help (Iain, 2026-10-09). Residents who have never signed
 // in, sorted by house number for walking round, with a printable welcome
@@ -78,107 +77,7 @@ const trayStyle = {
 }
 const trayInner = { maxWidth: 720, margin: "0 auto", padding: "0.65rem 84px 0.65rem 16px", display: "flex", flexDirection: "column", gap: "0.5rem" }
 
-function pdfBlob(base64) {
-  const bin = atob(base64)
-  const bytes = new Uint8Array(bin.length)
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-  return new Blob([bytes], { type: "application/pdf" })
-}
 const pdfUrl = (base64) => URL.createObjectURL(pdfBlob(base64))
-
-const linkBtn = {
-  display: "inline-flex", alignItems: "center", justifyContent: "center", minHeight: 40, padding: "0 0.9rem",
-  borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)",
-  fontSize: "0.85rem", fontWeight: 700, textDecoration: "none", fontFamily: "inherit", cursor: "pointer", whiteSpace: "nowrap",
-}
-const linkBtnPrimary = { ...linkBtn, background: "var(--teal)", color: "#fff", border: "1px solid var(--teal)" }
-
-// One house's pack: send it or save it. Share hands the PDF to the phone's
-// own share sheet (Messages, Mail, WhatsApp). Text and Email open a message
-// already written, with the sign-in link, username and one-time password --
-// a pre-filled message can't carry the PDF itself.
-function PackRow({ pack, guideUrl, helpLine }) {
-  const [preview, setPreview] = useState(false)
-  const [shareError, setShareError] = useState(null)
-  const { url, file } = useMemo(() => {
-    const blob = pdfBlob(pack.pdf)
-    return {
-      url: URL.createObjectURL(blob),
-      file: typeof File !== "undefined" ? new File([blob], pack.fileName, { type: "application/pdf" }) : null,
-    }
-  }, [pack])
-  useEffect(() => () => URL.revokeObjectURL(url), [url])
-
-  let canShare = false
-  try { canShare = !!file && typeof navigator !== "undefined" && !!navigator.canShare && navigator.canShare({ files: [file] }) } catch { canShare = false }
-
-  async function share() {
-    setShareError(null)
-    try { await navigator.share({ files: [file], title: `Element Happenings welcome pack - ${pack.title}` }) }
-    catch (e) { if (e?.name !== "AbortError") setShareError("Sharing did not open on this device. Download the PDF and attach it instead.") }
-  }
-
-  return (
-    <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 12, padding: "0.7rem 0.8rem", display: "flex", flexDirection: "column", gap: "0.6rem" }}>
-      <div style={{ fontWeight: 700, fontSize: "0.95rem" }}>
-        {pack.title}
-        <span style={{ fontWeight: 500, color: "var(--text-dim)" }}> · {pack.residents.map(r => r.name).join(", ")}</span>
-      </div>
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        {canShare && <button type="button" onClick={share} style={linkBtnPrimary}>Share PDF</button>}
-        <a href={url} download={pack.fileName} style={canShare ? linkBtn : linkBtnPrimary}>Download PDF</a>
-        <button type="button" onClick={() => setPreview(v => !v)} style={linkBtn}>{preview ? "Hide preview" : "Preview"}</button>
-      </div>
-      {!canShare && (
-        <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>
-          This device can&apos;t share a file straight to a message. Download the PDF and attach it, or use Text / Email below.
-        </div>
-      )}
-      {shareError && <div style={{ color: "#e53e3e", fontSize: "0.82rem", fontWeight: 600 }}>{shareError}</div>}
-      {pack.residents.map(r => {
-        const text = packMessage({ name: r.name, username: r.username, pin: r.pin, loginUrl: r.loginUrl, guideUrl, helpLine })
-        const sms = smsHrefWithBody(r.phone, text)
-        const mail = mailtoHref(r.email, PACK_MESSAGE_SUBJECT, text)
-        return (
-          <div key={r.username} style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", borderTop: "1px solid var(--border)", paddingTop: "0.55rem" }}>
-            <div style={{ flex: "1 1 9rem", minWidth: 0, fontSize: "0.85rem" }}>
-              <strong>{r.name}</strong> <span style={{ color: "var(--text-dim)" }}>{r.username}</span>
-            </div>
-            {sms && <a href={sms} style={linkBtn} aria-label={`Text ${r.name}`}>Text</a>}
-            {mail && <a href={mail} style={linkBtn} aria-label={`Email ${r.name}`}>Email</a>}
-            {!sms && !mail && <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>No mobile or email on file</span>}
-          </div>
-        )
-      })}
-      {preview && <PdfPages url={url} onError={() => setPreview(false)} />}
-    </div>
-  )
-}
-
-function PackPanel({ result, onClose }) {
-  const { packs, failed, count, guideUrl, helpLine } = result
-  return (
-    <div style={{ border: "2px solid var(--teal)", borderRadius: 14, padding: "0.8rem", display: "flex", flexDirection: "column", gap: "0.7rem", background: "var(--bg)" }}>
-      <div>
-        <div style={{ fontWeight: 800, fontSize: "1rem" }}>
-          {packs.length === 1 ? "Welcome pack ready" : `${packs.length} welcome packs ready`}
-        </div>
-        <div style={{ fontSize: "0.82rem", color: "var(--text-dim)" }}>
-          {count} {count === 1 ? "resident has" : "residents have"} a new starting password. Send or download now:
-          the passwords are only shown here and are gone once you close this or leave the page.
-          Text and Email send the sign-in details as a message. Only Share and Download include the PDF.
-        </div>
-      </div>
-      {failed.length > 0 && (
-        <div style={{ color: "#e53e3e", fontSize: "0.85rem", fontWeight: 600 }}>
-          No pack for: {failed.join(", ")}. Their password was not changed.
-        </div>
-      )}
-      {packs.map(p => <PackRow key={p.key} pack={p} guideUrl={guideUrl} helpLine={helpLine} />)}
-      <div><Btn onClick={onClose}>Done</Btn></div>
-    </div>
-  )
-}
 
 const fmtDate = (iso) => new Date(iso).toLocaleDateString("en-AU", { timeZone: "Australia/Sydney", day: "numeric", month: "short" })
 
@@ -209,6 +108,12 @@ export default function WelcomeCardsAdmin({ backHref = "/admin?tab=Residents&sub
   // Set when some residents got no card: the PDF waits in the tray so the
   // "No card for" message is seen before leaving the page (BUG-087).
   const [result, setResult] = useState(null)
+  // Add Resident (2026-11-16): open on arrival when linked with ?add=1
+  // (the Committee page's Add Resident pill).
+  const [adding, setAdding] = useState(false)
+  useEffect(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("add") === "1") setAdding(true)
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true); setError(null)
@@ -320,7 +225,10 @@ export default function WelcomeCardsAdmin({ backHref = "/admin?tab=Residents&sub
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
       <div>
-        <h2 style={{ margin: "0 0 0.25rem", fontSize: "1.15rem" }}>Sign-in Help</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", marginBottom: "0.25rem" }}>
+          <h2 style={{ margin: 0, fontSize: "1.15rem", flex: "1 1 auto" }}>Sign-in Help</h2>
+          <Btn tone="primary" onClick={() => setAdding(true)}>👤 Add Resident</Btn>
+        </div>
         <div style={{ fontSize: "0.88rem", color: "var(--text-dim)" }}>
           {neverCount} {neverCount === 1 ? "resident has" : "residents have"} never signed in.{" "}
           {noLoginCount > 0 && <><strong>{noLoginCount} more {noLoginCount === 1 ? "has" : "have"} no login yet.</strong>{" "}</>}
@@ -529,6 +437,9 @@ export default function WelcomeCardsAdmin({ backHref = "/admin?tab=Residents&sub
           </div>
         </div>
       )}
+      <Sheet open={adding} onClose={() => setAdding(false)} title="Add Resident">
+        {adding && <AddResidentForm onAdded={load} onClose={() => setAdding(false)} />}
+      </Sheet>
     </div>
   )
 }

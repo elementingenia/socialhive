@@ -1,8 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabaseAdmin"
 import { NextResponse } from "next/server"
-import { newAuthEmail } from "@/lib/authEmail"
+import { createMemberAccount } from "@/lib/createMemberAccount"
 import { validateNewAccount, validateUsername, validatePin, memberFieldsFromContact } from "@/lib/accounts"
-import { sydneyTodayStr } from "@/lib/date"
 import { newPinColumns } from "@/lib/pinAuth"
 
 // Admin-only account management (2026-07-16). Fills two gaps: no way for an
@@ -84,10 +83,6 @@ export async function POST(req) {
     const err = validateNewAccount({ name, username, pin })
     if (err) return NextResponse.json({ error: err }, { status: 400 })
 
-    const { data: existing } = await supabaseAdmin
-      .from("members").select("id").ilike("username", username).maybeSingle()
-    if (existing) return NextResponse.json({ error: "That username is already taken." }, { status: 409 })
-
     // Created from a Contacts entry: the login takes over that entry's house
     // number, street, phone and email (BUG-106). Only from an entry that has
     // no login yet -- the same condition the link below uses.
@@ -99,52 +94,10 @@ export async function POST(req) {
       if (contact && !contact.member_id) fromContact = memberFieldsFromContact(contact)
     }
 
-    // Random and permanent -- see migration 066. Never derived from username.
-    const fakeEmail = newAuthEmail()
-    const authPassword = toAuthPassword(pin)
-
-    // Create Auth user (relinking a dangling orphan if the email already
-    // exists from a previously-deleted members row — same recovery as register).
-    let authUserId = null
-    let relinkedOrphan = false
-    const { data: created, error: createErr } = await supabaseAdmin.auth.admin.createUser({
-      email: fakeEmail, password: authPassword, email_confirm: true,
-      user_metadata: { username },
-    })
-    if (createErr) {
-      const emailTaken = /already been registered|already exists/i.test(createErr.message || "")
-      if (!emailTaken) return NextResponse.json({ error: "Could not create the login. Please try again." }, { status: 500 })
-      const lookup = await fetch(
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users?filter=${encodeURIComponent(fakeEmail)}`,
-        { cache: "no-store", headers: { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}` } }
-      )
-      const orphan = (lookup.ok ? await lookup.json() : null)?.users?.find(u => u.email === fakeEmail)
-      if (!orphan) return NextResponse.json({ error: "Could not create the login. Please try again." }, { status: 500 })
-      const { error: upErr } = await supabaseAdmin.auth.admin.updateUserById(orphan.id, { password: authPassword, user_metadata: { username } })
-      if (upErr) return NextResponse.json({ error: "Could not create the login. Please try again." }, { status: 500 })
-      authUserId = orphan.id
-      relinkedOrphan = true
-    } else {
-      authUserId = created.user.id
-    }
-
-    const { data: member, error: insertErr } = await supabaseAdmin.from("members").insert({
-      // display_name (2026-08-14) defaults to Real Name at creation here too --
-      // see the identical note in app/api/auth/register/route.js.
-      ...fromContact,
-      name, display_name: name, username, ...newPinColumns(pin), auth_id: authUserId, auth_email: fakeEmail,
-      // Admin-created: the PIN is handed over, so force a change on first
-      // login (migration 067). Self-registration leaves this false.
-      must_change_pin: true,
-      is_admin: false, status: "active",
-      joined_date: sydneyTodayStr(),
-    }).select("id").single()
-
-    if (insertErr) {
-      if (!relinkedOrphan) await supabaseAdmin.auth.admin.deleteUser(authUserId)
-      const dup = /duplicate|unique/i.test(insertErr.message || "")
-      return NextResponse.json({ error: dup ? "That username is already taken." : "Could not create the account. Please try again." }, { status: dup ? 409 : 500 })
-    }
+    // One shared copy of account creation (lib/createMemberAccount.js).
+    const made = await createMemberAccount({ name, displayName: name, username, pin, fields: fromContact })
+    if (made.error) return NextResponse.json({ error: made.error }, { status: made.status })
+    const member = { id: made.member_id }
 
     // Two-way link: attach an existing standalone contact to the new member so
     // its extra info (phone/title/categories) carries over and it stops

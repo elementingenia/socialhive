@@ -370,6 +370,15 @@ export default function CommitteePage() {
           }}>
             Sign-in Help
           </Link>
+          {/* Add a new resident with their login and welcome pack in one
+              step (Iain, 2026-11-16). Opens on the Sign-in Help screen. */}
+          <Link href="/committee/sign-in-help?add=1" style={{
+            display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.9rem",
+            borderRadius: 20, fontWeight: 700, fontSize: "0.82rem", whiteSpace: "nowrap", textDecoration: "none",
+            border: `1.5px solid ${COLOUR}`, background: "var(--surface)", color: COLOUR,
+          }}>
+            👤 Add Resident
+          </Link>
           <button onClick={() => setComposerOpen(o => !o)} style={{
             display: "inline-flex", alignItems: "center", gap: 6, padding: "0.35rem 0.9rem",
             borderRadius: 20, fontFamily: "inherit", fontWeight: 700, fontSize: "0.82rem",
