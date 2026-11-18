@@ -202,9 +202,18 @@ ok(choiceImageStoragePath(null) === null, 'storage path: null => null')
     [{ choice_id: 'c1' }, { choice_id: 'c1' }, { choice_id: 'c2' }],
     [{ choice_id: 'c2', votes: 4 }],
   )
-  ok(combined[0].votes === 2 && combined[0].app === 2 && combined[0].offline === 0, 'combineResults: app-only option')
-  ok(combined[1].votes === 5 && combined[1].app === 1 && combined[1].offline === 4, 'combineResults: app + offline added together')
+  const c1 = combined.find(r => r.choice_id === 'c1'), c2 = combined.find(r => r.choice_id === 'c2')
+  ok(c1.votes === 2 && c1.app === 2 && c1.offline === 0, 'combineResults: app-only option')
+  ok(c2.votes === 5 && c2.app === 1 && c2.offline === 4, 'combineResults: app + offline added together')
   ok(combineResults([{ id: 'c1', label: 'Yes' }], [], null)[0].votes === 0, 'combineResults: no ballots, no offline => 0')
+  {
+    const ranked = combineResults(
+      [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }, { id: 'c', label: 'C' }, { id: 'd', label: 'D' }],
+      [{ choice_id: 'b' }, { choice_id: 'c' }, { choice_id: 'c' }, { choice_id: 'd' }],
+      [{ choice_id: 'c', votes: 1 }, { choice_id: 'a', votes: 1 }],
+    )
+    ok(ranked.map(r => r.choice_id).join() === 'c,a,b,d', 'combineResults: ranked most votes first, ties keep choice order')
+  }
 }
 
 console.log(`\nvoting.test.mjs: ${pass} passed, ${fail} failed`)
