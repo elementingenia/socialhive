@@ -10,7 +10,7 @@ import { buildWelcomeCardsPdf } from "@/lib/welcomeCardsPdf"
 import { buildWelcomePackPdf } from "@/lib/welcomePackPdf"
 import {
   PACK_INTRO_KEY, MAX_PER_PACK_RUN, cleanPackIntro, groupByHouse, packTitle, packFileName,
-  homeScreenGuideUrl, committeeMayPack,
+  homeScreenGuideUrl, committeeMayPack, cleanPackContact,
 } from "@/lib/welcomePack"
 import { isAreaOwner } from "@/lib/areaAuth"
 import sharp from "sharp"
@@ -200,6 +200,7 @@ export async function POST(req) {
   if (!who) return NextResponse.json({ error: "Admins and committee only" }, { status: 403 })
   const body = await req.json().catch(() => ({}))
   if (body.action === "pack") return makePacks(req, who, body)
+  if (body.action === "set_contact") return setContact(who, body)
   // Everything below is admin only.
   const admin = who.isAdmin ? who.member : null
   if (!admin) return NextResponse.json({ error: "Admin only" }, { status: 403 })
@@ -298,7 +299,7 @@ async function makePacks(req, who, body) {
       packs.push({
         key: group.key, title: packTitle(group), fileName: packFileName(group),
         pdf: Buffer.from(bytes).toString("base64"),
-        residents: group.residents.map(r => ({ name: r.name, username: r.username, pin: r.pin, loginUrl: r.loginUrl, phone: r.phone, email: r.email })),
+        residents: group.residents.map(r => ({ id: r.id, name: r.name, username: r.username, pin: r.pin, loginUrl: r.loginUrl, phone: r.phone, email: r.email })),
       })
     }
   } catch (e) {
@@ -308,4 +309,33 @@ async function makePacks(req, who, body) {
   }
 
   return NextResponse.json({ count: cards.length, packs, failed, helpLine, guideUrl: homeScreenGuideUrl(origin) })
+}
+
+// Mobile / email typed on a pack row (Iain, 2026-11-19), saved to the
+// resident's own members row (members owns phone and email -- migration 030;
+// the Auth email is separate and untouched, lib/authEmail.js). Same reach as
+// making a pack: admins any active resident, committee only residents they
+// may make a pack for. Adds or corrects; never clears.
+async function setContact(who, body) {
+  const id = String(body.member_id || "")
+  if (!id || id.startsWith("c-")) return NextResponse.json({ error: "Choose a resident." }, { status: 400 })
+  const clean = cleanPackContact({ phone: body.phone, email: body.email })
+  if (clean.error) return NextResponse.json({ error: clean.error }, { status: 400 })
+
+  const { data: m, error } = await supa.from("members")
+    .select("id, status, is_test, is_admin, hide_name, auth_id").eq("id", id).maybeSingle()
+  if (error) return NextResponse.json({ error: "Could not load the resident." }, { status: 500 })
+  if (!m || m.status !== "active" || m.is_test) return NextResponse.json({ error: "Resident not found." }, { status: 404 })
+  if (!who.isAdmin) {
+    const signedInIds = await fetchSignedInAuthIds(supa)
+    if (!signedInIds) return NextResponse.json({ error: "Could not check who has signed in. Try again." }, { status: 500 })
+    if (!committeeMayPack(m, hasSignedIn(m, signedInIds))) return NextResponse.json({ error: "You can't change this resident's details." }, { status: 403 })
+  }
+
+  const { data: saved, error: upErr } = await supa.from("members").update(clean.fields).eq("id", id).select("phone, email").single()
+  if (upErr) {
+    console.error("welcome-cards: contact update failed", id, upErr.message)
+    return NextResponse.json({ error: "Could not save. Try again." }, { status: 500 })
+  }
+  return NextResponse.json({ ok: true, phone: saved.phone || null, email: saved.email || null })
 }

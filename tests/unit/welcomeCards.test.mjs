@@ -10,7 +10,7 @@ import { PDFDocument, PDFName } from "pdf-lib"
 import { buildWelcomePackPdf } from "../../lib/welcomePackPdf.js"
 import {
   DEFAULT_PACK_INTRO, PACK_INTRO_MAX, cleanPackIntro, packIntroText, joinNames, groupByHouse, packTitle,
-  packGreeting, packFileName, homeScreenGuideUrl, packMessage, smsHrefWithBody, mailtoHref, committeeMayPack,
+  packGreeting, packFileName, homeScreenGuideUrl, packMessage, smsHrefWithBody, mailtoHref, committeeMayPack, cleanPackContact,
 } from "../../lib/welcomePack.js"
 import QRCode from "qrcode"
 
@@ -183,6 +183,14 @@ t("text only to a mobile, email only to a real address", () => {
   assert.equal(mailtoHref(" a@b.co ", "Sub ject", "line1\nline2"), "mailto:a@b.co?subject=Sub%20ject&body=line1%0Aline2")
   assert.equal(mailtoHref("not-an-email", "s", "b"), null)
   assert.equal(mailtoHref(null, "s", "b"), null)
+  assert.deepEqual(cleanPackContact({ phone: "0434357060" }), { fields: { phone: "0434 357 060" } })
+  assert.deepEqual(cleanPackContact({ phone: "+61 434 357 060" }), { fields: { phone: "0434 357 060" } })
+  assert.deepEqual(cleanPackContact({ email: " a@b.co " }), { fields: { email: "a@b.co" } })
+  assert.deepEqual(cleanPackContact({ phone: "0434 357 060", email: "a@b.co" }), { fields: { phone: "0434 357 060", email: "a@b.co" } })
+  assert.ok(cleanPackContact({ phone: "02 4912 3456" }).error)
+  assert.ok(cleanPackContact({ email: "nope" }).error)
+  assert.ok(cleanPackContact({ phone: " ", email: "" }).error)
+  assert.ok(cleanPackContact().error)
 })
 
 t("committee may only pack residents who have never signed in, not admins or Private", () => {
