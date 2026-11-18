@@ -1163,6 +1163,14 @@ export default function AdminGuidePage() {
                 Share is offered on phones and tablets; on a computer use Download.
               </Step>
               <Step>
+                <strong>Adding or correcting a mobile or email (added 2026-11-19).</strong> Each resident in the
+                pack has a <strong>Mobile</strong> and an <strong>Email</strong> box, filled in with what is on
+                file. Type a new or corrected one and tap <strong>Save</strong>: it is saved to the
+                resident&apos;s profile and <strong>Text</strong> / <strong>Email</strong> then use it. Only a
+                mobile can receive a text. These boxes add or correct; to remove a number or email, edit the
+                resident in Info › Contacts. Committee can do this for the residents they can make packs for.
+              </Step>
+              <Step>
                 The passwords are shown only on that screen. Send or download before you tap{" "}
                 <strong>Done</strong> or leave the page; after that the only way to get a pack is to make it
                 again, which sets a new password.

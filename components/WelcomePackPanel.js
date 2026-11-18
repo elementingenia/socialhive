@@ -1,6 +1,8 @@
 "use client"
 import { useState, useEffect, useMemo } from "react"
-import { PACK_MESSAGE_SUBJECT, packMessage, smsHrefWithBody, mailtoHref } from "@/lib/welcomePack"
+import { PACK_MESSAGE_SUBJECT, packMessage, smsHrefWithBody, mailtoHref, cleanPackContact } from "@/lib/welcomePack"
+import { formatPhoneInput } from "@/lib/phone"
+import { authedFetch } from "@/lib/getAuthToken"
 import PdfPages from "@/components/PdfPages"
 
 // Welcome pack results (Iain, 2026-11-16): Share PDF, Download, Preview, and
@@ -63,22 +65,87 @@ function PackRow({ pack, guideUrl, helpLine }) {
         </div>
       )}
       {shareError && <div style={{ color: "#e53e3e", fontSize: "0.82rem", fontWeight: 600 }}>{shareError}</div>}
-      {pack.residents.map(r => {
-        const text = packMessage({ name: r.name, username: r.username, pin: r.pin, loginUrl: r.loginUrl, guideUrl, helpLine })
-        const sms = smsHrefWithBody(r.phone, text)
-        const mail = mailtoHref(r.email, PACK_MESSAGE_SUBJECT, text)
-        return (
-          <div key={r.username} style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", borderTop: "1px solid var(--border)", paddingTop: "0.55rem" }}>
-            <div style={{ flex: "1 1 9rem", minWidth: 0, fontSize: "0.85rem" }}>
-              <strong>{r.name}</strong> <span style={{ color: "var(--text-dim)" }}>{r.username}</span>
-            </div>
-            {sms && <a href={sms} style={linkBtn} aria-label={`Text ${r.name}`}>Text</a>}
-            {mail && <a href={mail} style={linkBtn} aria-label={`Email ${r.name}`}>Email</a>}
-            {!sms && !mail && <span style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>No mobile or email on file</span>}
-          </div>
-        )
-      })}
+      {pack.residents.map(r => (
+        <ResidentSendRow key={r.username} resident={r} guideUrl={guideUrl} helpLine={helpLine} />
+      ))}
       {preview && <PdfPages url={url} onError={() => setPreview(false)} />}
+    </div>
+  )
+}
+
+const fieldStyle = {
+  flex: "1 1 10rem", minWidth: 0, padding: "0.55rem 0.7rem", borderRadius: 8, border: "1px solid var(--border)",
+  background: "var(--surface)", color: "var(--text)", fontSize: "0.9rem", fontFamily: "inherit", boxSizing: "border-box",
+  appearance: "none", WebkitAppearance: "none",
+}
+
+// One resident in a pack (Iain, 2026-11-19): mobile and email can be added
+// or corrected here. Save writes them to the resident's record, then Text /
+// Email use them. Text and Email only show for saved details, so what is
+// sent always matches what is on file.
+function ResidentSendRow({ resident: r, guideUrl, helpLine }) {
+  const [saved, setSaved] = useState({ phone: r.phone || "", email: r.email || "" })
+  const [phone, setPhone] = useState(r.phone || "")
+  const [email, setEmail] = useState(r.email || "")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState(null)
+  const [note, setNote] = useState(null)
+
+  const changed = {}
+  if (phone.trim() && phone.trim() !== saved.phone) changed.phone = phone
+  if (email.trim() && email.trim() !== saved.email) changed.email = email
+  const dirty = Object.keys(changed).length > 0
+
+  async function save() {
+    setError(null); setNote(null)
+    const check = cleanPackContact(changed)
+    if (check.error) { setError(check.error); return }
+    setBusy(true)
+    try {
+      const res = await authedFetch("/api/admin/welcome-cards", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set_contact", member_id: r.id, ...changed }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(d.error || "Could not save.")
+      const next = { phone: d.phone || "", email: d.email || "" }
+      setSaved(next); setPhone(next.phone); setEmail(next.email)
+      setNote("Saved to their profile.")
+    } catch (e) { setError(e.message) }
+    setBusy(false)
+  }
+
+  const text = packMessage({ name: r.name, username: r.username, pin: r.pin, loginUrl: r.loginUrl, guideUrl, helpLine })
+  const sms = smsHrefWithBody(saved.phone, text)
+  const mail = mailtoHref(saved.email, PACK_MESSAGE_SUBJECT, text)
+  const canEdit = !!r.id
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.45rem", borderTop: "1px solid var(--border)", paddingTop: "0.55rem" }}>
+      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+        <div style={{ flex: "1 1 9rem", minWidth: 0, fontSize: "0.85rem" }}>
+          <strong>{r.name}</strong> <span style={{ color: "var(--text-dim)" }}>{r.username}</span>
+        </div>
+        {!dirty && sms && <a href={sms} style={linkBtn} aria-label={`Text ${r.name}`}>Text</a>}
+        {!dirty && mail && <a href={mail} style={linkBtn} aria-label={`Email ${r.name}`}>Email</a>}
+      </div>
+      {canEdit && (
+        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+          <input type="tel" inputMode="numeric" value={phone} placeholder="Mobile"
+            onChange={e => { setPhone(formatPhoneInput(e.target.value)); setNote(null) }}
+            aria-label={`Mobile for ${r.name}`} style={fieldStyle} />
+          <input type="email" value={email} placeholder="Email" autoCapitalize="none" autoCorrect="off"
+            onChange={e => { setEmail(e.target.value); setNote(null) }}
+            aria-label={`Email for ${r.name}`} style={fieldStyle} />
+          {dirty && (
+            <button type="button" onClick={save} disabled={busy} style={{ ...linkBtnPrimary, opacity: busy ? 0.6 : 1 }}>
+              {busy ? "Saving…" : "Save"}
+            </button>
+          )}
+        </div>
+      )}
+      {dirty && !error && <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>Save to update their profile and send to these details.</div>}
+      {!dirty && !sms && !mail && !note && <div style={{ fontSize: "0.78rem", color: "var(--text-dim)" }}>No mobile or email on file. Add one above to text or email the pack details.</div>}
+      {note && <div style={{ fontSize: "0.78rem", color: "var(--teal)", fontWeight: 600 }}>{note}</div>}
+      {error && <div style={{ color: "#e53e3e", fontSize: "0.82rem", fontWeight: 600 }}>{error}</div>}
     </div>
   )
 }
