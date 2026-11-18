@@ -2158,6 +2158,9 @@ export default function HelpGuidePage() {
                 vote was set up; some votes keep one or both of those private.
               </Step>
               <Step>
+                Results are listed with the most votes at the top.
+              </Step>
+              <Step>
                 If some residents voted on paper or by proxy, each option shows how many votes came
                 from the app and how many from paper or proxy, with the total alongside.
               </Step>
