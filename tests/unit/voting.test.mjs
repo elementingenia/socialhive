@@ -6,7 +6,7 @@ import {
   householdAlreadyVoted, isEligibleToVote, validateSelfVote,
   validateBallotSelection, tallyBallots, householdAnomalyReport, canSeeResults,
   normalizeCoordinatorIds, validateClosesAt, cleanChoiceImageUrl, choiceImageStoragePath,
-  validateOfflineVotes, offlineTotalsCheck, combineResults,
+  validateOfflineVotes, offlineTotalsCheck, combineResults, pickHomeVote,
 } from '../../lib/voting.js'
 
 let pass = 0, fail = 0
@@ -214,6 +214,23 @@ ok(choiceImageStoragePath(null) === null, 'storage path: null => null')
     )
     ok(ranked.map(r => r.choice_id).join() === 'c,a,b,d', 'combineResults: ranked most votes first, ties keep choice order')
   }
+}
+
+
+// ── pickHomeVote — Home tile: open first, else latest closed/published ──
+{
+  const now = new Date('2026-11-19T00:00:00Z')
+  const draft = { id: 'd', opened_at: null, closes_at: null, published_at: null }
+  const pub = { id: 'p', opened_at: '2026-11-01T00:00:00Z', closes_at: '2026-11-10T00:00:00Z', published_at: '2026-11-18T00:00:00Z' }
+  const closed = { id: 'c', opened_at: '2026-11-01T00:00:00Z', closes_at: '2026-11-12T00:00:00Z', published_at: null }
+  const open = { id: 'o', opened_at: '2026-11-15T00:00:00Z', closes_at: '2026-11-30T00:00:00Z', published_at: null }
+  ok(pickHomeVote([draft, pub, closed, open], now)?.id === 'o', 'open vote wins over closed/published')
+  ok(pickHomeVote([draft, closed, pub], now)?.id === 'p', 'no open: latest finished (published 18th beats closed 12th)')
+  ok(pickHomeVote([draft, closed], now)?.status === 'closed', 'closed vote shown with status closed')
+  ok(pickHomeVote([draft], now) === null, 'drafts never shown')
+  ok(pickHomeVote([], now) === null && pickHomeVote(undefined, now) === null, 'empty => null')
+  const open2 = { ...open, id: 'o2', closes_at: '2026-11-20T00:00:00Z' }
+  ok(pickHomeVote([open, open2], now)?.id === 'o2', 'several open: soonest to close')
 }
 
 console.log(`\nvoting.test.mjs: ${pass} passed, ${fail} failed`)
