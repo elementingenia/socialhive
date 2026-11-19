@@ -49,6 +49,7 @@ function typeIcon(type) {
     case "space_booking_cancelled": return "🚪"
     case "space_request_validate":  return "📋"
     case "voting_opened":            return "🗳️"
+    case "voting_results_published": return "🗳️"
     case "survey_opened":            return "📝"
     case "survey_results_published": return "📊"
     case "event_recap_prompt":       return "📰"
@@ -103,6 +104,7 @@ function typeColour(type) {
     case "space_booking_cancelled": return "#e53e3e"
     case "space_request_validate":  return "var(--amber-dark)"
     case "voting_opened":            return "var(--voting)"
+    case "voting_results_published": return "var(--voting)"
     case "survey_opened":            return "var(--voting)"
     case "survey_results_published": return "var(--voting)"
     case "event_recap_prompt":       return "var(--happenings-news)"
@@ -151,7 +153,7 @@ function typeColour(type) {
 // drift apart as hubs are added.
 function targetForNotif(n) {
   if (n.type?.startsWith("question_")) return "/questions"
-  if (n.type === "voting_opened") return "/voting"
+  if (n.type === "voting_opened" || n.type === "voting_results_published") return "/voting"
   if (n.type === "survey_opened" || n.type === "survey_results_published") return "/surveys"
   if (n.type === "committee_post_added") return "/committee"
   // Weekly Digest (2026-10-02): no event_id, always the Digest page.

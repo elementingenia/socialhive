@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseAdmin'
 import { requireVotingEventManage } from '@/lib/areaAuth'
 import { computeVotingStatus, householdAnomalyReport } from '@/lib/voting'
+import { notifyAllActiveMembers } from '@/lib/notifyAudience'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,7 +46,7 @@ export async function GET(req, { params }) {
 // the anomaly report (GET, above) is a human checkpoint, not an automatic
 // gate; an admin who's reviewed it and decided to proceed anyway can.
 export async function POST(req, { params }) {
-  const { error, status } = await requireVotingEventManage(req, params.id)
+  const { error, status, member } = await requireVotingEventManage(req, params.id)
   if (error) return NextResponse.json({ error }, { status })
 
   const { data: event, error: eErr } = await supabaseAdmin
@@ -59,6 +60,15 @@ export async function POST(req, { params }) {
   const { data: updated, error: updErr } = await supabaseAdmin
     .from('voting_events').update({ published_at: new Date().toISOString() }).eq('id', event.id).select().single()
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
+
+  // Tell every active resident the results are in (Iain, 2026-11-19 -- Fruit
+  // selection was published with no alert at all). Only when residents can
+  // actually see the outcome: if results are coordinator-only, a broadcast
+  // would just lead them to a page with nothing to show.
+  if (event.results_visibility_outcome === 'residents') {
+    await notifyAllActiveMembers(supabaseAdmin, null, 'voting_results_published',
+      `Voting results are in: "${event.title}"`, { excludeMemberId: member?.id, url: '/voting' })
+  }
 
   return NextResponse.json({ event: { ...updated, status: computeVotingStatus(updated) } })
 }
