@@ -10,6 +10,7 @@ import { MoviesIcon, SocialIcon, BookClubIcon, BarIcon, InfoIcon, ClubsIcon, Spa
 import HeartButton from "@/components/HeartButton"
 import { BAR_ENABLED, SPACE_BOOKINGS_ENABLED } from "@/lib/features"
 import { isHtmlContent } from "@/lib/richText"
+import { pickHomeVote } from "@/lib/voting"
 
 // Home hub grid — kept to at most TWO rows (Iain: mobile vertical space is
 // premium). Row 1 = three tiles (span 2 of a 6-col grid), row 2 = three tiles.
@@ -174,7 +175,7 @@ function VotingTile({ enabled }) {
       const res = await authedFetch("/api/voting").catch(() => null)
       const json = res ? await res.json().catch(() => ({})) : {}
       if (cancelled) return
-      setOpenEvent((json.events || []).find(e => e.status === "open") || null)
+      setOpenEvent(pickHomeVote(json.events))
     }
     load()
     return () => { cancelled = true }
@@ -184,10 +185,12 @@ function VotingTile({ enabled }) {
 
   function label() {
     if (openEvent === undefined) return "Loading…"
-    if (!openEvent) return "No vote is currently open"
+    if (!openEvent) return "No votes yet"
+    if (openEvent.status === "published") return `${openEvent.title} — results published`
     const closes = new Date(openEvent.closes_at)
-    const closesStr = isNaN(closes.getTime()) ? "" : ` — closes ${closes.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short" })}`
-    return `${openEvent.title}${closesStr}`
+    const dateStr = isNaN(closes.getTime()) ? "" : closes.toLocaleDateString("en-AU", { weekday: "short", day: "numeric", month: "short", timeZone: "Australia/Sydney" })
+    if (openEvent.status === "closed") return `${openEvent.title} — closed${dateStr ? " " + dateStr : ""}`
+    return `${openEvent.title}${dateStr ? " — closes " + dateStr : ""}`
   }
 
   return (
