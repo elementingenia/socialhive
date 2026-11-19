@@ -2200,7 +2200,9 @@ export default function HelpGuidePage() {
               <Step>
                 Once closed, review the vote before publishing — for a per-household vote, the app
                 flags any household that recorded more than one vote so you can check it before
-                results go out. Tap <strong>Publish results</strong> once you're satisfied.
+                results go out. Tap <strong>Publish results</strong> once you're satisfied. If results are
+                shown to residents, every active resident gets a notification (and a phone alert, if
+                they've enabled those) that the results are in.
               </Step>
               <Step>
                 <strong>Paper and proxy votes.</strong> If anyone voted on paper or gave someone their
