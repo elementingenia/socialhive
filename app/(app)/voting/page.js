@@ -1357,8 +1357,15 @@ function OfflineVotesPanel({ event, choices, onSaved }) {
   const [data, setData] = useState(null)
   const [loadErr, setLoadErr] = useState("")
   const [editing, setEditing] = useState(false)
-  const [picked, setPicked] = useState([])
-  const [counts, setCounts] = useState({})
+  // Iain, 2026-11-19: each paper/proxy vote is entered like a normal vote
+  // (the same tick boxes / one-choice buttons), not as a typed number per
+  // option. We still only SAVE the per-option totals (voting_offline_counts
+  // never links a vote to a resident), so the per-resident picks live only
+  // in this form. Votes saved earlier come back as totals: they're kept as
+  // a fixed "counted earlier" block, and "Start again" clears them.
+  const [keptIds, setKeptIds] = useState([])      // residents saved earlier
+  const [keptCounts, setKeptCounts] = useState({}) // their saved totals
+  const [ballots, setBallots] = useState([])       // [{ memberId, picks: [] }]
   const [note, setNote] = useState("")
   const [query, setQuery] = useState("")
   const [saving, setSaving] = useState(false)
@@ -1374,37 +1381,57 @@ function OfflineVotesPanel({ event, choices, onSaved }) {
   useEffect(() => { load() }, [event.id])
 
   function startEdit() {
-    setPicked(data.offlineMemberIds || [])
-    setCounts(Object.fromEntries(choices.map(c => [c.id, String(data.counts?.[c.id] ?? "")])))
+    setKeptIds(data.offlineMemberIds || [])
+    setKeptCounts(data.counts || {})
+    setBallots([])
     setNote(data.note || "")
     setQuery(""); setErr(""); setEditing(true)
   }
 
+  function startAgain() {
+    setKeptIds([]); setKeptCounts({}); setBallots([]); setErr("")
+  }
+
+  const single = event.vote_mode === "single"
+  const max = single ? 1 : (event.max_selections || choices.length)
+
   const residentsById = useMemo(() => new Map((data?.residents || []).map(r => [r.id, r])), [data])
+  const usedIds = useMemo(() => new Set([...keptIds, ...ballots.map(b => b.memberId)]), [keptIds, ballots])
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (q.length < 2 || !data) return []
     return data.residents
-      .filter(r => !picked.includes(r.id))
+      .filter(r => !usedIds.has(r.id))
       .filter(r => (r.name || "").toLowerCase().includes(q) || (r.house_number || "").toLowerCase().includes(q))
       .slice(0, 20)
-  }, [query, data, picked])
+  }, [query, data, usedIds])
 
-  const n = picked.length
-  const values = choices.map(c => {
-    const v = counts[c.id]
-    return v === "" || v === undefined ? 0 : Number(v)
-  })
-  const allWhole = values.every(v => Number.isInteger(v) && v >= 0)
-  const sum = values.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0)
-  const check = allWhole ? offlineTotalsCheck(event, n, sum, values, choices.length) : { ok: false, reason: "Totals must be whole numbers, 0 or more." }
+  function togglePick(memberId, choiceId) {
+    setBallots(bs => bs.map(b => {
+      if (b.memberId !== memberId) return b
+      if (single) return { ...b, picks: [choiceId] }
+      if (b.picks.includes(choiceId)) return { ...b, picks: b.picks.filter(x => x !== choiceId) }
+      if (b.picks.length >= max) return b
+      return { ...b, picks: [...b.picks, choiceId] }
+    }))
+  }
+
+  // Totals = saved-earlier totals + the ballots entered now.
+  const values = choices.map(c => (Number(keptCounts[c.id]) || 0) + ballots.filter(b => b.picks.includes(c.id)).length)
+  const sum = values.reduce((a, b) => a + b, 0)
+  const n = keptIds.length + ballots.length
+  const blank = ballots.filter(b => b.picks.length === 0)
+  const check = blank.length > 0
+    ? { ok: false, reason: `Choose ${single ? "an option" : "at least one option"} for ${blank.map(b => residentsById.get(b.memberId)?.name || "each resident").join(", ")}.` }
+    : offlineTotalsCheck(event, n, sum, values, choices.length)
+  const changed = ballots.length > 0 || keptIds.length !== (data?.offlineMemberIds || []).length || note !== (data?.note || "")
 
   async function save() {
     setErr(""); setSaving(true)
     const res = await authedFetch(`/api/voting/${event.id}/offline`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        member_ids: picked,
+        member_ids: [...keptIds, ...ballots.map(b => b.memberId)],
         counts: Object.fromEntries(choices.map((c, i) => [c.id, values[i]])),
         note,
       }),
@@ -1446,39 +1473,69 @@ function OfflineVotesPanel({ event, choices, onSaved }) {
             )}
           </div>
         )}
-        <button style={BTN_GHOST} onClick={startEdit}>{recorded.length === 0 ? "Add paper & proxy votes" : "Change paper & proxy votes"}</button>
+        <button style={BTN_GHOST} onClick={startEdit}>{recorded.length === 0 ? "Add paper & proxy votes" : "Add or change paper & proxy votes"}</button>
       </div>
     )
   }
 
   return (
     <div style={box}>
-      <div style={{ fontWeight: 700, fontSize: "0.9rem", marginBottom: "0.4rem" }}>Paper & proxy votes</div>
-
-      <div style={{ fontSize: "0.85rem", fontWeight: 600, marginBottom: "0.3rem" }}>1. Who voted on paper or by proxy</div>
-      <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", marginBottom: "0.4rem" }}>
-        Add the resident whose vote it is, not the person holding the proxy.
+      <div style={{ fontWeight: 700, fontSize: "0.9rem", marginBottom: "0.3rem" }}>Paper & proxy votes</div>
+      <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", marginBottom: "0.5rem" }}>
+        Add the resident whose vote it is (not the person holding the proxy), then mark their vote as it is on the form.
       </div>
-      {picked.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginBottom: "0.4rem" }}>
-          {picked.map(id => {
-            const r = residentsById.get(id)
-            return (
-              <span key={id} style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: "999px", padding: "0.25rem 0.6rem", fontSize: "0.85rem" }}>
-                {r?.name || "Resident"}{r?.house_number ? ` · #${r.house_number}` : ""}
-                <button aria-label="Remove" onClick={() => setPicked(p => p.filter(x => x !== id))}
-                  style={{ border: "none", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "1rem", lineHeight: 1, padding: 0, fontFamily: "inherit" }}>×</button>
-              </span>
-            )
-          })}
+
+      {keptIds.length > 0 && (
+        <div style={{ background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: "10px", padding: "0.6rem 0.8rem", marginBottom: "0.6rem", fontSize: "0.85rem" }}>
+          <div style={{ fontWeight: 600, marginBottom: "0.2rem" }}>Counted earlier ({keptIds.length})</div>
+          <div>{keptIds.map(id => residentsById.get(id)?.name || "Resident").join(", ")}</div>
+          {choices.map(c => (keptCounts[c.id] ? (
+            <div key={c.id} style={{ color: "var(--text-dim)" }}>{c.label}: {keptCounts[c.id]}</div>
+          ) : null))}
+          <div style={{ color: "var(--text-dim)", fontSize: "0.8rem", marginTop: "0.3rem" }}>
+            Only the totals are kept, so these can't be changed one by one. To fix one, start again and re-enter them all.
+          </div>
+          <button style={{ ...BTN_GHOST, marginTop: "0.4rem" }} onClick={startAgain}>Start again</button>
         </div>
       )}
-      <input style={INPUT} placeholder="Type a name or house number…" value={query} onChange={e => setQuery(e.target.value)} />
+
+      {ballots.map(b => {
+        const r = residentsById.get(b.memberId)
+        return (
+          <div key={b.memberId} style={{ border: "1px solid var(--border)", borderRadius: "10px", padding: "0.6rem 0.8rem", marginBottom: "0.6rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>{r?.name || "Resident"}{r?.house_number ? ` · #${r.house_number}` : ""}</span>
+              <button style={{ border: "none", background: "transparent", color: "var(--text-dim)", cursor: "pointer", fontSize: "0.85rem", fontFamily: "inherit", padding: 0 }}
+                onClick={() => setBallots(bs => bs.filter(x => x.memberId !== b.memberId))}>Remove</button>
+            </div>
+            <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", margin: "0.2rem 0 0.1rem" }}>
+              {single ? "Choose one option." : `Choose up to ${max} option${max === 1 ? "" : "s"}.`}
+            </div>
+            {choices.map(c => {
+              const picked = b.picks.includes(c.id)
+              const atMax = !single && !picked && b.picks.length >= max
+              const isSelfBlocked = event.allow_self_vote === false && c.candidate_member_id && c.candidate_member_id === b.memberId
+              return (
+                <label key={c.id} style={{ display: "flex", alignItems: "center", gap: "0.6rem", padding: "0.45rem 0", borderBottom: "1px solid var(--border)", opacity: (atMax || isSelfBlocked) ? 0.5 : 1 }}>
+                  <input type={single ? "radio" : "checkbox"} name={`offline-${b.memberId}`}
+                    checked={picked} disabled={atMax || isSelfBlocked} onChange={() => togglePick(b.memberId, c.id)} />
+                  <span style={{ minWidth: 0, fontSize: "0.9rem" }}>
+                    {c.label}
+                    {isSelfBlocked && <span style={{ marginLeft: "0.4rem", fontSize: "0.72rem", color: "var(--text-dim)", fontStyle: "italic" }}>(can't vote for themselves)</span>}
+                  </span>
+                </label>
+              )
+            })}
+          </div>
+        )
+      })}
+
+      <input style={INPUT} placeholder="Add a resident: type a name or house number…" value={query} onChange={e => setQuery(e.target.value)} />
       {matches.length > 0 && (
         <div style={{ border: "1px solid var(--border)", borderRadius: "10px", marginTop: "0.3rem", overflow: "hidden" }}>
           {matches.map(r => (
             <button key={r.id} disabled={r.votedInApp}
-              onClick={() => { setPicked(p => [...p, r.id]); setQuery("") }}
+              onClick={() => { setBallots(bs => [...bs, { memberId: r.id, picks: [] }]); setQuery("") }}
               style={{ display: "flex", justifyContent: "space-between", gap: "0.5rem", width: "100%", textAlign: "left", padding: "0.6rem 0.8rem", border: "none", borderBottom: "1px solid var(--border)", background: "var(--surface)", color: r.votedInApp ? "var(--text-dim)" : "var(--text)", cursor: r.votedInApp ? "not-allowed" : "pointer", fontSize: "0.9rem", fontFamily: "inherit" }}>
               <span>{r.name}{r.house_number ? ` · #${r.house_number}` : ""}</span>
               {r.votedInApp && <span style={{ fontSize: "0.8rem" }}>Voted in the app</span>}
@@ -1487,33 +1544,26 @@ function OfflineVotesPanel({ event, choices, onSaved }) {
         </div>
       )}
 
-      <div style={{ fontSize: "0.85rem", fontWeight: 600, margin: "0.8rem 0 0.3rem" }}>2. Their votes, added up</div>
-      <div style={{ fontSize: "0.8rem", color: "var(--text-dim)", marginBottom: "0.4rem" }}>
-        {event.vote_mode === "single"
-          ? "One vote each, so the totals must add up to the number of residents above."
-          : `Each resident could pick up to ${event.max_selections || choices.length} options.`}
-      </div>
-      {choices.map(c => (
-        <div key={c.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.6rem", marginBottom: "0.4rem" }}>
-          <span style={{ minWidth: 0, fontSize: "0.9rem" }}>{c.label}</span>
-          <input style={{ ...INPUT, width: "5rem", textAlign: "center" }} inputMode="numeric" placeholder="0"
-            value={counts[c.id] ?? ""} onChange={e => setCounts(cs => ({ ...cs, [c.id]: e.target.value.replace(/[^0-9]/g, "") }))} />
-        </div>
-      ))}
-      {(n > 0 || sum > 0) && (
-        <div style={{ fontSize: "0.85rem", marginBottom: "0.4rem", color: check.ok ? "#16a34a" : "var(--terracotta)" }}>
-          {check.ok ? `✓ ${n} resident${n === 1 ? "" : "s"}, totals add up to ${sum}.` : `⚠ ${check.reason}`}
+      {n > 0 && (
+        <div style={{ fontSize: "0.85rem", margin: "0.6rem 0 0.4rem" }}>
+          <div style={{ fontWeight: 600, marginBottom: "0.2rem" }}>Paper & proxy totals</div>
+          {choices.map((c, i) => (
+            <div key={c.id} style={{ display: "flex", justifyContent: "space-between", color: "var(--text-dim)" }}>
+              <span>{c.label}</span><span>{values[i]}</span>
+            </div>
+          ))}
+          {!check.ok && <div style={{ color: "var(--terracotta)", marginTop: "0.3rem" }}>⚠ {check.reason}</div>}
         </div>
       )}
 
-      <div style={{ fontSize: "0.85rem", fontWeight: 600, margin: "0.8rem 0 0.3rem" }}>3. Note (optional)</div>
+      <div style={{ fontSize: "0.85rem", fontWeight: 600, margin: "0.8rem 0 0.3rem" }}>Note (optional)</div>
       <textarea style={{ ...INPUT, minHeight: "3.5rem", resize: "vertical" }} placeholder="e.g. 4 proxy forms held by the returning officer"
         value={note} onChange={e => setNote(e.target.value)} maxLength={1000} />
 
       {err && <div style={{ color: "var(--terracotta)", fontSize: "0.85rem", marginTop: "0.4rem" }}>{err}</div>}
       <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem" }}>
-        <button style={{ ...BTN_PRIMARY, opacity: check.ok && !saving ? 1 : 0.6, cursor: check.ok && !saving ? "pointer" : "not-allowed" }}
-          disabled={!check.ok || saving} onClick={save}>{saving ? "Saving…" : "Save"}</button>
+        <button style={{ ...BTN_PRIMARY, opacity: check.ok && changed && !saving ? 1 : 0.6, cursor: check.ok && changed && !saving ? "pointer" : "not-allowed" }}
+          disabled={!check.ok || !changed || saving} onClick={save}>{saving ? "Saving…" : "Save"}</button>
         <button style={BTN_GHOST} onClick={() => setEditing(false)}>Cancel</button>
       </div>
     </div>

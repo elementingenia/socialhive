@@ -2205,12 +2205,14 @@ export default function HelpGuidePage() {
               <Step>
                 <strong>Paper and proxy votes.</strong> If anyone voted on paper or gave someone their
                 proxy, add those votes after the vote closes and before you publish. Tap{" "}
-                <strong>Add paper &amp; proxy votes</strong>, then: (1) add each resident whose vote it
+                <strong>Add paper &amp; proxy votes</strong>, then add each resident whose vote it
                 is (not the person holding the proxy) — anyone who already voted in the app is
-                greyed out and can't be added; (2) type how many votes each option got from those
-                forms; (3) add a note if useful, e.g. where the forms are kept. The app checks the
-                totals add up before you can save. Tap <strong>Change paper &amp; proxy votes</strong>{" "}
-                to fix a mistake. Once results are published they can't be changed. The paper forms
+                greyed out and can't be added. Under each name, tick their choices exactly as on
+                their form, the same way residents vote in the app. Add a note if useful, e.g.
+                where the forms are kept. Only the totals per option are saved, never who chose
+                what. Tap <strong>Add or change paper &amp; proxy votes</strong> to add more later;
+                to fix one already saved, tap <strong>Start again</strong> and re-enter them all.
+                Once results are published they can't be changed. The paper forms
                 stay the official record.
               </Step>
               <InfoBox>
