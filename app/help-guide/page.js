@@ -617,8 +617,7 @@ export default function HelpGuidePage() {
               </Step>
               <Step>
                 <strong>Right — Your account controls.</strong> On the right-hand side you will see up
-                to three items: a bell icon for notifications (only appears when you have unread
-                notifications), a <strong>?</strong> button that opens this help guide in a new tab, and
+                to three items: a bell icon for notifications, a <strong>?</strong> button that opens this help guide in a new tab, and
                 your <strong>account pill</strong> showing your name (and your photo if you have uploaded
                 one).
               </Step>
@@ -648,7 +647,8 @@ export default function HelpGuidePage() {
               </Step>
               <InfoBox>
                 💡 If you see a red dot or number on the bell icon, you have unread notifications. Tap
-                the bell to open the notifications panel and see what's new.
+                the bell to open the notifications panel and see what's new. Tap the ✓ next to one to
+                mark it as read, or tap <strong>✓ Mark all as read</strong> to clear them all at once.
               </InfoBox>
             </Subsection>
           </Section>

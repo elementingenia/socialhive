@@ -253,6 +253,22 @@ export default function NotificationsDrawer() {
     refreshNotifCount()
   }, [setNotifCount, refreshNotifCount])
 
+  // Marks every unread notification read in one go (Iain, 2026-11-19:
+  // "there should be a clear all option i.e. mark all as read"). An explicit
+  // button, so it doesn't undo the 2026-08-14 rule that merely OPENING the
+  // drawer must not clear anything. Uses the existing PATCH {all:true}.
+  const markAll = useCallback(async () => {
+    const now = new Date().toISOString()
+    setNotifs(prev => prev.map(n => n.read_at ? n : { ...n, read_at: now }))
+    setNotifCount(0)
+    await authedFetch('/api/notifications', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ all: true }),
+    }).catch(() => {})
+    refreshNotifCount()
+  }, [setNotifCount, refreshNotifCount])
+
   // Clicking the body of a notification (not the tick) acknowledges it AND
   // navigates to the relevant hub, satisfying Iain's "if they click through
   // to the matter, that counts as done too" -- so a resident who taps
@@ -318,7 +334,19 @@ export default function NotificationsDrawer() {
             <div style={{ display: "flex", flexDirection: "column" }}>
               {/* Unread stays visible (with a tick to dismiss) until acknowledged -- no longer auto-cleared just by opening the drawer */}
               {unread.length > 0 && (
-                <div style={{ padding: "0.5rem 1rem 0.25rem", fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.08em" }}>New</div>
+                <div style={{ padding: "0.35rem 0.75rem 0.25rem 1rem", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "0.7rem", fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.08em" }}>New</span>
+                  <button
+                    onClick={markAll}
+                    style={{
+                      background: "none", border: "1.5px solid var(--teal)", color: "var(--teal)",
+                      borderRadius: 999, padding: "0.35rem 0.8rem", fontSize: "0.82rem", fontWeight: 700,
+                      cursor: "pointer", fontFamily: "inherit", minHeight: 32,
+                    }}
+                  >
+                    ✓ Mark all as read
+                  </button>
+                </div>
               )}
               {ordered.map((n, i) => {
                 const isNew = !n.read_at
