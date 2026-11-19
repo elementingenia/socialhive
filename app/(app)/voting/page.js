@@ -636,7 +636,10 @@ function WelcomeBanner({ text }) {
 
 function EventCard({ event, isAdmin, canManage, canManageEvent, onChanged }) {
   const { member } = useUser()
-  const [expanded, setExpanded] = useState(false)
+  // A published vote opens expanded so its results show straight away
+  // (Iain, 2026-11-19). Every other status still starts collapsed.
+  const [expanded, setExpanded] = useState(event.status === "published")
+  useEffect(() => { if (event.status === "published") setExpanded(true) }, [event.status])
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [detail, setDetail] = useState(null)
   // Closing date is now set at create (Iain, 2026-10-22); prefill it here
