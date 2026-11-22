@@ -29,6 +29,7 @@ import { waitlistLabel, waitlistPositionMap } from "@/lib/waitlist"
 import { resolveMemberName } from "@/lib/memberName"
 import { busSeatsUsed } from "@/lib/busSeats"
 import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/attendeeExport"
+import { buildReconciliationGroups, reconciliationSummaryLines, fetchPaymentNotes } from "@/lib/reconciliationReport"
 import { CopyLinkButton, AddToCalendarButton } from "@/components/EventShareActions"
 import EventNotices from "@/components/EventNotices"
 import InviteNeighbourButton from "@/components/InviteNeighbourButton"
@@ -1462,45 +1463,16 @@ function EventCard({ event, coordinators, myBooking, myWaitlist, waitlistInfo, i
   // panel, so it needs its own copy built from this component's own data.
   // Unassigned seats have no booking/payment row at all, so (same as
   // paymentSummary itself) they aren't part of this export.
-  function handleExportReconciliation() {
-    const rowFor = (b) => {
-      const isOwn = b.member_id === member?.id
-      const name = isOwn ? "You"
-        : !showNames ? "Guest"
-        : b.member ? resolveMemberName(b.member, { canManage: isAdmin })
-        : (b.contact?.name || "Member")
-      return { name, seats: b.seats || 1, amount: balancePhrase(b, event, b.seats || 1) }
-    }
-    const paidRows = [], unpaidRows = [], partialRows = []
-    for (const b of confirmedBookings) {
-      if (payableSeats(b, event) === 0) continue // free bus-driver seat: nothing to reconcile
-      if (computeIsPaid(b)) paidRows.push(rowFor(b))
-      else if (computeIsPartial(b, event)) partialRows.push(rowFor(b))
-      else unpaidRows.push(rowFor(b))
-    }
-    const refundRows = refundPendingBookings.map(b => ({
-      ...rowFor(b),
-      amount: `$${(parseFloat(b.refund_due) || 0).toFixed(2)} due`,
-    }))
-    ;[paidRows, unpaidRows, partialRows, refundRows].forEach(list => list.sort((a, b) => a.name.localeCompare(b.name)))
-
-    const summaryLines = summary ? [
-      { label: "Expected", value: `$${summary.expectedTotal.toFixed(2)}` },
-      { label: "Collected", value: `$${summary.collectedTotal.toFixed(2)}`, colour: "#166534" },
-      { label: "Outstanding", value: `$${summary.outstandingTotal.toFixed(2)}`, colour: summary.outstandingTotal > 0 ? "#92400e" : undefined },
-      ...(summary.refundsDueCount > 0 ? [{ label: "Refunds due", value: `$${summary.refundsDueTotal.toFixed(2)}`, colour: "#92400e" }] : []),
-    ] : []
-
+  async function handleExportReconciliation() {
+    const nameFor = (b) => b.member
+      ? resolveMemberName(b.member, { canManage: true, fallback: b.member?.username || b.contact?.name || "—" })
+      : (b.contact?.name || "—")
+    const notesByBooking = await fetchPaymentNotes(authedFetch, event.id)
     const ok = exportPaymentReconciliationPdf({
       eventTitle: event.title,
       eventSubtitle: `${fmtDate(event.event_date)}${event.event_time ? " · " + fmtTime(event.event_time) : ""}`,
-      summaryLines,
-      groups: [
-        { heading: "Paid", rows: paidRows },
-        { heading: "Unpaid", rows: unpaidRows },
-        { heading: "Partial", rows: partialRows },
-        { heading: "Refunds", rows: refundRows },
-      ],
+      summaryLines: reconciliationSummaryLines(summary),
+      groups: buildReconciliationGroups({ confirmed: confirmedBookings, refundPending: refundPendingBookings, event: event, nameFor, notesByBooking }),
       router,
       hubColour: "var(--special)",
     })

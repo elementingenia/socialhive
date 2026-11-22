@@ -1394,6 +1394,16 @@ export default function HelpGuidePage() {
                 anything's changed since the last time.
               </Step>
               <Step>
+                Tap <strong>⬇ Export Reconciliation PDF</strong> any time, from the moment the event is
+                set up until after it's over, for a state-of-play report: the totals at the top, then
+                everyone grouped <strong>Paid</strong>, <strong>Unpaid</strong> and{" "}
+                <strong>Partial</strong> with what each person is <strong>Due</strong>, has{" "}
+                <strong>Paid</strong> and still <strong>Owing</strong>, a total under each group, any{" "}
+                <strong>Refunds owed</strong> last, and each payment note (amount, date and who
+                recorded it) under the person. Waitlisted residents aren't included, as nothing is
+                due from them yet.
+              </Step>
+              <Step>
                 A cancelled booking that had already been paid (in full or partially) automatically
                 appears under <strong>⚠️ Refunds Due</strong> for the amount that was actually
                 received. Once the money has genuinely been handed back to the resident, tap{" "}
@@ -1612,6 +1622,16 @@ export default function HelpGuidePage() {
                 stamps a <strong>Last reviewed</strong> date so you (or the next coordinator) can see
                 at a glance whether anything's changed since — an amber note appears if a booking has
                 moved since the last close-out.
+              </Step>
+              <Step>
+                Tap <strong>⬇ Export Reconciliation PDF</strong> any time, from the moment the event is
+                set up until after it's over, for a state-of-play report: the totals at the top, then
+                everyone grouped <strong>Paid</strong>, <strong>Unpaid</strong> and{" "}
+                <strong>Partial</strong> with what each person is <strong>Due</strong>, has{" "}
+                <strong>Paid</strong> and still <strong>Owing</strong>, a total under each group, any{" "}
+                <strong>Refunds owed</strong> last, and each payment note (amount, date and who
+                recorded it) under the person. Waitlisted residents aren't included, as nothing is
+                due from them yet.
               </Step>
               <Step>
                 A cancelled booking that had already been paid automatically appears under{" "}

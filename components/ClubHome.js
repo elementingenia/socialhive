@@ -39,6 +39,7 @@ import { useWaitlistInfo } from "@/lib/useWaitlistInfo"
 import { waitlistLabel } from "@/lib/waitlist"
 import { resolveMemberName } from "@/lib/memberName"
 import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/attendeeExport"
+import { buildReconciliationGroups, reconciliationSummaryLines, fetchPaymentNotes } from "@/lib/reconciliationReport"
 // Payment-management port (2026-09-22, Iain -- Club payment parity): same
 // hub-agnostic helpers Social's events page and EventSlideOut.js's
 // CoordinatorPanel already use, see lib/payments.js for the shared
@@ -403,40 +404,19 @@ function EventCard({ event, isFirst = true, booking, myWaitlist = null, waitlist
   // its own copy rather than going through EventSlideOut.js's shared
   // CoordinatorPanel). Built from paymentData, loaded by loadPaymentData()
   // above alongside attendees.
-  function handleExportReconciliation() {
+  async function handleExportReconciliation() {
+    // Real names for everyone, including the coordinator's own row -- this
+    // is a report for managers, not the on-screen list ("You").
     const nameFor = (b) => b.members
-      ? resolveMemberName({ ...b.members, hide_name: !!(b.members?.hide_name || b.name_hidden) },
-          { viewerId: member?.id, canManage: canManageBooks, selfLabel: "You", fallback: b.members?.username || b.contacts?.name || "Member" })
+      ? resolveMemberName(b.members, { canManage: true, fallback: b.members?.username || b.contacts?.name || "Member" })
       : (b.contacts?.name || "Member")
-    const rowFor = (b) => ({ name: nameFor(b), seats: b.seats || 1, amount: balancePhrase(b, event, b.seats || 1) })
     const confirmed = (paymentData?.bookings || []).filter(b => b.status === "confirmed")
-    const paidRows = [], unpaidRows = [], partialRows = []
-    for (const b of confirmed) {
-      if (payableSeats(b, event) === 0) continue // free bus-driver seat: nothing to reconcile
-      if (isPaymentPaid(b)) paidRows.push(rowFor(b))
-      else if (isPaymentPartial(b, event)) partialRows.push(rowFor(b))
-      else unpaidRows.push(rowFor(b))
-    }
-    const refundRows = (paymentData?.refund_pending || []).map(b => ({
-      name: nameFor(b), seats: b.seats || 1, amount: `$${(parseFloat(b.refund_due) || 0).toFixed(2)} due`,
-    }))
-    ;[paidRows, unpaidRows, partialRows, refundRows].forEach(list => list.sort((a, b) => a.name.localeCompare(b.name)))
-    const summaryLines = paymentSummaryData ? [
-      { label: "Expected", value: `$${paymentSummaryData.expectedTotal.toFixed(2)}` },
-      { label: "Collected", value: `$${paymentSummaryData.collectedTotal.toFixed(2)}`, colour: "#166534" },
-      { label: "Outstanding", value: `$${paymentSummaryData.outstandingTotal.toFixed(2)}`, colour: paymentSummaryData.outstandingTotal > 0 ? "#92400e" : undefined },
-      ...(paymentSummaryData.refundsDueCount > 0 ? [{ label: "Refunds due", value: `$${paymentSummaryData.refundsDueTotal.toFixed(2)}`, colour: "#92400e" }] : []),
-    ] : []
+    const notesByBooking = await fetchPaymentNotes(authedFetch, event.id)
     const ok = exportPaymentReconciliationPdf({
       eventTitle: event.title,
       eventSubtitle: fmtDate(event.event_date),
-      summaryLines,
-      groups: [
-        { heading: "Paid", rows: paidRows },
-        { heading: "Unpaid", rows: unpaidRows },
-        { heading: "Partial", rows: partialRows },
-        { heading: "Refunds", rows: refundRows },
-      ],
+      summaryLines: reconciliationSummaryLines(paymentSummaryData),
+      groups: buildReconciliationGroups({ confirmed: confirmed, refundPending: paymentData?.refund_pending || [], event: event, nameFor, notesByBooking }),
       router,
       hubColour: colour,
     })
