@@ -12,7 +12,7 @@ const small = {
   fontSize: '0.78rem', fontWeight: 700, padding: '0.3rem 0.7rem', borderRadius: 16, fontFamily: 'inherit', cursor: 'pointer',
 }
 
-export default function TradeRecommendBlock({ contactId, trade, isPrivate, onChanged, onEdit }) {
+export default function TradeRecommendBlock({ contactId, trade, isPrivate, onChanged }) {
   const [showNotes, setShowNotes] = useState(false)
   const [composing, setComposing] = useState(false)
   const [privateNotice, setPrivateNotice] = useState(false)
@@ -107,12 +107,6 @@ export default function TradeRecommendBlock({ contactId, trade, isPrivate, onCha
             <button type="button" disabled={busy} onClick={() => post({ action: 'withdraw' })}
               style={{ ...small, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}>
               Remove my recommendation
-            </button>
-          )}
-          {trade.canEdit && onEdit && (
-            <button type="button" onClick={onEdit}
-              style={{ ...small, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}>
-              Edit details
             </button>
           )}
         </div>

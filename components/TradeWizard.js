@@ -40,8 +40,10 @@ function Note({ tone = 'info', children }) {
 
 const OTHER = '__other__'
 
-// editing: { id, trade_type, name, business_name, phone, email, note, hasMine }
-export default function TradeWizard({ types = [], editing = null, onClose, onSaved }) {
+// editing: { id, trade_type, name, business_name, phone, email, note, hasMine, active }
+// canManage: admin -- adds Hide / Delete, since this is the only Edit a
+// trade card has (Iain, 2026-11-23).
+export default function TradeWizard({ types = [], editing = null, canManage = false, onClose, onSaved }) {
   const listed = types.filter(t => t.active).map(t => t.name)
   const startType = editing?.trade_type || ''
   const startIsListed = !startType || listed.some(n => n.toLowerCase() === startType.toLowerCase())
@@ -58,6 +60,7 @@ export default function TradeWizard({ types = [], editing = null, onClose, onSav
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
   const [done, setDone] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
   const tradeType = typePick === OTHER ? otherType.trim() : (typePick || '')
   const showNote = !editing || editing.hasMine
@@ -122,6 +125,31 @@ export default function TradeWizard({ types = [], editing = null, onClose, onSav
     setDone('added')
   }
 
+  // Admin only. Same calls the general contact form makes; deleting a
+  // contact also removes its recommendations (ON DELETE CASCADE, mig 148).
+  async function contactCall(method, body) {
+    setBusy(true); setErr(null)
+    try {
+      const res = await authedFetch('/api/info/contacts', {
+        method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+      const d = await res.json().catch(() => ({}))
+      setBusy(false)
+      if (!res.ok) { setErr(d.error || 'Something went wrong. Please try again.'); return false }
+      return true
+    } catch {
+      setBusy(false); setErr('Could not reach the server. Please try again.'); return false
+    }
+  }
+  async function toggleHidden() {
+    if (!(await contactCall('PATCH', { id: editing.id, active: !editing.active }))) return
+    onSaved?.(); close()
+  }
+  async function deleteTrade() {
+    if (!(await contactCall('DELETE', { id: editing.id }))) return
+    onSaved?.(); close()
+  }
+
   async function recommendInstead() {
     const d = await post({ action: 'recommend', contact_id: dup.id, note })
     if (!d) return
@@ -138,7 +166,7 @@ export default function TradeWizard({ types = [], editing = null, onClose, onSav
   })
   const isLast = stepIdx === steps.length - 1
   const shownName = name.trim() || business.trim()
-  const title = editing ? 'Edit trade details' : 'Recommend a trade'
+  const title = editing ? 'Edit trade' : 'Recommend a trade'
 
   return (
     <>
@@ -254,6 +282,32 @@ export default function TradeWizard({ types = [], editing = null, onClose, onSav
               )}
 
               {err && <Note tone="warn">{err}</Note>}
+
+              {editing && canManage && (
+                <div style={{ marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
+                  <div style={LABEL}>Admin</div>
+                  {confirmDelete ? (
+                    <>
+                      <Note tone="warn">Delete this trade and every recommendation on it? This can&apos;t be undone.</Note>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button type="button" onClick={() => setConfirmDelete(false)} disabled={busy} style={btn(false, busy)}>Keep it</button>
+                        <button type="button" onClick={deleteTrade} disabled={busy} style={{ ...btn(false, busy), border: '1px solid #fca5a5', background: '#fee2e2', color: '#991b1b' }}>
+                          {busy ? 'Deleting…' : 'Yes, delete'}
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button type="button" onClick={toggleHidden} disabled={busy} style={{ ...btn(false, busy), fontSize: '0.9rem', padding: '0.7rem' }}>
+                        {editing.active === false ? 'Show again' : 'Hide from residents'}
+                      </button>
+                      <button type="button" onClick={() => setConfirmDelete(true)} disabled={busy} style={{ ...btn(false, busy), fontSize: '0.9rem', padding: '0.7rem', border: '1px solid #fca5a5', background: '#fee2e2', color: '#991b1b' }}>
+                        Delete trade
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           )}
         </div>

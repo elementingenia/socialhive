@@ -800,15 +800,21 @@ export default function ContactsPage() {
               <ContactCard contact={e} badges={e.badges} external={e.external} isResident={e.isResident} query={search}
                 pinned={(() => { const p = pinFromPersonKey(e.key); return !!p && isPinned(p.item_type, p.item_id) })()}
                 onTogglePin={e.member?.id && e.member.id === me?.id ? undefined : () => { const p = pinFromPersonKey(e.key); if (p) togglePin(p.item_type, p.item_id) }}
-                onEdit={isAdmin ? () => setSheet(e.isMember ? { type: "resident", member: e.member } : { type: "contact", contact: raw || e.contact }) : null}>
+                onEdit={
+                  // A trade has one Edit: the trade editor (Iain, 2026-11-23).
+                  // The general contact form's Title/Role would fight the
+                  // trade type, so it isn't offered for trades. It is still
+                  // the fallback when Recommend a Trade is switched off.
+                  trade?.canEdit ? () => setTradeWizard({ editing: {
+                    id: e.contact.id, trade_type: trade.trade_type, name: raw?.name || e.name,
+                    business_name: trade.business_name, phone: raw?.phone || "", email: raw?.email || "",
+                    note: trade.mine?.note || "", hasMine: !!trade.mine, active: raw ? raw.active !== false : true,
+                  } })
+                  : isAdmin && !trade?.recommendations ? () => setSheet(e.isMember ? { type: "resident", member: e.member } : { type: "contact", contact: raw || e.contact })
+                  : null}>
                 {trade?.recommendations && (
                   <TradeRecommendBlock contactId={e.contact.id} trade={trade} isPrivate={!!trades?.isPrivate}
-                    onChanged={loadTrades}
-                    onEdit={() => setTradeWizard({ editing: {
-                      id: e.contact.id, trade_type: trade.trade_type, name: raw?.name || e.name,
-                      business_name: trade.business_name, phone: raw?.phone || "", email: raw?.email || "",
-                      note: trade.mine?.note || "", hasMine: !!trade.mine,
-                    } })} />
+                    onChanged={loadTrades} />
                 )}
               </ContactCard>
             </div>
@@ -833,8 +839,8 @@ export default function ContactsPage() {
       </Sheet>
 
       {tradeWizard && (
-        <TradeWizard types={trades?.types || []} editing={tradeWizard.editing}
-          onClose={() => setTradeWizard(null)} onSaved={() => { load() }} />
+        <TradeWizard types={trades?.types || []} editing={tradeWizard.editing} canManage={isAdmin}
+          onClose={() => setTradeWizard(null)} onSaved={() => { load(); loadTrades() }} />
       )}
 
       <Sheet open={sheet === "invite"} onClose={() => setSheet(null)} title="Invite Code">

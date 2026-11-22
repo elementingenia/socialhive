@@ -1245,11 +1245,13 @@ export default function AdminGuidePage() {
                 <strong>Typed in by residents</strong>, with <strong>Add to list</strong>.
               </Step>
               <Step>
-                <strong>Changing a trade:</strong> use <strong>Edit details</strong> under the trade (the
-                resident who added it can too). The card&apos;s own <strong>Edit</strong> button still
-                works for hiding or deleting, but change the trade type through Edit details so the
-                grouping stays right. The person who added a trade can&apos;t withdraw their
-                recommendation; to remove a trade, delete it from the card&apos;s <strong>Edit</strong>.
+                <strong>Changing a trade:</strong> tap <strong>Edit</strong> on the trade&apos;s card. It
+                opens the trade editor (type, name, business, phone, email), so the grouping stays right.
+                The resident who added the trade sees the same <strong>Edit</strong>. Admins also get{" "}
+                <strong>Hide from residents</strong> and <strong>Delete trade</strong> at the bottom of the
+                editor; deleting removes every recommendation on it. The person who added a trade
+                can&apos;t withdraw their recommendation or delete the trade. If Recommend a Trade is
+                switched Off, <strong>Edit</strong> opens the normal contact form instead.
               </Step>
             </Subsection>
 

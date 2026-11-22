@@ -1758,7 +1758,7 @@ export default function HelpGuidePage() {
                 recommended them.
               </Step>
               <Step>
-                If you added a trade, you can fix their details later with <strong>Edit details</strong>.
+                If you added a trade, you can fix their details later with <strong>Edit</strong> on the trade&apos;s card.
                 Your recommendation on a trade you added stays — ask an admin if it needs removing.
               </Step>
               <InfoBox>
