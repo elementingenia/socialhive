@@ -1394,6 +1394,16 @@ export default function HelpGuidePage() {
                 anything's changed since the last time.
               </Step>
               <Step>
+                Tap <strong>⬇ Export Reconciliation PDF</strong> any time, from the moment the event is
+                set up until after it's over, for a state-of-play report: the totals at the top, then
+                everyone grouped <strong>Paid</strong>, <strong>Unpaid</strong> and{" "}
+                <strong>Partial</strong> with what each person is <strong>Due</strong>, has{" "}
+                <strong>Paid</strong> and still <strong>Owing</strong>, a total under each group, any{" "}
+                <strong>Refunds owed</strong> last, and each payment note (amount, date and who
+                recorded it) under the person. Waitlisted residents aren't included, as nothing is
+                due from them yet.
+              </Step>
+              <Step>
                 A cancelled booking that had already been paid (in full or partially) automatically
                 appears under <strong>⚠️ Refunds Due</strong> for the amount that was actually
                 received. Once the money has genuinely been handed back to the resident, tap{" "}
@@ -1612,6 +1622,16 @@ export default function HelpGuidePage() {
                 stamps a <strong>Last reviewed</strong> date so you (or the next coordinator) can see
                 at a glance whether anything's changed since — an amber note appears if a booking has
                 moved since the last close-out.
+              </Step>
+              <Step>
+                Tap <strong>⬇ Export Reconciliation PDF</strong> any time, from the moment the event is
+                set up until after it's over, for a state-of-play report: the totals at the top, then
+                everyone grouped <strong>Paid</strong>, <strong>Unpaid</strong> and{" "}
+                <strong>Partial</strong> with what each person is <strong>Due</strong>, has{" "}
+                <strong>Paid</strong> and still <strong>Owing</strong>, a total under each group, any{" "}
+                <strong>Refunds owed</strong> last, and each payment note (amount, date and who
+                recorded it) under the person. Waitlisted residents aren't included, as nothing is
+                due from them yet.
               </Step>
               <Step>
                 A cancelled booking that had already been paid automatically appears under{" "}
@@ -2126,11 +2146,6 @@ export default function HelpGuidePage() {
             </Step>
 
             <Subsection id="sub-voting-cast" title="Casting your vote">
-              <Step>
-                The Voting tile on Home shows the vote that is open now. When no vote is open, it
-                shows the most recent vote instead, marked <strong>closed</strong> or
-                <strong> results published</strong>, so you can still tap through to see it.
-              </Step>
               <Step>
                 Open the Voting tile and tap the vote you want to take part in. Depending on how it
                 was set up, you'll either pick exactly one option or up to a stated number of

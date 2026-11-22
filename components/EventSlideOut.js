@@ -27,6 +27,7 @@ import { useWaitlistInfo } from "@/lib/useWaitlistInfo"
 import { waitlistLabel } from "@/lib/waitlist"
 import { buildCarSections, buildTransportExportSections, VEHICLE_OFFER_SELECT, VEHICLE_OFFER_PASSENGER_SELECT } from "@/lib/vehicleSections"
 import { exportAttendeeListPdf, exportPaymentReconciliationPdf } from "@/lib/attendeeExport"
+import { buildReconciliationGroups, reconciliationSummaryLines, fetchPaymentNotes } from "@/lib/reconciliationReport"
 import { hubPathForEvent } from "@/lib/eventShare"
 import { loginHref } from "@/lib/safeNext"
 import { formatAddress } from "@/lib/address"
@@ -600,37 +601,13 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
   // separate inline panel and Special Events' own inline accordion get
   // their own matching handler (they don't render through this shared
   // component).
-  function handleExportReconciliation() {
+  async function handleExportReconciliation() {
     const eventForCalc = { payment_required: paymentRequired, cost: data?.cost, has_bus: event.has_bus, bus_driver_id: event.bus_driver_id, bus_driver_free: event.bus_driver_free }
     const nameFor = (b) => b.members
       ? resolveMemberName(b.members, { canManage: true, fallback: b.members?.username || b.contacts?.name || "—" })
       : (b.contacts?.name || "—")
-    const rowFor = (b) => {
-      const seats = b.seats || 1
-      return { name: nameFor(b), seats, amount: balancePhrase(b, eventForCalc, seats) }
-    }
-    const paidRows = [], unpaidRows = [], partialRows = []
-    for (const b of confirmed) {
-      if (payableSeats(b, eventForCalc) === 0) continue // free bus-driver seat: nothing to reconcile
-      if (computeIsRefunded(b)) continue
-      if (computeIsPaid(b)) paidRows.push(rowFor(b))
-      else if (computeIsPartial(b, eventForCalc)) partialRows.push(rowFor(b))
-      else unpaidRows.push(rowFor(b))
-    }
-    const refundRows = refundPending.map(b => {
-      const seats = b.seats || 1
-      return { name: nameFor(b), seats, amount: eventCost ? `$${(eventCost * seats).toFixed(2)} due` : "" }
-    })
-    ;[paidRows, unpaidRows, partialRows, refundRows].forEach(list => list.sort((a, b) => a.name.localeCompare(b.name)))
-
+    const notesByBooking = await fetchPaymentNotes(authedFetch, event.id)
     const summary = paymentSummary(confirmed, eventForCalc, refundPending)
-    const summaryLines = summary ? [
-      { label: "Expected", value: `$${summary.expectedTotal.toFixed(2)}` },
-      { label: "Collected", value: `$${summary.collectedTotal.toFixed(2)}`, colour: "#166534" },
-      { label: "Outstanding", value: `$${summary.outstandingTotal.toFixed(2)}`, colour: summary.outstandingTotal > 0 ? "#92400e" : undefined },
-      ...(summary.refundsDueCount > 0 ? [{ label: "Refunds due", value: `$${summary.refundsDueTotal.toFixed(2)}`, colour: "#92400e" }] : []),
-    ] : []
-
     const subtitleParts = []
     if (event.event_date) subtitleParts.push(fmtDate(event.event_date))
     if (event.event_time) subtitleParts.push(fmtTime(event.event_time))
@@ -639,13 +616,8 @@ function CoordinatorPanel({ event, colour, onRefresh, currentMember, refreshKey 
     const ok = exportPaymentReconciliationPdf({
       eventTitle: event.title,
       eventSubtitle: subtitleParts.join(" · "),
-      summaryLines,
-      groups: [
-        { heading: "Paid", rows: paidRows },
-        { heading: "Unpaid", rows: unpaidRows },
-        { heading: "Partial", rows: partialRows },
-        { heading: "Refunds", rows: refundRows },
-      ],
+      summaryLines: reconciliationSummaryLines(summary),
+      groups: buildReconciliationGroups({ confirmed: confirmed, refundPending: refundPending, event: eventForCalc, nameFor, notesByBooking }),
       router,
       hubColour: colour,
     })
