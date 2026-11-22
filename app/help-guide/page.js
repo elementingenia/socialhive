@@ -2147,6 +2147,11 @@ export default function HelpGuidePage() {
 
             <Subsection id="sub-voting-cast" title="Casting your vote">
               <Step>
+                The Voting tile on Home shows the vote that is open now. When no vote is open, it
+                shows the most recent vote instead, marked <strong>closed</strong> or
+                <strong> results published</strong>, so you can still tap through to see it.
+              </Step>
+              <Step>
                 Open the Voting tile and tap the vote you want to take part in. Depending on how it
                 was set up, you'll either pick exactly one option or up to a stated number of
                 options. Once you tap <strong>Cast my vote</strong>, that's final — you can't change
